@@ -79,6 +79,7 @@ import { NAVIGATE_NO_SESSION_ID, navigateLeftTab, openCandidates } from './cli/o
 import { fetchStatus } from './daemon/binding/daemon-status-probe.js';
 import { handleDrive } from './cli/drive/drive-command.js';
 import { handleVerify } from './cli/cli-verify.js';
+import { handleVerifyAgainst } from './cli/verify-against.js';
 import { FIRST_VERDICT_REASON, bareRunsFirstVerdict } from './cli/first-verdict.js';
 import { cmdFirstVerdict } from './cli/first-verdict-node.js';
 import { reportOnboardingStop } from '@/telemetry/onboarding-funnel.js';
@@ -871,7 +872,16 @@ export function main(): void {
       handleDrive(parsed, readProjectId(process.cwd()));
       break;
     case 'verify':
-      void writeFirstUseWarnings().then(() => {
+      void writeFirstUseWarnings().then(async () => {
+        // `--against` compares two builds through the daemon, and starts one when there is none.
+        if (parsed.against !== undefined) {
+          await handleVerifyAgainst({ ...parsed, against: parsed.against }, ensureDaemon, {
+            line: (text) => process.stdout.write(`${text}\n`),
+            fail: (text) => process.stderr.write(`${text}\n`),
+            exit: (code) => process.exit(code),
+          });
+          return;
+        }
         handleVerify(parsed, () => {
           writeCiHint({ automation: currentAutomationHint(process.env), machineOutput: false });
         });

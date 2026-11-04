@@ -47,7 +47,9 @@ function fakeApp(opts: { failPay?: boolean } = {}) {
   let mocked = false;
   const at = (): Page => {
     const current = PAGES[page];
-    if (current === undefined) throw new Error(`no page ${page}`);
+    if (current === undefined) {
+      throw new Error(`no page ${page}`);
+    }
     return current;
   };
   const tree = (): string => {
@@ -70,20 +72,28 @@ function fakeApp(opts: { failPay?: boolean } = {}) {
     look: () => Promise.resolve({ tree: tree(), route: at().route }),
     act: (ref, action) => {
       const label = refs.get(ref);
-      if (label === undefined) return Promise.resolve({ ok: false, events: [] });
+      if (label === undefined) {
+        return Promise.resolve({ ok: false, events: [] });
+      }
       acted.push(`${action} ${label}`);
       const events: ReticleEvent[] = [];
-      if ('fill' === action) filled = true;
-      else if ('Sign in' === label) page = 'dash';
-      else if ('Cart' === label) page = 'cart';
-      else if ('Rows' === label) page = 'rows';
-      else if ('Pay' === label && filled) {
+      if ('fill' === action) {
+        filled = true;
+      } else if ('Sign in' === label) {
+        page = 'dash';
+      } else if ('Cart' === label) {
+        page = 'cart';
+      } else if ('Rows' === label) {
+        page = 'rows';
+      } else if ('Pay' === label && filled) {
         events.push({
           type: 'net.request',
           t: 1,
           data: { method: 'POST', url: 'http://h/api/pay', status: mocked ? 0 : 200 },
         } as unknown as ReticleEvent);
-        if (!mocked || true !== opts.failPay) page = 'receipt';
+        if (!mocked || true !== opts.failPay) {
+          page = 'receipt';
+        }
       }
       return Promise.resolve({ ok: true, events });
     },
@@ -113,8 +123,12 @@ describe('explore — a field that already holds a value is left alone', () => {
               : '- button "Home" (ref=e3)',
         }),
       act: (ref, action, value) => {
-        if ('fill' === action) typed.push(value ?? '');
-        if ('e2' === ref) page = 'home';
+        if ('fill' === action) {
+          typed.push(value ?? '');
+        }
+        if ('e2' === ref) {
+          page = 'home';
+        }
         return Promise.resolve({ ok: true, events: [] });
       },
     };
@@ -265,7 +279,9 @@ function scriptedApp(
     },
     act: (ref, action) => {
       const c = refs.get(ref);
-      if (c === undefined) return Promise.resolve({ ok: false, events: [] });
+      if (c === undefined) {
+        return Promise.resolve({ ok: false, events: [] });
+      }
       acted.push(`${action} ${c.label}`);
       if ('fill' === action) {
         filled = true;
@@ -283,7 +299,9 @@ function scriptedApp(
           data: { method: 'POST', url, status: broken ? 0 : 200 },
         } as unknown as ReticleEvent);
       }
-      if (c.to !== undefined && !broken) page = c.to;
+      if (c.to !== undefined && !broken) {
+        page = c.to;
+      }
       return Promise.resolve({ ok: true, events });
     },
     mock: (next) => {
@@ -362,5 +380,93 @@ describe('driveFailureBranches — only a failure that happened counts as driven
     const { port } = scriptedApp(app, { start: 'start' });
     const branches = await driveFailureBranches(port, [payWrite], { maxActions: 20 });
     expect(branches.branched).toEqual(['POST /api/pay']);
+  });
+});
+
+/*
+ * Two fields that get the same text cannot show that a build swapped them. Each field on a state
+ * gets its own value, and the value travels in the recorded path so a replay types it again.
+ */
+describe('explore — each text field gets its own value', () => {
+  it('asks for a value by the field and its position, and records the value in the path', async () => {
+    let page = 'form';
+    const typed: string[] = [];
+    const port: ExplorePort = {
+      reset: () => {
+        page = 'form';
+        return Promise.resolve(true);
+      },
+      look: () =>
+        Promise.resolve({
+          route: `/${page}`,
+          tree:
+            'form' === page
+              ? '- textbox "First" (ref=e1)\n- textbox "Last" (ref=e2)\n- button "Save" (ref=e3)'
+              : '- text "saved"',
+        }),
+      act: (ref, action, value) => {
+        if ('fill' === action) {
+          typed.push(value ?? '');
+        }
+        if ('e3' === ref) {
+          page = 'done';
+        }
+        return Promise.resolve({ ok: true, events: [] });
+      },
+    };
+    const report = await explore(port, {
+      maxActions: 20,
+      fillValue: (_label, index) => `value ${String(index + 1)}`,
+    });
+    expect(typed.slice(0, 2)).toEqual(['value 1', 'value 2']);
+    expect(report.paths).toContainEqual([
+      { key: 'textbox "First"', action: 'fill', value: 'value 1' },
+      { key: 'textbox "Last"', action: 'fill', value: 'value 2' },
+      { key: 'button "Save"', action: 'click' },
+    ]);
+  });
+});
+
+/*
+ * A click that changes only a count leaves the explorer's state the same, so the state graph has
+ * no path to it. A caller that reads the page after each path still needs that click, so `paths`
+ * holds every click the explorer tried, not only the ones that found a new state.
+ */
+describe('explore — paths', () => {
+  it('lists a click that kept the same state, and waits after each click before it looks', async () => {
+    let count = 0;
+    const events: string[] = [];
+    const port: ExplorePort = {
+      reset: () => {
+        count = 0;
+        return Promise.resolve(true);
+      },
+      look: () => {
+        events.push('look');
+        return Promise.resolve({
+          route: '/',
+          tree: `- button "Add" (ref=e1)\n- text "count ${String(count)}"`,
+        });
+      },
+      act: () => {
+        events.push('act');
+        count += 1;
+        return Promise.resolve({ ok: true, events: [] });
+      },
+    };
+    const report = await explore(port, {
+      maxActions: 10,
+      fillValue: () => 'x',
+      wait: () => {
+        events.push('wait');
+        return Promise.resolve();
+      },
+    });
+    expect(report.paths).toEqual([[{ key: 'button "Add"', action: 'click' }]]);
+    expect(events.slice(events.indexOf('act'), events.indexOf('act') + 3)).toEqual([
+      'act',
+      'wait',
+      'look',
+    ]);
   });
 });
