@@ -73,7 +73,9 @@ export function buildCoverageTools(): ToolDef[] {
         app: z
           .boolean()
           .optional()
-          .describe('Also fold into the app-wide ledger; returns `app.levels`.'),
+          .describe(
+            'Also fold into the app-wide ledger; returns `app.levels`, `app.holes` and `app.findings`.',
+          ),
         ...sessionIdShape,
       },
       outputSchema: {

@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { reticleDirPaths } from '@/memory/project/dir/reticle-dir.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import {
   LedgerStore,
@@ -200,6 +201,44 @@ describe('coveragePercents', () => {
       expect(coveragePercents(root)).not.toHaveProperty('executed');
     } finally {
       await rm(root, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('behaviour findings and edge probes', () => {
+  const finding = {
+    kind: 'undo-not-restored',
+    invariant: 'undo restores',
+    detail: 'gone',
+    sequence: ['click button "Undo"'],
+  };
+
+  it('keeps one copy of a finding found twice, and marks a probed control as touched', () => {
+    const once = mergeLedger(emptyLedger(), {
+      findings: [finding],
+      edges: { probed: ['button "Undo"'] },
+    });
+    const twice = mergeLedger(once, { findings: [{ ...finding, detail: 'gone again' }] });
+    expect(twice.findings).toHaveLength(1);
+    expect(twice.edges.probed).toEqual(['button "Undo"']);
+    expect(twice.controls.touched).toContain('button "Undo"');
+  });
+
+  it('reads a ledger written before findings and edges existed', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'ledger-old-'));
+    try {
+      const fs = createNodeFileSystem();
+      const old: Record<string, unknown> = { ...emptyLedger() };
+      delete old['findings'];
+      delete old['edges'];
+      const path = reticleDirPaths(dir).coverage;
+      await fs.mkdir(dirname(path));
+      await fs.writeFile(path, JSON.stringify({ version: 1, ledger: old }));
+      const loaded = await new LedgerStore(fs, dir).load();
+      expect(loaded.findings).toEqual([]);
+      expect(loaded.edges.probed).toEqual([]);
+    } finally {
+      await rm(dir, { recursive: true, force: true });
     }
   });
 });
