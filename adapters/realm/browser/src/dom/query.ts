@@ -391,7 +391,9 @@ export function matchQuery(
     }
     if (attrs !== undefined && 0 < attrs.length) {
       const projected = projectAttrs(el, attrs);
-      if (projected !== undefined) base = { ...base, attrs: projected };
+      if (projected !== undefined) {
+        base = { ...base, attrs: projected };
+      }
     }
     return attachElementGeometry(base, el, geometry, visMemo, findCandidates);
   });

@@ -410,6 +410,8 @@ async function evaluatePredicateRaw(
         predicate.state,
         predicate.absent ?? false,
         diagnose,
+        false,
+        undefined,
         predicate.fullyInViewport === undefined &&
           predicate.textClipped === undefined &&
           predicate.overlaps === undefined

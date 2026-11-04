@@ -1,9 +1,4 @@
 {
-  "src/core-coupling-only-shrinks.test.ts": {
-    "curly": {
-      "count": 3
-    }
-  },
   "src/disagreement/body-failures.test.ts": {
     "curly": {
       "count": 1

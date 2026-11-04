@@ -94,17 +94,6 @@ export const ElementQuerySchema = z
   .strict();
 export type ElementQuery = z.infer<typeof ElementQuerySchema>;
 
-/**
- * MATCH command argument names carried on the wire (#1539). Beside the query schema rather than
- * in `wire/constants`: that file is at the 1000-line cap, and these names travel with the MATCH
- * call the schema describes.
- */
-export const MatchArg = {
-  GEOMETRY: 'geometry',
-  OVERLAPS_QUERY: 'overlapsQuery',
-} as const;
-export type MatchArg = (typeof MatchArg)[keyof typeof MatchArg];
-
 /** A rectangle in CSS pixels, in viewport coordinates as `getBoundingClientRect` reports it. */
 export interface ElementBox {
   x: number;

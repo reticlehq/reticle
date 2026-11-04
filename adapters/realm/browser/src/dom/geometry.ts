@@ -54,7 +54,9 @@ export function attachElementGeometry(
   visMemo: Map<Element, boolean>,
   findCandidates: (query: ElementQuery) => { candidates: Element[] },
 ): ElementDescriptor {
-  if (geometry === undefined) return base;
+  if (geometry === undefined) {
+    return base;
+  }
   const target = resolveOverlapTarget(geometry.overlaps, el, visMemo, findCandidates);
   return attachGeometry(base, el, visMemo, target);
 }
@@ -75,7 +77,9 @@ function resolveOverlapTarget(
   visMemo: Map<Element, boolean>,
   findCandidates: (query: ElementQuery) => { candidates: Element[] },
 ): Element | undefined {
-  if (undefined === overlaps) return undefined;
+  if (undefined === overlaps) {
+    return undefined;
+  }
   return findCandidates(overlaps).candidates.find(
     (candidate) => candidate !== measured && isVisible(candidate, visMemo),
   );
@@ -109,15 +113,16 @@ function measureGeometry(el: Element, memo?: Map<Element, boolean>): ElementGeom
     box.y + box.height <= viewport.height;
   // `visibleBounds` answers undefined when nothing clips the element, null when it is hidden
   // outright, and the surviving region otherwise. Only the first and third shapes can be whole.
-  const uncut =
-    clipped === undefined
-      ? true
-      : null === clipped
-        ? false
-        : clipped.left <= box.x &&
-          clipped.top <= box.y &&
-          clipped.right >= box.x + box.width &&
-          clipped.bottom >= box.y + box.height;
+  let uncut = false;
+  if (clipped === undefined) {
+    uncut = true;
+  } else if (null !== clipped) {
+    uncut =
+      clipped.left <= box.x &&
+      clipped.top <= box.y &&
+      clipped.right >= box.x + box.width &&
+      clipped.bottom >= box.y + box.height;
+  }
   const fullyInViewport = withinViewport && uncut && box.width > 0 && box.height > 0;
 
   // `textClipped` measures the element's own box, not always an ancestor that clips:

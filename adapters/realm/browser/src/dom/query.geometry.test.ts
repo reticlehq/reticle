@@ -28,7 +28,9 @@ function setViewport(width: number, height: number): void {
 
 function byTestid(id: string): HTMLElement {
   const el = document.querySelector(`[data-testid="${id}"]`);
-  if (!(el instanceof HTMLElement)) throw new Error(`no element for ${id}`);
+  if (!(el instanceof HTMLElement)) {
+    throw new Error(`no element for ${id}`);
+  }
   return el;
 }
 
@@ -41,7 +43,15 @@ describe('matchQuery geometry evidence', () => {
   it('reports the box fully in the viewport at a wide viewport', () => {
     document.body.innerHTML = '<div data-testid="card">Card</div>';
     rectOf(byTestid('card'), { x: 10, y: 10, width: 200, height: 50 });
-    const match = matchQuery({ testid: 'card' }, undefined, undefined, undefined, undefined, {});
+    const match = matchQuery(
+      { testid: 'card' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {},
+    );
     const geometry = match.elements[0]?.geometry;
     expect(geometry?.box).toEqual({ x: 10, y: 10, width: 200, height: 50 });
     expect(geometry?.viewport).toEqual({ width: 800, height: 600 });
@@ -52,7 +62,15 @@ describe('matchQuery geometry evidence', () => {
     setViewport(150, 600);
     document.body.innerHTML = '<div data-testid="card">Card</div>';
     rectOf(byTestid('card'), { x: 10, y: 10, width: 200, height: 50 });
-    const match = matchQuery({ testid: 'card' }, undefined, undefined, undefined, undefined, {});
+    const match = matchQuery(
+      { testid: 'card' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {},
+    );
     expect(match.elements[0]?.geometry?.fullyInViewport).toBe(false);
   });
 
@@ -61,9 +79,19 @@ describe('matchQuery geometry evidence', () => {
       '<div id="clip" style="overflow-x: hidden; overflow-y: hidden"><div data-testid="card">Card</div></div>';
     rectOf(byTestid('card'), { x: 0, y: 0, width: 200, height: 50 });
     const clip = document.getElementById('clip');
-    if (null === clip) throw new Error('no clip element');
+    if (null === clip) {
+      throw new Error('no clip element');
+    }
     rectOf(clip, { x: 0, y: 0, width: 100, height: 600 });
-    const match = matchQuery({ testid: 'card' }, undefined, undefined, undefined, undefined, {});
+    const match = matchQuery(
+      { testid: 'card' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {},
+    );
     expect(match.elements[0]?.geometry?.fullyInViewport).toBe(false);
   });
 
@@ -73,7 +101,15 @@ describe('matchQuery geometry evidence', () => {
     const label = byTestid('label');
     Object.defineProperty(label, 'scrollWidth', { value: 220, configurable: true });
     Object.defineProperty(label, 'clientWidth', { value: 100, configurable: true });
-    const match = matchQuery({ testid: 'label' }, undefined, undefined, undefined, undefined, {});
+    const match = matchQuery(
+      { testid: 'label' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {},
+    );
     const geometry = match.elements[0]?.geometry;
     expect(geometry?.textClipped).toBe(true);
     expect(geometry?.clippedX).toBe(120);
@@ -87,7 +123,15 @@ describe('matchQuery geometry evidence', () => {
     const clip = byTestid('clip');
     Object.defineProperty(clip, 'scrollWidth', { value: 220, configurable: true });
     Object.defineProperty(clip, 'clientWidth', { value: 100, configurable: true });
-    const match = matchQuery({ testid: 'label' }, undefined, undefined, undefined, undefined, {});
+    const match = matchQuery(
+      { testid: 'label' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {},
+    );
     const geometry = match.elements[0]?.geometry;
     expect(geometry?.textClipped).toBe(true);
     expect(geometry?.clippedX).toBe(120);
@@ -95,7 +139,15 @@ describe('matchQuery geometry evidence', () => {
 
   it('reports no clipping for text that fits', () => {
     document.body.innerHTML = '<span data-testid="label">Short</span>';
-    const match = matchQuery({ testid: 'label' }, undefined, undefined, undefined, undefined, {});
+    const match = matchQuery(
+      { testid: 'label' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {},
+    );
     expect(match.elements[0]?.geometry?.textClipped).toBe(false);
   });
 
@@ -112,7 +164,15 @@ describe('matchQuery geometry evidence', () => {
     const item = byTestid('item');
     Object.defineProperty(item, 'scrollWidth', { value: 50, configurable: true });
     Object.defineProperty(item, 'clientWidth', { value: 50, configurable: true });
-    const match = matchQuery({ testid: 'item' }, undefined, undefined, undefined, undefined, {});
+    const match = matchQuery(
+      { testid: 'item' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {},
+    );
     const geometry = match.elements[0]?.geometry;
     expect(geometry?.textClipped).toBe(false);
     expect(geometry?.clippedX).toBe(0);
@@ -128,7 +188,15 @@ describe('matchQuery geometry evidence', () => {
     const clip = byTestid('clip');
     Object.defineProperty(clip, 'scrollWidth', { value: 220, configurable: true });
     Object.defineProperty(clip, 'clientWidth', { value: 100, configurable: true });
-    const match = matchQuery({ testid: 'label' }, undefined, undefined, undefined, undefined, {});
+    const match = matchQuery(
+      { testid: 'label' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {},
+    );
     const geometry = match.elements[0]?.geometry;
     expect(geometry?.textClipped).toBe(true);
     expect(geometry?.clippedX).toBe(120);
@@ -142,7 +210,15 @@ describe('matchQuery geometry evidence', () => {
     const clip = byTestid('clip');
     Object.defineProperty(clip, 'scrollWidth', { value: 220, configurable: true });
     Object.defineProperty(clip, 'clientWidth', { value: 100, configurable: true });
-    const match = matchQuery({ testid: 'label' }, undefined, undefined, undefined, undefined, {});
+    const match = matchQuery(
+      { testid: 'label' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {},
+    );
     const geometry = match.elements[0]?.geometry;
     expect(geometry?.textClipped).toBe(true);
     expect(geometry?.clippedX).toBe(120);
@@ -156,7 +232,15 @@ describe('matchQuery geometry evidence', () => {
     const label = byTestid('label');
     Object.defineProperty(label, 'scrollWidth', { value: 220, configurable: true });
     Object.defineProperty(label, 'clientWidth', { value: 100, configurable: true });
-    const match = matchQuery({ testid: 'label' }, undefined, undefined, undefined, undefined, {});
+    const match = matchQuery(
+      { testid: 'label' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {},
+    );
     expect(match.elements[0]?.geometry?.textClipped).toBe(false);
   });
 
@@ -165,9 +249,17 @@ describe('matchQuery geometry evidence', () => {
       '<div data-testid="card">Card</div><div data-testid="other">Other</div>';
     rectOf(byTestid('card'), { x: 0, y: 0, width: 100, height: 100 });
     rectOf(byTestid('other'), { x: 50, y: 50, width: 100, height: 100 });
-    const match = matchQuery({ testid: 'card' }, undefined, undefined, undefined, undefined, {
-      overlaps: { testid: 'other' },
-    });
+    const match = matchQuery(
+      { testid: 'card' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {
+        overlaps: { testid: 'other' },
+      },
+    );
     const overlap = match.elements[0]?.geometry?.overlap;
     expect(overlap?.intersects).toBe(true);
     expect(overlap?.box).toEqual({ x: 50, y: 50, width: 100, height: 100 });
@@ -178,14 +270,30 @@ describe('matchQuery geometry evidence', () => {
       '<div data-testid="card">Card</div><div data-testid="other">Other</div>';
     rectOf(byTestid('card'), { x: 0, y: 0, width: 100, height: 100 });
     rectOf(byTestid('other'), { x: 300, y: 300, width: 50, height: 50 });
-    const apart = matchQuery({ testid: 'card' }, undefined, undefined, undefined, undefined, {
-      overlaps: { testid: 'other' },
-    });
+    const apart = matchQuery(
+      { testid: 'card' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {
+        overlaps: { testid: 'other' },
+      },
+    );
     expect(apart.elements[0]?.geometry?.overlap?.intersects).toBe(false);
 
-    const missing = matchQuery({ testid: 'card' }, undefined, undefined, undefined, undefined, {
-      overlaps: { testid: 'missing' },
-    });
+    const missing = matchQuery(
+      { testid: 'card' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {
+        overlaps: { testid: 'missing' },
+      },
+    );
     expect(missing.elements[0]?.geometry?.overlap).toBeUndefined();
   });
 
@@ -204,9 +312,17 @@ describe('matchQuery geometry evidence', () => {
     }
     rectOf(hidden, { x: 0, y: 0, width: 100, height: 100 });
     rectOf(shown, { x: 300, y: 300, width: 50, height: 50 });
-    const match = matchQuery({ testid: 'card' }, undefined, undefined, undefined, undefined, {
-      overlaps: { testid: 'other' },
-    });
+    const match = matchQuery(
+      { testid: 'card' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {
+        overlaps: { testid: 'other' },
+      },
+    );
     const overlap = match.elements[0]?.geometry?.overlap;
     expect(overlap?.intersects).toBe(false);
     expect(overlap?.box).toEqual({ x: 300, y: 300, width: 50, height: 50 });
@@ -218,9 +334,17 @@ describe('matchQuery geometry evidence', () => {
     // element is not a target; with nothing else matching, there is no overlap fact.
     document.body.innerHTML = '<div data-testid="card">Card</div>';
     rectOf(byTestid('card'), { x: 0, y: 0, width: 100, height: 100 });
-    const match = matchQuery({ testid: 'card' }, undefined, undefined, undefined, undefined, {
-      overlaps: { testid: 'card' },
-    });
+    const match = matchQuery(
+      { testid: 'card' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {
+        overlaps: { testid: 'card' },
+      },
+    );
     expect(match.elements[0]?.geometry?.overlap).toBeUndefined();
   });
 
@@ -234,9 +358,17 @@ describe('matchQuery geometry evidence', () => {
     }
     rectOf(first, { x: 0, y: 0, width: 100, height: 100 });
     rectOf(second, { x: 300, y: 300, width: 50, height: 50 });
-    const match = matchQuery({ testid: 'card' }, undefined, undefined, undefined, undefined, {
-      overlaps: { testid: 'card' },
-    });
+    const match = matchQuery(
+      { testid: 'card' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {
+        overlaps: { testid: 'card' },
+      },
+    );
     const overlap = match.elements[0]?.geometry?.overlap;
     expect(overlap?.intersects).toBe(false);
     expect(overlap?.box).toEqual({ x: 300, y: 300, width: 50, height: 50 });
@@ -245,7 +377,15 @@ describe('matchQuery geometry evidence', () => {
   it('reports a hidden element as not fully in the viewport instead of throwing', () => {
     document.body.innerHTML = '<div data-testid="card" style="display: none">Card</div>';
     rectOf(byTestid('card'), { x: 10, y: 10, width: 200, height: 50 });
-    const match = matchQuery({ testid: 'card' }, undefined, undefined, undefined, undefined, {});
+    const match = matchQuery(
+      { testid: 'card' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {},
+    );
     expect(match.elements[0]?.geometry?.fullyInViewport).toBe(false);
   });
 
