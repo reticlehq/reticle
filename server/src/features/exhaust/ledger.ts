@@ -40,14 +40,35 @@ export type CoverageLevel = (typeof CoverageLevel)[keyof typeof CoverageLevel];
 
 const LEDGER_VERSION = 1;
 /** How many missing items a level names before it only counts them. */
-const MAX_MISSING = 50;
+export const MAX_MISSING = 50;
 
 const names = z.array(z.string());
+
+/** A behaviour fault the explorer found. See `invariants.ts`, which produces these. */
+export const BehaviourFindingSchema = z.object({
+  /** A `BehaviourFindingKind` from core. */
+  kind: z.string(),
+  /** The rule that did not hold, in words. */
+  invariant: z.string(),
+  detail: z.string(),
+  /** The steps that show it, from a fresh page. */
+  sequence: z.array(z.string()),
+  /** `file:line` of the element, when the app gives source attribution. */
+  source: z.string().optional(),
+  /** True when the fault did not occur on every run. */
+  intermittent: z.boolean().optional(),
+});
+export type BehaviourFinding = z.infer<typeof BehaviourFindingSchema>;
+
 const LedgerSchema = z.object({
   routes: z.object({ discovered: names, reached: names }),
   controls: z.object({ seen: names, touched: names, proved: names }),
   journeys: z.object({ completed: names }),
   writes: z.object({ seen: names, branched: names, unhandled: names }),
+  /** Controls whose edge cases (edge inputs, edge interactions) were driven. */
+  edges: z.object({ probed: names }).default({ probed: [] }),
+  /** Behaviour faults, one copy each. Absent in a ledger from before they existed. */
+  findings: z.array(BehaviourFindingSchema).default([]),
   code: z.record(
     z.string(),
     z.record(z.string(), z.object({ name: z.string(), executed: z.boolean() })),
@@ -64,6 +85,8 @@ export interface LedgerDelta {
   controls?: Partial<AppLedger['controls']>;
   journeys?: Partial<AppLedger['journeys']>;
   writes?: Partial<AppLedger['writes']>;
+  edges?: Partial<AppLedger['edges']>;
+  findings?: readonly BehaviourFinding[];
   code?: CodeCoverage;
   /** When `code` was taken, so a file edited since reads as not measured rather than as covered. */
   codeTakenAt?: number;
@@ -119,6 +142,8 @@ export function emptyLedger(): AppLedger {
     controls: { seen: [], touched: [], proved: [] },
     journeys: { completed: [] },
     writes: { seen: [], branched: [], unhandled: [] },
+    edges: { probed: [] },
+    findings: [],
     code: {},
     codeTaken: {},
     best: {},
@@ -127,6 +152,24 @@ export function emptyLedger(): AppLedger {
 
 const union = (a: readonly string[], b: readonly string[] | undefined): string[] =>
   b === undefined ? [...a] : [...new Set([...a, ...b])];
+
+/** The same fault found again by the same steps is one finding; the first copy is kept. */
+const findingKey = (f: BehaviourFinding): string => `${f.kind}\n${f.sequence.join('\n')}`;
+
+function unionFindings(
+  into: readonly BehaviourFinding[],
+  add: readonly BehaviourFinding[] | undefined,
+): BehaviourFinding[] {
+  const out = [...into];
+  const keys = new Set(out.map(findingKey));
+  for (const f of add ?? []) {
+    if (!keys.has(findingKey(f))) {
+      keys.add(findingKey(f));
+      out.push(f);
+    }
+  }
+  return out;
+}
 
 export function mergeLedger(into: AppLedger, delta: LedgerDelta): AppLedger {
   const code: CodeCoverage = { ...into.code };
@@ -139,9 +182,11 @@ export function mergeLedger(into: AppLedger, delta: LedgerDelta): AppLedger {
     code[file] = merged;
     if (delta.codeTakenAt !== undefined) codeTaken[file] = delta.codeTakenAt;
   }
-  // Reaching a route discovers it; touching or proving a control means it was seen.
+  // Reaching a route discovers it; touching or proving a control means it was seen. Probing a
+  // control's edge cases drove it, so it was touched.
   const reached = union(into.routes.reached, delta.routes?.reached);
-  const touched = union(into.controls.touched, delta.controls?.touched);
+  const probed = union(into.edges.probed, delta.edges?.probed);
+  const touched = union(union(into.controls.touched, delta.controls?.touched), probed);
   const proved = union(into.controls.proved, delta.controls?.proved);
   const branched = union(into.writes.branched, delta.writes?.branched);
   return {
@@ -160,6 +205,8 @@ export function mergeLedger(into: AppLedger, delta: LedgerDelta): AppLedger {
       branched,
       unhandled: union(into.writes.unhandled, delta.writes?.unhandled),
     },
+    edges: { probed },
+    findings: unionFindings(into.findings, delta.findings),
     code,
     codeTaken,
     best: { ...into.best },
@@ -210,6 +257,96 @@ export function levelsOf(ledger: AppLedger): LevelReport[] {
     level(CoverageLevel.BRANCHED, ledger.writes.seen, ledger.writes.branched),
     executedLevel(ledger.code),
   ];
+}
+
+/**
+ * What was never reached, as named items: the holes in the exploration.
+ *
+ * The levels above give a number per level. A number does not say where to go next, and it hides a
+ * level that was never measured behind an empty list. `holesOf` names every gap by kind, says when
+ * a kind was not measured at all, and counts the items past its cap. Nothing is left out in silence.
+ */
+export const HoleKind = {
+  /** Routes discovered and never visited. */
+  ROUTES: 'routes',
+  /** Controls seen and never driven. */
+  CONTROLS: 'controls',
+  /** Controls seen whose edge cases were never driven. */
+  EDGES: 'edges',
+  /** Writes seen whose failure path was never driven. */
+  WRITES: 'writes',
+  /** App functions loaded and never executed, as `file: function`. */
+  FUNCTIONS: 'functions',
+  /** Components the app has and never rendered. */
+  COMPONENTS: 'components',
+} as const;
+export type HoleKind = (typeof HoleKind)[keyof typeof HoleKind];
+
+export interface HoleList {
+  /** False when nothing could measure this kind: an empty list then means "unknown", not "none". */
+  measured: boolean;
+  items: string[];
+  /** How many more items there are than `items` names. */
+  overflow?: number;
+  /** Why the kind is not measured, or what to do to measure it. */
+  note?: string;
+}
+
+export type HolesReport = Record<HoleKind, HoleList>;
+
+/** The React adapter's component inventory: every component it knows, and the ones it rendered. */
+export interface ComponentInventory {
+  known: readonly string[];
+  rendered: readonly string[];
+}
+
+export const HoleNote = {
+  CODE: 'Not measured: code coverage needs a browser Reticle drives (`reticle drive`, or RETICLE_CDP_URL).',
+  COMPONENTS:
+    'Not measured: no component inventory is available. A component that never rendered still shows in `functions` when code coverage is on.',
+  EDGES:
+    'No edge cases were driven yet. Run `reticle_crawl { exhaustive: true }`; every control listed here is still a hole.',
+} as const;
+
+function named(universe: readonly string[], covered: readonly string[]): HoleList {
+  const done = new Set(covered);
+  const missing = [...new Set(universe)].filter((item) => !done.has(item));
+  return {
+    measured: true,
+    items: missing.slice(0, MAX_MISSING),
+    ...(missing.length > MAX_MISSING ? { overflow: missing.length - MAX_MISSING } : {}),
+  };
+}
+
+/** The same named list a coverage level reports, so the two can never disagree. */
+function fromLevel(ledger: AppLedger, level: CoverageLevel): HoleList {
+  const report = levelsOf(ledger).find((l) => l.level === level);
+  return {
+    measured: true,
+    items: report?.missing ?? [],
+    ...(report?.missingOverflow === undefined ? {} : { overflow: report.missingOverflow }),
+  };
+}
+
+export function holesOf(ledger: AppLedger, components?: ComponentInventory): HolesReport {
+  const edges = named(ledger.controls.seen, ledger.edges.probed);
+  return {
+    [HoleKind.ROUTES]: fromLevel(ledger, CoverageLevel.REACHED),
+    [HoleKind.CONTROLS]: fromLevel(ledger, CoverageLevel.TOUCHED),
+    [HoleKind.EDGES]:
+      0 === ledger.edges.probed.length
+        ? { ...edges, measured: false, note: HoleNote.EDGES }
+        : edges,
+    [HoleKind.WRITES]: fromLevel(ledger, CoverageLevel.BRANCHED),
+    [HoleKind.FUNCTIONS]:
+      0 === Object.keys(ledger.code).length
+        ? { measured: false, items: [], note: HoleNote.CODE }
+        : fromLevel(ledger, CoverageLevel.EXECUTED),
+    [HoleKind.COMPONENTS]:
+      components === undefined
+        ? { measured: false, items: [], note: HoleNote.COMPONENTS }
+        : named(components.known, components.rendered),
+  };
 }
 
 /** The best percentage each level has reached, raised to today's where today is higher. */

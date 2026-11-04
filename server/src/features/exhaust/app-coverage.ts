@@ -6,7 +6,15 @@
 import type { ReticleEvent } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { emptyCodeCoverage, foldCodeCoverage, type RawScriptCoverage } from './code-coverage.js';
-import { LedgerStore, levelsOf, regressions, type LevelReport } from './ledger.js';
+import {
+  holesOf,
+  LedgerStore,
+  levelsOf,
+  regressions,
+  type BehaviourFinding,
+  type HolesReport,
+  type LevelReport,
+} from './ledger.js';
 import { sessionDelta } from './session-fold.js';
 
 export interface AppCoverageReport {
@@ -15,6 +23,10 @@ export interface AppCoverageReport {
   unhandledWrites: string[];
   /** Levels below the best they ever reached. */
   regressed: { level: string; was: number; now: number }[];
+  /** Every route, control, edge case, write, function and component never reached, by name. */
+  holes: HolesReport;
+  /** Behaviour faults the explorer found, one copy each. Absent when there are none. */
+  findings?: BehaviourFinding[];
   note?: string;
 }
 
@@ -53,6 +65,8 @@ export async function foldAppCoverage(input: {
     levels: levelsOf(ledger),
     unhandledWrites: ledger.writes.unhandled,
     regressed: regressions(ledger),
+    holes: holesOf(ledger),
+    ...(ledger.findings.length > 0 ? { findings: ledger.findings } : {}),
     ...(take === undefined && 0 === Object.keys(ledger.code).length ? { note: NO_CODE_NOTE } : {}),
   };
 }

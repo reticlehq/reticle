@@ -6,10 +6,12 @@
  * `exhaustive` block with what only this mode knows.
  */
 
+import { BehaviourFindingKind } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import { emptyCodeCoverage, foldCodeCoverage, type RawScriptCoverage } from './code-coverage.js';
 import { explore } from './explorer.js';
 import { driveFailureBranches } from './failure-branches.js';
+import { failureFindings } from './invariants.js';
 import { LedgerStore, levelsOf, regressions } from './ledger.js';
 import { sessionPort, type PortSession } from './session-port.js';
 
@@ -60,6 +62,7 @@ export async function runExhaustive(input: {
       branched: branches.branched,
       unhandled: branches.unhandled.map((u) => u.key),
     },
+    findings: failureFindings(branches, report.writes),
     ...(take === undefined
       ? {}
       : { code: foldCodeCoverage(emptyCodeCoverage(), take), codeTakenAt: input.now() }),
@@ -67,7 +70,7 @@ export async function runExhaustive(input: {
   const anomalies = [
     ...report.anomalies.map((a) => ({ kind: a.kind, ref: '', desc: a.control, detail: a.detail })),
     ...branches.unhandled.map((u) => ({
-      kind: 'failure-unhandled',
+      kind: BehaviourFindingKind.FAILURE_UNHANDLED,
       ref: '',
       desc: u.key,
       detail: u.detail,

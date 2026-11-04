@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import type { ReticleEvent } from '@reticlehq/core';
 import { createMemoryFs } from '@/memory/project/memory-fs.js';
+import { BehaviourFindingKind } from '@reticlehq/core';
 import { foldAppCoverage } from './app-coverage.js';
+import { HoleKind, LedgerStore } from './ledger.js';
 
 const session = (acted: string[], proved: string[]) => ({
   url: 'http://h/cart',
@@ -70,5 +72,27 @@ describe('foldAppCoverage', () => {
       covered: 0,
       missing: ['src/Cart.tsx: pay'],
     });
+  });
+
+  it('names the holes, and the behaviour findings the ledger holds', async () => {
+    const { fs } = createMemoryFs();
+    const reticleRoot = '/p/.reticle';
+    const finding = {
+      kind: BehaviourFindingKind.LOST_AFTER_RELOAD,
+      invariant: 'kept after reload',
+      detail: 'gone',
+      sequence: ['click button "Save"', 'reload'],
+    };
+    await new LedgerStore(fs, reticleRoot).merge({ findings: [finding] });
+    const report = await foldAppCoverage({
+      now: () => 0,
+      fs,
+      reticleRoot,
+      seen: ['button "Save"', 'link "Admin"'],
+      session: session(['button "Save"'], []),
+    });
+    expect(report.holes[HoleKind.CONTROLS].items).toEqual(['link "Admin"']);
+    expect(report.holes[HoleKind.FUNCTIONS].measured).toBe(false);
+    expect(report.findings).toEqual([finding]);
   });
 });

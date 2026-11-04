@@ -484,3 +484,25 @@ export const CrawlAnomalyKind = {
   DEAD_CONTROL: 'dead-control', // it dispatched but the app did NOTHING (no DOM/net/route/signal)
 } as const;
 export type CrawlAnomalyKind = (typeof CrawlAnomalyKind)[keyof typeof CrawlAnomalyKind];
+
+/**
+ * Behaviour faults that the systematic explorer finds by driving the app against itself. Each one
+ * needs no reference answer: the app's own earlier state, request or run is the reference.
+ *
+ * Like `CrawlAnomalyKind`, these are not cross-channel contradictions and do not decide a verdict.
+ */
+export const BehaviourFindingKind = {
+  /** An undo or cancel did not return the page to the state before the action. */
+  UNDO_NOT_RESTORED: 'undo-not-restored',
+  /** A repeated identical action changed state that the first action did not change. */
+  REPEAT_CHANGED_STATE: 'repeat-changed-state',
+  /** A value the app saved is not shown after a reload, and the app did not say it was not saved. */
+  LOST_AFTER_RELOAD: 'lost-after-reload',
+  /** The value the page shows after a write is not the value the write request sent. */
+  SHOWN_DIFFERS_FROM_SENT: 'shown-differs-from-sent',
+  /** Two identical drives from a fresh page showed different results. */
+  INTERMITTENT_RESULT: 'intermittent-result',
+  /** With a write failing, the app arrived where it goes when the write succeeds. */
+  FAILURE_UNHANDLED: 'failure-unhandled',
+} as const;
+export type BehaviourFindingKind = (typeof BehaviourFindingKind)[keyof typeof BehaviourFindingKind];
