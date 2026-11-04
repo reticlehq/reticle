@@ -37,6 +37,7 @@ function fakeSession(id: string, acts: string[]): Session {
     id,
     url: `http://localhost:5173/${id}`,
     elapsed: () => 0,
+    lostSince: () => false,
     lastAct: new LastAct(),
     beginAction: () => 'a1',
     finishAction: () => undefined,

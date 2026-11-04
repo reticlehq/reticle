@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a `reticle_act { steps }` plan that declared nothing said `unknown`, also when the app was quiet.** A single `reticle_act_and_wait` with no `until` is `no-fault` when the page settles and no channel reports a problem. The same drive as a plan of steps was always `unknown`. `unknown` tells the agent to look again with better coverage, which cannot help: the next move is to give each step an `expect`. Now a plan with no `expect` is `no-fault` when every step settled, no step saw an absence-derived finding, and the capture lost no events. Otherwise it stays `unknown`. The reason stays `nothing_declared` in both cases. Closes [#2196](https://github.com/reticlehq/reticle/issues/2196).

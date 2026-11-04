@@ -3143,14 +3143,6 @@
       "count": 9
     }
   },
-  "src/surface/tools/act/sequence-grade.ts": {
-    "curly": {
-      "count": 2
-    },
-    "no-nested-ternary": {
-      "count": 1
-    }
-  },
   "src/surface/tools/act/settle-in-flight.ts": {
     "curly": {
       "count": 11

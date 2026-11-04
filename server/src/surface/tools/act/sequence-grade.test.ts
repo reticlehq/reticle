@@ -5,30 +5,40 @@ import { gradeSequence, type StepExpectation } from './sequence-grade.js';
 const held = (): StepExpectation => ({ declared: true, held: true });
 const missed = (observed: string): StepExpectation => ({ declared: true, held: false, observed });
 const silent = (): StepExpectation => ({ declared: false });
+const quiet = (): StepExpectation => ({ declared: false, settled: true });
 
 describe('grading a plan by what it declared', () => {
   it('is unknown when no step declared anything — a plan that asserts nothing proves nothing', () => {
-    /*
-     * `unknown`, deliberately, and NOT `no-fault` -- which this comment used to claim it was "the
-     * same rule" as, while asserting the opposite enum. Two words for one state is how an agent
-     * ends up taking the opposite next step, so the difference is worth stating.
-     *
-     * The engine emits `no-fault` for "nothing was declared" ONLY over a settled window
-     * (`engine/src/evidence/verified.ts`): no-fault claims the whole window was observed, and a
-     * call that returned while the app was still moving has not earned that claim. This path
-     * tracks no settledness at all -- `act-sequence-tool.ts` never asks for it and no step result
-     * carries it -- so `no-fault` here would be an assertion about evidence nobody collected.
-     * `unknown` is the conservative word and the honest one.
-     *
-     * The agent is not left guessing either way: `because` names the exact next move, which is to
-     * give each step an `expect`. Upgrading this to `no-fault` means plumbing `settled` through
-     * `SequencePlan` from the act results, and it is not worth doing until something reads the
-     * difference.
-     */
+    // No step reported a settled window, so nothing says the whole window was seen: `unknown`.
     const grade = gradeSequence([silent(), silent(), silent()]);
     expect(grade.verified).toBe(Verified.UNKNOWN);
     expect(grade.declared).toBe(0);
     expect(grade.because).toMatch(/declared nothing/i);
+  });
+
+  it('is no-fault when no step declared anything and every step settled with nothing flagged', () => {
+    // The rule a single act_and_wait follows (engine/src/evidence/verified.ts): nothing declared
+    // over a settled window is `no-fault`, not `unknown`. A plan graded `unknown` here told the
+    // agent to look again with better coverage, when the fix is to declare a consequence.
+    const grade = gradeSequence([quiet(), quiet()]);
+    expect(grade.verified).toBe(Verified.NO_FAULT);
+    expect(grade.reason).toBe(VerifiedReason.NOTHING_DECLARED);
+    expect(grade.because).toMatch(/declared nothing/i);
+  });
+
+  it.each([
+    ['a step did not settle', () => gradeSequence([quiet(), { declared: false, settled: false }])],
+    [
+      'a step saw an absence-derived finding',
+      () => gradeSequence([quiet(), { ...quiet(), doubted: ['request-never-settled'] }]),
+    ],
+    [
+      'the capture lost events',
+      () => gradeSequence([quiet()], { planned: 1, dispatched: true, captureLost: true }),
+    ],
+  ])('stays unknown when %s', (_label, grade) => {
+    expect(grade().verified).toBe(Verified.UNKNOWN);
+    expect(grade().reason).toBe(VerifiedReason.NOTHING_DECLARED);
   });
 
   it('is yes when every declared consequence held', () => {

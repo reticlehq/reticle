@@ -46,6 +46,14 @@ export interface StepExpectation {
    * step is undecided, never a miss — `unknown`, as act_and_wait says.
    */
   undecided?: string;
+  /** A real frame flushed after this step's action, as `settled` on its act result says. */
+  settled?: boolean;
+  /**
+   * Absence-derived contradiction kinds seen in this step's window (a request that never settled,
+   * for example). They do not decide a miss, but they stop a plan from claiming no channel saw a
+   * problem.
+   */
+  doubted?: readonly string[];
 }
 
 export interface SequenceGrade {
@@ -71,6 +79,21 @@ interface SequencePlan {
   readonly planned: number;
   /** Whether anything actually reached the page. */
   readonly dispatched: boolean;
+  /** The capture lost events inside the plan's window, so no channel saw all of it. */
+  readonly captureLost?: boolean;
+}
+
+/** The sentence for a plan whose steps declared nothing. */
+function undeclaredBecause(total: number, dispatched: boolean): string {
+  if (0 === total) {
+    return 'the plan had no steps, so nothing was driven and nothing was proved';
+  }
+  // A step refused before dispatch is a malformed call: telling its author to add an `expect`
+  // sends them to the wrong thing.
+  if (!dispatched) {
+    return `nothing was dispatched, so none of the ${String(total)} step(s) ran — read the per-step \`error\` for the one that was refused, and fix that before adding an \`expect\``;
+  }
+  return `all ${String(total)} step(s) declared nothing, so the app was driven but not verified — give each step an \`expect\` naming the consequence it causes`;
 }
 
 export function gradeSequence(
@@ -115,7 +138,7 @@ export function gradeSequence(
 
   // Nothing failed that was seen: a step nobody could judge leaves the plan undecided, saying why.
   const unjudged = steps.find((step) => step.undecided !== undefined);
-  if (unjudged !== undefined)
+  if (unjudged !== undefined) {
     return {
       verified: Verified.UNKNOWN,
       reason: VerifiedReason.INCONCLUSIVE,
@@ -123,36 +146,27 @@ export function gradeSequence(
       total,
       because: `a step could not be judged — ${unjudged.undecided ?? ''}`,
     };
+  }
 
   /*
-   * `unknown` rather than `no-fault`, and the distinction is load-bearing.
-   *
-   * "Nothing was declared" is what `no-fault` means for a single action -- but the engine only says
-   * it over a SETTLED window, because no-fault claims the whole window was observed. Nothing on
-   * this path observes settledness: the caller tracks dispatch and stalls, never settle. Saying
-   * `no-fault` here would claim evidence nobody collected, in the one place this product cannot
-   * afford to overclaim.
-   *
-   * So the enum stays conservative and the SENTENCE carries the whole answer: it names declaring a
-   * consequence as the next move, which is what an agent reading `no-fault` would have done.
-   * Upgrading means plumbing `settled` from the act results through `SequencePlan`.
+   * Nothing declared is `no-fault` over a quiet plan and `unknown` otherwise. This is the rule a
+   * single action follows (`engine/src/evidence/verified.ts`): no-fault claims the whole window was
+   * observed, so every step must report a settled frame, no step may carry an absence-derived
+   * finding, and the capture must be whole. `unknown` sends an agent to look again with better
+   * coverage. When the plan was quiet, that cannot help: the fix is to declare a consequence.
    */
   if (0 === declared) {
+    const quiet =
+      plan.dispatched &&
+      true !== plan.captureLost &&
+      steps.length > 0 &&
+      steps.every((step) => true === step.settled && 0 === (step.doubted ?? []).length);
     return {
-      verified: Verified.UNKNOWN,
+      verified: quiet ? Verified.NO_FAULT : Verified.UNKNOWN,
       reason: VerifiedReason.NOTHING_DECLARED,
       declared,
       total,
-      because:
-        0 === total
-          ? 'the plan had no steps, so nothing was driven and nothing was proved'
-          : // "the app was driven" was said unconditionally, including on a call whose own
-            // `dispatched` was false in the same object. A step refused before dispatch is a
-            // malformed call, and telling its author to add an `expect` sends them at the wrong
-            // thing entirely.
-            plan.dispatched
-            ? `all ${String(total)} step(s) declared nothing, so the app was driven but not verified — give each step an \`expect\` naming the consequence it causes`
-            : `nothing was dispatched, so none of the ${String(total)} step(s) ran — read the per-step \`error\` for the one that was refused, and fix that before adding an \`expect\``,
+      because: undeclaredBecause(total, plan.dispatched),
     };
   }
 
@@ -210,7 +224,9 @@ export function gradeSequence(
 export const JOURNEY_RECORDING = 'last-journey';
 
 export function offerToKeep(grade: SequenceGrade): string | undefined {
-  if (grade.verified !== Verified.YES || 0 === grade.declared) return undefined;
+  if (grade.verified !== Verified.YES || 0 === grade.declared) {
+    return undefined;
+  }
   return (
     `this plan proved something (${String(grade.declared)} of ${String(grade.total)} steps declared a ` +
     'consequence and every one held) — keep it as a regression flow with ' +
