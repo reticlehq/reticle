@@ -7,7 +7,7 @@ icon: play
 `reticle serve` starts the daemon: the WebSocket bridge your app dials into, plus the tool engine behind it. It spawns a detached child and then waits for that child to answer `/status` before reporting success.
 
 ```bash
-npx @reticlehq/server serve [--port N] [--drive <url>] [--headless] [--headed] [--http] [--http-port N] [--http-token T]
+npx @reticlehq/server serve [--port N] [--drive <url>] [--headless] [--headed] [--http] [--http-port N] [--http-token T] [--ignore-https-errors]
 ```
 
 Most people never type this. Your agent runs [`reticle mcp`](/cli/mcp), which starts a daemon itself if one is not already up.
@@ -23,8 +23,11 @@ Most people never type this. Your agent runs [`reticle mcp`](/cli/mcp), which st
 | `--http` | boolean | `false` | Also expose the HTTP verify endpoint |
 | `--http-port N` | number | unset (`7331`) | Port for that endpoint. Requires `--http`. |
 | `--http-token T` | string | unset | Bearer token the endpoint requires. Requires `--http`. |
+| `--ignore-https-errors` | boolean | `false` | Accept a self-signed or local-CA dev certificate (mkcert, `vite --https` with no trusted cert) for every browser this daemon opens, including the isolated context a lease or a `drive` is handed |
 
 The HTTP flags and `--drive` are honoured or refused, never silently dropped: against an already-running daemon that does not serve the requested verify port, `serve --http` exits 1 and names both ports. A running daemon keeps the flags it was started with, so `reticle stop`, then serve again. A verify port that cannot be bound fails the daemon start with a `reticle_daemon_start_failed` line naming that port.
+
+`--ignore-https-errors` is the same kind of flag: it applies to the daemon this command starts, and a daemon that is already up keeps the value it was started with. For a single run against a running daemon, pass the flag to [`reticle drive`](/cli/drive) instead, which forwards it with the drive request.
 
 When `serve --drive <url>` finds a running daemon, it exits `1` rather than silently ignoring the URL. Its stderr includes a copyable `reticle drive` command with the requested URL. On a non-default bridge port it prefixes the command with `RETICLE_PORT=N` to select the existing daemon. The `drive` command does not support a `--port` flag; see [`reticle drive`](/cli/drive).
 

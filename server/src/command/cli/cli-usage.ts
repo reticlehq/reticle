@@ -67,6 +67,7 @@ const VERIFY_DETAIL = `Drives the URL and verifies the saved flows. Exit 0 means
   --require-start-control       fail a flow whose first control is not on its freshly loaded start page
   --sweep                       judge every step, also after one fails (the results score counts them all)
   --storage-state <file>        start signed in
+  --ignore-https-errors         accept the dev server's self-signed certificate for this run
   --session-id <id>, --timeout <ms>, --headed, --port N
   --expect '<json predicate>' | --expect-file <path>
                                 one verdict, no saved flows needed. Asks a running daemon,
@@ -81,7 +82,12 @@ it; CI, RETICLE_HEADLESS=1, or a Linux machine with no display hides it too.`;
 /** What `--http` starts. MCP is already on the bridge port; this flag is the verify endpoint. */
 const HTTP_HELP = '--http starts the verify endpoint. MCP is already served on the bridge port.';
 
-const DAEMON_DETAIL = `${BROWSER_NOTE}\n\n${HTTP_HELP}`;
+/** The daemon's browser opens pages, including the ones a self-signed dev server serves. */
+const CERT_HELP =
+  '--ignore-https-errors accepts a self-signed or local-CA dev certificate for every browser ' +
+  'the daemon opens on your behalf (mkcert, a local CA, `vite --https` with no cert configured).';
+
+const DAEMON_DETAIL = `${BROWSER_NOTE}\n\n${HTTP_HELP}\n\n${CERT_HELP}`;
 
 const COMMANDS: readonly CommandDoc[] = [
   {
@@ -267,9 +273,14 @@ const COMMANDS: readonly CommandDoc[] = [
   },
   {
     name: 'drive',
-    synopsis: 'drive <url> [--headless] [--headed]',
+    synopsis: 'drive <url> [--headless] [--headed] [--ignore-https-errors]',
     summary: 'Open a URL in the foreground, for debugging',
     group: HelpGroup.MORE,
+    detail:
+      'With the bridge port free, drive opens its own browser and stays in the foreground. With a\n' +
+      'daemon already on it, drive asks that daemon for a session instead and exits once the\n' +
+      'session exists. --ignore-https-errors rides that request, so a daemon started without it\n' +
+      'still opens the tab for this run.',
   },
   {
     name: 'setup',

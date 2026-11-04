@@ -9,6 +9,7 @@
 import {
   EXPECT_FLAG,
   HEADED_FLAG,
+  IGNORE_HTTPS_ERRORS_FLAG,
   PORT_FLAG,
   VERIFY_COMMAND,
   missingOperand,
@@ -70,6 +71,8 @@ export type VerifySuffix =
       kind: 'ok';
       url: string;
       headless: boolean;
+      /** Accept a self-signed or local-CA dev certificate on the browser this run opens (#1713). */
+      ignoreHTTPSErrors?: boolean;
       port: number;
       timeoutMs?: number;
       storageState?: string;
@@ -143,6 +146,7 @@ function looksQuoteStripped(value: string): boolean {
 
 export function parseVerifySuffix(args: string[], defaultPort: number): VerifySuffix {
   let headless = true;
+  let ignoreHTTPSErrors = false;
   let url: string | undefined;
   let timeoutMs: number | undefined;
   let storageState: string | undefined;
@@ -166,6 +170,8 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
     }
     if (arg === HEADED_FLAG) {
       headless = false;
+    } else if (arg === IGNORE_HTTPS_ERRORS_FLAG) {
+      ignoreHTTPSErrors = true;
     } else if (arg === PORT_FLAG) {
       i++;
       const n = args[i];
@@ -294,6 +300,7 @@ export function parseVerifySuffix(args: string[], defaultPort: number): VerifySu
     kind: 'ok',
     url,
     headless,
+    ...(ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
     port,
     ...(expect !== undefined ? { expect } : {}),
     ...(expectFile !== undefined ? { expectFile } : {}),

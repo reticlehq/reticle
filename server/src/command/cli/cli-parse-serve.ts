@@ -6,6 +6,7 @@
  */
 import {
   HEADED_FLAG,
+  IGNORE_HTTPS_ERRORS_FLAG,
   PORT_FLAG,
   missingValue,
   notANumber,
@@ -30,6 +31,11 @@ type ServeFlags =
       port: number;
       driveUrl?: string;
       headless: boolean;
+      /**
+       * Accept a self-signed or local-CA dev certificate. The daemon passes this to the browser it
+       * drives and to every context its lease pool opens (#1713).
+       */
+      ignoreHTTPSErrors?: boolean;
       http: boolean;
       httpPort?: number;
       httpToken?: string;
@@ -63,6 +69,7 @@ export function parseServeFlags(
   let port = defaultPort;
   let driveUrl: string | undefined;
   let headless = defaultHeadless;
+  let ignoreHTTPSErrors = false;
   let http = false;
   let httpPort: number | undefined;
   let httpToken: string | undefined;
@@ -95,6 +102,8 @@ export function parseServeFlags(
       headless = false;
     } else if (arg === HEADLESS_FLAG) {
       headless = true;
+    } else if (arg === IGNORE_HTTPS_ERRORS_FLAG) {
+      ignoreHTTPSErrors = true;
     } else if (arg === HTTP_FLAG) {
       http = true;
     } else if (arg === HTTP_PORT_FLAG) {
@@ -137,6 +146,7 @@ export function parseServeFlags(
     kind: 'ok',
     port,
     headless,
+    ...(ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
     http,
     ...(driveUrl !== undefined ? { driveUrl } : {}),
     ...(httpPort !== undefined ? { httpPort } : {}),

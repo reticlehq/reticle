@@ -36,6 +36,7 @@ import { attachNetworkDetail, type NetworkDetail } from './network-detail.js';
 import { attachDownloadCapture, type CdpLike } from './download-capture.js';
 import { injectedConnectArgs } from '@/portal/pool/zero-install.js';
 import { EARLY_CAPTURE_ARG, queueEarlyConsole } from '@/portal/pool/lease-page-error.js';
+import { IGNORE_HTTPS_ERRORS_FLAG, isCertificateError } from '@/certificate-error.js';
 
 /** Viewport CSS-px box as returned by the INSPECT command (getBoundingClientRect). */
 export interface ElementBox {
@@ -606,6 +607,8 @@ export interface LaunchedProviderOptions {
   injectConnect?: InjectConnectOptions;
   /** Path to a Playwright storageState JSON (cookies/localStorage) — starts the page authenticated. */
   storageState?: string;
+  /** Accept a self-signed or local-CA dev certificate for this context only (#1713). */
+  ignoreHTTPSErrors?: boolean;
   /**
    * Sink for CDP-authoritative network detail. When set, every driven-page response is captured
    * as a NET_DETAIL and handed here — the daemon routes it onto the driven session's journal so the
@@ -644,6 +647,24 @@ export const launchedChromium: LaunchFn = async (headless) => {
 };
 
 /**
+ * What a driven page's failed navigation tells a CLI user.
+ *
+ * Playwright names the net code but not the way out. A self-signed or mkcert certificate on a dev
+ * host is ordinary, so when the flag was not passed, name it. When it WAS passed, the same code
+ * means something else, and repeating the flag would send the reader in a circle.
+ */
+export function navigationFailureMessage(reason: string, ignoreHTTPSErrors: boolean): string {
+  if (ignoreHTTPSErrors || !isCertificateError(reason)) {
+    return reason;
+  }
+  return (
+    `${reason}\n` +
+    `The browser refused the TLS certificate. If this is your dev server, pass ` +
+    `${IGNORE_HTTPS_ERRORS_FLAG} to accept it for this browser.`
+  );
+}
+
+/**
  * Launches and OWNS a Playwright Chromium, navigates it to `driveUrl`, then drives native
  * input on that page. Headless-capable so @reticlehq/test / CI can run hover/drag unattended.
  */
@@ -655,6 +676,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
   readonly #launch: LaunchFn;
   readonly #injectConnect: InjectConnectOptions | undefined;
   readonly #storageState: string | undefined;
+  readonly #ignoreHTTPSErrors: boolean;
   readonly #onNetworkDetail: ((detail: NetworkDetail) => void) | undefined;
   readonly #zeroInstallScript: (() => string | undefined) | undefined;
   #browser: Browser | undefined;
@@ -670,6 +692,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     this.#launch = options.launch ?? launchedChromium;
     this.#injectConnect = options.injectConnect;
     this.#storageState = options.storageState;
+    this.#ignoreHTTPSErrors = true === options.ignoreHTTPSErrors;
     this.#onNetworkDetail = options.onNetworkDetail;
     this.#zeroInstallScript = options.zeroInstallScript;
   }
@@ -678,6 +701,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     this.#browser = await this.#launch(this.#headless);
     const page = await this.#browser.newPage({
       ...pageViewportOptions(this.#headless),
+      ...(true === this.#ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
       ...(this.#storageState !== undefined ? { storageState: this.#storageState } : {}),
     });
     this.#page = page;
@@ -704,9 +728,10 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
       // first-run tour mounts over a driven page and its scrim swallows every native gesture.
       await page.goto(stampedDriveUrl(this.#driveUrl), gotoOptions(undefined));
     } catch (e) {
+      const reason = e instanceof Error ? e.message : String(e);
       throw new DriveError(
         DriveErrorCode.NAVIGATE_FAILED,
-        e instanceof Error ? e.message : String(e),
+        navigationFailureMessage(reason, this.#ignoreHTTPSErrors),
       );
     }
     await this.#supplyReader(page);

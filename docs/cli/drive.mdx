@@ -7,7 +7,7 @@ icon: gauge-high
 `reticle drive` runs the engine in the foreground and launches a browser at the URL you give it. It exists for debugging: you watch the run happen.
 
 ```bash
-npx @reticlehq/server drive <url> [--headless] [--headed]
+npx @reticlehq/server drive <url> [--headless] [--headed] [--ignore-https-errors]
 ```
 
 ## Arguments and flags
@@ -17,6 +17,7 @@ npx @reticlehq/server drive <url> [--headless] [--headed]
 | `url` | string, positional, **required** | none | The page to drive |
 | `--headed` | boolean | on by default outside CI | Show the browser |
 | `--headless` | boolean | on when `CI` or `RETICLE_HEADLESS` is set, or on Linux with no display | Hide it |
+| `--ignore-https-errors` | boolean | `false` | Accept a self-signed or local-CA dev certificate. Set in the browser `drive` opens itself, and sent along with the request when it attaches, so a daemon started without the flag still opens the tab for this run |
 
 `serve` and `mcp` show their browser by default too, so you can watch your agent's run; `--headless` hides it. `restart` always starts its daemon headless.
 
@@ -35,9 +36,9 @@ usage:  reticle <command>   (or npx @reticlehq/server <command>)
 ```
 
 <Note>
-  `drive` takes **no `--port` flag**. Any flag other than `--headed` or `--headless` is rejected as
-  `unknown argument '--port'`. To drive on a different port, set `RETICLE_PORT` or put the port in
-  `.reticle.json`.
+  `drive` takes **no `--port` flag**. Any flag other than `--headed`, `--headless` or
+  `--ignore-https-errors` is rejected as `unknown argument '--port'`. To drive on a different port,
+  set `RETICLE_PORT` or put the port in `.reticle.json`.
 </Note>
 
 ## Exit codes
@@ -67,6 +68,8 @@ attached to the Reticle daemon on :4497 ... it is driving http://localhost:5177/
 That session lives in the daemon, so the tools your agent already has open can address it by id. You do **not** need `reticle stop` first, and should not use it: the MCP proxy respawns a daemon as soon as the next tool call arrives, which is a race a manual `stop` loses.
 
 Attaching means the browser is the daemon's pooled one, shown or hidden as that daemon was started, so `--headed` cannot apply. To watch a browser instead, drive on a port no daemon owns (`RETICLE_PORT=4460`).
+
+`--ignore-https-errors` is the one flag the daemon can still honour per run: a browser context is created from scratch for every lease, so `drive https://localhost:5173 --ignore-https-errors` rides the request and the daemon opens the tab with certificate checks off for that context only. Most daemons were started without the flag, and this is the way to drive one anyway.
 
 <Note>
   If the port is held by something that is **not** a Reticle daemon, `drive` refuses and names the

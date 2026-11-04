@@ -46,6 +46,21 @@ describe('a lease context and certificates', () => {
     expect(seen).toEqual([undefined, { ignoreHTTPSErrors: true }]);
     await pool.shutdown();
   });
+
+  it('inherits the daemon-wide setting, so a CLI flag reaches every lease', async () => {
+    const seen: unknown[] = [];
+    let n = 0;
+    const pool = new BrowserPool(recordingLauncher(seen), {
+      maxContexts: 2,
+      genSessionId: () => `lease-${String((n += 1))}`,
+      ignoreHTTPSErrors: true,
+    });
+
+    await pool.acquire('https://app.test:5173/', { sessionId: 'inherited' });
+
+    expect(seen).toEqual([{ ignoreHTTPSErrors: true }]);
+    await pool.shutdown();
+  });
 });
 
 describe('a navigation the certificate stopped', () => {

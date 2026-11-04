@@ -126,11 +126,6 @@
       "count": 3
     }
   },
-  "src/command/cli/daemon-start-options.ts": {
-    "curly": {
-      "count": 4
-    }
-  },
   "src/command/cli/doctor/browser/chromium-hint.ts": {
     "curly": {
       "count": 7

@@ -31,6 +31,7 @@
 
 import * as http from 'node:http';
 import { DRIVE_PATH, LOOPBACK_HOST } from '@reticlehq/core';
+import { IGNORE_HTTPS_ERRORS_FLAG, isCertificateError } from '@/certificate-error.js';
 import { PortPresence } from '@/command/daemon/binding/port-presence.js';
 import { summarizeStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 
@@ -119,7 +120,7 @@ export function readAttachResponse(
   const record = parsed as Record<string, unknown>;
   const error = record[ERROR_FIELD];
   if ('string' === typeof error) {
-    return { ok: false, reason: `could not drive ${url} — ${error}` };
+    return { ok: false, reason: couldNotDrive(url, error) };
   }
   const sessionId = record['sessionId'];
   if ('string' !== typeof sessionId || 0 === sessionId.length) {
@@ -143,6 +144,24 @@ export function readAttachResponse(
   };
 }
 
+/**
+ * A refusal the daemon passed through, in words a CLI reader can act on.
+ *
+ * The lease tool's own message offers `ignoreHTTPSErrors: true`, which is the right answer for an
+ * agent holding the tools and the wrong one for somebody running `drive` from a shell. The flag is
+ * the CLI's spelling of the same choice, so a certificate refusal names it (#1713).
+ */
+function couldNotDrive(url: string, error: string): string {
+  const reason = `could not drive ${url}: ${error}`;
+  if (!isCertificateError(error)) {
+    return reason;
+  }
+  return (
+    `${reason}\nIf it is your dev server, retry with ${IGNORE_HTTPS_ERRORS_FLAG}: the flag travels ` +
+    'with this request, and the daemon opens the tab for it with certificate checks off.'
+  );
+}
+
 function parseJson(body: string): unknown {
   try {
     return JSON.parse(body);
@@ -159,15 +178,38 @@ export class DriveRequestTimeout extends Error {
   }
 }
 
+/** What a drive request may ask the daemon for, beside the url. */
+export interface DriveRequestArgs {
+  /**
+   * Accept the dev server's self-signed certificate for the lease the daemon opens (#1713).
+   *
+   * `drive` has no `--port`, and a daemon usually owns the bridge port on a developer machine, so
+   * this is the COMMON path: without it the flag would be dropped in exactly the run that needed
+   * it.
+   * A daemon older than the field ignores it, and the lease then fails on the certificate.
+   */
+  ignoreHTTPSErrors?: boolean;
+  /** Injected in tests so the request is read without a socket. */
+  post?: DrivePost;
+}
+
 /** Ask the daemon on `port` to open a driveable browser at `url`. */
 export async function requestDriveSession(
   port: number,
   url: string,
-  post: DrivePost = postJson,
+  opts: DriveRequestArgs = {},
 ): Promise<DriveAttachResult> {
+  const post = opts.post ?? postJson;
   let res: { status: number; body: string };
   try {
-    res = await post(port, DRIVE_PATH, JSON.stringify({ url }));
+    res = await post(
+      port,
+      DRIVE_PATH,
+      JSON.stringify({
+        url,
+        ...(true === opts.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
+      }),
+    );
   } catch (error: unknown) {
     // A timeout is not a shutdown (#1535). The daemon took the request and said nothing for the
     // whole window, so it is alive and busy: telling the user it stopped sends them to restart a

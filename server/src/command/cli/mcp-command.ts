@@ -103,11 +103,13 @@ export async function handleMcp(opts: {
   port: number;
   driveUrl?: string;
   headless: boolean;
+  /** `--ignore-https-errors`, forwarded to the daemon this proxy spawns (#1713). */
+  ignoreHTTPSErrors?: boolean;
   http: boolean;
   httpPort?: number;
   httpToken?: string;
 }): Promise<void> {
-  const { driveUrl, headless, http, httpPort, httpToken } = opts;
+  const { driveUrl, headless, ignoreHTTPSErrors, http, httpPort, httpToken } = opts;
   // Decided before anything else, because every line below is about ONE port and the wrong one means
   // serving another project's daemon. `resolveMcpPort` prefers our own daemon wherever it moved to,
   // takes the requested port when it is free or unclaimed, and relocates to an OS-assigned port
@@ -260,6 +262,7 @@ export async function handleMcp(opts: {
       port,
       headless: spawnsHeadless(headless, opts.port, port),
       http,
+      ...(true === ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
       ...(driveUrl !== undefined ? { driveUrl } : {}),
       ...(httpPort !== undefined ? { httpPort } : {}),
       ...(httpToken !== undefined ? { httpToken } : {}),

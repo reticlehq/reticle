@@ -26,7 +26,7 @@ import {
   LOOPBACK_HOST,
 } from '@reticlehq/core';
 import { replayFromHud } from './language/flows/replay-from-hud.js';
-import { createSharedServer } from './surface/http-server.js';
+import { createSharedServer, type DriveRequestOptions } from './surface/http-server.js';
 import { openLoopbackAlias } from './command/daemon/binding/loopback-alias.js';
 import { reportAppInstrumented } from './telemetry/app-instrumented.js';
 import { resolveBridgeSecurityWithAutoToken } from './portal/bridge/bridge-security.js';
@@ -306,6 +306,7 @@ export async function start(options: StartOptions = {}): Promise<RunningServer> 
       (leaseId, error) => pageErrorJournal.onPoolPageError(leaseId, error),
       (leaseId) => pageErrorJournal.onLeaseClosed(leaseId),
       bridge.nonces,
+      true === options.ignoreHTTPSErrors,
     );
     leaseReaper = new LeaseReaper(pool);
     leaseReaper.start();
@@ -550,6 +551,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     (leaseId, error) => pageErrorJournal.onPoolPageError(leaseId, error),
     (leaseId) => pageErrorJournal.onLeaseClosed(leaseId),
     bridge.nonces,
+    true === options.ignoreHTTPSErrors,
   );
   const leaseReaper = new LeaseReaper(pool);
   leaseReaper.start();
@@ -610,8 +612,13 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
     (sessionId) => pool.wasReapedLease(sessionId),
     (url) => pool.acquire(url),
   );
-  const leaseUrl = (url: string): Promise<unknown> =>
-    runTool(LEASE_ACQUIRE_TOOL, effectiveDeps, { url });
+  // A drive request may carry `ignoreHTTPSErrors` (#1713). The pool default already accepts a dev
+  // certificate for agents that cannot pass it; this is the route for `reticle drive`, which can.
+  const leaseUrl = (url: string, opts: DriveRequestOptions = {}): Promise<unknown> =>
+    runTool(LEASE_ACQUIRE_TOOL, effectiveDeps, {
+      url,
+      ...(true === opts.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
+    });
   const deps = {
     sessions: bridge.sessions,
     pool,

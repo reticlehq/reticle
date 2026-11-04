@@ -8,6 +8,7 @@ import {
   scrubKnownSecrets,
   type SeedStorage,
 } from '@reticlehq/core';
+import { isCertificateError } from '@/certificate-error.js';
 
 function redactExactValue(text: string, value: string): string {
   if (0 === value.length) return text;
@@ -95,9 +96,6 @@ export function cleanNavError(err: unknown, seed?: SeedStorage): string {
     .slice(0, 100);
 }
 
-/** Chromium's certificate failures: `net::ERR_CERT_AUTHORITY_INVALID`, `ERR_CERT_DATE_INVALID`, … */
-const CERT_ERROR = /^net::ERR_CERT_/;
-
 /** What a lease whose navigation hit a certificate error tells the caller. */
 export const NAV_CERT_REFUSED =
   'the browser refused its TLS certificate, which a self-signed or mkcert dev certificate gets. ' +
@@ -147,7 +145,7 @@ export function navFailureMessage(
   // A certificate the browser refused is not an app that is down: the server answered, with a cert
   // no CA here vouches for (a self-signed or mkcert dev certificate). Asking "is the app running?"
   // sent the caller to restart a dev server that was fine (#1255).
-  if (CERT_ERROR.test(reason)) return `could not open ${url} — ${NAV_CERT_REFUSED} (${reason})`;
+  if (isCertificateError(reason)) return `could not open ${url}: ${NAV_CERT_REFUSED} (${reason})`;
   if (NAV_TIMED_OUT !== reason) return `could not open ${url} — ${NAV_FAILED_QUESTION} (${reason})`;
   const rawMsg = err instanceof Error ? err.message : String(err);
   const budgetMs = PLAYWRIGHT_TIMEOUT.exec(rawMsg)?.[1];
