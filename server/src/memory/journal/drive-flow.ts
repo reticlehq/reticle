@@ -1,5 +1,6 @@
 import {
   ActionType,
+  FlowPredicateSchema,
   QueryBy,
   REPLAY_PROGRAM_VERSION,
   asFlowName,
@@ -57,9 +58,24 @@ export interface DriveProgram {
  * So it is not a tool and not a rule. It runs at teardown, in code, on every session.
  */
 
+/**
+ * The claims one tape step carries: its own `expect`, and the `expect` of each of its sub-steps.
+ *
+ * A `reticle_act { steps }` journey is one tape step, and each claim is on its sub-step. When only
+ * the step's own `expect` was read, a journey with four held claims was "unproven" and was not saved.
+ */
+export function claimsOf(step: TapeStep): Predicate[] {
+  const subs = Array.isArray(step.args['steps']) ? step.args['steps'] : [];
+  const subClaims = subs.flatMap((sub) => {
+    const parsed = FlowPredicateSchema.safeParse(asRecord(sub)['expect']);
+    return parsed.success ? [parsed.data] : [];
+  });
+  return step.expect === undefined ? subClaims : [step.expect, ...subClaims];
+}
+
 /** The one condition on saving, and the reason the whole thing is safe. */
 export function carriesAnAssertion(steps: readonly TapeStep[]): boolean {
-  return steps.some((step) => step.expect !== undefined);
+  return steps.some((step) => 0 < claimsOf(step).length);
 }
 
 /** Squeeze any string into one safe, lower-case filename segment. */
@@ -77,7 +93,7 @@ const segment = (value: string, max: number): string =>
  * said nothing about what it was for.
  */
 function provedSentence(steps: readonly TapeStep[]): string | undefined {
-  return journeySentence(steps.flatMap((step) => (step.expect === undefined ? [] : [step.expect])));
+  return journeySentence(steps.flatMap(claimsOf));
 }
 
 /** Every auto-saved flow's name starts here, which is what lets a merge tell them from hand-named ones. */

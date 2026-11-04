@@ -150,6 +150,19 @@ export const isAmbient = (name: string): boolean =>
   AMBIENT_RECORDING === name || name.startsWith(`${AMBIENT_RECORDING}:`);
 
 /**
+ * Whether a step, or one of its sub-steps, declared a consequence.
+ * ponytail: the same test as `carriesAnAssertion` in memory/journal/drive-flow.ts, which this
+ * directory may not import. Move both into core if a third caller needs it.
+ */
+const isChecked = (step: RecordedStep): boolean => {
+  const subs = Array.isArray(step.args['steps']) ? (step.args['steps'] as unknown[]) : [];
+  return (
+    step.expect !== undefined ||
+    subs.some((sub) => 'object' === typeof sub && null !== sub && 'expect' in sub)
+  );
+};
+
+/**
  * How long a journey the ambient tape will hold.
  *
  * Generous, because the cost of one truncated tape is one flow that has to be re-driven, while the
@@ -449,7 +462,7 @@ export class RecordingStore {
    */
   takeAmbient(session: string | undefined): ActiveRecording | undefined {
     const tape = this.stop(ambientRecordingOf(session));
-    const unchecked = tape?.steps.every((step) => step.expect === undefined) ?? false;
+    const unchecked = tape !== undefined && !tape.steps.some(isChecked);
     if (tape === undefined || session === undefined || this.#navigatedSinceStep || !unchecked) {
       return tape;
     }
