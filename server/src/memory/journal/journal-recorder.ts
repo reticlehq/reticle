@@ -88,8 +88,10 @@ export interface JournalReadLoss {
   /** Parsed records evicted from the retained set. Exact, unlike `droppedBytes`. */
   droppedEvents: number;
   /**
-   * Latest timestamp of parsed cache evictions, inclusive. Omitted after a byte cut skips
-   * unparsed records: their time range is unknown even when newer bytes survive.
+   * Latest `t` the loss can reach, inclusive: a parsed record that was evicted, or the bound of a
+   * byte cut. Omitted while a cut has no bound, which means every window is lost. A cut has no
+   * bound until a record after it is parsed, and none at all when the clock can have started
+   * again across it.
    */
   lostThroughT?: number;
   /** Human-and-agent readable summary. Present so a consumer never has to compose one. */

@@ -46,10 +46,12 @@ export function makeJournalAttach(deps: JournalAttachDeps): (session: JournalTar
       log('journal_skipped_unsafe_session_id', { sessionId: session.id });
       return;
     }
+    // The session's clock stamps each record's `t`, so it also bounds a cut that left nothing to parse.
     const journal = new SessionJournal(
       deps.fs,
       session.artifactRoot ?? deps.reticleRoot,
       session.id,
+      { now: () => session.elapsed() },
     );
     // Same SessionJournal is both the write sink and the read fall-through for queries after eviction.
     session.setJournal(new JournalRecorder(journal, { now: () => session.elapsed() }), journal);
