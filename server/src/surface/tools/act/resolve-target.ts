@@ -12,7 +12,12 @@ interface TargetCandidate {
 
 /** What the resolution produced: a ref to act on, a document-key press, or the reason there isn't one. */
 export type TargetResolution =
-  | { readonly kind: 'ref'; readonly ref: string }
+  | {
+      readonly kind: 'ref';
+      readonly ref: string;
+      /** Set when every match was hidden and the action uses the hidden one. Says so to the caller. */
+      readonly hiddenTarget?: string;
+    }
   | { readonly kind: 'global'; readonly ref: '' }
   | { readonly kind: 'error'; readonly message: string };
 
@@ -105,6 +110,27 @@ function nearNamesClause(hint: unknown): string {
   );
 }
 
+/**
+ * What a result says when every match was hidden and the action used the hidden one. It does not
+ * say that a person could not reach it: a hidden input with a visible label is reached through the
+ * label, and the reach check after the action decides that.
+ */
+export function hiddenTargetNote(ref: string): string {
+  return (
+    `every element that matched the target is hidden, so the action used the hidden match ${ref}. ` +
+    'If a person reaches it through a visible label, this is correct. If not, target the control ' +
+    'a person can see.'
+  );
+}
+
+/** The `hiddenTarget` field for a tool result, or nothing when the action used a visible match. */
+export function hiddenTargetField(resolution: TargetResolution): { hiddenTarget?: string } {
+  if ('ref' !== resolution.kind || resolution.hiddenTarget === undefined) {
+    return {};
+  }
+  return { hiddenTarget: resolution.hiddenTarget };
+}
+
 const NearestTargetsSchema = z.array(NearestTargetSchema).min(1);
 
 /** The words before the nearest-target list in a no_match refusal. The repeat hint reads after it. */
@@ -144,7 +170,9 @@ function nearestClause(hint: unknown): string {
  *
  * Invisible matches are filtered before counting: a hidden duplicate is a common way for a
  * legitimately unambiguous query to look ambiguous, and refusing on it would push callers back to
- * the two-turn path for no gain.
+ * the two-turn path for no gain. When every match is hidden, the one hidden match is used and the
+ * resolution names it in `hiddenTarget`. It is not refused: a hidden input is often clicked through
+ * its visible label.
  *
  * When several remain, they are ranked (in-viewport, then role) inside the refusal only — so the
  * agent can pass the top ref on the next turn without a snapshot. Ranking is never acted on here.
@@ -182,6 +210,10 @@ export function resolveTargetRef(candidates: readonly unknown[], hint?: unknown)
   const ref = only === undefined ? undefined : only.ref;
   if ('string' !== typeof ref || 0 === ref.length) {
     return { kind: 'error', message: 'target matched an element with no usable ref.' };
+  }
+  // Every match was hidden, so the action uses a hidden one. Rule 11: say so, never silently.
+  if (0 === visible.length) {
+    return { kind: 'ref', ref, hiddenTarget: hiddenTargetNote(ref) };
   }
   return { kind: 'ref', ref };
 }

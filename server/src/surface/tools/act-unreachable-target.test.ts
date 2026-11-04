@@ -39,7 +39,12 @@ interface Paragraph {
  * A page whose MATCH answers with `before` until the action runs and with `after` once it has, and
  * whose window holds `events` only after the action.
  */
-function page(before: Paragraph[], after: Paragraph[], effect: Record<string, unknown>): ToolDeps {
+function page(
+  before: Paragraph[],
+  after: Paragraph[],
+  effect: Record<string, unknown>,
+  targets: unknown[] = [],
+): ToolDeps {
   let acted = false;
   const described = (ps: Paragraph[]): unknown[] =>
     ps.map((p, i) => ({
@@ -57,6 +62,14 @@ function page(before: Paragraph[], after: Paragraph[], effect: Record<string, un
         id: 'm',
         ok: true,
         result: { matched: ps.length > 0, count: ps.length, elements: described(ps) },
+      });
+    }
+    if (ReticleCommand.QUERY === name) {
+      return Promise.resolve({
+        kind: 'command_result',
+        id: 'q',
+        ok: true,
+        result: { elements: targets },
       });
     }
     if (ReticleCommand.ACT === name) acted = true;
@@ -186,5 +199,49 @@ describe('act steps on a target a person could not reach', () => {
   it('is still yes on a target a person could click', async () => {
     const r = await steps(appears());
     expect(r['verified']).toBe(Verified.YES);
+  });
+});
+
+/*
+ * A target query whose only match is hidden. The action uses that match. It used it and said
+ * nothing, so the caller could not tell it from a visible control (#1518). Each result names it.
+ */
+describe('a target whose every match is hidden', () => {
+  const HIDDEN_ONLY = [{ ref: 'e5', role: 'checkbox', name: 'Select row', visible: false }];
+  const SHOWN_ONLY = [{ ref: 'e5', role: 'checkbox', name: 'Select row', visible: true }];
+  const TARGET = { role: 'checkbox', name: 'Select row' };
+  const hiddenOnly = (): ToolDeps => page([], [{ visible: true }], {}, HIDDEN_ONLY);
+  const shownOnly = (): ToolDeps => page([], [{ visible: true }], {}, SHOWN_ONLY);
+
+  it('act_and_wait names the hidden match it used', async () => {
+    const r = await call(ReticleTool.ACT_AND_WAIT, hiddenOnly(), {
+      target: TARGET,
+      action: 'click',
+      until: SHOWN,
+    });
+    expect(String(r['hiddenTarget'])).toContain('e5');
+  });
+
+  it('act names the hidden match it used', async () => {
+    const r = await call(ReticleTool.ACT, hiddenOnly(), { target: TARGET, action: 'click' });
+    expect(String(r['hiddenTarget'])).toContain('e5');
+  });
+
+  it('act steps names the hidden match on the step row', async () => {
+    const r = await call(ReticleTool.ACT_SEQUENCE, hiddenOnly(), {
+      steps: [{ target: TARGET, action: 'click', expect: SHOWN }],
+    });
+    const rows = r['steps'];
+    const row = Array.isArray(rows) ? (rows[0] as Record<string, unknown>) : {};
+    expect(String(row['hiddenTarget'])).toContain('e5');
+  });
+
+  it('says nothing when the match is visible', async () => {
+    const r = await call(ReticleTool.ACT_AND_WAIT, shownOnly(), {
+      target: TARGET,
+      action: 'click',
+      until: SHOWN,
+    });
+    expect(r).not.toHaveProperty('hiddenTarget');
   });
 });

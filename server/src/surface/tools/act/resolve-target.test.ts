@@ -36,9 +36,27 @@ describe('resolving a target query to one ref', () => {
     expect(r).toEqual({ kind: 'ref', ref: 'e3' });
   });
 
-  it('falls back to hidden matches when nothing is visible, so the message is about the right thing', () => {
+  /*
+   * When every match is hidden, the action uses the hidden one. It used that match and said nothing,
+   * so a caller could not tell it from a visible control (#1518). The result now names it.
+   */
+  it('names the fallback when every match is hidden', () => {
     const r = resolveTargetRef([{ ref: 'e7', role: 'button', name: 'Save', visible: false }]);
-    expect(r).toEqual({ kind: 'ref', ref: 'e7' });
+    expect(r.kind).toBe('ref');
+    if (r.kind !== 'ref') {
+      return;
+    }
+    expect(r.ref).toBe('e7');
+    expect(r.hiddenTarget).toContain('hidden');
+    expect(r.hiddenTarget).toContain('e7');
+  });
+
+  it('says nothing about hidden matches when a visible match was used', () => {
+    const r = resolveTargetRef([
+      { ref: 'e3', role: 'button', name: 'Save', visible: true },
+      { ref: 'e9', role: 'button', name: 'Save', visible: false },
+    ]);
+    expect(r).not.toHaveProperty('hiddenTarget');
   });
 
   it('says nothing matched, and says no verdict is possible', () => {
