@@ -26,6 +26,7 @@ It uses the same runner and the same verdict as the MCP and HTTP paths, so a pla
 | `--select <label>` | string, repeatable | unset | Verify only flows carrying this label |
 | `--expect '<json predicate>'` / `--expect-file <path>` | string | unset | One verdict on one predicate, no saved flows needed. Asks the daemon that owns the port and never starts one; with no daemon it refuses. Waits up to `--timeout` for the predicate, the way `reticle_assert { action: "wait" }` does, so a request still in flight after the page loads is waited for. Exits `0` only on `verified: "yes"`. Cannot be combined with `--storage-state` |
 | `--explore` / `--persona "<who does what>"` | boolean / string | off | No saved flows yet? The Harness drives the app and records them. `--persona` implies `--explore`. Needs a linked project (`reticle connect`, or `RETICLE_API_KEY` in CI). It runs at any instrumentation score |
+| `--against <reference-url>` | string | unset | Compare the URL with a reference build, for example a pull request preview with production. See [Compare two builds](#compare-two-builds). Cannot be combined with `--expect`, `--expect-file`, `--explore` or `--persona` |
 | `--confirm-dangerous` | boolean | off | Let this run press the controls the replay guard holds as destructive, such as a "Place order" or "Delete" button in a saved flow. Without it such a step is refused, so a checkout flow cannot pass. It covers this run only and is never saved into a flow. |
 
 On Windows PowerShell, write the predicate to a file and pass `--expect-file` so the JSON never goes through shell quoting:
@@ -34,6 +35,27 @@ On Windows PowerShell, write the predicate to a file and pass `--expect-file` so
 '{"kind":"text","contains":"Saved"}' | Set-Content expect.json
 npx @reticlehq/server verify http://localhost:3000 --expect-file expect.json
 ```
+
+## Compare two builds
+
+```bash
+npx @reticlehq/server verify https://pr-42.preview.example.com --against https://example.com
+```
+
+`--against` answers one question: did the change alter what users see? It drives both running builds with the same actions and reports each difference in what a person can read and use.
+
+- **The actions.** Each saved flow in `.reticle/flows/` (with `--select`, only the flows with those labels) is replayed one step at a time, and the page is read after every step. Then the explorer of `reticle_verify { action: "crawl", exhaustive: true }` walks the reference breadth first. It fills each empty text field with its own value (`text 1`, `text 2`), clicks each control, and waits a short time after each action. Both builds then get the same list of actions.
+- **What is compared.** The accessibility tree, reduced to what a person sees: names, text, values, and the checked, selected, disabled, expanded and pressed states, in page order. Case and spacing are folded. Refs, focus, layout, test ids, source locations and component names are removed.
+- **Noise.** The reference is driven two times, each time in a new browser. A line that differs between those two runs (a clock, a random id) is ignored. A step that the reference did on only one of its runs is not compared.
+- **A step the candidate cannot do.** When the reference did a step and the candidate could not (the control is gone, or a flow anchor does not resolve), that is a difference.
+
+The command uses the daemon on `--port`, and starts one when there is none. Each run is a leased browser tab, so the apps do not need `reticle init`. Each replayed flow step is written as a run, the same as any replay.
+
+The explorer clicks every control it finds. The action guard refuses a control it holds as destructive, and `--confirm-dangerous` removes that guard. Point `--against` at a build whose data you can change, not at a production database.
+
+Each difference prints the actions that first reached it, then `-` for the lines only the reference shows and `+` for the lines only the candidate shows. Differences with the same lines are printed one time, with the number of steps they were seen at. Exit `0` only when steps were compared and nothing differs. A run that compared no step exits `1`, because it proved nothing.
+
+`--results-json <file>` writes `{ schemaVersion: 1, reference, candidate, identical, differences: [{ id, kind, actions, removed, added, seen }], journeys, compared, unstable, ignored, explored }`. `kind` is `changed` or `unreached`. `id` is a hash of the difference's lines, so the same difference has the same id on every run. `ignored` counts the lines skipped as noise, and `unstable` counts the steps not compared.
 
 ## What it prints
 

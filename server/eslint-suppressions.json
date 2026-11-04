@@ -67,11 +67,6 @@
       "count": 1
     }
   },
-  "src/command/cli/cli-parse-verify.ts": {
-    "curly": {
-      "count": 14
-    }
-  },
   "src/command/cli/cli-update-commands.ts": {
     "curly": {
       "count": 4
@@ -717,16 +712,6 @@
   "src/features/exhaust/exhaust-run.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/features/exhaust/explorer.test.ts": {
-    "curly": {
-      "count": 11
-    }
-  },
-  "src/features/exhaust/explorer.ts": {
-    "curly": {
-      "count": 17
     }
   },
   "src/features/exhaust/failure-branches.ts": {

@@ -59,6 +59,8 @@ the first flow. It never drives: the Harness is opt-in and runs at any instrumen
 const VERIFY_DETAIL = `Drives the URL and verifies the saved flows. Exit 0 means every one passed.
 
   --explore [--persona <who>]   no saved flows? let Reticle drive the app and record them
+  --against <reference-url>     compare the URL with a reference build: drive both with the same
+                                actions, and report each difference in what users see (exit 1)
   --select <label>              repeatable: verify only flows carrying these labels
   --results-json <file>         also write one verdict per journey as JSON, for CI
   --confirm-dangerous           this run may press what the replay guard holds as destructive

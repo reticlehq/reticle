@@ -332,6 +332,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'dev-server',
     // `reticle gate` ratchets on the coverage ledger and blocks changed code that never ran.
     'exhaust',
+    // `verify <url> --against <reference>` drives two builds and reports what differs (#2190).
+    'compare',
     // `verify <url> --expect` opens the url when no tab is on it, by the same rule `reticle open`
     // uses (decideOpen), so the two commands cannot disagree about which tab counts.
     'launch',
@@ -440,6 +442,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // `facts` and `session`: a full page load replaces the session, and the explorer must follow it
   // (session-port.ts) with the same reconnect wait `navigate { reload }` uses.
   exhaust: ['dir', 'fs', 'project', 'facts', 'session'],
+  // Two builds are explored with the same breadth-first explorer the exhaustive crawl uses.
+  compare: ['exhaust'],
   // `ports`: port-state.ts names the process that holds the bridge port, so every surface says the
   // same thing about a daemon that holds it and does not answer (#1937).
   daemon: ['lifetime', 'binding', 'ports', 'telemetry'],

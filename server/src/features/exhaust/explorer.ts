@@ -13,7 +13,10 @@
  * - Controls that differ only by a number — the rows of a table — are one control. It is covered
  *   once, which is what keeps a 500-row page from eating the whole budget.
  * - Text fields on a state are filled before its buttons are tried, so a submit is driven with
- *   input rather than dismissed as dead because it refused an empty form.
+ *   input rather than dismissed as dead because it refused an empty form. Each field gets its own
+ *   value (`fillValue` is told the field's position), so two fields a build swaps do not read alike.
+ * - `paths` keeps every click it tried, also a click that kept the same state (a count went up).
+ *   A caller that reads the page after each path needs those clicks too.
  *
  * ponytail: breadth-first with a flat action budget, and every edge replays its path from a fresh
  * load. That is O(states × path length), correct and slow; add prefix sharing if it proves too slow.
@@ -84,6 +87,16 @@ export interface ExploreReport {
   /** States whose recorded path no longer replays — the app is not deterministic from its start. */
   unreachable: number;
   budgetExhausted: boolean;
+  /** Every click tried, as its path from a fresh start page, in the order the explorer tried them. */
+  paths: Step[][];
+}
+
+export interface ExploreOptions {
+  maxActions: number;
+  /** What to type into an empty field: its label, and its position among the fields on the state. */
+  fillValue: (label: string, index: number) => string;
+  /** Called after each click, before the page is read, so behaviour driven by a timer can show. */
+  wait?: () => Promise<void>;
 }
 
 /** Roles that take typed input. */
@@ -116,10 +129,7 @@ export function stateKey(route: string | undefined, controls: readonly Control[]
   return `${pathOf(route) ?? ''}|${[...new Set(controls.map((c) => c.key))].sort().join('\n')}`;
 }
 
-export async function explore(
-  port: ExplorePort,
-  opts: { maxActions: number; fillValue: (label: string) => string },
-): Promise<ExploreReport> {
+export async function explore(port: ExplorePort, opts: ExploreOptions): Promise<ExploreReport> {
   let actions = 0;
   let unreachable = 0;
   const routes = new Set<string>();
@@ -130,6 +140,7 @@ export async function explore(
   const explored = new Set<string>();
   const queued = new Set<string>();
   const queue: { path: Step[]; key?: string }[] = [{ path: [] }];
+  const paths: Step[][] = [];
   const spent = (): boolean => actions >= opts.maxActions;
 
   const act = async (
@@ -145,27 +156,37 @@ export async function explore(
 
   while (queue.length > 0 && !spent()) {
     const node = queue.shift();
-    if (node === undefined) break;
+    if (node === undefined) {
+      break;
+    }
     if (!(await goTo(node.path))) {
-      if (!spent()) unreachable += 1;
+      if (!spent()) {
+        unreachable += 1;
+      }
       continue;
     }
     const here = await port.look();
     const controls = controlsOf(here.tree);
     const key = stateKey(here.route, controls);
-    if (explored.has(key)) continue;
+    if (explored.has(key)) {
+      continue;
+    }
     explored.add(key);
     const where = pathOf(here.route);
-    if (where !== undefined) routes.add(where);
-    for (const c of controls) seen.add(c.key);
+    if (where !== undefined) {
+      routes.add(where);
+    }
+    for (const c of controls) {
+      seen.add(c.key);
+    }
 
     // Only EMPTY fields. The first drive of the fixture typed placeholders over the login form's
     // correct pre-filled credentials, got a 401, and never left the first page.
     const typed = controls.filter((c) => TYPED.test(c.key) && !c.holdsValue);
-    const fills: Step[] = typed.map((c) => ({
+    const fills: Step[] = typed.map((c, index) => ({
       key: c.key,
       action: 'fill',
-      value: opts.fillValue(c.key),
+      value: opts.fillValue(c.key, index),
     }));
     // Fills first, then the targets: valid input can reveal the button that moves on (a Continue,
     // a Submit), and a list drawn before the fill would never contain it.
@@ -181,7 +202,9 @@ export async function explore(
       return 0 < fills.length ? controlsOf((await port.look()).tree) : before;
     };
     const ready = await fillHere();
-    for (const c of ready) seen.add(c.key);
+    for (const c of ready) {
+      seen.add(c.key);
+    }
     // Every control of THIS state, once. Not filtered by what other states touched: a "Save" on
     // another screen is another control, and skipping it left reachable writes undriven.
     const untried = [
@@ -189,16 +212,24 @@ export async function explore(
     ];
 
     for (const [index, target] of untried.entries()) {
-      if (spent()) break;
+      if (spent()) {
+        break;
+      }
       // The first control is tried on the page already loaded and filled; every other one starts
       // over from the recorded path, because the one before it may have changed or left this state.
-      if (index > 0 && !(await goTo(node.path))) break;
+      if (index > 0 && !(await goTo(node.path))) {
+        break;
+      }
       const current = 0 === index ? ready : await fillHere();
       const control = current.find((c) => c.key === target);
-      if (control === undefined || spent()) continue;
+      if (control === undefined || spent()) {
+        continue;
+      }
       const result = await act(control.ref, 'click');
       touched.add(target);
       const path: Step[] = [...node.path, ...fills, { key: target, action: 'click' }];
+      paths.push(path);
+      await opts.wait?.();
       const after = await port.look();
       const next = stateKey(after.route, controlsOf(after.tree));
       noteWrites(result.events, path, key, next, writes);
@@ -221,6 +252,7 @@ export async function explore(
     frontier: queue.filter((n) => n.key === undefined || !explored.has(n.key)).length,
     unreachable,
     budgetExhausted: spent(),
+    paths,
   };
 }
 
@@ -234,12 +266,20 @@ export async function replayPath(
   act: (ref: string, action: 'click' | 'fill', value?: string) => Promise<{ ok: boolean }>,
   spent: () => boolean,
 ): Promise<boolean> {
-  if (!(await port.reset())) return false;
+  if (!(await port.reset())) {
+    return false;
+  }
   for (const step of path) {
-    if (spent()) return false;
+    if (spent()) {
+      return false;
+    }
     const target = controlsOf((await port.look()).tree).find((c) => c.key === step.key);
-    if (target === undefined) return false;
-    if (!(await act(target.ref, step.action, step.value)).ok) return false;
+    if (target === undefined) {
+      return false;
+    }
+    if (!(await act(target.ref, step.action, step.value)).ok) {
+      return false;
+    }
   }
   return true;
 }
@@ -253,7 +293,9 @@ function noteWrites(
 ): void {
   for (const event of events) {
     const key = writeKeyOf(event);
-    if (key === undefined || writes.has(key)) continue;
+    if (key === undefined || writes.has(key)) {
+      continue;
+    }
     const [method = '', urlPath = ''] = key.split(' ');
     const url = event.data['url'];
     const concrete = 'string' === typeof url ? new URL(url, 'http://localhost').pathname : urlPath;
@@ -267,20 +309,24 @@ function noteAnomalies(
   anomalies: ExploreReport['anomalies'],
 ): void {
   const list = [...events];
-  for (const e of list.filter(isConsoleError))
+  for (const e of list.filter(isConsoleError)) {
     anomalies.push({
       kind: 'console-error',
       control,
       detail: asString(e.data['message']) ?? e.type,
     });
-  for (const e of failedRequests(list, FAILED_STATUS))
+  }
+  for (const e of failedRequests(list, FAILED_STATUS)) {
     anomalies.push({
       kind: 'failed-request',
       control,
       detail: `${asString(e.data['method']) ?? ''} ${asString(e.data['url']) ?? ''} → ${String(asNumber(e.data['status']) ?? '')}`,
     });
+  }
   for (const c of findContradictions(list, { actionSince: 0 })) {
-    if (isAdvisory(c.kind) || isAbsenceDerived(c.kind)) continue;
+    if (isAdvisory(c.kind) || isAbsenceDerived(c.kind)) {
+      continue;
+    }
     anomalies.push({ kind: c.kind, control, detail: `${c.claim}, but ${c.counter}` });
   }
 }
