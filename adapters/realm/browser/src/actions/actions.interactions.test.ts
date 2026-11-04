@@ -377,7 +377,9 @@ describe('click holdMs — hold-to-confirm controls', () => {
       }, thresholdMs);
     });
     el.addEventListener('mouseup', () => {
-      if (timer !== undefined) clearTimeout(timer);
+      if (timer !== undefined) {
+        clearTimeout(timer);
+      }
     });
     return { el, fired: () => confirmed };
   }
@@ -601,7 +603,9 @@ describe('upload resolves the file input a dropzone hides', () => {
 
   const fileInputById = (id: string): HTMLInputElement => {
     const input = document.getElementById(id);
-    if (!(input instanceof HTMLInputElement)) throw new Error(`no file input #${id}`);
+    if (!(input instanceof HTMLInputElement)) {
+      throw new Error(`no file input #${id}`);
+    }
     return input;
   };
 
@@ -615,7 +619,9 @@ describe('upload resolves the file input a dropzone hides', () => {
     }
     (global as Record<string, unknown>)['DataTransfer'] = FakeDataTransfer;
     try {
-      if (!(target instanceof HTMLElement)) throw new Error('upload target is not an element');
+      if (!(target instanceof HTMLElement)) {
+        throw new Error('upload target is not an element');
+      }
       return await executeAction(refs.refFor(target), 'upload', ARGS).catch((e: unknown) => e);
     } finally {
       (global as Record<string, unknown>)['DataTransfer'] = originalDT;
@@ -624,7 +630,9 @@ describe('upload resolves the file input a dropzone hides', () => {
 
   const uploadOnSelector = async (selector: string): Promise<unknown> => {
     const el = document.querySelector(selector);
-    if (null === el) throw new Error(`no element for ${selector}`);
+    if (null === el) {
+      throw new Error(`no element for ${selector}`);
+    }
     return uploadOn(el);
   };
 
@@ -668,14 +676,20 @@ describe('upload resolves the file input a dropzone hides', () => {
   it('resolves a button and its input together in one shadow root', async () => {
     document.body.innerHTML = '<div id="host"></div>';
     const host = document.getElementById('host');
-    if (!(host instanceof HTMLElement)) throw new Error('no host');
+    if (!(host instanceof HTMLElement)) {
+      throw new Error('no host');
+    }
     const root = host.attachShadow({ mode: 'open' });
     root.innerHTML = '<button id="b" type="button">Browse</button><input id="f" type="file">';
     const input = root.getElementById('f');
-    if (!(input instanceof HTMLInputElement)) throw new Error('no shadow input');
+    if (!(input instanceof HTMLInputElement)) {
+      throw new Error('no shadow input');
+    }
     const changes = stubFiles(input);
     const button = root.getElementById('b');
-    if (null === button) throw new Error('no shadow button');
+    if (null === button) {
+      throw new Error('no shadow button');
+    }
     const done: unknown = await uploadOn(button);
     expect(done).not.toBeInstanceOf(Error);
     expect(changes).toEqual(['f']);
@@ -736,16 +750,22 @@ describe('upload resolves the file input a dropzone hides', () => {
     // that pass, and no input may get change.
     document.body.innerHTML = '<div id="host"></div>';
     const host = document.getElementById('host');
-    if (!(host instanceof HTMLElement)) throw new Error('no host');
+    if (!(host instanceof HTMLElement)) {
+      throw new Error('no host');
+    }
     const root = host.attachShadow({ mode: 'open' });
     root.innerHTML =
       '<button id="other" type="button">Other</button>' +
       '<button id="b" type="button">Browse</button><input id="f" type="file">';
     const input = root.getElementById('f');
-    if (!(input instanceof HTMLInputElement)) throw new Error('no shadow input');
+    if (!(input instanceof HTMLInputElement)) {
+      throw new Error('no shadow input');
+    }
     const changes = stubFiles(input);
     const button = root.getElementById('b');
-    if (null === button) throw new Error('no shadow button');
+    if (null === button) {
+      throw new Error('no shadow button');
+    }
     expect(String(await uploadOn(button))).toMatch(/upload target must be/);
     expect(changes).toEqual([]);
   });
