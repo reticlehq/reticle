@@ -512,7 +512,6 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
           return true === expectations[i]?.held ? step : rest;
         });
         const compiled = (steps: Record<string, unknown>[]): RecordedStep => {
-          process.stdout.write(`[dbg-seq] stepResults[0]=${JSON.stringify(stepResults[0])}\n`);
           const step = compileSequenceStep(
             { ...args, steps },
             { count: completed, steps: stepResults.slice(0, completed) },

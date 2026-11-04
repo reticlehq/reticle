@@ -6,7 +6,7 @@
  * the documented default for multi-step work, so the failed check was lost on the common path.
  * Driven here through the same handler, the same end tool and the same fold the daemon uses.
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   JOURNAL_FILE_VERSION,
   ReticleTool,
@@ -179,6 +179,21 @@ describe('the keep offer can be taken', () => {
     expect(result.verified).toBe(Verified.YES);
     expect(result.keep).toContain(`flowName: "${JOURNEY_RECORDING}"`);
     expect(recordings.getCompiled(JOURNEY_RECORDING)?.steps).toHaveLength(1);
+  });
+
+  // Over stdio, the daemon's own stdout is the MCP channel, so one stray line breaks the stream.
+  it('writes nothing to stdout while it keeps the journey', async () => {
+    const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    try {
+      const session = journalingSession('s-journal-stdout', []);
+      await tool(ReticleTool.ACT_SEQUENCE).handler(depsFor(session, new RecordingStore()), {
+        steps: [HELD],
+        timeout_ms: 0,
+      });
+      expect(write).not.toHaveBeenCalled();
+    } finally {
+      write.mockRestore();
+    }
   });
 
   /*
