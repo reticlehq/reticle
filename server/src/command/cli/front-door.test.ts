@@ -90,7 +90,7 @@ function run(...args: string[]): Promise<Result> {
  * The two families are here on purpose: `init` and `serve` reach the typed parser, `link` and `push`
  * are dispatched before it. They took separate fixes, so they need separate checks.
  */
-const HELP_MUST_ANSWER = ['init', 'serve', 'status', 'link', 'push', 'runs'];
+const HELP_MUST_ANSWER = ['init', 'serve', 'status', 'connect', 'sync', 'runs'];
 
 describe('the first commands anybody types', { timeout: 30_000 }, () => {
   it('the built CLI is there to test', () => {

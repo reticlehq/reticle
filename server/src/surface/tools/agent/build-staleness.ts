@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 const CHECK_EVERY_MS = 30_000;
 
 export const STALE_BUILD_NOTICE =
-  "Reticle's code on disk changed after this daemon started, so it is still running the old build. Restart it (`npx @reticlehq/server restart`) and retry before trusting a fix to Reticle itself.";
+  "Reticle's code on disk changed after this daemon started, so it is still running the old build. Restart it (`npx @reticlehq/server serve --restart`) and retry before trusting a fix to Reticle itself.";
 
 /** `dist/` of this package: this file sits at dist/surface/tools/agent/. */
 const DIST_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');

@@ -111,7 +111,7 @@ describe('a wedged daemon of our own', () => {
    */
   it('names the command that frees the port instead of leaving the reader to invent one', () => {
     const msg = describeForeignHolder(4411, { pid: 999, command: 'python' }, 65704);
-    expect(msg).toContain('reticle restart --force');
+    expect(msg).toContain('reticle serve --restart --force');
     expect(msg).not.toMatch(/-ti\b/);
   });
 
@@ -129,8 +129,8 @@ describe('a wedged daemon of our own', () => {
       );
       expect(msg).toContain('did not answer in time');
       expect(msg).toContain('may be busy');
-      expect(msg).not.toMatch(/wedged|\bkill\b|Run `reticle restart`/);
-      expect(msg).toMatch(/If it stays silent, run `reticle (restart|stop)`/);
+      expect(msg).not.toMatch(/wedged|\bkill\b|Run `reticle serve --restart`/);
+      expect(msg).toMatch(/If it stays silent, run `reticle (serve --restart|stop)`/);
     }
   });
 

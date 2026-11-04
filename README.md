@@ -528,10 +528,10 @@ Use `reticle <command>` after install, or `npx @reticlehq/server <command>` anyw
 | **Running** | `reticle open [url]` | Shows your app in a browser connected to Reticle |
 |  | `reticle status` | Whether Reticle is running and which apps are connected |
 |  | `reticle doctor` | Diagnoses setup in one go: the browser, the background service, the port |
-|  | `reticle restart` / `reticle stop` | Restarts or stops Reticle's background service |
+|  | `reticle serve --restart` / `reticle stop` | Restarts or stops Reticle's background service |
 | **Verifying** | `reticle verify <url>` | Runs your saved flows again. It exits 0 only when every one passes. `--explore --persona "a new user who signs up"` makes Reticle drive the app itself and save what it finds. `--expect '<check>'` gives one verdict |
 |  | `reticle gate --since HEAD~1` | For CI: fails unless every saved flow your changes touch has a passing run |
-|  | `reticle affected` | Lists which saved flows your changes touch |
+|  | `reticle gate --list` | Lists which saved flows your changes touch |
 |  | `reticle report` | What the last session claimed, and what actually held |
 | **Dashboard** _(optional)_ | `reticle connect --project "My App"` | Signs in, links this folder to a project on app.reticle.sh and sends your local history. Wires the app first if needed |
 |  | `reticle sync` | Syncs now. `--watch` keeps syncing |
@@ -539,7 +539,7 @@ Use `reticle <command>` after install, or `npx @reticlehq/server <command>` anyw
 |  | `reticle config --runs off` | Chooses what syncs: `--runs`, `--memory` and `--flows`, each `on` or `off` |
 |  | `reticle runs` / `reticle runs regression` | Reads your runs back from the dashboard. `runs regression` exits 3 if any flow broke |
 |  | `reticle logout` | Signs out |
-| **Keeping it current** | `reticle update` / `reticle rollback` | Installs the latest version, or goes back to the previous one |
+| **Keeping it current** | `reticle update` / `reticle update --rollback` | Installs the latest version, or goes back to the previous one |
 |  | `reticle telemetry disable` | Turns off anonymous usage counts |
 |  | `reticle feedback "message"` | Tells us what worked and what did not. It prints exactly what it sends |
 

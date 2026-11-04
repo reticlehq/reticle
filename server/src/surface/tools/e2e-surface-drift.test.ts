@@ -103,7 +103,7 @@ const KNOWN_REMOVED = new Map<string, string>([
   ],
   [
     'reticle_affected',
-    'MERGED into reticle_verify { action: "affected" }. The remaining references are not calls: `reticle affected` is a CLI COMMAND whose structured log line carries `"event": "reticle_affected"`, and the docs quote that line verbatim. Renaming the event to satisfy this guard was tried and reverted — it is documented output that somebody may be parsing, and breaking a log contract to quiet a false positive is a worse trade than an exemption that says so.',
+    'MERGED into reticle_verify { action: "affected" }. The remaining references are not calls: `reticle gate --list` (once `reticle affected`) is a CLI COMMAND whose structured log line carries `"event": "reticle_affected"`, and the docs quote that line verbatim. Renaming the event to satisfy this guard was tried and reverted — it is documented output that somebody may be parsing, and breaking a log contract to quiet a false positive is a worse trade than an exemption that says so.',
   ],
   [
     'reticle_record_stop',

@@ -87,7 +87,7 @@
   },
   "src/command/cli/cloud-cli.ts": {
     "curly": {
-      "count": 10
+      "count": 9
     },
     "no-nested-ternary": {
       "count": 2

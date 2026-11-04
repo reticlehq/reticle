@@ -267,13 +267,13 @@ function handleVersion(): void {
   process.stdout.write(`${SERVER_VERSION}\n`);
 }
 
-/** `reticle license` — show enterprise activation resolved from the environment (offline; nothing leaves). */
+/** `reticle license` (now `status`) — show enterprise activation resolved from the environment (offline; nothing leaves). */
 function handleLicense(): void {
   log('reticle_license', { ...describeLicense(Date.now()) });
 }
 
 /**
- * `reticle affected <file...>` — print which saved flows must re-verify for the given changed files.
+ * `reticle gate --list <file...>` (was `affected`) — print which saved flows must re-verify for the given changed files.
  * Environment-side (costs the agent nothing per turn); the foundation of watch/gate. Never throws:
  * a load error is logged, not fatal.
  */
@@ -661,7 +661,7 @@ export function main(): void {
     const colour = true === process.stderr.isTTY && process.env['NO_COLOR'] === undefined;
     process.stderr.write(`${renamedNote(argv[0] ?? '', renamedTo, colour)}\n`);
   }
-  // Cloud subcommands (login/link/project/config/push) are a distinct family with their own async client;
+  // Cloud subcommands (connect/sync/runs/config) are a distinct family with their own async client;
   // handle them before the local typed parser so `reticle login` etc. work as one tool.
   if (isCloudCommand(argv[0])) {
     // Asking a command what it does is never a request to run it. These dispatch before the typed
@@ -808,7 +808,8 @@ export function main(): void {
       void handleRestart(parsed.port, parsed.force);
       break;
     case 'status':
-      void handleStatus(parsed.port, parsed.json);
+      // Offline: the license key is read from the environment.
+      void handleStatus(parsed.port, parsed.json, { ...describeLicense(Date.now()) });
       break;
     case 'license':
       handleLicense();

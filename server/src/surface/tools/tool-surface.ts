@@ -484,7 +484,6 @@ const OPEN_WORLD: ReadonlySet<string> = new Set([
   ReticleTool.NAVIGATE,
   ReticleTool.SESSION,
   ReticleTool.VERIFY,
-  ReticleTool.EXPLORE,
   ReticleTool.FEEDBACK,
   ReticleTool.RUN,
 ]);

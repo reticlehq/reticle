@@ -104,7 +104,7 @@ describe('a port held by a process that does not accept', () => {
       const msg = describeForeignHolder(port, holder, null);
       expect(msg).toContain(String(pid));
       expect(msg).not.toContain('is not a Reticle daemon');
-      expect(msg).toContain('reticle restart');
+      expect(msg).toContain('reticle serve --restart');
     },
     TEST_TIMEOUT_MS,
   );

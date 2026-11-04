@@ -113,7 +113,7 @@ export function describeForeignHolder(
   // outcome and leaves the reader to invent a route to it, and the route they invent is the `-ti`
   // pipeline that takes their agent's proxy down with the holder.
   const tail =
-    'a daemon cannot bind it. Free it with `reticle restart --force` (it signals the listener only, ' +
+    'a daemon cannot bind it. Free it with `reticle serve --restart --force` (it signals the listener only, ' +
     "never the agent's mcp proxy), or run Reticle on a different port (`--port`), then retry.";
   if (null === holder) {
     /**
@@ -138,12 +138,12 @@ export function describeForeignHolder(
     return `port ${String(port)} is held by a process Reticle could not identify — ${tail}${ours}`;
   }
   if (true === holder.reticleDaemon && ourPid !== holder.pid) {
-    // Not the pid we recorded, so `reticle stop` cannot find it. `restart` finds the listener.
+    // Not the pid we recorded, so `reticle stop` cannot find it. `serve --restart` finds the listener.
     // It did not answer a short probe. A busy daemon does that too, and other agents can use it.
     return (
       `port ${String(port)} is held by a Reticle daemon (pid ${String(holder.pid)}) that did not ` +
       'answer in time. It may be busy. Run `reticle status` again in a few seconds. If it stays ' +
-      'silent, run `reticle restart`: it stops that process and starts a new daemon on this port.'
+      'silent, run `reticle serve --restart`: it stops that process and starts a new daemon on this port.'
     );
   }
   if (ourPid !== null && ourPid !== undefined && ourPid === holder.pid) {

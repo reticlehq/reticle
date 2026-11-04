@@ -227,7 +227,7 @@ function waitForStop(port: number, pid: number, quiet: boolean): void {
 }
 
 /**
- * `reticle restart` — free the port, then put a daemon back on it and prove it bound.
+ * `reticle serve --restart` — free the port, then put a daemon back on it and prove it bound.
  *
  * The two halves are reported separately on purpose. A restart that killed the old daemon and then
  * could not start a new one leaves the user in a different place from one that could not kill

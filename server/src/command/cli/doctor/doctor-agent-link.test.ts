@@ -30,7 +30,7 @@ describe('agentLinkText', () => {
     expect(text).toContain(POINTER);
     expect(text).not.toContain(RECORD_HEALTHY);
     expect(text).not.toContain('reticle stop');
-    expect(text).not.toContain('reticle restart --force');
+    expect(text).not.toContain('reticle serve --restart --force');
   });
 
   it('a foreign port replaces the restart-client advice too', () => {

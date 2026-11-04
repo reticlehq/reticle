@@ -656,8 +656,12 @@ export const MERGE_PLANS: MergePlan[] = [
   {
     name: ReticleTool.RECORD,
     description:
-      'Timeline recording: { action: "start" } begins recording under a name, "stop" ends it and returns the reaction report plus a compiled replayable program.',
-    members: { start: ReticleTool.RECORD_START, stop: ReticleTool.RECORD_STOP },
+      'Timeline recording: { action: "start" } begins recording under a name, "stop" ends it and returns the reaction report plus a compiled replayable program, "replay" runs that program again by recordingName (destructive controls need confirmDangerous:true on each replay).',
+    members: {
+      start: ReticleTool.RECORD_START,
+      stop: ReticleTool.RECORD_STOP,
+      replay: ReticleTool.REPLAY,
+    },
   },
   {
     name: ReticleTool.FLOW,
@@ -737,6 +741,7 @@ export const RETIRED_FROM_SURFACE: string[] = [
   ReticleTool.RUN_RECORD, // auto-recording on flow_replay already persists run outcomes
   ReticleTool.REFRESH, // absorbed into reticle_navigate { reload: true }
   ReticleTool.WAIT_READY, // server-internal: the first live call already blocks for the session
+  ReticleTool.EXPLORE, // the interactive snapshot plus the console give the same answer
 ];
 
 /**

@@ -1,7 +1,7 @@
 /**
  * Where a merged or retired tool's old name went.
  *
- * Twenty-two names exported from `ReticleTool` are no longer tools: `reticle_record_start` became
+ * Many names exported from `ReticleTool` are no longer tools: `reticle_record_start` became
  * `reticle_record { action: "start" }`, `reticle_diff` became `reticle_baseline { action: "diff" }`,
  * and three were retired outright. Confirmed live in a field sweep, they all answered `unknown tool`
  * — which is the wrong answer, because the capability exists and only moved. An agent trained on an
@@ -32,6 +32,10 @@ const RETIRED_NOTE: Readonly<Record<string, MergedNameRedirect>> = {
   [ReticleTool.RUN_RECORD]: {
     tool: ReticleTool.PROJECT,
     note: 'run outcomes are persisted automatically by reticle_flow_replay; read them with reticle_project',
+  },
+  [ReticleTool.EXPLORE]: {
+    tool: ReticleTool.LOOK,
+    note: 'list the controls with reticle_look { action: "page", mode: "interactive" } (reticle_snapshot { mode: "interactive" }), and read console errors with reticle_observe { action: "console" } (reticle_console)',
   },
   [ReticleTool.WAIT_READY]: {
     tool: ReticleTool.SESSIONS,

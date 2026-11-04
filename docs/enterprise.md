@@ -22,7 +22,7 @@ No feature in the open packages needs a key. A key identifies your organisation 
    export RETICLE_LICENSE_KEY="<your key>"
    # the release already bakes the issuer public key (RETICLE_LICENSE_PUBLIC_KEY)
    ```
-3. **Verify.** `reticle license` prints one JSON line whose `status` and `detail` say where you stand:
+3. **Verify.** `reticle status --json` carries a `license` object whose `status` and `detail` say where you stand:
 
    ```
    active    licensed to Acme Corp (enterprise), expires 2027-06-20T00:00:00.000Z
@@ -36,7 +36,7 @@ No feature in the open packages needs a key. A key identifies your organisation 
 
 4. **Renew.** Keys carry an expiry, shown as `expiresAt`; once it passes, the status is `expired`.
 
-> Procuring a license: contact **[hey@reticle.sh](mailto:hey@reticle.sh)**. Keys are issued offline and signed with Ed25519; the activation you run (`reticle license`) verifies them locally with no network call.
+> Procuring a license: contact **[hey@reticle.sh](mailto:hey@reticle.sh)**. Keys are issued offline and signed with Ed25519; the activation check (`reticle status`) verifies them locally with no network call.
 
 ## Roadmap
 

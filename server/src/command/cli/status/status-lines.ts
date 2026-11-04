@@ -27,6 +27,7 @@ export const StatusLabel = {
   NEXT: 'next',
   SPLIT_BRAIN: 'split brain',
   UPDATE: 'update',
+  LICENSE: 'license',
 } as const;
 export type StatusLabel = (typeof StatusLabel)[keyof typeof StatusLabel];
 
@@ -205,7 +206,27 @@ export function statusLines(fields: Record<string, unknown>): string[] {
     }
   }
 
+  const license = licenseText(fields['license']);
+  if (license !== undefined) {
+    lines.push(row(StatusLabel.LICENSE, license));
+  }
+
   return lines;
+}
+
+/** License states with no key set. `--json` carries them; the block stays silent. */
+const NO_KEY_LICENSE: ReadonlySet<unknown> = new Set(['missing', 'eval']);
+
+/** The license row, only when a key is set: active, expired or rejected. */
+function licenseText(value: unknown): string | undefined {
+  if ('object' !== typeof value || null === value) {
+    return undefined;
+  }
+  const { status, detail } = value as Record<string, unknown>;
+  if ('string' !== typeof status || NO_KEY_LICENSE.has(status)) {
+    return undefined;
+  }
+  return 'string' === typeof detail ? `${status}: ${detail}` : status;
 }
 
 /** The account row: refused at the last sync, not signed in, or signed in. */

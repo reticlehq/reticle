@@ -103,7 +103,7 @@ export const SKEW_CONVERGE =
 
 /** The fix for two builds of one version. */
 const SAME_VERSION_FIX =
-  'Both say the same version, so one of them is an older build of it: run `reticle restart`, then ' +
+  'Both say the same version, so one of them is an older build of it: run `reticle serve --restart`, then ' +
   'reload the page so it loads the SDK the dev server serves now.';
 
 function versionPhrase(peer: PeerIdentity, self: SelfIdentity): string {

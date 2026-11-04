@@ -51,13 +51,18 @@ export { CLI_USAGE };
 const INIT_COMMAND = 'init';
 const SERVE_COMMAND = 'serve';
 const STOP_COMMAND = 'stop';
-const KILL_COMMAND = 'kill';
+/** Kept for one release as `serve --restart`. */
 const RESTART_COMMAND = 'restart';
+/** `serve --restart`: stop the daemon, then start it and wait until it listens. */
+const RESTART_FLAG = '--restart';
 const STATUS_COMMAND = 'status';
 const OPEN_COMMAND = 'open';
 const DRIVE_COMMAND = 'drive';
+/** Kept for one release as `gate --list`. */
 const AFFECTED_COMMAND = 'affected';
 const GATE_COMMAND = 'gate';
+/** `gate --list`: name the saved flows the changes touch, and check nothing. */
+const LIST_FLAG = '--list';
 /** Hook mode: prose a human can read, and silence when there was simply nothing to check. */
 const HOOK_FLAG = '--hook';
 const ACCEPT_COVERAGE_FLAG = '--accept-coverage';
@@ -67,7 +72,9 @@ const REPORT_COMMAND = 'report';
 const CONTEXT_COMMAND = 'context';
 const SESSION_FLAG = '--session';
 const UPDATE_COMMAND = 'update';
+/** Kept for one release as `update --rollback`. */
 const ROLLBACK_COMMAND = 'rollback';
+const ROLLBACK_FLAG = '--rollback';
 const MCP_COMMAND = 'mcp';
 const LICENSE_COMMAND = 'license';
 const VERSION_COMMAND = 'version';
@@ -112,7 +119,6 @@ export const LOCAL_COMMANDS: readonly string[] = [
   INIT_COMMAND,
   SERVE_COMMAND,
   STOP_COMMAND,
-  KILL_COMMAND,
   RESTART_COMMAND,
   STATUS_COMMAND,
   OPEN_COMMAND,
@@ -691,6 +697,16 @@ export function parseCliArgs(
       };
     }
     case SERVE_COMMAND: {
+      if (rest.includes(RESTART_FLAG)) {
+        return {
+          kind: 'restart',
+          port: parsePortFlag(rest, defaultPort),
+          force: rest.includes(FORCE_FLAG),
+        };
+      }
+      if (rest.includes(FORCE_FLAG)) {
+        return { kind: 'error', message: `${FORCE_FLAG} works only with ${RESTART_FLAG}` };
+      }
       const r = parseServeFlags(rest, defaultPort, defaultHeadless);
       if ('error' === r.kind) {
         return r;
@@ -708,16 +724,12 @@ export function parseCliArgs(
     case STOP_COMMAND: {
       const port = parsePortFlag(rest, defaultPort);
       // `stop --force` is what `kill` was: free the port by its listener, which must still be a
-      // Reticle daemon. Overriding that refusal stays on `restart --force` and the old `kill --force`.
+      // Reticle daemon. Overriding that refusal stays on `serve --restart --force`.
       if (rest.includes(FORCE_FLAG)) {
         return { kind: 'kill', port, force: false };
       }
       const quiet = rest.includes(QUIET_FLAG);
       return { kind: 'stop', port, quiet };
-    }
-    case KILL_COMMAND: {
-      const port = parsePortFlag(rest, defaultPort);
-      return { kind: 'kill', port, force: rest.includes(FORCE_FLAG) };
     }
     case RESTART_COMMAND: {
       const port = parsePortFlag(rest, defaultPort);
@@ -838,8 +850,13 @@ export function parseCliArgs(
       // Flags are stripped before target parsing, which would reject them as unknown.
       const hook = rest.includes(HOOK_FLAG);
       const acceptCoverage = rest.includes(ACCEPT_COVERAGE_FLAG);
-      const t = parseTargetArgs(rest.filter((a) => a !== HOOK_FLAG && a !== ACCEPT_COVERAGE_FLAG));
+      const t = parseTargetArgs(
+        rest.filter((a) => a !== HOOK_FLAG && a !== ACCEPT_COVERAGE_FLAG && a !== LIST_FLAG),
+      );
       const since = t.since ?? implicitSince(t.files);
+      if (rest.includes(LIST_FLAG)) {
+        return { kind: 'affected', files: t.files, ...(since === undefined ? {} : { since }) };
+      }
       return {
         kind: 'gate',
         files: t.files,
@@ -867,7 +884,7 @@ export function parseCliArgs(
       return { kind: 'context', ...(session === undefined ? {} : { session }) };
     }
     case UPDATE_COMMAND:
-      return { kind: 'update' };
+      return rest.includes(ROLLBACK_FLAG) ? { kind: 'rollback' } : { kind: 'update' };
     case ROLLBACK_COMMAND:
       return { kind: 'rollback' };
     case MCP_COMMAND: {

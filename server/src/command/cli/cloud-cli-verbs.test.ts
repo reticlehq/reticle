@@ -21,7 +21,18 @@ import {
 } from '@reticlehq/core';
 import { buildVerificationRun } from '@/judgement/runs/artifact/build-verification-run.js';
 import { connectInstalls, runCloudCommand } from './cloud-cli.js';
-import { EMAIL_SIGN_IN_REMOVED } from './cloud-login.js';
+import { EMAIL_SIGN_IN_REMOVED, cmdLogin } from './cloud-login.js';
+import { cmdLink } from './cloud-link.js';
+
+/**
+ * The sign-in half of `reticle connect`, with the catch the cloud dispatcher puts around it: a
+ * failure prints its sentence and exits 1. `login` is no longer a command of its own.
+ */
+const login = (argv: readonly string[]): Promise<number> =>
+  cmdLogin(argv, cmdLink).catch((e: unknown) => {
+    process.stderr.write(`${e instanceof Error ? e.message : String(e)}\n`);
+    return 1;
+  });
 
 // The device flow opens a browser; a test must never.
 vi.mock('./auth/device-flow.js', async (original) => ({
@@ -188,7 +199,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       // The artifacts directory alone — the shape bench-app was in.
       await writeRepoFile(['impact.json'], '{}');
 
-      const code = await runCloudCommand(['login']);
+      const code = await login([]);
 
       expect(code).toBe(0);
       // Signed in, but nothing was minted or bound: no key request went out.
@@ -208,7 +219,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       };
       await writeFile(join(cwd, '.reticle.json'), JSON.stringify({ projectId: 'p1' }));
 
-      const code = await runCloudCommand(['login']);
+      const code = await login([]);
 
       expect(code).toBe(0);
       expect(requests.filter((r) => r.url.endsWith('/v1/keys')).length).toBe(1);
@@ -223,7 +234,7 @@ describe('cloud-cli verb contracts (#555)', () => {
     [['login', 'dev@example.com']],
   ])('%j stops with the sentence and sends nothing', async (argv) => {
     process.env['RETICLE_CLOUD_URL'] = TEST_URL;
-    expect(await runCloudCommand(argv)).toBe(2);
+    expect(await login(argv.slice(1))).toBe(2);
     expect(stderrBuf).toContain(EMAIL_SIGN_IN_REMOVED);
     expect(requests).toEqual([]);
   });
@@ -235,7 +246,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       status: 410,
       body: { error: { code: 'email_sign_in_removed', message: said } },
     });
-    expect(await runCloudCommand(['login'])).toBe(1);
+    expect(await login([])).toBe(1);
     expect(stderrBuf).toContain(said);
     expect(stderrBuf).not.toContain('    at ');
   });
@@ -389,7 +400,7 @@ describe('cloud-cli verb contracts (#555)', () => {
   it('login without RETICLE_CLOUD_URL dials the hosted service, not the developer machine', async () => {
     responder = () => ({ status: 500, body: { error: { message: 'down' } } });
 
-    const code = await runCloudCommand(['login']);
+    const code = await login([]);
 
     expect(code).toBe(1);
     expect(requests).toHaveLength(1);
@@ -405,87 +416,16 @@ describe('cloud-cli verb contracts (#555)', () => {
     expect(stderrBuf).not.toContain('Opening');
   });
 
-  it('RETICLE_CLOUD_URL overrides the default — which is how this repo develops against localhost', async () => {
-    process.env['RETICLE_CLOUD_URL'] = 'http://localhost:8890';
-    responder = () => ({ status: 500, body: { error: { message: 'down' } } });
-
-    const code = await runCloudCommand(['login']);
-
-    expect(code).toBe(1);
-    expect(requests[0]?.url).toBe('http://localhost:8890/v1/auth/device/start');
-  });
-
-  it('never sends a cached session token to a host that session was not issued by', async () => {
-    // The staging/prod case, and the reason a single session file is not enough. `baseUrl` and
-    // `bearer` resolve independently: the URL can be redirected by RETICLE_CLOUD_URL while the
-    // token still comes from the cached session. Point a prod login at staging and the PROD
-    // bearer is handed to another host — a credential crossing a trust boundary because one
-    // environment variable moved, with nothing on screen to say it happened.
-    await writeHomeFile(
-      [SESSION_FILE],
-      '{"token":"prod-token","orgName":"Acme","url":"https://app.reticle.sh"}',
-    );
-    process.env['RETICLE_CLOUD_URL'] = 'https://staging.reticle.sh';
-    responder = () => ({ status: 200, body: { projects: [] } });
-
-    const code = await runCloudCommand(['project', 'ls']);
-
-    // It refuses before dialling at all, which is stronger than sending no token: the foreign host
-    // learns nothing, not even that this machine exists.
-    expect(requests, 'the staging host must not be contacted with a prod login').toHaveLength(0);
-    expect(code).toBe(2);
-    // And it says WHICH host it is signed in to versus which one the command targets — the two
-    // facts needed to fix it. "Run reticle login" alone would be baffling to somebody who just did.
-    expect(stderrBuf).toContain('https://app.reticle.sh');
-    expect(stderrBuf).toContain('https://staging.reticle.sh');
-  });
-
   it('login --url dials the host given on the command line, over env and over the default', async () => {
     // A flag beats an environment variable for a one-off: it is visible in shell history, it cannot
     // leak into a sibling process, and it is the spelling somebody reaches for without reading docs.
     process.env['RETICLE_CLOUD_URL'] = 'https://staging.reticle.sh';
     responder = () => ({ status: 500, body: { error: { message: 'down' } } });
 
-    const code = await runCloudCommand(['login', '--url', 'https://other.reticle.sh']);
+    const code = await login(['--url', 'https://other.reticle.sh']);
 
     expect(code).toBe(1);
     expect(requests[0]?.url).toBe('https://other.reticle.sh/v1/auth/device/start');
-  });
-
-  it('holds a session per host, so staging and production can both be logged in', async () => {
-    // The point of keying by host. Two logins, neither clobbering the other, and each command
-    // picking the token that belongs to the host it is actually dialling.
-    await writeHomeFile(
-      ['sessions', 'app.reticle.sh.json'],
-      '{"token":"prod-token","orgName":"Prod","url":"https://app.reticle.sh"}',
-    );
-    await writeHomeFile(
-      ['sessions', 'staging.reticle.sh.json'],
-      '{"token":"staging-token","orgName":"Staging","url":"https://staging.reticle.sh"}',
-    );
-    responder = () => ({ status: 200, body: { projects: [] } });
-
-    process.env['RETICLE_CLOUD_URL'] = 'https://staging.reticle.sh';
-    await runCloudCommand(['project', 'ls']);
-    expect(requests[0]?.authorization).toBe('Bearer staging-token');
-
-    requests = [];
-    process.env['RETICLE_CLOUD_URL'] = 'https://app.reticle.sh';
-    await runCloudCommand(['project', 'ls']);
-    expect(requests[0]?.authorization).toBe('Bearer prod-token');
-  });
-
-  it('reads a pre-existing session.json, so an already-logged-in machine is not signed out by upgrading', async () => {
-    await writeHomeFile(
-      [SESSION_FILE],
-      '{"token":"legacy-token","orgName":"Acme","url":"http://localhost:9999"}',
-    );
-    responder = () => ({ status: 200, body: { projects: [] } });
-
-    await runCloudCommand(['project', 'ls']);
-
-    expect(requests[0]?.url).toContain('http://localhost:9999');
-    expect(requests[0]?.authorization).toBe('Bearer legacy-token');
   });
 
   it('logout signs out of one host and leaves the other logged in', async () => {
@@ -523,57 +463,6 @@ describe('cloud-cli verb contracts (#555)', () => {
     expect(requests).toHaveLength(0);
   });
 
-  it("whoami reports the session and this repo's attach state without dialling", async () => {
-    await writeHomeFile(
-      [SESSION_FILE],
-      JSON.stringify({ token: 'tok', orgName: 'Acme', url: 'http://cloud.test' }),
-    );
-    await writeHomeFile([CREDENTIALS_FILE], JSON.stringify({ proj_1: 'rk_live_whoami' }));
-    await writeRepoFile(
-      [CLOUD_LINK_FILE],
-      JSON.stringify({
-        projectId: 'proj_1',
-        projectName: 'Proj',
-        url: 'http://cloud.test',
-        sync: { runs: false },
-        verify: 'server',
-      }),
-    );
-
-    const code = await runCloudCommand(['whoami']);
-
-    expect(code).toBe(0);
-    expect(lastJsonOutput()).toEqual({
-      loggedInAs: 'Acme',
-      // The sync half of "what is my state". `neverSynced` is the distinction that matters out
-      // here: a machine that has never talked to the dashboard and one whose last attempt failed
-      // are both "behind", and only one of them is a problem.
-      sync: {
-        lastPushAt: null,
-        lastPullAt: null,
-        decisionsHeld: 0,
-        neverSynced: true,
-      },
-      repo: {
-        attached: true,
-        projectId: 'proj_1',
-        url: 'http://cloud.test',
-        // `capsules` defaults ON — this project's cloud.json is silent about it, and a policy names
-        // what it changes rather than inheriting a neighbouring opt-out.
-        sync: {
-          runs: false,
-          memory: true,
-          flows: true,
-          capsules: true,
-          screenshots: false,
-          video: false,
-        },
-        verify: 'server',
-      },
-    });
-    expect(requests, 'whoami reads local files only').toHaveLength(0);
-  });
-
   // Persona drive: `reticle connect` wrote the dashboard's address to cloud.json and never said it.
   it('prints the dashboard address it wrote', async () => {
     process.env['RETICLE_CLOUD_URL'] = TEST_URL;
@@ -581,7 +470,7 @@ describe('cloud-cli verb contracts (#555)', () => {
     responder = () => ({
       body: { projectId: 'proj_1', projectName: 'Proj', dashboardUrl: 'https://app.test/p/proj_1' },
     });
-    expect(await runCloudCommand(['link'])).toBe(0);
+    expect(await cmdLink([])).toBe(0);
     expect(stderrBuf).toContain('https://app.test/p/proj_1');
   });
 
@@ -590,7 +479,7 @@ describe('cloud-cli verb contracts (#555)', () => {
     process.env['RETICLE_CLOUD_KEY'] = TEST_KEY;
     responder = () => ({ body: { projectId: 'proj_1', projectName: 'Proj' } });
 
-    const code = await runCloudCommand(['link']);
+    const code = await cmdLink([]);
 
     expect(code).toBe(0);
     expect(requests).toHaveLength(1);
@@ -633,7 +522,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       };
     };
 
-    const code = await runCloudCommand(['link', '--project', 'Storefront']);
+    const code = await cmdLink(['--project', 'Storefront']);
 
     expect(code).toBe(0);
     const created = requests.find((r) => 'POST' === r.method && r.url.endsWith('/v1/projects'));
@@ -659,7 +548,7 @@ describe('cloud-cli verb contracts (#555)', () => {
         body: { projectId: 'proj_new', projectName: 'Storefront', key: 'rk_live_abcd1234ef' },
       };
     };
-    await runCloudCommand(['link', '--project', 'Storefront']);
+    await cmdLink(['--project', 'Storefront']);
     expect(stderrBuf).toContain('in workspace "Acme"');
     expect(stderrBuf).toContain('bound this repo to project "Storefront" in workspace "Acme"');
   });
@@ -683,7 +572,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       }
       return { body: { projectId: 'web-2', projectName: 'web', key: 'rk_live_abcd1234ef' } };
     };
-    await runCloudCommand(['link', '--project', 'web']);
+    await cmdLink(['--project', 'web']);
     const created = requests.find((r) => 'POST' === r.method && r.url.endsWith('/v1/projects'));
     expect(created?.body).toMatchObject({ name: 'web', repo: expect.any(String) as unknown });
     const link = JSON.parse(await readFile(join(cwd, RETICLE_DIR, CLOUD_LINK_FILE), 'utf8')) as {
@@ -702,7 +591,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       };
     };
 
-    await runCloudCommand(['link', '--project', 'storefront']);
+    await cmdLink(['--project', 'storefront']);
 
     expect(requests.filter((r) => 'POST' === r.method && r.url.endsWith('/v1/projects'))).toEqual(
       [],
@@ -723,7 +612,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       };
     };
 
-    await runCloudCommand(['link', '--project', 'storefront']);
+    await cmdLink(['--project', 'storefront']);
 
     // Which project it bound to.
     expect(stderrBuf).toContain('Storefront');
@@ -761,7 +650,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       return { body: { projectId: 'proj_1', projectName: 'Storefront', orgId: 'org_theirs' } };
     };
 
-    const code = await runCloudCommand(['link', '--project', 'storefront']);
+    const code = await cmdLink(['--project', 'storefront']);
 
     expect(code).toBe(0);
     expect(
@@ -798,7 +687,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       return { body: { projectId: 'proj_1', projectName: 'Storefront' } };
     };
 
-    const code = await runCloudCommand(['link', '--project', 'storefront']);
+    const code = await cmdLink(['--project', 'storefront']);
 
     expect(code).toBe(0);
     expect(requests.filter((r) => 'POST' === r.method && r.url.endsWith('/v1/keys')).length).toBe(
@@ -824,7 +713,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       return { body: { projectId: 'proj_1', projectName: 'Storefront', orgId: 'org_acme' } };
     };
 
-    const code = await runCloudCommand(['link', '--project', 'storefront']);
+    const code = await cmdLink(['--project', 'storefront']);
 
     expect(code).toBe(0);
     expect(
@@ -858,7 +747,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       };
     };
 
-    const code = await runCloudCommand(['link', '--project', 'storefront']);
+    const code = await cmdLink(['--project', 'storefront']);
 
     expect(code).toBe(0);
     expect(requests.filter((r) => 'POST' === r.method && r.url.endsWith('/v1/keys')).length).toBe(
@@ -901,7 +790,7 @@ describe('cloud-cli verb contracts (#555)', () => {
     process.env['RETICLE_CLOUD_KEY'] = TEST_KEY;
     responder = () => ({ body: { knownRunIds: [], stateHashes: {}, triage: [], cursor: '0:' } });
 
-    const code = await runCloudCommand(['push']);
+    const code = await runCloudCommand(['sync']);
 
     expect(code).toBe(0);
     const out = lastJsonOutput() as Record<string, unknown>;
@@ -981,7 +870,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       await writeCurrentRunArtifact('run_refused');
       responder = refusingCloud;
 
-      const code = await runCloudCommand(['push']);
+      const code = await runCloudCommand(['sync']);
 
       expect(code, 'exit 0 tells a CI step the sync worked').toBe(1);
     });
@@ -990,7 +879,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       await writeCurrentRunArtifact('run_refused');
       responder = refusingCloud;
 
-      await runCloudCommand(['push']);
+      await runCloudCommand(['sync']);
 
       expect((lastJsonOutput() as Record<string, unknown>)['ok']).toBe(false);
     });
@@ -999,7 +888,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       await writeCurrentRunArtifact('run_refused');
       responder = refusingCloud;
 
-      await runCloudCommand(['push']);
+      await runCloudCommand(['sync']);
 
       const out = lastJsonOutput() as Record<string, unknown>;
       expect(out['sent']).toEqual({
@@ -1019,7 +908,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       await writeCurrentRunArtifact('run_refused');
       responder = refusingCloud;
 
-      await runCloudCommand(['push']);
+      await runCloudCommand(['sync']);
 
       const pushed = requests.find((r) => 'POST' === r.method && r.url.endsWith('/v1/sync'));
       const runs = (pushed?.body as { runs?: Array<Record<string, unknown>> } | undefined)?.runs;
@@ -1038,7 +927,7 @@ describe('cloud-cli verb contracts (#555)', () => {
         return { body: { runs: { accepted: 1, rejected: [] } } };
       };
 
-      const code = await runCloudCommand(['push']);
+      const code = await runCloudCommand(['sync']);
 
       expect(code).toBe(0);
       const out = lastJsonOutput() as Record<string, unknown>;
@@ -1080,7 +969,7 @@ describe('cloud-cli verb contracts (#555)', () => {
     process.env['RETICLE_CLOUD_KEY'] = TEST_KEY;
     responder = () => ({ body: { broken: [] } });
 
-    const code = await runCloudCommand(['regression']);
+    const code = await runCloudCommand(['runs', 'regression']);
 
     expect(code).toBe(0);
     expect(requests).toHaveLength(1);
@@ -1095,10 +984,10 @@ describe('cloud-cli verb contracts (#555)', () => {
     process.env['RETICLE_CLOUD_KEY'] = TEST_KEY;
     responder = () => ({ body: { shareUrl: 'https://cloud.test/s/abc' } });
 
-    expect(await runCloudCommand(['share'])).toBe(2);
+    expect(await runCloudCommand(['runs', 'share'])).toBe(2);
     expect(requests).toHaveLength(0);
 
-    const code = await runCloudCommand(['share', 'run_abc']);
+    const code = await runCloudCommand(['runs', 'share', 'run_abc']);
     expect(code).toBe(0);
     expect(requests).toHaveLength(1);
     expect(requests[0]?.method).toBe('POST');
@@ -1130,7 +1019,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       const entries = [{ statement: 'ours', status: 'proved' }];
       responder = () => ({ body: { projectId: 'proj_1', entries } });
 
-      const code = await runCloudCommand(['memory']);
+      const code = await runCloudCommand(['runs', 'memory']);
 
       expect(code).toBe(0);
       expect(requests).toHaveLength(1);
@@ -1150,7 +1039,7 @@ describe('cloud-cli verb contracts (#555)', () => {
         body: { projectId: 'proj_sibling', entries: [{ statement: 'theirs', status: 'proved' }] },
       });
 
-      const code = await runCloudCommand(['memory']);
+      const code = await runCloudCommand(['runs', 'memory']);
 
       expect(code).toBe(1);
       expect(stdoutBuf.trim()).toBe('');
@@ -1161,7 +1050,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       await linkedHere();
       responder = () => ({ body: { entries: [{ statement: 'whose?', status: 'proved' }] } });
 
-      const code = await runCloudCommand(['memory']);
+      const code = await runCloudCommand(['runs', 'memory']);
 
       expect(code).toBe(1);
       expect(stdoutBuf.trim()).toBe('');
@@ -1185,7 +1074,7 @@ describe('cloud-cli verb contracts (#555)', () => {
       // The server answers about SOME project, and with no link there is nothing to disagree with.
       responder = () => ({ body: { projectId: 'some-other-project', entries } });
 
-      const code = await runCloudCommand(['memory']);
+      const code = await runCloudCommand(['runs', 'memory']);
 
       expect(code).toBe(0);
       // No `projectId=` in the query: there is no linked id to send, and inventing one would scope

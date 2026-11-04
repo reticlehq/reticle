@@ -55,21 +55,12 @@ export const EXPECT_FLAG = '--expect';
  * that the dispatcher and the telemetry vocabulary read one list instead of two.
  */
 export const CLOUD_COMMANDS: readonly string[] = [
-  'login',
   'connect',
   'try',
   'logout',
-  'whoami',
-  'link',
-  'project',
   'config',
-  'issues',
-  'memory',
-  'push',
   'sync',
   'runs',
-  'regression',
-  'share',
 ];
 
 /**
@@ -77,16 +68,10 @@ export const CLOUD_COMMANDS: readonly string[] = [
  * prints a single line saying so, then does what it always did.
  */
 export const RENAMED_COMMANDS: ReadonlyMap<string, string> = new Map([
-  ['kill', 'stop --force'],
-  ['login', 'connect'],
-  ['link', 'connect'],
-  ['project', 'connect --project <name|id>'],
-  ['whoami', 'status'],
-  ['push', 'sync'],
-  ['regression', 'runs regression'],
-  ['share', 'runs share <runId>'],
-  ['issues', 'runs issues'],
-  ['memory', 'runs memory'],
+  ['affected', 'gate --list'],
+  ['license', 'status'],
+  ['rollback', 'update --rollback'],
+  ['restart', 'serve --restart'],
 ]);
 
 const HELP_FLAGS: ReadonlySet<string> = new Set(['--help', '-h']);
@@ -107,13 +92,24 @@ export function renamedCommandFor(argv: readonly string[]): string | undefined {
  */
 export const REMOVED_COMMANDS: ReadonlyMap<string, string> = new Map([
   ['hunt', 'it has no replacement'],
-  ['watch', 'use `reticle affected` after you save, or `reticle gate` before you commit'],
+  ['watch', 'use `reticle gate --list` after you save, or `reticle gate` before you commit'],
   ['capsules', 'it has no replacement; saved capsules stay in .reticle/capsules'],
   ['tutorial', "use `reticle init` in your app's folder, or `reticle try <url>`"],
   [
     'identify',
     'it has no replacement; delete ~/.reticle/identity.json to forget a saved identity, and use `reticle feedback` to reach us',
   ],
+  // Renamed one release earlier, and kept for that one release.
+  ['kill', 'use `reticle stop --force`'],
+  ['login', 'use `reticle connect`'],
+  ['link', 'use `reticle connect`'],
+  ['project', 'use `reticle connect --project <name|id>`'],
+  ['whoami', 'use `reticle status`'],
+  ['push', 'use `reticle sync`'],
+  ['regression', 'use `reticle runs regression`'],
+  ['share', 'use `reticle runs share <runId>`'],
+  ['issues', 'use `reticle runs issues`'],
+  ['memory', 'use `reticle runs memory`'],
 ]);
 
 export const removedNote = (command: string, instead: string): string =>

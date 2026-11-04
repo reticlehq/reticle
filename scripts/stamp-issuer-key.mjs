@@ -9,7 +9,7 @@
  * `describeLicense` reads `BAKED_ISSUER_PUBLIC_KEY_PEM` in preference to the environment, so an
  * operator cannot swap in an issuer key of their own. That only works if a release actually has the
  * key baked. A release that ships with the literal still empty resolves no issuer key at all, so in
- * production `reticle license` reports the build as MISCONFIGURED and every customer key activates
+ * production `reticle status` reports the license as MISCONFIGURED and every customer key activates
  * NOTHING. This script is the step that makes the shipped artifact different from the source tree.
  *
  *   RETICLE_ISSUER_PUBLIC_KEY="$(cat issuer-public.pem)" node scripts/stamp-issuer-key.mjs

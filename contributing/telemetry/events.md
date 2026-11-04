@@ -678,7 +678,7 @@ Eligibility is on rows that exist. It needs no field of its own. Deduplicate on 
 
 ## version_changed
 
-**When:** a start of any `reticle` process runs a version that differs from the last version that ran on this machine, kept in `~/.reticle/last-version`. Also when `reticle update` or `reticle rollback` changes the version. Sent from `reportCliRun` in `server/src/telemetry/cli-telemetry.ts` and from `server/src/command/update/updater.ts`. The updater records the new version, so its move is not sent a second time. **Why:** upgrade adoption, and whether the update nudge caused it. **Unit:** one version move on one machine. The first start on a machine records the version and sends nothing.
+**When:** a start of any `reticle` process runs a version that differs from the last version that ran on this machine, kept in `~/.reticle/last-version`. Also when `reticle update` or `reticle update --rollback` changes the version. Sent from `reportCliRun` in `server/src/telemetry/cli-telemetry.ts` and from `server/src/command/update/updater.ts`. The updater records the new version, so its move is not sent a second time. **Why:** upgrade adoption, and whether the update nudge caused it. **Unit:** one version move on one machine. The first start on a machine records the version and sends nothing.
 
 | Field | Type | Meaning |
 | --- | --- | --- |

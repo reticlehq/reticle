@@ -97,7 +97,7 @@ Enterprise features are unlocked by a signed key, verified locally with Ed25519 
 npx @reticlehq/server@latest init --license <key>
 ```
 
-That writes `RETICLE_LICENSE_KEY` to the project's `.env` and adds `.env` to `.gitignore` if nothing there covers it. Do not do those two by hand: a key committed to git is a leaked credential, and it stays leaked after the file is removed. Confirm with `npx @reticlehq/server license`, which prints `active`, `eval`, `missing`, `invalid` or `expired`.
+That writes `RETICLE_LICENSE_KEY` to the project's `.env` and adds `.env` to `.gitignore` if nothing there covers it. Do not do those two by hand: a key committed to git is a leaked credential, and it stays leaked after the file is removed. Confirm with `npx @reticlehq/server status --json`. Its `license.status` is `active`, `eval`, `missing`, `invalid` or `expired`.
 
 Never echo the key back in your reply, and never put it in a commit, a code comment, or a feedback report. The rest: `curl https://docs.reticle.sh/enterprise.md`.
 

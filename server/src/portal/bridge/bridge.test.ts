@@ -161,14 +161,6 @@ describe('bridge round-trip (north-star)', () => {
     expect(result.component).toEqual({ component: 'PayButton', hooks: [0] });
   });
 
-  it('explore lists interactive elements with refs', async () => {
-    const result = (await callTool(deps, 'reticle_explore', {})) as {
-      interactive: { ref: string }[];
-    };
-    expect(result.interactive.length).toBeGreaterThan(0);
-    expect(result.interactive[0]?.ref).toMatch(/^e\d+$/);
-  });
-
   it('a hidden session surfaces throttled:true + a warning on an reticle_act result', async () => {
     browser.emit(EventType.PAGE_HEALTH, {
       hidden: true,

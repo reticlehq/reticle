@@ -95,7 +95,7 @@ describe('handleDoctor agent link row on a FOREIGN port', () => {
       const line = agentLinkLine(output);
       expect(line).toContain('follow the daemon row above');
       expect(line).not.toContain('reticle stop');
-      expect(line).not.toContain('reticle restart --force');
+      expect(line).not.toContain('reticle serve --restart --force');
       expect(output).not.toContain(RECORD_HEALTHY);
     } finally {
       await close(server, sockets);

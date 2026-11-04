@@ -41,8 +41,8 @@ describe('record -> compile -> replay', () => {
     await bridge.close();
   });
 
-  it('reticle_replay is registered with recordingName in its schema', () => {
-    const tool = TOOLS.find((t) => t.name === ReticleTool.REPLAY);
+  it('reticle_record takes replay, with recordingName in its schema', () => {
+    const tool = TOOLS.find((t) => t.name === ReticleTool.RECORD);
     expect(tool).toBeDefined();
     expect(tool?.inputSchema['recordingName']).toBeDefined();
   });
@@ -101,7 +101,10 @@ describe('record -> compile -> replay', () => {
     await callTool(deps, ReticleTool.RECORD, { action: 'stop', name: 'rerun' });
 
     browser.received.length = 0;
-    const replay = (await callTool(deps, ReticleTool.REPLAY, { name: 'rerun' })) as ReplayResult;
+    const replay = (await callTool(deps, ReticleTool.RECORD, {
+      action: 'replay',
+      name: 'rerun',
+    })) as ReplayResult;
     expect(replay.ok).toBe(true);
     expect(replay.steps).toEqual([{ tool: 'reticle_act', ok: true }]);
     const query = browser.received.find((c) => c.name === ReticleCommand.QUERY);
@@ -111,9 +114,12 @@ describe('record -> compile -> replay', () => {
   });
 
   it('replay of an unknown program throws', async () => {
-    await expect(callTool(deps, ReticleTool.REPLAY, { recordingName: 'nope' })).rejects.toThrow(
-      /no compiled recording named 'nope'/,
-    );
+    await expect(
+      callTool(deps, ReticleTool.RECORD, {
+        action: 'replay',
+        recordingName: 'nope',
+      }),
+    ).rejects.toThrow(/no compiled recording named 'nope'/);
   });
 
   it('replay stops with ok:false when a testid does not resolve', async () => {
@@ -122,7 +128,8 @@ describe('record -> compile -> replay', () => {
     await callTool(deps, ReticleTool.RECORD, { action: 'stop', recordingName: 'gone' });
 
     browser.queryResolves = false;
-    const replay = (await callTool(deps, ReticleTool.REPLAY, {
+    const replay = (await callTool(deps, ReticleTool.RECORD, {
+      action: 'replay',
       recordingName: 'gone',
     })) as ReplayResult;
     expect(replay.ok).toBe(false);
@@ -144,7 +151,8 @@ describe('record -> compile -> replay', () => {
     expect(rec.program.steps[0]?.stable).toBe(true);
 
     browser.received.length = 0;
-    const replay = (await callTool(deps, ReticleTool.REPLAY, {
+    const replay = (await callTool(deps, ReticleTool.RECORD, {
+      action: 'replay',
       recordingName: 'seq',
     })) as ReplayResult;
     expect(replay.ok).toBe(true);

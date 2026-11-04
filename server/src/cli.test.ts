@@ -842,7 +842,7 @@ describe('--help anywhere in the command line', () => {
   });
 
   it('works for every other subcommand too — it is a property of the CLI, not of init', () => {
-    for (const cmd of ['serve', 'status', 'link', 'verify']) {
+    for (const cmd of ['serve', 'status', 'connect', 'verify']) {
       expect(parseCliArgs([cmd, '--help'], 4400).kind).toBe('help');
     }
   });

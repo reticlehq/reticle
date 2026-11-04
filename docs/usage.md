@@ -283,13 +283,13 @@ Show the agent's intent on the page, and control time (toasts/debounces/auto-dis
 
 Regression detection. See [§8](#8-regression-baselines--diff).
 
-### `reticle_run { tool: "reticle_record", args: { action: "start" } }` / `reticle_run { tool: "reticle_record", args: { action: "stop" } }` / `reticle_replay`
+### `reticle_run { tool: "reticle_record", args: { action: "start" | "stop" | "replay" } }`
 
 Capture a flow's reaction report and compile it into a replayable program. See [§9](#9-recording-a-flow). `reticle_run { tool: "reticle_record", args: { action: "stop" } }` also returns a `cost:{ events, bytes }` hint alongside the reaction report so you can gauge the recording's size.
 
-### `reticle_explore`
+### Autonomous exploration
 
-List interactive elements + console-error count for autonomous exploration. See [§10](#10-autonomous-exploration).
+List the interactive elements with `reticle_snapshot { mode: "interactive" }` and read console errors with `reticle_console`. See [§10](#10-autonomous-exploration).
 
 ### Flows, recorder & self-healing (`.reticle/`)
 
@@ -668,7 +668,7 @@ reticle_run({ tool: "reticle_record", args: { action: "stop", recordingName: "ch
 `reticle_run { tool: "reticle_record", args: { action: "stop" } }` returns a compiled, replayable `program`: the agent's `reticle_act` / `reticle_act { steps: [...] }` invocations captured during the span, with each ref normalized to its element's `data-testid` where resolvable. Re-run it later:
 
 ```jsonc
-reticle_run({ tool: "reticle_replay", args: { recordingName: "checkout" } })
+reticle_run({ tool: "reticle_record", args: { action: "replay", recordingName: "checkout" } })
 // re-resolves each step by testid and re-runs the actions in order
 // → { recordingName, ok, steps: [{ tool, ok, error?, note? }] }   // stops at the first failure
 ```
@@ -682,8 +682,8 @@ reticle_run({ tool: "reticle_replay", args: { recordingName: "checkout" } })
 Have the agent crawl and stress a screen without a script:
 
 ```jsonc
-reticle_run({ tool: "reticle_explore", args: { scope: "main" } })
-// → { interactive: [ { ref, desc }, … ], consoleErrors, hint }
+reticle_snapshot({ mode: "interactive", scope: "main" })   // the controls, with refs
+reticle_console({})                                        // the console errors so far
 ```
 
 The agent then acts on each ref, observes the reaction, and reports anomalies (failed requests, console errors, dead controls). Good for "click everything on this page and tell me what breaks."
@@ -1045,9 +1045,9 @@ registerCapabilities({ testids: [...], signals: [...], stores: [...], flows: [..
 reticle_run({ tool: "reticle_capabilities", args: {} })   // → { testids, signals, stores, flows }
 ```
 
-### `reticle_replay`: recordings become re-runnable programs
+### `reticle_record { action: "replay" }`: recordings become re-runnable programs
 
-`reticle_run { tool: "reticle_record", args: { action: "start" } }` → drive the flow → `reticle_run { tool: "reticle_record", args: { action: "stop" } }` returns a **compiled program** (steps bound to testids/signals, not volatile refs). `reticle_run({ tool: "reticle_replay", args: { recordingName } })` re-executes it, so your flow becomes a deterministic regression run, not a checklist.
+`reticle_run { tool: "reticle_record", args: { action: "start" } }` → drive the flow → `reticle_run { tool: "reticle_record", args: { action: "stop" } }` returns a **compiled program** (steps bound to testids/signals, not volatile refs). `reticle_run({ tool: "reticle_record", args: { action: "replay", recordingName } })` re-executes it, so your flow becomes a deterministic regression run, not a checklist.
 
 ---
 

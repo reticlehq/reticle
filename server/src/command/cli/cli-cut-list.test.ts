@@ -28,13 +28,12 @@ const SHORT_HELP = [
   'doctor',
   'open',
   'stop',
-  'restart',
   'update',
   'logout',
   'feedback',
   'telemetry',
 ];
-const HIDDEN = ['mcp', 'serve', 'drive', 'affected', 'setup', 'config', 'license', 'rollback'];
+const HIDDEN = ['mcp', 'serve', 'drive', 'setup', 'config'];
 const commandLines = (page: string): string[] =>
   page
     .split('\n')
@@ -104,9 +103,16 @@ describe('reticle --help', () => {
   });
 
   it('an old name answers with the new page and says so', () => {
-    const page = renderHelp('link', RENAMED_COMMANDS);
-    expect(page).toContain('usage:  reticle connect');
-    expect(page).toContain('`reticle link` is now `reticle connect`');
+    const page = renderHelp('affected', RENAMED_COMMANDS);
+    expect(page).toContain('usage:  reticle gate');
+    expect(page).toContain('`reticle affected` is now `reticle gate --list`');
+  });
+
+  it('each survivor page names the flag that replaced an old command', () => {
+    expect(renderHelp('gate')).toContain('--list');
+    expect(renderHelp('update')).toContain('--rollback');
+    expect(renderHelp('serve')).toContain('--restart');
+    expect(renderHelp('status')).toContain('license');
   });
 });
 
@@ -117,7 +123,50 @@ describe('renamed commands still run', () => {
       port: PORT,
       force: false,
     });
-    expect(parseCliArgs(['kill'], PORT)).toEqual({ kind: 'kill', port: PORT, force: false });
+  });
+
+  it('gate --list does what affected did', () => {
+    const affected = { kind: 'affected', files: ['src/a.ts'] };
+    expect(parseCliArgs(['gate', '--list', 'src/a.ts'], PORT)).toEqual(affected);
+    expect(parseCliArgs(['affected', 'src/a.ts'], PORT)).toEqual(affected);
+    expect(parseCliArgs(['gate', '--list', '--since', 'main'], PORT)).toEqual({
+      kind: 'affected',
+      files: [],
+      since: 'main',
+    });
+    expect(parseCliArgs(['gate', 'src/a.ts'], PORT)).toMatchObject({ kind: 'gate' });
+  });
+
+  it('update --rollback does what rollback did', () => {
+    expect(parseCliArgs(['update', '--rollback'], PORT)).toEqual({ kind: 'rollback' });
+    expect(parseCliArgs(['rollback'], PORT)).toEqual({ kind: 'rollback' });
+    expect(parseCliArgs(['update'], PORT)).toEqual({ kind: 'update' });
+  });
+
+  it('serve --restart does what restart did, --force included', () => {
+    const restart = { kind: 'restart', port: 4500, force: false };
+    expect(parseCliArgs(['serve', '--restart', '--port', '4500'], PORT)).toEqual(restart);
+    expect(parseCliArgs(['restart', '--port', '4500'], PORT)).toEqual(restart);
+    expect(parseCliArgs(['serve', '--restart', '--force'], PORT)).toEqual({
+      kind: 'restart',
+      port: PORT,
+      force: true,
+    });
+    // `--force` belongs to the restart; alone it names the flag it needs, not "unknown argument".
+    expect(parseCliArgs(['serve', '--force'], PORT)).toEqual({
+      kind: 'error',
+      message: `--force works only with --restart`,
+    });
+    expect(parseCliArgs(['restart', '--force'], PORT)).toEqual({
+      kind: 'restart',
+      port: PORT,
+      force: true,
+    });
+  });
+
+  it('license still runs, and its note points at status', () => {
+    expect(parseCliArgs(['license'], PORT)).toEqual({ kind: 'license' });
+    expect(renamedCommandFor(['license'])).toBe('status');
   });
 
   it('each old name is still dispatched', () => {
@@ -128,12 +177,33 @@ describe('renamed commands still run', () => {
   });
 
   it('the note is one plain line, dimmed only when asked', () => {
-    expect(renamedNote('push', 'sync', false)).toBe('`reticle push` is now `reticle sync`');
-    expect(renamedNote('push', 'sync', true)).toContain('\u001b[2m');
+    expect(renamedNote('rollback', 'update --rollback', false)).toBe(
+      '`reticle rollback` is now `reticle update --rollback`',
+    );
+    expect(renamedNote('rollback', 'update --rollback', true)).toContain('\u001b[2m');
   });
 });
 
 describe('removed commands say so and fail', () => {
+  // The names renamed one release earlier have had their release. Each one now points at the command that replaced it.
+  it.each([
+    ['kill', 'reticle stop --force'],
+    ['login', 'reticle connect'],
+    ['link', 'reticle connect'],
+    ['project', 'reticle connect --project'],
+    ['whoami', 'reticle status'],
+    ['push', 'reticle sync'],
+    ['regression', 'reticle runs regression'],
+    ['share', 'reticle runs share'],
+    ['issues', 'reticle runs issues'],
+    ['memory', 'reticle runs memory'],
+  ])('%s points at %s', (cmd, survivor) => {
+    const parsed = parseCliArgs([cmd], PORT);
+    expect('removed' === parsed.kind && parsed.message).toContain(survivor);
+    expect(CLOUD_COMMANDS).not.toContain(cmd);
+    expect(LOCAL_COMMANDS).not.toContain(cmd);
+  });
+
   it.each([...REMOVED_COMMANDS.keys()])('%s', (cmd) => {
     for (const argv of [[cmd], [cmd, '--help']]) {
       const parsed = parseCliArgs(argv, PORT);
@@ -190,6 +260,24 @@ describe('shipped text names only commands that still exist', () => {
   });
 });
 
+describe('status says which license is active', () => {
+  it('names an active or rejected license', () => {
+    const out = statusLines({
+      running: false,
+      license: { status: 'active', detail: 'licensed to Acme (team)' },
+    }).join('\n');
+    expect(out).toContain('license');
+    expect(out).toContain('licensed to Acme (team)');
+  });
+
+  it('says nothing when no key is set', () => {
+    for (const status of ['missing', 'eval']) {
+      const out = statusLines({ running: false, license: { status, detail: 'set a key' } });
+      expect(out.join('\n')).not.toContain('set a key');
+    }
+  });
+});
+
 describe('status says who is signed in', () => {
   it('names the account and the linked project', () => {
     const out = statusLines({ running: false, signedInAs: 'Acme', linkedProject: 'shop' }).join(
@@ -207,10 +295,10 @@ describe('status says who is signed in', () => {
 
 describe('the renamed-command note', () => {
   it('names the new command for an old one', () => {
-    expect(renamedCommandFor(['whoami'])).toBe('status');
+    expect(renamedCommandFor(['affected'])).toBe('gate --list');
   });
 
   it('says nothing to a request for help', () => {
-    expect(renamedCommandFor(['link', '--help'])).toBeUndefined();
+    expect(renamedCommandFor(['restart', '--help'])).toBeUndefined();
   });
 });
