@@ -478,6 +478,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'runs',
     'session',
     'tape',
+    // A replay that starts while the page reconnects waits for it with the same wait the tools
+    // use (resolve-within.ts). `timing` reaches nothing, so this adds no mutual pair (#2168).
+    'timing',
     'tools',
     // Every replayed step leaves a screenshot, taken by the same function every action uses.
     'visual',

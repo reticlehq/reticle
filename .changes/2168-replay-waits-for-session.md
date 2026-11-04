@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a replayed flow ended `unknown` while the page reconnected.** `reticle verify` replays flows one after the other, and each flow reloads the page. A flow that started in the short gap before the page reconnected ended at once with "no browser session connected". The same build could pass on one run and be "not proved" on the next. Now the replay waits for the page, up to the time it already allows for the start page. It reports "no browser session connected" only when no page connects in that time. Closes [#2168](https://github.com/reticlehq/reticle/issues/2168).
