@@ -9,6 +9,7 @@
 
 import {
   ActionType,
+  EventType,
   ReticleCommand,
   ReticleTool,
   SnapshotMode,
@@ -33,6 +34,20 @@ export interface PortSession {
   eventsSince(cursor: number): ReticleEvent[];
   beginAction?(tool: string, args: Record<string, unknown>): unknown;
   finishAction?(): void;
+}
+
+/** How long a press waits for the requests it started to answer. */
+export const PENDING_WAIT_MS = 10_000;
+const PENDING_POLL_MS = 100;
+
+/** A request that was sent and has not answered: a `net.pending` with no `net.request` of its id. */
+function inFlight(events: readonly ReticleEvent[]): boolean {
+  const answered = new Set(
+    events.filter((e) => EventType.NET_REQUEST === e.type).map((e) => asString(e.data['id'])),
+  );
+  return events.some(
+    (e) => EventType.NET_PENDING === e.type && !answered.has(asString(e.data['id'])),
+  );
 }
 
 export function sessionPort(input: {
@@ -175,10 +190,18 @@ export function sessionPort(input: {
       } finally {
         session.finishAction?.();
       }
+      let events = session.eventsSince(since);
       if (false !== opts?.settle) {
         await input.sleep(input.settleMs);
+        events = session.eventsSince(since);
+        // A slow write answers long after the page settles. Wait for the requests this press
+        // started, up to a bound, so its answer, its error and a second copy are in its events.
+        const poll = Math.max(input.settleMs, PENDING_POLL_MS);
+        for (let i = 0; i < Math.floor(PENDING_WAIT_MS / poll) && inFlight(events); i += 1) {
+          await input.sleep(poll);
+          events = session.eventsSince(since);
+        }
       }
-      const events = session.eventsSince(since);
       const found = source === undefined ? {} : { source };
       if (replaced && (await successor(session))) {
         return { ok, events: [...events, ...current.eventsSince(0)], ...found };

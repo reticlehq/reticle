@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { ReticleEvent } from '@reticlehq/core';
-import { explore, type ExplorePort } from './explorer.js';
+import { explore, noteDuplicateWrites, type ExplorePort } from './explorer.js';
 import { driveFailureBranches } from './failure-branches.js';
 
 /*
@@ -614,5 +614,37 @@ describe('explore — what one press shows', () => {
     expect(dead.surfaces[0]?.inert).toEqual(['button "Help"']);
     const alive = await explore(navApp().port, { maxActions: 50, fillValue: () => 'x' });
     expect(alive.surfaces[0]?.inert).toEqual([]);
+  });
+});
+
+/*
+ * bench-app's Generate answers after six seconds. The press returns long before that, so its writes
+ * are still in flight: only their `net.pending` events are in the press's window. A double send seen
+ * only there is still one press sending the same write twice.
+ */
+describe('noteDuplicateWrites — requests still in flight', () => {
+  const pending = (id: string): ReticleEvent =>
+    ({
+      type: 'net.pending',
+      t: 1,
+      data: { id, method: 'POST', url: 'http://h/api/generate', initiator: 'fetch' },
+    }) as unknown as ReticleEvent;
+  const done = (id: string): ReticleEvent =>
+    ({
+      type: 'net.request',
+      t: 2,
+      data: { id, method: 'POST', url: 'http://h/api/generate', status: 200 },
+    }) as unknown as ReticleEvent;
+
+  it('counts two sends that have not answered yet', () => {
+    const anomalies: { kind: string; control: string; detail: string }[] = [];
+    noteDuplicateWrites([pending('a'), pending('b')], 'button "Generate"', anomalies);
+    expect(anomalies.map((a) => a.kind)).toEqual(['duplicate-request']);
+  });
+
+  it('counts a send and its own answer once', () => {
+    const anomalies: { kind: string; control: string; detail: string }[] = [];
+    noteDuplicateWrites([pending('a'), done('a')], 'button "Generate"', anomalies);
+    expect(anomalies).toEqual([]);
   });
 });

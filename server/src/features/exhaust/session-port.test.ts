@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CommandResult, ReticleEvent } from '@reticlehq/core';
 import { sessionReplacedReason } from '@/portal/session/facts/session-replaced.js';
-import { sessionPort, type PortSession } from './session-port.js';
+import { PENDING_WAIT_MS, sessionPort, type PortSession } from './session-port.js';
 
 /*
  * A full page load replaces the session object under the same id. Every call has to follow it, or
@@ -138,5 +138,67 @@ describe('sessionPort drives edge cases', () => {
     const { port, sent } = recorder({ tree: '- heading "Saved"' });
     expect((await port.lookFull?.())?.tree).toBe('- heading "Saved"');
     expect(sent.at(-1)?.args).toEqual({ mode: 'full' });
+  });
+});
+
+/*
+ * bench-app's Generate answers after six seconds. The press settled after 300 ms, its write had not
+ * answered, and the explorer never saw the write, its 500 or its second copy. A press now waits for
+ * the requests it started, up to a bound.
+ */
+describe('sessionPort waits for the requests a press started', () => {
+  function slowWrite(answersAfterSleeps: number) {
+    let clock = 0;
+    let sleeps = 0;
+    const pending = {
+      type: 'net.pending',
+      t: 1,
+      data: { id: 'r1', method: 'POST', url: '/api/g' },
+    };
+    const done = {
+      type: 'net.request',
+      t: 2,
+      data: { id: 'r1', method: 'POST', url: '/api/g', status: 500 },
+    };
+    const session: PortSession = {
+      id: 's1',
+      url: 'http://h/',
+      elapsed: () => 0,
+      eventsSince: () =>
+        (sleeps > answersAfterSleeps ? [pending, done] : [pending]) as unknown as ReticleEvent[],
+      command: () =>
+        Promise.resolve({
+          kind: 'command_result',
+          id: 'c',
+          ok: true,
+          result: { dispatched: true },
+        }),
+    };
+    const port = sessionPort({
+      sessions: { get: () => session },
+      start: session,
+      startUrl: 'http://h/',
+      settleMs: 300,
+      now: () => clock,
+      sleep: (ms) => {
+        sleeps += 1;
+        clock += ms;
+        return Promise.resolve();
+      },
+    });
+    return { port, clock: () => clock };
+  }
+
+  it('returns the answer of a write that came back after the settle', async () => {
+    const { port } = slowWrite(5);
+    const { events } = await port.act('e1', 'click');
+    expect(events.map((e) => e.type)).toEqual(['net.pending', 'net.request']);
+  });
+
+  it('stops waiting at its bound for a write that never answers', async () => {
+    const { port, clock } = slowWrite(Number.POSITIVE_INFINITY);
+    const { events } = await port.act('e1', 'click');
+    expect(events.map((e) => e.type)).toEqual(['net.pending']);
+    expect(clock()).toBeLessThanOrEqual(PENDING_WAIT_MS + 300);
   });
 });

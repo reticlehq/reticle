@@ -451,28 +451,38 @@ export function noteDuplicateWrites(
   control: string,
   anomalies: ExploreReport['anomalies'],
 ): void {
-  const sent = new Map<string, number>();
+  // Each request once, by its id: a write still in flight has only its `net.pending` here, and one
+  // that answered has both. A slow write sent twice is still two sends.
+  const sent = new Map<string, Set<string>>();
   const retried = new Set<string>();
-  for (const e of events) {
-    const key = writeKeyOf(e);
+  for (const [index, e] of events.entries()) {
+    const key = sentWriteKeyOf(e);
     if (key === undefined) {
       continue;
     }
     if (AUTH_REFUSED.has(asNumber(e.data['status']) ?? 0)) {
       retried.add(key);
-      continue;
     }
-    sent.set(key, (sent.get(key) ?? 0) + 1);
+    const id = asString(e.data['id']) ?? `#${String(index)}`;
+    sent.set(key, (sent.get(key) ?? new Set()).add(id));
   }
-  for (const [key, count] of sent) {
-    if (count > 1 && !retried.has(key)) {
+  for (const [key, ids] of sent) {
+    if (ids.size > 1 && !retried.has(key)) {
       anomalies.push({
         kind: DUPLICATE_REQUEST,
         control,
-        detail: `one press sent ${key} ${String(count)} times`,
+        detail: `one press sent ${key} ${String(ids.size)} times`,
       });
     }
   }
+}
+
+/** The write a request or a request still in flight sends, as `writeKeyOf` spells it. */
+function sentWriteKeyOf(e: ReticleEvent): string | undefined {
+  if (EventType.NET_PENDING === e.type) {
+    return writeKeyOf({ ...e, type: EventType.NET_REQUEST });
+  }
+  return writeKeyOf(e);
 }
 
 /** The faults in an action's events: page errors, requests at or above `floor`, contradictions. */
