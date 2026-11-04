@@ -23,6 +23,8 @@ export const Sig = {
   TOAST_SHOWN: 'toast:shown',
   PALETTE_OPENED: 'palette:opened',
   ITEM_SAVED: 'item:saved',
+  FORM_SUBMIT: 'form:submit',
+  INVITE_SENT: 'invite:sent',
 } as const;
 export type Sig = (typeof Sig)[keyof typeof Sig];
 

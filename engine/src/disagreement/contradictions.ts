@@ -26,6 +26,8 @@ import {
   recoveredByRetry,
   screenMoved,
   splitForeignTraffic,
+  successClaims,
+  UNNAMED_SIGNAL,
   type NetCall,
   type WriteIdentity,
 } from './contradiction-evidence.js';
@@ -288,8 +290,6 @@ function pageWasHidden(events: readonly ReticleEvent[], options: ContradictionOp
   );
 }
 
-/** Net-shaped events — the only ones that carry a URL a dev-tooling channel could occupy. */
-
 export function findContradictions(
   allEvents: readonly ReticleEvent[],
   options: ContradictionOptions = {},
@@ -447,7 +447,7 @@ function findWindowContradictions(
   const advanced: boolean | undefined = floor === undefined ? undefined : uiAdvanced(events);
   const signals = events
     .filter((e) => e.type === EventType.SIGNAL)
-    .map((e) => asString(e.data['name']) ?? 'signal');
+    .map((e) => asString(e.data['name']) ?? UNNAMED_SIGNAL);
 
   // ── The route moved and nothing was rendered for it ─────────────────────────────────────────
   // A navigation that neither fetches nor renders arrived nowhere. Distinct from a dead control:
@@ -583,10 +583,11 @@ function findWindowContradictions(
   // observation benchmark: one of two false positives across 47 cells, and the argument for it is
   // the paragraph above, which had simply not been carried down here.
   const unexpectedWrites = unexpected.filter(isMutating);
-  if (failedWrites.length > 0 && successSignals.length > 0 && !failureAcknowledged(events)) {
+  const claims = successClaims(events, failedWrites, successSignals, options.expectedFailures);
+  if (failedWrites.length > 0 && claims.length > 0 && !failureAcknowledged(events)) {
     found.push({
       kind: ContradictionKind.SIGNAL_CONTRADICTED,
-      claim: `the app fired ${successSignals.map((s) => `"${s}"`).join(', ')}`,
+      claim: `the app fired ${claims.map((s) => `"${s}"`).join(', ')}`,
       counter: `${String(failedWrites.length)} write(s) in the same window failed`,
       detail: failedWrites.map(describe).join('; '),
     });

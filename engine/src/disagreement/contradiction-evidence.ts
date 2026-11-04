@@ -31,6 +31,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { isReticleVoice } from '../state-bookkeeping.js';
+import { matchesDeclaredFailure, type DeclaredNetFailure } from '@/question/declared.js';
 
 export interface NetCall {
   /** When the call settled, on the session clock. */
@@ -372,16 +373,14 @@ export interface WriteIdentity {
   readonly carried: boolean;
 }
 
+const nonEmpty = (text: string | undefined): string | undefined =>
+  text === undefined || 0 === text.length ? undefined : text;
+
 export function identityOf(event: ReticleEvent): WriteIdentity | undefined {
   const action = asString(event.data[NEXT_ACTION_FIELD]);
   const shape = asString(event.data[REQUEST_SHAPE_FIELD]);
   const body = asString(event.data['requestBody']);
-  const carried =
-    shape !== undefined && 0 !== shape.length
-      ? shape
-      : body === undefined || 0 === body.length
-        ? undefined
-        : body;
+  const carried = nonEmpty(shape) ?? nonEmpty(body);
   if (action === undefined || 0 === action.length) {
     return carried === undefined ? undefined : { key: carried, carried: true };
   }
@@ -660,4 +659,73 @@ export function targetFate(
     ([key, value]) => (atFailure.get(key) ?? before.get(key)) !== value,
   );
   return movedAfter ? TargetFate.PERSISTED : TargetFate.PENDING;
+}
+
+// ── Success claims over a declared failure ────────────────────────────────────────────────────
+
+/** The name a signal is reported under when the app gave it none. */
+export const UNNAMED_SIGNAL = 'signal';
+
+const nameOf = (e: ReticleEvent): string => asString(e.data['name']) ?? UNNAMED_SIGNAL;
+
+/** Whether `a` was emitted before `b`. The sequence number is exact; the clock can tie. */
+function emittedBefore(a: ReticleEvent, b: ReticleEvent): boolean {
+  return a.seq !== undefined && b.seq !== undefined ? a.seq < b.seq : a.t < b.t;
+}
+
+/** The event that recorded when this failed call was SENT, if the window holds it. */
+function sendOf(events: readonly ReticleEvent[], call: NetCall): ReticleEvent | undefined {
+  const answer = events.find((e) => {
+    if (e.type !== EventType.NET_REQUEST || e.t !== call.t) {
+      return false;
+    }
+    const recorded = netCall(e);
+    return recorded.method === call.method && recorded.matchUrl === call.matchUrl;
+  });
+  const id = answer === undefined ? undefined : asString(answer.data['id']);
+  if (id === undefined) {
+    return undefined;
+  }
+  return events.find((e) => e.type === EventType.NET_PENDING && asString(e.data['id']) === id);
+}
+
+/**
+ * The success signals that can claim the failed writes in this window landed.
+ *
+ * A caller that declared the failure (`net { status: 409 }`) tests the failure path. A signal that the
+ * app fired BEFORE it sent the failed write cannot report the outcome of that write, so it is not a
+ * claim about it (#2172). A `form:submit` on the click, or an analytics beacon, is that kind of signal.
+ *
+ * The limit is when the write was SENT, not when its answer was recorded. The browser observer reads
+ * a failed response's body before it records the answer, so the app's own handler can fire its
+ * signal first. A limit on the answer would then hide the false green this rule exists for.
+ *
+ * Every failed write must be declared, and the window must hold when each one was sent. Otherwise
+ * every success signal stays a claim, as before.
+ */
+export function successClaims(
+  events: readonly ReticleEvent[],
+  failedWrites: readonly NetCall[],
+  successSignals: readonly string[],
+  declared: readonly DeclaredNetFailure[] = [],
+): readonly string[] {
+  if (
+    0 === failedWrites.length ||
+    !failedWrites.every((c) => matchesDeclaredFailure(c, declared))
+  ) {
+    return successSignals;
+  }
+  const sends: ReticleEvent[] = [];
+  for (const call of failedWrites) {
+    const send = sendOf(events, call);
+    if (send === undefined) {
+      return successSignals;
+    }
+    sends.push(send);
+  }
+  const claims = new Set(successSignals);
+  return events
+    .filter((e) => e.type === EventType.SIGNAL && sends.some((send) => !emittedBefore(e, send)))
+    .map(nameOf)
+    .filter((name) => claims.has(name));
 }

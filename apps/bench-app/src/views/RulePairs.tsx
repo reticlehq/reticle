@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useApp } from '../store/store.js';
+import { emit, Sig } from '../lib/reticle-bridge.js';
 
 /**
  * The shapes that three narrowed rules must tell apart in a real browser.
@@ -23,6 +24,8 @@ import { useApp } from '../store/store.js';
  *    button under a full-screen overlay (the spec adds the overlay). A person cannot click any of
  *    them, so a request they send must not give `yes`. A switch that a person can reach sends the
  *    same request and must still give `yes`.
+ *  - `signal-contradicted` over a declared 409: a `form:submit` signal fired before the invite was
+ *    sent (silent), and an `invite:sent` signal fired after the 409 (report) (#2172).
  */
 const API = 'http://localhost:8787/api/rule-pairs';
 /**
@@ -54,6 +57,17 @@ async function post(path: string): Promise<void> {
   });
 }
 
+/** The text the invite panel shows when the server refuses a duplicate email. */
+const DUPLICATE_EMAIL = 'Another account already uses this email.';
+
+async function invite(): Promise<Response> {
+  return fetch(`${API}/invite`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: 'ana@example.com' }),
+  });
+}
+
 async function readPage(list: string): Promise<void> {
   await fetch(`${API}/${list}?page=1`);
 }
@@ -63,6 +77,7 @@ export function RulePairs(): React.ReactElement {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(0);
   const [batch, setBatch] = useState('');
+  const [invited, setInvited] = useState('');
 
   useEffect(() => {
     void readPage('pages');
@@ -163,6 +178,32 @@ export function RulePairs(): React.ReactElement {
             Stream archived
           </button>
         </div>
+      </div>
+      <div className="panel panel-pad" style={{ maxWidth: 560 }}>
+        <h3>Invite</h3>
+        {/* Correct: the submit signal fires before the invite is sent, and the 409 is shown. */}
+        <button
+          data-testid="rule-pairs-invite-early"
+          onClick={() => {
+            emit(Sig.FORM_SUBMIT);
+            void invite().then(() => setInvited(DUPLICATE_EMAIL));
+          }}
+        >
+          Invite
+        </button>
+        {/* The defect, on purpose: the app says the invite was sent although the server refused it. */}
+        <button
+          data-testid="rule-pairs-invite-claimed"
+          onClick={() =>
+            void invite().then(() => {
+              emit(Sig.INVITE_SENT);
+              setInvited('Invitation sent');
+            })
+          }
+        >
+          Invite and claim
+        </button>
+        <output data-testid="rule-pairs-invited">{invited}</output>
       </div>
       <div className="panel panel-pad" style={{ maxWidth: 560 }}>
         <h3>Pagination</h3>

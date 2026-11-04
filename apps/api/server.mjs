@@ -314,6 +314,11 @@ app.get('/api/rule-pairs/jobs', (_req, res) => {
   });
 });
 
+// `invite` always refuses the email as a duplicate: a 409 that the caller declares (#2172).
+app.post('/api/rule-pairs/invite', (_req, res) => {
+  res.status(409).json({ error: 'email_taken' });
+});
+
 // `ping` answers any POST. The bench-app sends one through a `fetch` it saved before connect() and
 // one through `window.fetch`, so the server gets both while only the second is recorded (#1660).
 app.post('/api/rule-pairs/ping/:via', (req, res) => {
