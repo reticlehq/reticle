@@ -17,6 +17,7 @@ import { AwkwardControls } from './views/AwkwardControls.js';
 import { StaleRace } from './views/StaleRace.js';
 import { RulePairs } from './views/RulePairs.js';
 import { AckPairs } from './views/AckPairs.js';
+import { ClaimPairs } from './views/ClaimPairs.js';
 
 export function App(): React.ReactElement {
   const auth = useApp((s) => s.auth);
@@ -57,6 +58,7 @@ export function App(): React.ReactElement {
           {'stale-race' === view ? <StaleRace /> : null}
           {'rule-pairs' === view ? <RulePairs /> : null}
           {'ack-pairs' === view ? <AckPairs /> : null}
+          {'claim-pairs' === view ? <ClaimPairs /> : null}
         </div>
       </div>
       <Toasts />

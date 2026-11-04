@@ -132,3 +132,34 @@ describe("Reticle's own panel is not the app's DOM, including what it removes", 
     expect(events.filter((e) => e.type === EventType.DOM_REMOVED)).toHaveLength(1);
   });
 });
+
+/*
+ * Reported from the field (#2176): an agent closed a dialog and asserted it absent by testid. A
+ * virtualized list on the same page made the verdict `unknown`, because the engine could not tell
+ * that the removed dialog was the asserted element. The removal now names the testid it carried.
+ */
+describe('a removal names the testid of what left', () => {
+  it('carries the testid of a dialog removed inside its wrapper', async () => {
+    const host = document.createElement('div');
+    host.innerHTML =
+      '<div class="scrim"><div role="dialog" aria-label="Confirm" data-testid="confirm-dialog"></div></div>';
+    document.body.appendChild(host);
+    try {
+      const events = await record(() => {
+        host.innerHTML = '';
+      });
+      const gone = events.filter((e) => e.type === EventType.DOM_REMOVED);
+      expect(gone.map((e) => e.data['testid'])).toContain('confirm-dialog');
+    } finally {
+      host.remove();
+    }
+  });
+
+  it('carries no testid field when the removed node has none', async () => {
+    document.body.innerHTML = '<main><button id="x">Save</button></main>';
+    const events = await record(() => document.getElementById('x')?.remove());
+    const gone = events.filter((e) => e.type === EventType.DOM_REMOVED);
+    expect(gone).toHaveLength(1);
+    expect(gone[0]?.data).not.toHaveProperty('testid');
+  });
+});

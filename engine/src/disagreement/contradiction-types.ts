@@ -129,6 +129,15 @@ export interface ContradictionOptions {
    */
   renderProved?: boolean | undefined;
   /**
+   * The caller declared a route, it HELD in this window, and it was not true before the action.
+   *
+   * `action-had-no-effect` infers a dead control from an empty window. A full navigation that the
+   * SDK did not record leaves the window empty, and the passing route clause disproves the
+   * inference. Undefined/false leaves the rule as it was, which is the case that catches a click on
+   * an inert target.
+   */
+  routeProved?: boolean | undefined;
+  /**
    * The document currently under observation, as the session derived it from its own event stream.
    *
    * Every rule below reasons about "the same window", and a window is scoped by time and by

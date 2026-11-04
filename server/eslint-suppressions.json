@@ -3088,14 +3088,6 @@
       "count": 1
     }
   },
-  "src/surface/tools/act-tools.ts": {
-    "curly": {
-      "count": 11
-    },
-    "no-nested-ternary": {
-      "count": 1
-    }
-  },
   "src/surface/tools/act-truncated-window.test.ts": {
     "curly": {
       "count": 1

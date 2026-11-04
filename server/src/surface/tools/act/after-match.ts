@@ -13,11 +13,28 @@ import type { Predicate } from '@reticlehq/core';
 import { hiddenMatchNote } from '@reticlehq/engine/evidence/already-true.js';
 import {
   evaluatePredicate,
+  waitForPredicate,
   type EvalResult,
 } from '@reticlehq/engine/question/predicate/predicate.js';
 import { waitForInFlight } from './settle-in-flight.js';
 import { waitForReaction } from './react-grace.js';
 import { revertedAfterMatch } from './durable.js';
+
+type WaitArgs = Parameters<typeof waitForPredicate>;
+
+/** Wait for the predicate inside the budget, or read it once when there is no budget. */
+export function evaluateAfterAct(
+  session: WaitArgs[0],
+  until: Predicate,
+  timeout: number,
+  since: number,
+  baselines: WaitArgs[4],
+): Promise<EvalResult> {
+  if (timeout > 0) {
+    return waitForPredicate(session, until, timeout, since, baselines);
+  }
+  return evaluatePredicate(session, until, since, true, baselines);
+}
 
 type Waited = Parameters<typeof waitForInFlight>[0] & Parameters<typeof revertedAfterMatch>[0];
 

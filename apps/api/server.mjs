@@ -334,6 +334,22 @@ app.get('/api/rule-pairs/:list', (req, res) => {
   res.json({ list: req.params.list, page: Number(req.query.page ?? 1) });
 });
 
+// --- Claim pairs: a route claim and an absence claim, in both directions (#2176) ----
+//
+// `rows` answers 200 invoices, more than the virtualized list renders at one time. `archive`
+// accepts the archive of one invoice.
+const CLAIM_PAIRS_ROWS = 200;
+
+app.get('/api/claim-pairs/rows', (_req, res) => {
+  res.json({
+    rows: Array.from({ length: CLAIM_PAIRS_ROWS }, (_, id) => ({ id, label: `Invoice #${id}` })),
+  });
+});
+
+app.post('/api/claim-pairs/archive', (req, res) => {
+  res.json({ archived: Number(req.body?.id ?? -1) });
+});
+
 const server = createServer(app);
 
 // WS echo. `channel` is echoed back so a client can correlate a reply with what it asked for;

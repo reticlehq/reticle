@@ -19,6 +19,7 @@ import { crashedRuleNotes } from '@reticlehq/engine/disagreement/contradiction-f
 import {
   declaredExpectations,
   declaresBodyIndependentChannel,
+  provedConsequences,
 } from '@reticlehq/engine/question/declared.js';
 import {
   absenceBlindSpotNote,
@@ -106,7 +107,6 @@ export async function assertVerdict(
   // The window's own counts, so sampling before it is not described as this window's (#1414).
   const windowSpots = blindSpotsFromState(session.blindSpots(since), session.runtime);
   const statement = buildCoverageStatement(spots, windowSpots);
-  const absenceBlindSpot = absenceBlindSpotNote(predicate, spots);
   // A green resting on hidden matches says the node exists, not that it shows (#1408).
   const hiddenMatch = hiddenMatchNote(predicate, evidence);
   // Omitted entirely when coverage is full, so an intact page pays nothing and the field's PRESENCE
@@ -119,6 +119,8 @@ export async function assertVerdict(
         }
       : {};
   const windowEvents = await session.queryEvents({ since });
+  // The window lets a target the page was seen to remove escape the virtualized blind spot.
+  const absenceBlindSpot = absenceBlindSpotNote(predicate, spots, windowEvents);
   // Everything before the window, passed as LEARNING material only. A scale error disagrees with a
   // value the API stated earlier in the session, which an action-scoped window can never contain —
   // measured live, `observe` over a wide window reported `unit-mismatch` while `assert` on the same
@@ -144,7 +146,7 @@ export async function assertVerdict(
     expectedFailures: declared.netFailures,
     namedNetUrls: declared.netUrls,
     repeatableNetUrls: declared.repeatableNetUrls,
-    renderProved: pass && declared.rendersContent,
+    ...provedConsequences(declared, pass),
     ...(actCursor !== undefined && actCursor >= since ? { actionSince: actCursor } : {}),
   });
   // Only a spot that IMPEACHES the capture downgrades a general verdict. Structural boundaries are

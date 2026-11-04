@@ -11,6 +11,8 @@ import { describeSuperseded } from '@/question/predicate/observed-in-window.js';
 import {
   declareFailureHint,
   describe,
+  didNothing,
+  RETICLE_SIGNAL_NAMESPACE,
   groupByIdentity,
   identityOf,
   isMutating,
@@ -29,7 +31,6 @@ import {
   storeEchoesFailedStatus,
   successClaims,
   UNNAMED_SIGNAL,
-  type NetCall,
   type WriteIdentity,
 } from './contradiction-evidence.js';
 import { findStaleResponses } from './stale-response.js';
@@ -39,7 +40,7 @@ import { findUnitMismatches } from './unit-mismatch.js';
 import { asString } from '@reticlehq/core';
 import { isDeclaredRead, matchesDeclaredFailure } from '@/question/declared.js';
 import { runRegisteredFolds } from './contradiction-folds.js';
-import { isMeaningfulStateChange, tiedReaction } from '../state-bookkeeping.js';
+import { isMeaningfulStateChange } from '../state-bookkeeping.js';
 import type {
   Contradiction,
   OwnContradiction,
@@ -176,8 +177,6 @@ function failureAcknowledged(events: readonly ReticleEvent[]): boolean {
 }
 
 const ALERT_ROLE = 'alert';
-/** Reticle's own instrumentation's signals (core's `RETICLE_HYDRATION_SIGNAL`); not imported: coupling only shrinks. */
-const RETICLE_SIGNAL_NAMESPACE = 'reticle:';
 const ARIA_INVALID = 'aria-invalid';
 
 const MUST_DO_SOMETHING = new Set(['click', 'dblclick', 'submit']);
@@ -195,70 +194,6 @@ const ONE_INTENT_ACTIONS: ReadonlySet<string> = new Set([
   'uncheck',
   'submit',
 ]);
-
-/**
- * Whether NOTHING in this window is attributable to the action.
- *
- * Ambient churn is deliberately not counted as evidence the action worked — a background event
- * stream, a polling store, a perf sample and a scroll position all move on their own. What counts:
- *
- *  - a mutation inside the target's own subtree (what the target itself did),
- *  - a request (the action asked the server for something),
- *  - a navigation, or a dialog/live region appearing — the two ways a real reaction legitimately
- *    lands OUTSIDE the target, e.g. a modal portalled to the body,
- *  - a store change or an app signal tied to the action (#1531): see
- *    `tiedReaction`.
- *
- * The last two clauses are what keep this from manufacturing noise: a button that opens a modal
- * mutates nothing within itself, and a Pause button whose store updates on the media `pause` event
- * renders its new label only later. Neither must be called dead.
- */
-function didNothing(
-  events: readonly ReticleEvent[],
-  requests: readonly NetCall[],
-  options: ContradictionOptions,
-): boolean {
-  const mutatedWithin = options.mutatedWithin;
-  if (mutatedWithin === undefined) {
-    return 0 === events.length;
-  }
-  if (mutatedWithin > 0 || requests.length > 0) {
-    return false;
-  }
-  const tied = tiedAppReaction(options);
-  return !events.some(
-    (e) => e.type === EventType.ROUTE_CHANGE || e.type === EventType.VISIBLE_SHOWN || tied(e),
-  );
-}
-
-const STATE_KEY_PREFIX = 'state:';
-const SIGNAL_KEY_PREFIX = 'signal:';
-
-/** Which store path or signal an event moved, keyed the same way in the window and in `prior`. */
-function appReactionKey(e: ReticleEvent): string | undefined {
-  if (e.type === EventType.STATE_CHANGE) {
-    return `${STATE_KEY_PREFIX}${asString(e.data['name']) ?? ''}:${asString(e.data['path']) ?? ''}`;
-  }
-  if (e.type !== EventType.SIGNAL) {
-    return undefined;
-  }
-  const name = asString(e.data['name']) ?? '';
-  // Reticle's own instrumentation is not the app reacting.
-  return name.startsWith(RETICLE_SIGNAL_NAMESPACE) ? undefined : `${SIGNAL_KEY_PREFIX}${name}`;
-}
-
-/** A store change or app signal tied to the action: see `tiedReaction` (#1531). */
-function tiedAppReaction(options: ContradictionOptions): (e: ReticleEvent) => boolean {
-  const namedPaths = new Set(options.namedStatePaths ?? []);
-  const namedSignals = new Set(options.namedSignals ?? []);
-  return tiedReaction(options.prior ?? [], {
-    keyOf: appReactionKey,
-    isNamed: (e) =>
-      e.type === EventType.STATE_CHANGE
-        ? namedPaths.has(asString(e.data['path']) ?? '')
-        : namedSignals.has(asString(e.data['name']) ?? ''),
-  });
-}
 
 /**
  * Was the page HIDDEN at any point in this window?
@@ -395,7 +330,11 @@ function findWindowContradictions(
   // Checked first and returned alone: nothing is attributable to the action, so every rule below is
   // reasoning about someone else's events.
   const action = (options.action ?? '').toLowerCase();
-  if (MUST_DO_SOMETHING.has(action) && didNothing(events, settled, options)) {
+  if (
+    MUST_DO_SOMETHING.has(action) &&
+    true !== options.routeProved &&
+    didNothing(events, settled, options)
+  ) {
     const measured = options.mutatedWithin !== undefined;
     return [
       {

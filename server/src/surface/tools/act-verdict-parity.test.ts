@@ -140,7 +140,7 @@ describe('act_and_wait and assert see the same evidence', () => {
     for (const file of [act, assert]) {
       expect(file).toMatch(/declaredExpectations\(/);
       expect(file).toMatch(/expectedFailures:/);
-      expect(file).toMatch(/renderProved:/);
+      expect(file).toMatch(/provedConsequences\(declared,/);
       expect(file).toMatch(/namedNetIsInFlight\(/);
       expect(file).toMatch(/namedRequestInFlight:/);
     }

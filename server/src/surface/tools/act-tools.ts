@@ -51,7 +51,7 @@ import { declaresState } from '@reticlehq/engine/question/predicate/predicate-as
 import { isStateUnwatched } from '@reticlehq/engine/evidence/blind-spots.js';
 import { hiddenMatchNote } from '@reticlehq/engine/evidence/already-true.js';
 import { inFlightRequestLabels, repeatedRequestLabels } from './act/settle-in-flight.js';
-import { awaitShownMatch, finishAfterMatch } from './act/after-match.js';
+import { awaitShownMatch, evaluateAfterAct, finishAfterMatch } from './act/after-match.js';
 import { noteProved } from './act/proved-controls.js';
 import { decideVerified } from '@reticlehq/engine/evidence/verified.js';
 import { buildHonestyBlock, honestyForVerdict } from '@reticlehq/engine/evidence/honesty.js';
@@ -59,6 +59,7 @@ import {
   declaredExpectations,
   declaresBodyIndependentChannel,
   namedReactions,
+  provedConsequences,
 } from '@reticlehq/engine/question/declared.js';
 import { describeWaitTarget, namedNetIsInFlight } from '@reticlehq/engine/evidence/unsettled.js';
 import { saveFailedAssertCapsule } from './act-capsule.js';
@@ -77,7 +78,6 @@ import {
 import { acceptedWriteLabels } from '@reticlehq/engine/evidence/accepted-write.js';
 import { unreadWriteLabels, unreadWriteReason } from '@reticlehq/engine/evidence/unread-outcome.js';
 import {
-  evaluatePredicate,
   waitForPredicate,
   provenExpectedLinks,
   PredicateSchema,
@@ -187,7 +187,9 @@ export const ACT_TOOLS: ToolDef[] = [
       const session = deps.sessions.resolve(asString(args['sessionId']));
       // Live-control: refuse to drive the page while the human has paused us (before any work).
       const paused = pausedShortCircuit(session);
-      if (paused !== undefined) return paused;
+      if (paused !== undefined) {
+        return paused;
+      }
       refuseIfThrottled(session, args['refuseWhenThrottled']);
       // Where this step RUNS, read before the action — not after.
       //
@@ -199,7 +201,9 @@ export const ACT_TOOLS: ToolDef[] = [
       // Resolve `target` to a ref BEFORE the action window opens, so the lookup is not attributed to
       // the act and cannot be mistaken for something the action caused.
       const targetRef = await resolveActTarget(session, args);
-      if ('error' === targetRef.kind) throw new Error(targetRef.message);
+      if ('error' === targetRef.kind) {
+        throw new Error(targetRef.message);
+      }
 
       const since = session.elapsed();
       // The act cursor + effect are marked only once the action has actually DISPATCHED (below, on
@@ -240,11 +244,15 @@ export const ACT_TOOLS: ToolDef[] = [
         // before any ACT command crosses the bridge, covering this call site and all others.
         const plain = { ref: targetRef.ref, action: args['action'], args: args['args'] ?? {} };
         const result = await actCommand(deps, session, ReticleCommand.ACT, plain, undefined, true);
-        if (!result.ok) throw new Error(result.error ?? 'act failed');
+        if (!result.ok) {
+          throw new Error(result.error ?? 'act failed');
+        }
         captureAct(deps.recordings, args, result.result, routeBefore, session.id);
         // lift dispatch/settle status to the envelope (a settle timeout is NOT a failure).
         const r = asRecord(result.result);
-        if ('boolean' === typeof r['settled']) settledOutcome = r['settled'];
+        if ('boolean' === typeof r['settled']) {
+          settledOutcome = r['settled'];
+        }
         // Keep what only this call measured, so the observe that judges this window can ask whether
         // anything happened INSIDE the target — the one fact that separates a dead control from a
         // page that was merely busy with something else.
@@ -477,7 +485,9 @@ export const ACT_TOOLS: ToolDef[] = [
       // BEFORE the action. A body clause this session cannot answer would fail whatever the app
       // did, and on a drive that mutates state the action is not always repeatable. See #801(C).
       const bodyRefusal = bodyClauseRefusal(until, session);
-      if (bodyRefusal !== undefined) throw new Error(bodyRefusal);
+      if (bodyRefusal !== undefined) {
+        throw new Error(bodyRefusal);
+      }
       const timeout = asNumber(args['timeout_ms']) ?? DEFAULT_ASSERT_TIMEOUT_MS;
       // An intent declared here lands in the ledger BEFORE the verdict is drawn, which is what makes
       // the undeclared-change gap silent on THIS verdict rather than the next one: it reads the
@@ -495,7 +505,9 @@ export const ACT_TOOLS: ToolDef[] = [
       // Resolve `target` to a ref BEFORE the action window opens, so the lookup is not attributed to
       // the act and cannot be mistaken for something the action caused.
       const resolved = await resolveActTarget(session, args);
-      if ('error' === resolved.kind) throw new Error(resolved.message);
+      if ('error' === resolved.kind) {
+        throw new Error(resolved.message);
+      }
 
       let since = session.elapsed();
       const actedSince = since;
@@ -534,7 +546,9 @@ export const ACT_TOOLS: ToolDef[] = [
           }),
         );
         if (actResult !== null) {
-          if (!actResult.ok) throw new Error(actResult.error ?? 'act failed');
+          if (!actResult.ok) {
+            throw new Error(actResult.error ?? 'act failed');
+          }
           dispatched = { result: actResult.result };
           // Dispatched — now this act owns the cursor and the effect. Marking its OWN measurement
           // also stops the spread below from inheriting an earlier reticle_act's action and
@@ -552,9 +566,7 @@ export const ACT_TOOLS: ToolDef[] = [
         let verdict =
           null === actResult
             ? { pass: false, observationLost: true }
-            : timeout > 0
-              ? await waitForPredicate(session, until, timeout, since, baselines)
-              : await evaluatePredicate(session, until, since, true, baselines);
+            : await evaluateAfterAct(session, until, timeout, since, baselines);
 
         // The SDK may have gone away mid-act — see act-observation.ts.
         const followed = await followLostObservation({
@@ -567,7 +579,9 @@ export const ACT_TOOLS: ToolDef[] = [
           failedFollowGraceMs: NAVIGATION_FOLLOW_GRACE_MS,
           reevaluate: (next, budget) => waitForPredicate(next, until, budget, 0, baselines),
         });
-        if (followed.followed) since = 0;
+        if (followed.followed) {
+          since = 0;
+        }
         session = followed.session;
         verdict = followed.verdict;
 
@@ -575,13 +589,16 @@ export const ACT_TOOLS: ToolDef[] = [
         if (verdict.pass && timeout > 0) {
           const left = (): number => timeout - (session.elapsed() - predicateStarted);
           const reverted = await finishAfterMatch(session, until, since, baselines, left);
-          if (reverted !== undefined)
+          if (reverted !== undefined) {
             verdict = { pass: false, failureReason: reverted, observed: reverted };
+          }
           verdict = await awaitShownMatch(session, until, since, baselines, verdict, left);
         }
 
         const r = asRecord(actResult?.result);
-        if ('boolean' === typeof r['settled']) settledOutcome = r['settled'];
+        if ('boolean' === typeof r['settled']) {
+          settledOutcome = r['settled'];
+        }
         // Where the acted element is written, captured at act time even if the action unmounted it.
         const actedSource = sourceOf(r['source']);
         // Remembered so a LATER assertion can name a file with no element to point at, and so the
@@ -631,7 +648,7 @@ export const ACT_TOOLS: ToolDef[] = [
         // The window's own counts, so sampling before it is not described as this window's (#1414).
         const windowSpots = blindSpotsFromState(session.blindSpots(since), session.runtime);
         const coverage = buildCoverageStatement(spots, windowSpots);
-        const absenceBlindSpot = absenceBlindSpotNote(until, spots);
+        const absenceBlindSpot = absenceBlindSpotNote(until, spots, windowEvents);
         // A green resting on hidden matches says the node exists, not that it shows (#1408).
         const hiddenMatch = hiddenMatchNote(until, verdict.evidence);
         // Nothing subscribed ⇒ the state channel is dark, and the summary must say so rather than
@@ -722,8 +739,8 @@ export const ACT_TOOLS: ToolDef[] = [
           namedNetUrls: declared.netUrls,
           repeatableNetUrls: declared.repeatableNetUrls,
           // A consequence that was already true before the action proves nothing about it, so it is
-          // not evidence the destination rendered either — `alreadyTrue` decides that, once.
-          renderProved: verdict.pass && !alreadyTrue && declared.rendersContent,
+          // not evidence the destination rendered or the route moved — `alreadyTrue` decides that, once.
+          ...provedConsequences(declared, verdict.pass && !alreadyTrue),
           ...session.lastAct.effect(),
           ...namedReactions(declared),
           currentDocumentId: session.currentDocumentId,
@@ -955,7 +972,7 @@ export const ACT_TOOLS: ToolDef[] = [
           ...healthEnvelope(currentOf(deps.sessions, session)),
         });
       } finally {
-        if (dispatched !== undefined)
+        if (dispatched !== undefined) {
           captureVerdictedAct(
             deps.recordings,
             args,
@@ -965,6 +982,7 @@ export const ACT_TOOLS: ToolDef[] = [
             session.id,
             wroteSince(acted, actedSince),
           );
+        }
         deps.recordings.markEnded(pageOf(currentOf(deps.sessions, session).url), session.id);
         acted.finishAction(
           verdictEffect,
