@@ -320,6 +320,11 @@ app.post('/api/rule-pairs/ping/:via', (req, res) => {
   res.json({ via: req.params.via });
 });
 
+// `toggle` answers 200 to every switch in the reach panel, so the request alone decides nothing.
+app.post('/api/rule-pairs/toggle', (_req, res) => {
+  res.json({ ok: true });
+});
+
 app.get('/api/rule-pairs/:list', (req, res) => {
   res.json({ list: req.params.list, page: Number(req.query.page ?? 1) });
 });

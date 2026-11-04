@@ -19,6 +19,10 @@ import { useApp } from '../store/store.js';
  *    and a read of a job list that holds old failed jobs (silent).
  *  - a `net` miss over a `fetch` saved before connect(): `unknown`, not `no` (#1660), and the same
  *    ping through `window.fetch` passes.
+ *  - reach: a switch inside a closed `<details>`, a switch inside a `display: none` panel, and a
+ *    button under a full-screen overlay (the spec adds the overlay). A person cannot click any of
+ *    them, so a request they send must not give `yes`. A switch that a person can reach sends the
+ *    same request and must still give `yes`.
  */
 const API = 'http://localhost:8787/api/rule-pairs';
 /**
@@ -141,6 +145,24 @@ export function RulePairs(): React.ReactElement {
           Refresh jobs
         </button>
         <output data-testid="rule-pairs-batch-status">{batch}</output>
+      </div>
+      <div className="panel panel-pad" style={{ maxWidth: 560 }}>
+        <h3>Reach</h3>
+        <details>
+          <summary>Players</summary>
+          <button role="switch" aria-checked="false" onClick={() => void post('toggle')}>
+            Stream eligible
+          </button>
+        </details>
+        <button role="switch" aria-checked="false" onClick={() => void post('toggle')}>
+          Stream public
+        </button>
+        <button onClick={() => void post('toggle')}>Publish roster</button>
+        <div hidden>
+          <button role="switch" aria-checked="false" onClick={() => void post('toggle')}>
+            Stream archived
+          </button>
+        </div>
       </div>
       <div className="panel panel-pad" style={{ maxWidth: 560 }}>
         <h3>Pagination</h3>

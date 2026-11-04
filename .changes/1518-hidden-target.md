@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser`, `@reticlehq/server` — a click on a control inside a `display: none` panel was verified `yes`.** Synthetic dispatch reached the control, its request fired, and the declared consequence held. No person could have clicked it, because it had no box on the page. Now a target with no box at all reports `noSize`, and `act_and_wait`, `reticle_act { steps }` and flow replay give `unknown` and say why. A hidden input with a visible label is still measured through its label. A control inside a closed `<details>` was already `unknown`, but the reason said that the next control covered it. The reason now says that the target is not visible. Refs [#1518](https://github.com/reticlehq/reticle/issues/1518).
