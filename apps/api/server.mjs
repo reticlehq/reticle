@@ -330,6 +330,17 @@ app.post('/api/rule-pairs/toggle', (_req, res) => {
   res.json({ ok: true });
 });
 
+// `lock` is a compare-and-set update. It bumps `lock_version` by one, as an optimistic lock does.
+// `kept` echoes the title it was sent. `lost` echoes an old title: an ignored write under the bump.
+app.put('/api/rule-pairs/lock/:outcome', (req, res) => {
+  const title = 'kept' === req.params.outcome ? String(req.body?.title ?? '') : 'Old title';
+  res.json({
+    id: String(req.body?.id ?? ''),
+    title,
+    lock_version: Number(req.body?.lock_version ?? 0) + 1,
+  });
+});
+
 app.get('/api/rule-pairs/:list', (req, res) => {
   res.json({ list: req.params.list, page: Number(req.query.page ?? 1) });
 });

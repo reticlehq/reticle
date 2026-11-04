@@ -168,8 +168,38 @@ function isVersionKey(key: string): boolean {
     '_version' === lower ||
     'etag' === lower ||
     'rev' === lower ||
-    'revision' === lower
+    'revision' === lower ||
+    'concurrencystamp' === lower
   );
+}
+
+const WHOLE_NUMBER = /^\d+$/;
+const VERSION_WORD = 'version';
+/** The Mongoose document version key. */
+const MONGOOSE_VERSION_KEY = '__v';
+
+/**
+ * A lock counter under another name: a key whose last word is `version` (`lock_version`,
+ * `lockVersion`, `rowVersion`) or `__v`. The name alone does not make it a token, because
+ * `targetVersion: "1.4"` is a field the caller sets. So it is a token only when the request and the
+ * echo are whole numbers and the echo is larger.
+ */
+function isBumpedLockCounter(
+  key: string,
+  wanted: ReadonlySet<string>,
+  echoed: ReadonlySet<string> | undefined,
+): boolean {
+  if (MONGOOSE_VERSION_KEY !== key && keyWords(key).at(-1) !== VERSION_WORD) {
+    return false;
+  }
+  const [want] = [...wanted];
+  if (want === undefined || echoed === undefined || 0 === echoed.size) {
+    return false;
+  }
+  if (!WHOLE_NUMBER.test(want)) {
+    return false;
+  }
+  return [...echoed].every((got) => WHOLE_NUMBER.test(got) && Number(got) > Number(want));
 }
 
 /**
@@ -513,6 +543,9 @@ export function findEchoMismatches(
         continue;
       }
       const values = echoed.get(key);
+      if (isBumpedLockCounter(key, wanted, values)) {
+        continue;
+      }
       // Not echoed at all = no evidence either way. Only a key the server chose to report back can
       // contradict the request, and silence is not a contradiction.
       if (values === undefined || 0 === values.size) {
