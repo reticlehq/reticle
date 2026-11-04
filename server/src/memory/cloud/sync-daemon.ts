@@ -56,6 +56,7 @@ import { watch, type FSWatcher } from 'node:fs';
 import {
   BackgroundSyncState,
   backgroundSyncGate,
+  closeCycleGate,
   type BackgroundSyncGate,
 } from './background-sync.js';
 import { unmatchedRoots, unsyncedRoots, type UnsyncedRoot } from './unsynced-roots.js';
@@ -944,13 +945,11 @@ export function attachCloudSync(deps: {
     // and on the backstop timer.
     // Watching them too means one recursive watcher per linked repo — add it if siblings lag.
     watch: (onChange) => watchReticleRoot(deps.reticleRoot, onChange),
-    // Sent only while somebody is signed in, to a linked project that did not switch it off.
-    ...(signedIn === undefined
-      ? {}
-      : {
-          gate: (root: string, cloud: ProjectCloud) =>
-            backgroundSyncGate({ reticleRoot: root, cloud, env: deps.env, signedIn }),
-        }),
+    // Sent only to a linked project that did not switch it off; see `closeCycleGate` for no sign-in.
+    gate: (root: string, cloud: ProjectCloud) =>
+      signedIn === undefined
+        ? closeCycleGate(root, deps.env)
+        : backgroundSyncGate({ reticleRoot: root, cloud, env: deps.env, signedIn }),
     ...(deps.request === undefined ? {} : { request: deps.request }),
     ...(deps.intervalMs === undefined ? {} : { intervalMs: deps.intervalMs }),
   });
