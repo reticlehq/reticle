@@ -106,6 +106,7 @@ import { tryRealInput } from './real-input-attempt.js';
 import { verdictIntentGap } from '@reticlehq/engine/evidence/verdict-intent-gap.js';
 import { asActionType, gradeOf } from './act/act-helpers.js';
 import { resolveActTarget } from './act/act-target.js';
+import { hiddenTargetField } from './act/resolve-target.js';
 import { screenRequestFindings, withAdvisories } from './act/screen-request.js';
 import { gradeOfPredicate } from './assert/assert-grade.js';
 import { readAlreadyTrue } from './act/already-true.js';
@@ -230,6 +231,7 @@ export const ACT_TOOLS: ToolDef[] = [
             settled: real.settled,
             settleReason: null,
             result: leanActResult(real.result),
+            ...hiddenTargetField(targetRef),
             ...healthEnvelope(session),
           });
         }
@@ -256,6 +258,7 @@ export const ACT_TOOLS: ToolDef[] = [
           settled: r['settled'] ?? null,
           settleReason: r['settleReason'] ?? null,
           result: leanActResult(result.result),
+          ...hiddenTargetField(targetRef),
           ...(true === real.fellBack ? { warning: ActionWarning.REAL_INPUT_FELL_BACK } : {}),
           ...healthEnvelope(session),
         });
@@ -896,6 +899,7 @@ export const ACT_TOOLS: ToolDef[] = [
           // An unobserved act has no effect to report, and inventing an empty one would read as
           // "the page did nothing" — a claim about the app, from a call that never saw it.
           ...(null === actResult ? {} : { effect: leanActResult(actResult.result) }),
+          ...hiddenTargetField(resolved),
           verdict,
           // Promoted out of `effect` on red only. On green nobody needs it and it is noise; on red it
           // is the first thing the agent wants, and burying a file:line inside the effect block is

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a `target` whose every match was hidden acted on the hidden match and said nothing.** `reticle_act`, `act_and_wait` and `reticle_act { steps }` prefer a visible match. When no match was visible, they used the hidden one with no word in the result, so it looked the same as a visible control. Now the result, and the step row in `steps`, has a `hiddenTarget` field that names the hidden match. The action is not refused, because a hidden input is often clicked through its visible label. The reach check after the action still decides the verdict. Closes [#1518](https://github.com/reticlehq/reticle/issues/1518).

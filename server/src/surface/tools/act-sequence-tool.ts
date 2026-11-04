@@ -59,6 +59,7 @@ import type { Session } from '@/portal/session/session.js';
 // resolveActTarget moved out of act-tools into its own module on this branch; #706 was written
 // against the older layout where act-tools re-exported it.
 import { resolveActTarget } from './act/act-target.js';
+import { hiddenTargetField } from './act/resolve-target.js';
 import { gradeOfPredicate } from './assert/assert-grade.js';
 import { describeWaitTarget } from '@reticlehq/engine/evidence/unsettled.js';
 import { sourceOf } from './tools-helpers.js';
@@ -304,12 +305,15 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
           // Resolve `target` with the same helper reticle_act uses, then dispatch by ref. Passing
           // the unresolved step through used to send `ref: undefined` and the browser blamed a
           // stale empty ref — the caller went looking for a re-render instead of a missing locator.
+          // Set by the resolve below, so the step row names a hidden match the step acted on.
+          let hidden: { hiddenTarget?: string } = {};
           const outcome = await runStepWithStaleRetry(
             async () => {
               const resolved = await resolveActTarget(session, step, perStepTimeout);
               if ('error' === resolved.kind) {
                 return { ok: false, error: resolved.message };
               }
+              hidden = hiddenTargetField(resolved);
               // In burst mode every step carries a zero settle budget, so step N+1 is dispatched
               // while step N is still in flight. That overlap IS the test — see `burst` above.
               return actCommand(
@@ -383,6 +387,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
           const describe = () => ({
             ...describeStepResult(step, asRecord(outcome.result)),
             ...effectOf(session, stepSince, step['expect']),
+            ...hidden,
           });
           const deciding = (step: ReturnType<typeof describe>) =>
             (step.contradictions ?? [])
