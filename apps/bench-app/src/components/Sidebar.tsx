@@ -21,6 +21,7 @@ const NAV: NavDef[] = [
   { id: 'awkward', label: 'Awkward Controls', icon: IconSave },
   { id: 'stale-race', label: 'Stale Race', icon: IconSave },
   { id: 'rule-pairs', label: 'Rule Pairs', icon: IconSave },
+  { id: 'ack-pairs', label: 'Ack Pairs', icon: IconSave },
 ];
 
 // The enterprise-scale fixture is opt-in: without its URL knob the nav item is not even rendered,

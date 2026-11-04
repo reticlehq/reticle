@@ -355,6 +355,22 @@ wss.on('connection', (socket, req) => {
   });
 });
 
+// --- Ack pairs: failed writes that the app acknowledges, beside the ones it hides (#2173) ------
+//
+// Both invite routes answer 429, so the store alone tells a retry message from a false "sent".
+// `order` answers 500.
+app.post('/api/ack-pairs/invite-retry', (_req, res) => {
+  res.status(429).json({ message: 'slow down' });
+});
+
+app.post('/api/ack-pairs/invite-claimed', (_req, res) => {
+  res.status(429).json({ message: 'slow down' });
+});
+
+app.post('/api/ack-pairs/order', (_req, res) => {
+  res.status(500).json({ message: 'order store down' });
+});
+
 server.listen(PORT, () => {
   // eslint-disable-next-line no-console -- server startup banner
   console.log(`[reticle-api] listening on http://localhost:${PORT} (reflect=${REFLECT_MS}ms)`);

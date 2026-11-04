@@ -24,7 +24,8 @@ export type ViewId =
   | 'expiring-auth'
   | 'awkward'
   | 'stale-race'
-  | 'rule-pairs';
+  | 'rule-pairs'
+  | 'ack-pairs';
 export type EnvFilter = Env | 'all';
 
 export interface Toast {
@@ -32,6 +33,13 @@ export interface Toast {
   tone: 'success' | 'danger' | 'info';
   title: string;
   detail?: string;
+}
+
+/** An invite as the Ack Pairs view records it: the HTTP status it got, or a claim that it was sent. */
+export interface AckInvite {
+  status?: number;
+  message?: string;
+  sent?: boolean;
 }
 
 interface RequestLog {
@@ -64,6 +72,10 @@ interface AppState {
   rulePairsClicks: number;
   /** The one store path the Rule Pairs "Remember" button moves. */
   rulePairsChoice: string;
+  /** What the Ack Pairs invite panel recorded about its last invite. */
+  ackInvite: AckInvite | null;
+  /** What the Ack Pairs order panel shows after its last order. */
+  ackOrder: string;
   saveItem: (label: string, renderDelayMs?: number, serverDelayMs?: number) => Promise<void>;
 
   setView: (v: ViewId) => void;
@@ -109,6 +121,8 @@ export const useApp = create<AppState>((set, get) => ({
   savedItemsStatus: 'idle',
   rulePairsClicks: 0,
   rulePairsChoice: '',
+  ackInvite: null,
+  ackOrder: '',
   saveItem: async (label, renderDelayMs = 0, serverDelayMs = 0) => {
     // Do NOT set savedItemsStatus:'saving' here — that STATE_CHANGE fires before the response
     // lands and makes uiAdvanced()=true, which suppresses response-ignored in both polarities.
@@ -184,7 +198,9 @@ export const useApp = create<AppState>((set, get) => ({
   },
   select: (selectedId) => {
     set({ selectedId });
-    if (selectedId !== null) emit(Sig.DEPLOY_SELECTED, { id: selectedId });
+    if (selectedId !== null) {
+      emit(Sig.DEPLOY_SELECTED, { id: selectedId });
+    }
   },
   openDrawer: (drawerId) => {
     set({ drawerId, selectedId: drawerId });
@@ -199,7 +215,9 @@ export const useApp = create<AppState>((set, get) => ({
    * reports being dismissed when it was never on screen is the kind of thing a flow then asserts on.
    */
   setNewDeploy: (newDeployOpen) => {
-    if (get().newDeployOpen === newDeployOpen) return;
+    if (get().newDeployOpen === newDeployOpen) {
+      return;
+    }
     set({ newDeployOpen });
     emit(newDeployOpen ? Sig.MODAL_OPENED : Sig.MODAL_CLOSED, { modal: 'new-deploy' });
   },
@@ -217,9 +235,13 @@ export const useApp = create<AppState>((set, get) => ({
    * palette open and the second one clicks ⌘K into a no-op.
    */
   setPalette: (paletteOpen) => {
-    if (get().paletteOpen === paletteOpen) return;
+    if (get().paletteOpen === paletteOpen) {
+      return;
+    }
     set({ paletteOpen });
-    if (paletteOpen) emit(Sig.PALETTE_OPENED, {});
+    if (paletteOpen) {
+      emit(Sig.PALETTE_OPENED, {});
+    }
   },
   createDeployment: (service, env) => {
     const id = depSeq++;
@@ -270,10 +292,14 @@ export const useApp = create<AppState>((set, get) => ({
     const list = [...get().deployments];
     const i = list.findIndex((d) => d.id === id);
     const j = i + dir;
-    if (i < 0 || j < 0 || j >= list.length) return;
+    if (i < 0 || j < 0 || j >= list.length) {
+      return;
+    }
     const a = list[i];
     const b = list[j];
-    if (a === undefined || b === undefined) return;
+    if (a === undefined || b === undefined) {
+      return;
+    }
     list[i] = b;
     list[j] = a;
     set({ deployments: list });
