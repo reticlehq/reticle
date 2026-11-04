@@ -1,5 +1,5 @@
 import { readTestId, testIdSelector } from '@/dom/addressing/testid-attr.js';
-import { EventType, REDACTED_VALUE, TruncationChannel } from '@reticlehq/core';
+import { EventType, LivePoliteness, REDACTED_VALUE, TruncationChannel } from '@reticlehq/core';
 import { getAccessibleName, getRole, isSensitiveField } from '@/dom/a11y.js';
 import { isVisible } from '@/dom/visibility.js';
 import { refs } from '@/dom/addressing/refs.js';
@@ -169,6 +169,31 @@ const named = (el: Element): { testid?: string } => {
   return testid === undefined ? {} : { testid };
 };
 
+const ALERT_REGION = '[role="alert"]';
+const LIVE_REGION = `[aria-live],${ALERT_REGION},[role="status"]`;
+
+/**
+ * `{ live }` when `el` is inside a live region: the level of the nearest one. An explicit
+ * `aria-live` replaces the level of the role, and `off` is no region. The engine reads an error
+ * text written into an existing alert region as the app telling the user about a failure (#2173).
+ */
+const liveOf = (el: Element): { live?: LivePoliteness } => {
+  const region = el.closest(LIVE_REGION);
+  if (null === region) {
+    return {};
+  }
+  const level = region.getAttribute('aria-live');
+  if (level === LivePoliteness.ASSERTIVE || level === LivePoliteness.POLITE) {
+    return { live: level };
+  }
+  if (level !== null) {
+    return {};
+  }
+  return {
+    live: region.matches(ALERT_REGION) ? LivePoliteness.ASSERTIVE : LivePoliteness.POLITE,
+  };
+};
+
 export function installDom(emit: Emit): Teardown {
   // Installed here rather than in the bootstrap list because this observer is the registry's reason
   // for existing, and the ordering matters: a root attached between the two would be missed by both.
@@ -227,7 +252,7 @@ export function installDom(emit: Emit): Teardown {
           const old = hide ? undefined : capValue(record.oldValue?.trim() ?? null);
           emit(
             EventType.DOM_TEXT,
-            { text, ...(old === undefined ? {} : { old }), ...named(parent) },
+            { text, ...(old === undefined ? {} : { old }), ...named(parent), ...liveOf(parent) },
             refs.refFor(parent),
           );
         }
@@ -255,7 +280,7 @@ export function installDom(emit: Emit): Teardown {
             const old = hide ? undefined : capValue(textOf(record.removedNodes) ?? null);
             emit(
               EventType.DOM_TEXT,
-              { text, ...(old === undefined ? {} : { old }), ...named(parent) },
+              { text, ...(old === undefined ? {} : { old }), ...named(parent), ...liveOf(parent) },
               refs.refFor(parent),
             );
           }

@@ -192,6 +192,13 @@ export const StreamDirection = { OPEN: 'open', IN: 'in', OUT: 'out', CLOSE: 'clo
 export type StreamDirection = (typeof StreamDirection)[keyof typeof StreamDirection];
 
 export const ScrollDirection = { UP: 'up', DOWN: 'down' } as const;
+
+/**
+ * How urgently a live region announces its text, as ARIA defines it. `role="alert"` is assertive,
+ * and `role="status"` is polite. An explicit `aria-live` value replaces the value of the role.
+ */
+export const LivePoliteness = { ASSERTIVE: 'assertive', POLITE: 'polite' } as const;
+export type LivePoliteness = (typeof LivePoliteness)[keyof typeof LivePoliteness];
 export type ScrollDirection = (typeof ScrollDirection)[keyof typeof ScrollDirection];
 
 /**

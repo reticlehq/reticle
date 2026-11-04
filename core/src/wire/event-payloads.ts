@@ -3,6 +3,7 @@ import { CanvasTrigger, EventType, MediaEvent, PerfMetric } from './constants/co
 import {
   FieldChangeField,
   FieldChangeKind,
+  LivePoliteness,
   RouteChangeHow,
   ROUTE_CHANGE_HOW_FIELD,
   ScrollDirection,
@@ -143,6 +144,12 @@ export const EVENT_PAYLOAD_SCHEMAS = {
     testid: z.string().optional(),
     /** The text an element ARRIVED with, not a change: the baseline a later change is read against. */
     initial: z.boolean().optional(),
+    /**
+     * Set when the text changed inside a live region that already exists: how urgently the region
+     * announces it. An app that writes its error text into an existing alert region tells the user
+     * about a failure, and a mount event does not record that write.
+     */
+    live: z.nativeEnum(LivePoliteness).optional(),
   }),
   [EventType.NET_REQUEST]: netRequestSchema,
   [EventType.NET_PENDING]: z.object({

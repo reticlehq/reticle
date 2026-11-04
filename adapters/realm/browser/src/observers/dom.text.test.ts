@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { EventType } from '@reticlehq/core';
+import { EventType, LivePoliteness } from '@reticlehq/core';
 import { installDom } from './dom.js';
 
 interface Captured {
@@ -138,5 +138,42 @@ describe('text is named, and its first value is kept', () => {
       type: EventType.DOM_TEXT,
       data: { text: 'Score: 3', testid: 'score', initial: true },
     });
+  });
+});
+
+/**
+ * Text written into a live region that is already on the page carries the region's level.
+ *
+ * Reported from the field (#2173). An app wrote "Wrong email or password" into an existing
+ * `<div role="alert">`. The text event carried no role, so the engine could not see that the app
+ * told the user about the failed login, and the verdict was `unknown` or `no`.
+ */
+describe('a text change inside a live region carries its level', () => {
+  const liveOf = async (html: string, selector: string): Promise<unknown> => {
+    document.body.innerHTML = html;
+    const el = document.querySelector(selector) as HTMLElement;
+    const events = await record(() => {
+      el.textContent = 'Wrong email or password';
+    });
+    return textEvents(events)[0]?.data['live'];
+  };
+
+  it('marks text in a role="alert" region as assertive', async () => {
+    expect(await liveOf('<div role="alert"></div>', 'div')).toBe(LivePoliteness.ASSERTIVE);
+  });
+
+  it('marks text in a child of a role="status" region as polite', async () => {
+    expect(await liveOf('<div role="status"><p></p></div>', 'p')).toBe(LivePoliteness.POLITE);
+  });
+
+  it('lets an explicit aria-live replace the level of the role', async () => {
+    expect(await liveOf('<div role="status" aria-live="assertive"></div>', 'div')).toBe(
+      LivePoliteness.ASSERTIVE,
+    );
+  });
+
+  it('marks nothing for aria-live="off" or for a plain element', async () => {
+    expect(await liveOf('<div aria-live="off"></div>', 'div')).toBeUndefined();
+    expect(await liveOf('<p></p>', 'p')).toBeUndefined();
   });
 });

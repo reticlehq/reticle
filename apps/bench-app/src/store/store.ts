@@ -43,6 +43,12 @@ export interface AckInvite {
   sent?: boolean;
 }
 
+/** A sign-in as the Ack Pairs view records it: the text it showed, or a claim that it signed in. */
+export interface AckLogin {
+  message?: string;
+  signedIn?: boolean;
+}
+
 interface RequestLog {
   id: number;
   method: string;
@@ -77,6 +83,8 @@ interface AppState {
   ackInvite: AckInvite | null;
   /** What the Ack Pairs order panel shows after its last order. */
   ackOrder: string;
+  /** What the Ack Pairs sign-in panel recorded about its last sign-in. */
+  ackLogin: AckLogin | null;
   saveItem: (label: string, renderDelayMs?: number, serverDelayMs?: number) => Promise<void>;
 
   setView: (v: ViewId) => void;
@@ -124,6 +132,7 @@ export const useApp = create<AppState>((set, get) => ({
   rulePairsChoice: '',
   ackInvite: null,
   ackOrder: '',
+  ackLogin: null,
   saveItem: async (label, renderDelayMs = 0, serverDelayMs = 0) => {
     // Do NOT set savedItemsStatus:'saving' here — that STATE_CHANGE fires before the response
     // lands and makes uiAdvanced()=true, which suppresses response-ignored in both polarities.
