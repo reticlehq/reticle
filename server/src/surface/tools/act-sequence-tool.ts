@@ -406,8 +406,14 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
           if (!parsed.success) {
             const described = describe();
             const contradicted = deciding(described);
+            // What a quiet, undeclared plan is graded on — see gradeSequence.
+            const doubted = (described.contradictions ?? [])
+              .map((c) => c.kind)
+              .filter((kind) => !isAdvisory(kind) && isAbsenceDerived(kind));
             expectations.push({
               declared: false,
+              settled: true === asRecord(outcome.result)['settled'],
+              ...(0 === doubted.length ? {} : { doubted }),
               ...(0 === contradicted.length ? {} : { contradicted }),
               ...(unreachable === undefined ? {} : { undecided: unreachable }),
             });
@@ -550,6 +556,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
       const grade = gradeSequence(expectations, {
         planned: inputSteps.length,
         dispatched: completed > 0,
+        captureLost: session.lostSince(since),
       });
       // The journey a `keep` offer names, held as a stopped recording so `reticle_flow_save
       // { flowName: JOURNEY_RECORDING, saveAs }` saves exactly what was just driven. The offer used
