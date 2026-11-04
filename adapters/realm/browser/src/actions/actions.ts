@@ -12,6 +12,7 @@ import { isHiddenNativeOption } from '@/dom/query-finders.js';
 import { isReticleUi, isUnobserved } from '@/dom/dom-ignore.js';
 
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
+import { withDialogConsent } from './synthetic/dialog-consent.js';
 import { echoRef, refs } from '@/dom/addressing/refs.js';
 import {
   requiresDangerousConfirmation,
@@ -795,7 +796,10 @@ export async function executeAction(
   let settled = false;
   let settleReason: SettleReason | null = null;
   try {
-    const outcome = await dispatchFor(el, action, args);
+    // `confirmDangerous: true` is also the caller's yes to a `confirm()` this dispatch opens (#2167).
+    const outcome = await withDialogConsent(true === args[DANGEROUS_ACTION_CONFIRM_ARG], () =>
+      dispatchFor(el, action, args),
+    );
     defaultPrevented = outcome.prevented;
     heldMs = outcome.heldMs;
   } finally {

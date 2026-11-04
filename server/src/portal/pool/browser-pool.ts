@@ -32,6 +32,7 @@ import type {
 import type { RealInputArgs, RealInputResult } from '@/portal/input/real-input.js';
 import { readViewport, type LeaseEmulation, type LeaseMedia } from './lease-emulation.js';
 import { NotHtmlDocumentError, READER_NOT_HTML } from './zero-install.js';
+import { LeaseDialogs } from './lease-dialogs.js';
 export type {
   InitScriptHandle,
   Launcher,
@@ -409,15 +410,21 @@ export class BrowserPool {
   /**
    * Press a key with the leased page's real keyboard, or undefined when this session is not a lease
    * or its page has no keyboard. A throw is the caller's to read: a key that went down and did not
-   * come up must not be answered with a second, synthetic press.
+   * come up must not be answered with a second, synthetic press. `acceptConfirm` is the action's
+   * `confirmDangerous`: a yes to one `confirm` that this press opens (#2167).
    */
-  async pressLease(sessionId: string, args: RealInputArgs): Promise<RealInputResult | undefined> {
+  async pressLease(
+    sessionId: string,
+    args: RealInputArgs,
+    acceptConfirm = false,
+  ): Promise<RealInputResult | undefined> {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
     if (lease?.page.press === undefined) {
       return undefined;
     }
     this.touch(sessionId);
-    return lease.page.press(args);
+    const { page } = lease;
+    return lease.dialogs.during(acceptConfirm, async () => await page.press?.(args));
   }
 
   /**
@@ -629,7 +636,7 @@ export class BrowserPool {
     const sessionId = opts.sessionId ?? this.#genId();
     let context: PooledContext | undefined;
     let pending: string | undefined;
-    let pendingDialogMessage: string | undefined;
+    const dialogs = new LeaseDialogs();
     try {
       const browser = await this.#ensureBrowser(slot);
       const contextOpts = {
@@ -675,17 +682,8 @@ export class BrowserPool {
         } // logged during goto, before the lease is registered below
       });
       // Same "listen before goto" reasoning as onConsole above: a dialog opened during the initial
-      // navigation (an app that confirms something in an onload handler) must still be dismissed, not
-      // just ones opened after the lease is registered.
-      page.onDialog?.((dialog) => {
-        const active = this.#active.get(sessionId);
-        if (active !== undefined) {
-          active.lastDialogMessage = dialog.message;
-        } else {
-          pendingDialogMessage = dialog.message;
-        }
-        void dialog.dismiss();
-      });
+      // navigation (an onload confirm) must still be answered, not just ones after registration.
+      page.onDialog?.((dialog) => void dialogs.answer(dialog));
       // Listener on BEFORE goto — an import-time throw lands during it (#1966).
       await listenForPageErrors(page, sessionId, this.#pageErrorHooks);
       const marker = leaseMarkerOf(url);
@@ -729,8 +727,8 @@ export class BrowserPool {
         permissions: opts.permissions ?? [],
         ignoresHTTPSErrors: true === opts.ignoreHTTPSErrors,
         csp,
+        dialogs,
         ...(pending === undefined ? {} : { dialFailureUrl: pending }),
-        ...(pendingDialogMessage === undefined ? {} : { lastDialogMessage: pendingDialogMessage }),
         ...(hostStub === undefined || opts.initScript === undefined
           ? {}
           : { hostStub, hostStubScript: opts.initScript }),
@@ -778,7 +776,7 @@ export class BrowserPool {
    * lease, if any. Diagnostic only — the dialog itself is already gone by the time this is readable.
    */
   lastDialogMessage(sessionId: string): string | undefined {
-    return this.#active.get(this.#leaseIdOf(sessionId))?.lastDialogMessage;
+    return this.#active.get(this.#leaseIdOf(sessionId))?.dialogs.lastMessage;
   }
 
   /** Close every context and the browser. Pending waiters are rejected (the pool is terminal now). */
