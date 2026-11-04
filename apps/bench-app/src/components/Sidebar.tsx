@@ -1,5 +1,6 @@
 import { useApp, type ViewId } from '../store/store.js';
 import { isEnterpriseEnabled } from '../lib/enterprise-config.js';
+import { areFixtureViewsEnabled } from '../lib/fixture-views.js';
 import { IconBug, IconGrid, IconRocket, IconSparkles, IconSave } from './icons.js';
 
 interface NavDef {
@@ -21,6 +22,10 @@ const NAV: NavDef[] = [
   { id: 'awkward', label: 'Awkward Controls', icon: IconSave },
   { id: 'stale-race', label: 'Stale Race', icon: IconSave },
   { id: 'rule-pairs', label: 'Rule Pairs', icon: IconSave },
+];
+
+// Views that exist only for an e2e spec. Opt-in, like the Enterprise link below: see fixture-views.ts.
+const NAV_FIXTURES: NavDef[] = [
   { id: 'ack-pairs', label: 'Ack Pairs', icon: IconSave },
   { id: 'claim-pairs', label: 'Claim Pairs', icon: IconSave },
 ];
@@ -45,7 +50,11 @@ export function Sidebar(): React.ReactElement {
       </div>
 
       <div className="nav-section">Workspace</div>
-      {(isEnterpriseEnabled() ? [...NAV, NAV_ENTERPRISE] : NAV).map(({ id, label, icon: Ico }) => (
+      {[
+        ...NAV,
+        ...(areFixtureViewsEnabled() ? NAV_FIXTURES : []),
+        ...(isEnterpriseEnabled() ? [NAV_ENTERPRISE] : []),
+      ].map(({ id, label, icon: Ico }) => (
         <button
           key={id}
           type="button"

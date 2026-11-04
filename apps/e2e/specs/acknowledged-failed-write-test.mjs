@@ -68,7 +68,8 @@ const why = (verdict) =>
 
 const b = await chromium.launch({ headless: true });
 const p = await b.newPage();
-await p.goto(APP_URL, { waitUntil: 'domcontentloaded' });
+// The fixture views are opt-in, so the benchmark page has no link to them (fixture-views.ts).
+await p.goto(`${APP_URL}?fixture-views=1`, { waitUntil: 'domcontentloaded' });
 await waitForSession(() => server.bridge.sessions.list(), isBench, {
   what: 'the bench-app session for the ack-pairs fixture',
 });
