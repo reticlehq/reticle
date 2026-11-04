@@ -18,6 +18,8 @@ import {
 } from '@reticlehq/core';
 import { haltedFrom } from './recording/replay-halt.js';
 import { establishedState, startPathBudgetMs } from './flow-journey.js';
+import { resolveSessionWithin } from '@/portal/session/timing/resolve-within.js';
+import { WALL_CLOCK } from '@/portal/session/timing/wall-clock.js';
 import { asString } from '@reticlehq/core';
 import { partialStatus, replayFlow, replayWindow, type ReplayFromOptions } from './flow-replay.js';
 import { staleTargetResult } from './flow-step-runners.js';
@@ -391,7 +393,14 @@ async function replayOnce(
   const replayRoot = sessionRoot(deps, asString(args['sessionId']));
   const intents = new IntentStore(deps.fs, replayRoot, { now: deps.now });
   const intentSaid = await flowIntentStatement(intents, loaded.value);
-  const connected = deps.sessions.resolve(asString(args['sessionId']));
+  // `verify` reloads the page between flows. A flow that starts in the reconnect gap waits for the
+  // page, up to the start-page budget, instead of ending unknown at once (#2168).
+  const connected = await resolveSessionWithin(
+    deps.sessions,
+    asString(args['sessionId']),
+    startPathBudgetMs(loaded.value),
+    { now: deps.now, sleep: WALL_CLOCK.sleep },
+  );
   // The FlowFile contract: replay navigates to the flow's startPath before step 1, and the steps run
   // on the session the SDK reconnects as. When arrival can't be confirmed, replay proceeds on the
   // connected session — and the hint below turns the wrong-page drift into an actionable next move.
