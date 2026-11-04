@@ -64,6 +64,13 @@ export interface SessionJournalOptions {
   maxReadBytes?: number;
   maxRetainedBytes?: number;
   maxRetainedEvents?: number;
+  /**
+   * The session's elapsed-ms clock, the same clock that stamps each record's `t`. It bounds a cut
+   * that left no readable record: every skipped byte was on disk at the read, so its `t` is at or
+   * before the time of the read. Without it, such a cut stays unbounded until a later read parses
+   * a record.
+   */
+  now?: () => number;
 }
 
 /**
@@ -186,11 +193,13 @@ export class SessionJournal {
   #droppedBytes = 0;
   /** Parsed records evicted from the retained set. Exact — these were counted, not estimated. */
   #droppedEvents = 0;
-  /**
-   * Latest parsed eviction timestamp, or +Infinity after unparsed bytes were skipped.
-   * -Infinity means no loss. Later intact reads cannot narrow an unknown discarded time range.
-   */
+  /** Latest `t` that a cut or an eviction can reach, inclusive. -Infinity means no loss. */
   #lostThroughT = Number.NEGATIVE_INFINITY;
+  /** A cut skipped bytes and no record after it has been parsed yet, so its bound is unknown. */
+  #cutPending = false;
+  /** The last record parsed, so a cut can tell whether the clock started again across it. */
+  #lastParsed: ClockMark | undefined;
+  readonly #now: (() => number) | undefined;
 
   constructor(
     fs: FileSystemPort,
@@ -231,6 +240,7 @@ export class SessionJournal {
       'maxRetainedEvents',
     );
     this.#eventBytesCap = cap;
+    this.#now = options.now;
   }
 
   /**
@@ -491,9 +501,14 @@ export class SessionJournal {
       // never skips, so its start IS the offset we asked for.
       const from = chunk.from ?? this.#eventBytesConsumed;
       const skipped = Math.max(0, from - this.#eventBytesConsumed);
-      this.#ingestTail(chunk.text);
+      // Before the ingest, so the first record parsed after the cut bounds it.
       if (skipped > 0) {
         this.#noteCut(skipped);
+      }
+      this.#ingestTail(chunk.text);
+      const now = this.#now;
+      if (this.#cutPending && now !== undefined) {
+        this.#boundCut({ t: now() });
       }
       // Resume at the end of the last COMPLETE line, counted forward over the bytes that actually
       // ARRIVED. Not from `chunk.size`: that is the file's end as `fstat` reported it, and a read
@@ -571,6 +586,10 @@ export class SessionJournal {
       }
       const result = ReticleEventSchema.safeParse(parsed);
       if (result.success) {
+        if (this.#cutPending) {
+          this.#boundCut(result.data);
+        }
+        this.#lastParsed = result.data;
         this.#eventCache.push(result.data);
         // Its cost in the file, newline included — so the retained bound is in the same unit the
         // read ceiling and the loss report are.
@@ -624,13 +643,38 @@ export class SessionJournal {
   }
 
   /**
-   * Skipped bytes have unknown timestamps: page clocks can reset while the journal id survives.
-   * A surviving tail cannot bound records that were never parsed. Later intact reads cannot
-   * reconstruct that history; finite bounds apply only to parsed cache evictions.
+   * Skipped bytes are not parsed, so their `t` is not known at the cut. The first record parsed
+   * after the cut, or the time of the read, can bound them (see `#boundCut`). Until then, the cut
+   * reaches every window.
    */
   #noteCut(skippedBytes: number): void {
     this.#droppedBytes += skippedBytes;
-    this.#lostThroughT = Number.POSITIVE_INFINITY;
+    this.#cutPending = true;
+  }
+
+  /**
+   * Bound the pending cut at `next`: the first record parsed after it, or the time of the read.
+   *
+   * The file is append-only, and one connection stamps `t` from one monotonic clock
+   * (`Session.elapsed`). So when the clock did not start again across the cut, each skipped record
+   * has a `t` at or before `next.t`.
+   *
+   * A reload or a reconnect keeps the session id and starts the clock again, and one window can
+   * span it: a window opened at t=150 on the old connection can hold skipped old records at t=200
+   * while the new connection's records start at t=10. A bound from the new clock then clears a
+   * window that lost evidence. So the cut stays unbounded, for good, when the reset cannot be
+   * ruled out: no record was parsed before the cut, or `t` or `seq` went down, or the document
+   * changed. This check is conservative but not complete. A reconnect in the same document whose
+   * new clock already passed the old `t` shows none of the three signs.
+   */
+  #boundCut(next: ClockMark): void {
+    const last = this.#lastParsed;
+    this.#cutPending = false;
+    if (last === undefined || clockStartedAgain(last, next)) {
+      this.#lostThroughT = Number.POSITIVE_INFINITY;
+      return;
+    }
+    this.#lostThroughT = Math.max(this.#lostThroughT, next.t);
   }
 
   /**
@@ -644,7 +688,7 @@ export class SessionJournal {
     if (0 === this.#droppedBytes && 0 === this.#droppedEvents) {
       return undefined;
     }
-    const bounded = Number.isFinite(this.#lostThroughT);
+    const bounded = !this.#cutPending && Number.isFinite(this.#lostThroughT);
     return {
       droppedBytes: this.#droppedBytes,
       droppedEvents: this.#droppedEvents,
@@ -704,6 +748,24 @@ export class SessionJournal {
     }
     return out;
   }
+}
+
+/** The fields of a record that show which clock stamped it. */
+type ClockMark = Pick<ReticleEvent, 't' | 'seq' | 'documentId'>;
+
+/** Did the clock start again between `last` and `next`? A field one record lacks proves nothing. */
+function clockStartedAgain(last: ClockMark, next: ClockMark): boolean {
+  if (next.t < last.t) {
+    return true;
+  }
+  if (last.seq !== undefined && next.seq !== undefined && next.seq < last.seq) {
+    return true;
+  }
+  return (
+    last.documentId !== undefined &&
+    next.documentId !== undefined &&
+    next.documentId !== last.documentId
+  );
 }
 
 /**

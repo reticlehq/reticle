@@ -212,6 +212,78 @@ describe('SessionJournal — a read too large to be one string', () => {
     expect(loss?.lostThroughT).toBeUndefined();
     expect(loss?.note).toContain('no window');
   });
+
+  /** A port over a file the test grows between reads. */
+  function growingJournal(): { fs: FileSystemPort; append: (more: string) => void } {
+    let text = '';
+    return {
+      append: (more) => {
+        text += more;
+      },
+      fs: {
+        ...unusedFileSystem(),
+        readFileFrom: (path, byteOffset, maxBytes) =>
+          ceilingJournal(text).fs.readFileFrom?.(path, byteOffset, maxBytes) ??
+          Promise.reject(new Error('not used by this fixture')),
+      },
+    };
+  }
+
+  /** One line too long to read whole, so a capped read keeps no complete record of it. */
+  function unreadable(event: ReticleEvent): string {
+    return lines([event]).padStart(READ_CEILING_BYTES * 3, 'x');
+  }
+
+  it('bounds a cut that left nothing readable at the time of the read', async () => {
+    // Every skipped byte was on disk when the read started, so its `t` is at or before that time.
+    const READ_AT = 50;
+    const { fs, append } = growingJournal();
+    const journal = new SessionJournal(fs, '/root', 'demo', {
+      maxReadBytes: READ_CEILING_BYTES,
+      now: () => READ_AT,
+    });
+    append(lines([evt(0, 0)]));
+    await journal.readEvents();
+
+    append(unreadable(evt(1, 1)));
+    await journal.readEvents();
+
+    expect(journal.readLoss()?.droppedBytes).toBeGreaterThan(0);
+    expect(journal.readLoss()?.lostThroughT).toBe(READ_AT);
+  });
+
+  it('keeps a cut unbounded when the time of the read is before the last record read', async () => {
+    // The clock is behind the last record, so it started again: the read time bounds nothing.
+    const { fs, append } = growingJournal();
+    const journal = new SessionJournal(fs, '/root', 'demo', {
+      maxReadBytes: READ_CEILING_BYTES,
+      now: () => 50,
+    });
+    append(lines([evt(0, 100)]));
+    await journal.readEvents();
+
+    append(unreadable(evt(1, 101)));
+    await journal.readEvents();
+
+    expect(journal.readLoss()?.droppedBytes).toBeGreaterThan(0);
+    expect(journal.readLoss()?.lostThroughT).toBeUndefined();
+  });
+
+  it('bounds a cut with no clock at the next record that a later read parses', async () => {
+    const { fs, append } = growingJournal();
+    const journal = new SessionJournal(fs, '/root', 'demo', { maxReadBytes: READ_CEILING_BYTES });
+    append(lines([evt(0, 0)]));
+    await journal.readEvents();
+
+    append(unreadable(evt(1, 1)));
+    await journal.readEvents();
+    expect(journal.readLoss()?.lostThroughT).toBeUndefined();
+
+    append(lines([evt(2, 60)]));
+    await journal.readEvents();
+
+    expect(journal.readLoss()?.lostThroughT).toBe(60);
+  });
 });
 
 describe('SessionJournal — the ceiling, on a real file', () => {
@@ -256,7 +328,7 @@ describe('SessionJournal — the ceiling, on a real file', () => {
     expect(journal.readLoss()?.lostThroughT).toBeUndefined();
   });
 
-  it('reports unknown loss when a byte cut opens a gap after cached records', async () => {
+  it('bounds a byte cut that opens a gap after cached records at the first record after it', async () => {
     const journal = new SessionJournal(fs, root, 'demo', { maxReadBytes: bytesOfNewest(2) + 10 });
     await journal.appendEvents([evt(0), evt(1)]);
     expect((await journal.readEvents()).map((e) => e.seq)).toEqual([0, 1]);
@@ -265,6 +337,21 @@ describe('SessionJournal — the ceiling, on a real file', () => {
     // A burst larger than the ceiling lands between reads: records 2..5 are unreachable, even though
     // the cache still holds 0 and 1 from before the gap.
     await journal.appendEvents([evt(2), evt(3), evt(4), evt(5)]);
+    await journal.readEvents();
+
+    // One connection stamps `t` from one monotonic clock, and `t` and `seq` both went up across the
+    // cut. So each skipped record is at or before the first record that survived it.
+    expect(journal.readLoss()?.droppedBytes).toBeGreaterThan(0);
+    expect(journal.readLoss()?.lostThroughT).toBe(4);
+  });
+
+  it('keeps a cut unbounded when seq went down across it, as after a reload', async () => {
+    const journal = new SessionJournal(fs, root, 'demo', { maxReadBytes: bytesOfNewest(2) + 10 });
+    await journal.appendEvents([evt(8, 0), evt(9, 1)]);
+    await journal.readEvents();
+
+    // `t` went up across the cut, but `seq` started again: a new page wrote the tail.
+    await journal.appendEvents([evt(0, 2), evt(1, 3), evt(2, 4), evt(3, 5)]);
     await journal.readEvents();
 
     expect(journal.readLoss()?.droppedBytes).toBeGreaterThan(0);
