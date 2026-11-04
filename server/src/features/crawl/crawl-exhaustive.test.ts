@@ -13,7 +13,7 @@ import {
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { LedgerStore, holesOf } from '@/features/exhaust/ledger.js';
 import type { PortSession } from '@/features/exhaust/session-port.js';
-import { runExhaustive } from './crawl-exhaustive.js';
+import { ExhaustBudget, runExhaustive, scaledBudget } from './crawl-exhaustive.js';
 
 /*
  * The whole exhaustive run over a session that speaks page commands: a form whose Save posts twice
@@ -133,5 +133,70 @@ describe('runExhaustive drives edge cases', () => {
     );
     expect(ledger.findings.map((f) => f.kind)).toContain(BehaviourFindingKind.REPEAT_CHANGED_STATE);
     expect(holesOf(ledger).edges.items).not.toContain('button "Save"');
+  });
+});
+
+/*
+ * A fixed 400 actions, split by share, ran out on bench-app before the edge drive reached its third
+ * page. With no budget given, each phase now gets what the crawl found, up to a ceiling.
+ */
+describe('scaledBudget', () => {
+  const surface = (n: number) => ({
+    path: [],
+    fills: [],
+    fields: [`textbox "F${String(n)}"`],
+    attrs: {},
+    order: [],
+    requests: [`button "R${String(n)}"`],
+    writes: [],
+    inert: [],
+  });
+  const write = (n: number) => ({
+    key: `POST /w${String(n)}`,
+    method: 'POST',
+    urlPath: `/w${String(n)}`,
+    path: [],
+    beforeState: 'a',
+    successState: 'b',
+  });
+
+  it('grows with the controls and writes found', () => {
+    const small = scaledBudget({ surfaces: [surface(1)], writes: [write(1)] });
+    const large = scaledBudget({
+      surfaces: [surface(1), surface(2), surface(3)],
+      writes: [write(1), write(2)],
+    });
+    expect(large.edges).toBeGreaterThan(small.edges);
+    expect(large.failure).toBeGreaterThan(small.failure);
+  });
+
+  it('stops at its ceiling', () => {
+    const many = Array.from({ length: 500 }, (_, i) => surface(i));
+    const writes = Array.from({ length: 500 }, (_, i) => write(i));
+    const budget = scaledBudget({ surfaces: many, writes });
+    expect(budget.edges).toBe(ExhaustBudget.EDGE_CEILING);
+    expect(budget.failure).toBe(ExhaustBudget.FAILURE_CEILING);
+  });
+
+  it('runs the whole crawl without a budget and finishes a small app', async () => {
+    root = await mkdtemp(join(tmpdir(), 'reticle-exhaustive-'));
+    const app = formApp();
+    const result = await runExhaustive({
+      sessions: app.sessions,
+      session: app.session,
+      startUrl: 'http://h/form',
+      settleMs: 0,
+      fillValue: () => 'hello',
+      now: () => 0,
+      sleep: () => Promise.resolve(),
+      fs: createNodeFileSystem(),
+      reticleRoot: root,
+    });
+    const exhaustive = result['exhaustive'] as {
+      budgetExhausted: boolean;
+      edges: { budgetExhausted: boolean };
+    };
+    expect(exhaustive.budgetExhausted).toBe(false);
+    expect(exhaustive.edges.budgetExhausted).toBe(false);
   });
 });

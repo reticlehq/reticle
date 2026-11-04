@@ -15,27 +15,53 @@ import {
   type RawScriptCoverage,
 } from '@/features/exhaust/code-coverage.js';
 import { driveEdges } from '@/features/exhaust/edges/edge-drive.js';
-import { explore } from '@/features/exhaust/explorer.js';
+import { explore, type ExploreReport } from '@/features/exhaust/explorer.js';
 import { driveFailureBranches } from '@/features/exhaust/failure-branches.js';
 import { failureFindings } from '@/features/exhaust/invariants.js';
 import { LedgerStore, levelsOf, regressions } from '@/features/exhaust/ledger.js';
 import { sessionPort, type PortSession } from '@/features/exhaust/session-port.js';
 
-/** Default action budget: generous, because every edge replays its path from a fresh load. */
-export const EXHAUST_DEFAULT_ACTIONS = 400;
-/** The share of the budget kept back for failure paths, so exploring cannot starve them. */
+/** The share of a GIVEN budget kept back for failure paths, so exploring cannot starve them. */
 const FAILURE_SHARE = 0.25;
-/**
- * The share kept back for edge cases. Exploring keeps the rest, so edge cases cannot starve it; what
- * exploring leaves unspent goes to edge cases too.
- */
+/** The share of a GIVEN budget kept back for edge cases. What exploring leaves goes to them too. */
 export const EDGE_SHARE = 0.25;
+
+/**
+ * With no budget given, each phase gets what the crawl found, up to a ceiling. Exploring stops on
+ * its own when no state is left; the ceiling only bounds an app too large to finish. A fixed 400,
+ * split by share, ran out on bench-app before the edge drive reached its third page.
+ */
+export const ExhaustBudget = {
+  EXPLORE_CEILING: 600,
+  /** A failure path replays the write's path, breaks it and fires it. */
+  FAILURE_PER_WRITE: 12,
+  FAILURE_CEILING: 150,
+  /** Enough for the first few probes of one control, each a replay and a few presses. */
+  EDGE_PER_CONTROL: 15,
+  EDGE_CEILING: 450,
+} as const;
+
+/** The failure and edge budgets for what exploring found. */
+export function scaledBudget(found: Pick<ExploreReport, 'surfaces' | 'writes'>): {
+  failure: number;
+  edges: number;
+} {
+  const controls = new Set(found.surfaces.flatMap((s) => [...s.requests, ...s.fields, ...s.inert]));
+  return {
+    failure: Math.min(
+      ExhaustBudget.FAILURE_CEILING,
+      ExhaustBudget.FAILURE_PER_WRITE * found.writes.length,
+    ),
+    edges: Math.min(ExhaustBudget.EDGE_CEILING, ExhaustBudget.EDGE_PER_CONTROL * controls.size),
+  };
+}
 
 export async function runExhaustive(input: {
   sessions: { get(id: string): PortSession | undefined };
   session: PortSession;
   startUrl: string;
-  maxActions: number;
+  /** A fixed budget, split by share. Absent: each phase gets what the crawl found (`scaledBudget`). */
+  maxActions?: number;
   settleMs: number;
   /** What to type into a field, given the page it is on — a secret is only for its own origin. */
   fillValue: (label: string, pageUrl: string) => string;
@@ -58,16 +84,24 @@ export async function runExhaustive(input: {
     sleep: input.sleep,
     ...(input.setMocks === undefined ? {} : { setMocks: input.setMocks }),
   });
-  const failureBudget = Math.floor(input.maxActions * FAILURE_SHARE);
-  const edgeBudget = Math.floor(input.maxActions * EDGE_SHARE);
-  const exploreBudget = input.maxActions - failureBudget - edgeBudget;
+  const given = input.maxActions;
+  const exploreBudget =
+    given === undefined
+      ? ExhaustBudget.EXPLORE_CEILING
+      : given - Math.floor(given * FAILURE_SHARE) - Math.floor(given * EDGE_SHARE);
   const report = await explore(port, {
     maxActions: exploreBudget,
     fillValue: (label) => input.fillValue(label, port.current().url),
   });
+  const scaled = scaledBudget(report);
+  const failureBudget = given === undefined ? scaled.failure : Math.floor(given * FAILURE_SHARE);
+  const edgeBudget =
+    given === undefined
+      ? scaled.edges
+      : Math.floor(given * EDGE_SHARE) + Math.max(0, exploreBudget - report.actions);
   const branches = await driveFailureBranches(port, report.writes, { maxActions: failureBudget });
   const edges = await driveEdges(port, report.surfaces, {
-    maxActions: edgeBudget + Math.max(0, exploreBudget - report.actions),
+    maxActions: edgeBudget,
     now: input.now,
     known: report.anomalies.map((a) => `${a.control}\n${a.kind}`),
   });

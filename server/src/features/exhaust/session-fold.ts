@@ -100,3 +100,47 @@ export function failedRequests(events: ReticleEvent[], floor: number): ReticleEv
     return status !== undefined && status >= floor;
   });
 }
+
+/** Any buffer event that proves the app reacted to a click (vs a dead/no-op control). */
+export function isActivity(e: ReticleEvent): boolean {
+  return (
+    e.type === EventType.NET_REQUEST ||
+    e.type === EventType.DOM_ADDED ||
+    e.type === EventType.DOM_REMOVED ||
+    e.type === EventType.DOM_ATTR ||
+    e.type === EventType.DOM_TEXT ||
+    e.type === EventType.ROUTE_CHANGE ||
+    e.type === EventType.SIGNAL ||
+    e.type === EventType.ANIM_START ||
+    e.type === EventType.ANIM_END
+  );
+}
+
+/**
+ * Controls whose correct behaviour IS to do nothing when clicked.
+ *
+ * Read off the same descriptor the crawler already has, so no extra round trip: `[disabled]` is inert
+ * by definition, an already `[checked]` radio/checkbox is idempotent, and clicking a text field
+ * focuses it rather than changing anything.
+ */
+export function legitimatelyInert(desc: string): boolean {
+  if (desc.includes('[disabled]')) {
+    return true;
+  }
+  if (desc.includes('[checked]')) {
+    return true;
+  }
+  // Inputs, and the ARIA LIVE-REGION roles.
+  //
+  // `alert`, `status`, `log`, `timer` and `marquee` exist to be READ — a screen reader announces
+  // them and nothing is meant to happen when one is clicked. Clicking twice and seeing nothing is
+  // therefore correct behaviour, and reporting it as `dead-control` accuses a working app.
+  //
+  // Found by driving a real app: the demo reported `dead-control — alert "Invalid email or
+  // password"`, which is a login form correctly telling somebody their password was wrong. That is
+  // the most expensive kind of false positive there is — the strongest claim the crawler makes,
+  // about an app that was working, and on the path a new user meets first.
+  //
+  // `alertdialog` is deliberately NOT here: it is interactive, and a word boundary keeps it out.
+  return /\b(textbox|searchbox|combobox|spinbutton|alert|status|log|timer|marquee)\b/.test(desc);
+}

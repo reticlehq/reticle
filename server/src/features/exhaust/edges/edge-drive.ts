@@ -15,14 +15,25 @@
 import {
   EdgeAction,
   EdgeInteraction,
+  describeStep,
   edgeInputs,
   edgeInteractions,
   looksLikeSubmit,
   type EdgeStep,
   type FieldSpec,
 } from '../edge-cases.js';
-import type { ActResult, ExploredSurface, ExplorePort, Step } from '../explorer.js';
 import {
+  controlsOf,
+  type ActResult,
+  type ExploredSurface,
+  type ExplorePort,
+  type Step,
+} from '../explorer.js';
+import { CrawlAnomalyKind } from '@reticlehq/core';
+import { isActivity } from '../session-fold.js';
+import {
+  Invariant,
+  samePage,
   checkDeterministic,
   checkReloadKeeps,
   checkRepeat,
@@ -137,6 +148,13 @@ function extraWrites(
 
 const shownOutsideFields = (page: PageObservation, value: string): boolean =>
   page.tree.split('\n').some((line) => !FIELD_LINE.test(line) && line.includes(value));
+
+/** Two pages are one view: the same route and the same controls, whatever the fields hold. */
+const sameView = (a: PageObservation, b: PageObservation): boolean => {
+  const keys = (page: PageObservation): string =>
+    [...new Set(controlsOf(page.tree).map((c) => c.key))].sort().join('\n');
+  return a.route === b.route && keys(a) === keys(b);
+};
 
 const sourceOf = (run: EdgeRun): { source?: { file: string; line: number } } =>
   run.source === undefined ? {} : { source: run.source };
@@ -269,7 +287,9 @@ export async function driveEdges(
       const ok = (r.writes[0] ?? []).some(
         (w) => w.status !== undefined && w.status >= OK_MIN && w.status < OK_END,
       );
-      if (saved === undefined || !ok) {
+      // The reload must land on the view that showed the save. An app without deep links lands
+      // elsewhere, which loses the user's place, not the value, and the value cannot be looked for.
+      if (saved === undefined || !ok || !sameView(saved, r.after)) {
         return [];
       }
       return t.surface.fills.flatMap((fill) => {
@@ -316,6 +336,33 @@ export async function driveEdges(
     return (await probe({ surface, control: field }, steps, steps)) !== undefined;
   };
 
+  /**
+   * A control the explorer saw do nothing, pressed again. Dead only when this press shows no
+   * activity either and the whole page, text included, is the same before and after it.
+   */
+  const dead = async (surface: ExploredSurface, control: string): Promise<boolean> => {
+    const steps = [...surface.fills, click(control)];
+    const run = await runEdge(driver, surface.path, steps);
+    if (run === undefined) {
+      return false;
+    }
+    if (!run.events.some(isActivity) && samePage(run.before, run.after)) {
+      report(control, [
+        {
+          kind: CrawlAnomalyKind.DEAD_CONTROL,
+          invariant: Invariant.RESPONDS,
+          detail:
+            'pressed twice, from a fresh page each time, and the app did nothing: no request, no page change, no route change',
+          sequence: steps.map(describeStep),
+          ...(run.source === undefined
+            ? {}
+            : { source: `${run.source.file}:${String(run.source.line)}` }),
+        },
+      ]);
+    }
+    return true;
+  };
+
   /** A cancel on a dialog: the page after it must be the page before the dialog opened. */
   const undo = async (surface: ExploredSurface, cancel: string): Promise<boolean> => {
     const open = surface.path.at(-1);
@@ -350,9 +397,18 @@ export async function driveEdges(
   const add = (control: string, run: () => Promise<boolean>): void => {
     probes.push({ control, run });
   };
+  // Every control that writes gets one probe before any gets a second: a double press first, which
+  // also sends the write once to compare with.
+  for (const t of writers) {
+    add(t.control, () => repeated(t, EdgeInteraction.DOUBLE_ACTIVATION));
+  }
+  for (const surface of surfaces) {
+    for (const control of surface.inert) {
+      add(control, () => dead(surface, control));
+    }
+  }
   for (const t of writers) {
     add(t.control, () => submitTwice(t));
-    add(t.control, () => repeated(t, EdgeInteraction.DOUBLE_ACTIVATION));
   }
   for (const t of writers) {
     add(t.control, () => reloadKeeps(t));

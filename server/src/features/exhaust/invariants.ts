@@ -26,6 +26,7 @@ export const Invariant = {
   DETERMINISTIC: 'two identical drives give the same result',
   FAILURE_HANDLED: 'no success over a failed write',
   NO_FAULT: 'an edge case gets an answer, not an error',
+  RESPONDS: 'a control that is pressed does something',
 } as const;
 export type Invariant = (typeof Invariant)[keyof typeof Invariant];
 
@@ -78,6 +79,10 @@ function visibleLines(page: PageObservation): string[] {
 
 const same = (a: readonly string[], b: readonly string[]): boolean =>
   a.length === b.length && a.every((line, i) => line === b[i]);
+
+/** The two pages show the same thing: refs and focus aside, every line and the route are equal. */
+export const samePage = (a: PageObservation, b: PageObservation): boolean =>
+  same(visibleLines(a), visibleLines(b));
 
 /** The lines one page has and the other does not, quoted for a finding. */
 function difference(before: readonly string[], after: readonly string[]): string {

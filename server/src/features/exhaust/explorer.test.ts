@@ -516,3 +516,103 @@ describe('explore — paths', () => {
     ]);
   });
 });
+
+/*
+ * Planted-bug runs on bench-app. Every page repeats the same nav buttons, and the explorer tried
+ * them first on every state, so the budget ran out before a page's own controls (Compose's
+ * Generate) were pressed. One press of Sign in sent POST /api/login twice, and nothing said so.
+ */
+describe('explore — what one press shows', () => {
+  const navApp = (opts: { duplicate?: boolean; retryAfter401?: boolean; dead?: boolean } = {}) => {
+    let page = 'home';
+    let refs = new Map<string, string>();
+    let seq = 0;
+    const pressed: string[] = [];
+    const controls: Record<string, string[]> = {
+      home: ['button "Home"', 'button "Compose"', 'button "Help"'],
+      compose: ['button "Home"', 'button "Compose"', 'button "Help"', 'button "Generate"'],
+    };
+    const port: ExplorePort = {
+      reset: () => {
+        page = 'home';
+        return Promise.resolve(true);
+      },
+      look: () => {
+        refs = new Map();
+        const tree = (controls[page] ?? [])
+          .map((c) => {
+            seq += 1;
+            refs.set(`e${String(seq)}`, c);
+            return `- ${c} (ref=e${String(seq)})`;
+          })
+          .join('\n');
+        return Promise.resolve({ tree, route: `/${page}` });
+      },
+      act: (ref) => {
+        const label = refs.get(ref) ?? '';
+        pressed.push(label);
+        const events: ReticleEvent[] = [];
+        const post = (status: number): void => {
+          events.push({
+            type: 'net.request',
+            t: 1,
+            data: { method: 'POST', url: 'http://h/api/generate', status },
+          } as unknown as ReticleEvent);
+        };
+        if ('button "Compose"' === label) {
+          page = 'compose';
+          events.push({ type: 'route.change', t: 1, data: {} } as unknown as ReticleEvent);
+        } else if ('button "Home"' === label) {
+          page = 'home';
+          events.push({ type: 'route.change', t: 1, data: {} } as unknown as ReticleEvent);
+        } else if ('button "Generate"' === label) {
+          post(true === opts.retryAfter401 ? 401 : 200);
+          if (true === opts.duplicate || true === opts.retryAfter401) {
+            post(200);
+          }
+        } else if ('button "Help"' === label && true !== opts.dead) {
+          events.push({ type: 'dom.added', t: 1, data: {} } as unknown as ReticleEvent);
+        }
+        return Promise.resolve({ ok: true, events });
+      },
+    };
+    return { port, pressed };
+  };
+
+  it('tries the controls no state has tried before the ones every page repeats', async () => {
+    const { port, pressed } = navApp();
+    await explore(port, { maxActions: 50, fillValue: () => 'x' });
+    // The home state's three, then the replay to Compose, then Generate before the repeated nav.
+    expect(pressed.slice(0, 5)).toEqual([
+      'button "Home"',
+      'button "Compose"',
+      'button "Help"',
+      'button "Compose"',
+      'button "Generate"',
+    ]);
+  });
+
+  it('reports one press that sends the same write twice', async () => {
+    const { port } = navApp({ duplicate: true });
+    const report = await explore(port, { maxActions: 50, fillValue: () => 'x' });
+    expect(report.anomalies).toContainEqual(
+      expect.objectContaining({ kind: 'duplicate-request', control: 'button "Generate"' }),
+    );
+  });
+
+  it('does not report a write sent again after the server refused the credentials', async () => {
+    const { port } = navApp({ retryAfter401: true });
+    const report = await explore(port, { maxActions: 50, fillValue: () => 'x' });
+    expect(report.anomalies.map((a) => a.kind)).not.toContain('duplicate-request');
+  });
+
+  it('records a press that changed nothing, for the edge drive to confirm', async () => {
+    const dead = await explore(navApp({ dead: true }).port, {
+      maxActions: 50,
+      fillValue: () => 'x',
+    });
+    expect(dead.surfaces[0]?.inert).toEqual(['button "Help"']);
+    const alive = await explore(navApp().port, { maxActions: 50, fillValue: () => 'x' });
+    expect(alive.surfaces[0]?.inert).toEqual([]);
+  });
+});

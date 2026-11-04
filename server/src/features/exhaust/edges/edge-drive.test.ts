@@ -17,6 +17,8 @@ interface Options {
   forgetsOnReload?: boolean;
   /** Cancel closes the dialog and leaves a line behind. */
   cancelLeavesTrace?: boolean;
+  /** A reload lands on the form again, not on the page that showed the save (no deep links). */
+  reloadLosesPlace?: boolean;
 }
 
 function notesApp(opts: Options = {}) {
@@ -81,7 +83,7 @@ function notesApp(opts: Options = {}) {
       const keep = page;
       const was = saved;
       reset();
-      page = keep;
+      page = true === opts.reloadLosesPlace ? 'new' : keep;
       saved = true === opts.forgetsOnReload ? '' : was;
       return Promise.resolve(true);
     },
@@ -93,6 +95,8 @@ function notesApp(opts: Options = {}) {
       }
       if ('fill' === action) {
         title = value ?? '';
+      } else if ('button "New note"' === label) {
+        page = 'new';
       } else if ('button "Help"' === label) {
         help = true;
       } else if ('button "Cancel"' === label) {
@@ -195,6 +199,16 @@ describe('driveEdges', () => {
     expect(lost.kinds).toContain(BehaviourFindingKind.LOST_AFTER_RELOAD);
     const kept = await drive({ guarded: true });
     expect(kept.kinds).not.toContain(BehaviourFindingKind.LOST_AFTER_RELOAD);
+  });
+
+  /*
+   * Found on bench-app's clean build: the app has no deep links, so a reload of the saved list lands
+   * on another view. The saved value is still on the server; the reload only lost the user's place,
+   * and the page it reached cannot show the value, so nothing can be judged there.
+   */
+  it('does not judge a reload that lands on another view', async () => {
+    const elsewhere = await drive({ guarded: true, forgetsOnReload: true, reloadLosesPlace: true });
+    expect(elsewhere.kinds).not.toContain(BehaviourFindingKind.LOST_AFTER_RELOAD);
   });
 
   it('reports a Cancel that does not restore the page, and passes one that does', async () => {
@@ -313,5 +327,76 @@ describe('driveEdges on a form whose fields are pre-filled', () => {
     expect(edges.probed).toEqual(expect.arrayContaining(['textbox "Email"', 'textbox "Password"']));
     expect(sent).toContainEqual({ email: '', password: 'secret' });
     expect(sent).toContainEqual({ email: 'admin@x.dev', password: '   ' });
+  });
+});
+
+/* Two writes on one page, and a Help button that may do nothing. */
+function twoWrites(opts: { helpWakesLate?: boolean } = {}) {
+  let refs = new Map<string, string>();
+  let seq = 0;
+  // The explorer pressed Help once already; the edge drive's press is the second.
+  let helpPresses = 1;
+  const port: ExplorePort = {
+    reset: () => Promise.resolve(true),
+    look: () => {
+      refs = new Map();
+      const tree = ['button "Save draft"', 'button "Save copy"', 'button "Help"']
+        .map((c) => {
+          seq += 1;
+          refs.set(`e${String(seq)}`, c);
+          return `- ${c} (ref=e${String(seq)})`;
+        })
+        .join('\n');
+      return Promise.resolve({ tree, route: '/' });
+    },
+    act: (ref) => {
+      const label = refs.get(ref) ?? '';
+      const events: ReticleEvent[] = [];
+      if (label.startsWith('button "Save')) {
+        events.push({
+          type: 'net.request',
+          t: 1,
+          data: { method: 'POST', url: `http://h/api/${label.length}`, status: 200 },
+        } as unknown as ReticleEvent);
+      } else if ('button "Help"' === label) {
+        helpPresses += 1;
+        if (true === opts.helpWakesLate && helpPresses > 1) {
+          events.push({ type: 'dom.added', t: 1, data: {} } as unknown as ReticleEvent);
+        }
+      }
+      return Promise.resolve({ ok: true, events });
+    },
+  };
+  const surface = {
+    path: [],
+    fills: [],
+    fields: [],
+    attrs: {},
+    order: ['button "Save draft"', 'button "Save copy"', 'button "Help"'],
+    requests: ['button "Save draft"', 'button "Save copy"'],
+    writes: ['button "Save draft"', 'button "Save copy"'],
+    inert: ['button "Help"'],
+  };
+  return { port, surface };
+}
+
+describe('driveEdges — every write first, and dead controls confirmed', () => {
+  it('probes every control that writes once before any of them twice', async () => {
+    const { port, surface } = twoWrites();
+    const edges = await driveEdges(port, [surface], { maxActions: 6, now: () => 0 });
+    expect(edges.probed).toEqual(['button "Save draft"', 'button "Save copy"']);
+  });
+
+  it('reports a control that did nothing on a second press too', async () => {
+    const { port, surface } = twoWrites();
+    const edges = await driveEdges(port, [surface], { maxActions: 200, now: () => 0 });
+    const dead = edges.found.find((f) => 'dead-control' === f.finding.kind);
+    expect(dead?.control).toBe('button "Help"');
+  });
+
+  it('does not report one that answered the second time', async () => {
+    const { port, surface } = twoWrites({ helpWakesLate: true });
+    const edges = await driveEdges(port, [surface], { maxActions: 200, now: () => 0 });
+    expect(edges.found.map((f) => f.finding.kind)).not.toContain('dead-control');
   });
 });

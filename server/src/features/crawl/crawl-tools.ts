@@ -5,7 +5,7 @@ import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
 import { stepCountSchema, timeoutMsSchema } from '@/surface/tools/args/numeric-bounds.js';
 import { crawl, type CrawlOptions } from './crawl.js';
-import { EXHAUST_DEFAULT_ACTIONS, runExhaustive } from './crawl-exhaustive.js';
+import { runExhaustive } from './crawl-exhaustive.js';
 import { heuristicFillValue } from '@/features/harness/fill-values.js';
 import { secretEnvKey } from '@/language/flows/flows.js';
 import type { MockRule } from '@/portal/input/network-mock.js';
@@ -161,7 +161,7 @@ export const CRAWL_TOOLS: ToolDef[] = [
           sessions: deps.sessions,
           session,
           startUrl: session.url,
-          maxActions: maxSteps ?? EXHAUST_DEFAULT_ACTIONS,
+          ...(maxSteps === undefined ? {} : { maxActions: maxSteps }),
           settleMs: settleMs ?? CRAWL_DEFAULTS.SETTLE_MS,
           fillValue: (label, pageUrl) => {
             const name = /"([^"]*)"/.exec(label)?.[1] ?? label;

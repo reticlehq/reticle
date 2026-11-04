@@ -33,7 +33,14 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
-import { controlKey, failedRequests, isConsoleError, writeKeyOf } from './session-fold.js';
+import {
+  controlKey,
+  failedRequests,
+  isActivity,
+  isConsoleError,
+  legitimatelyInert,
+  writeKeyOf,
+} from './session-fold.js';
 
 /** What one action gives back. */
 export interface ActResult {
@@ -130,6 +137,11 @@ export interface ExploredSurface {
   requests: string[];
   /** The controls whose click sent a write. */
   writes: string[];
+  /**
+   * The controls whose click showed no activity at all: no request, no DOM change, no route change,
+   * no signal. One sample; the edge drive presses each again before it calls one dead.
+   */
+  inert: string[];
 }
 
 export interface ExploreReport {
@@ -177,6 +189,8 @@ interface Control {
   key: string;
   /** The field already holds a value — pre-filled credentials, a default. Typing over it breaks it. */
   holdsValue: boolean;
+  /** The snapshot line, with the states (`[disabled]`) the key leaves out. */
+  desc: string;
 }
 
 /** A route without its query: `?__reticle_opened=1` and friends are not a different page. */
@@ -189,6 +203,7 @@ export function controlsOf(tree: string): Control[] {
       ref: item.ref,
       key: controlKey(item.desc),
       holdsValue: /\[value="[^"]+"/.test(item.desc),
+      desc: item.desc,
     }));
 }
 
@@ -292,10 +307,18 @@ export async function explore(port: ExplorePort, opts: ExploreOptions): Promise<
       order: untried,
       requests: [],
       writes: [],
+      inert: [],
     };
     surfaces.push(surface);
+    // Controls no state has tried yet go first. Every page of an app repeats its nav, and trying the
+    // nav first on every state spent the budget before a page's own controls were pressed. Each
+    // control of the state is still tried; only the order changes.
+    const tryOrder = [
+      ...untried.filter((c) => !touched.has(c)),
+      ...untried.filter((c) => touched.has(c)),
+    ];
 
-    for (const [index, target] of untried.entries()) {
+    for (const [index, target] of tryOrder.entries()) {
       if (spent()) {
         break;
       }
@@ -324,6 +347,16 @@ export async function explore(port: ExplorePort, opts: ExploreOptions): Promise<
         surface.writes.push(target);
       }
       noteAnomalies(result.events, target, anomalies);
+      noteDuplicateWrites(result.events, target, anomalies);
+      if (
+        result.ok &&
+        next === key &&
+        pathOf(after.route) === where &&
+        !result.events.some(isActivity) &&
+        !legitimatelyInert(control.desc)
+      ) {
+        surface.inert.push(target);
+      }
       if (!explored.has(next) && !queued.has(next)) {
         queued.add(next);
         queue.push({ path, key: next });
@@ -401,6 +434,44 @@ function noteWrites(
       successState,
       ...(failed ? { failed } : {}),
     });
+  }
+}
+
+/** HTTP answers that refuse the credentials. A client sends the write again after one by design. */
+const AUTH_REFUSED: ReadonlySet<number> = new Set([401, 403]);
+const DUPLICATE_REQUEST = 'duplicate-request';
+
+/**
+ * One action that sent the same write two or more times, whatever the server answered. A second
+ * copy sent after the server refused the credentials of the first is the client's retry, not a
+ * duplicate: the first did no work.
+ */
+export function noteDuplicateWrites(
+  events: readonly ReticleEvent[],
+  control: string,
+  anomalies: ExploreReport['anomalies'],
+): void {
+  const sent = new Map<string, number>();
+  const retried = new Set<string>();
+  for (const e of events) {
+    const key = writeKeyOf(e);
+    if (key === undefined) {
+      continue;
+    }
+    if (AUTH_REFUSED.has(asNumber(e.data['status']) ?? 0)) {
+      retried.add(key);
+      continue;
+    }
+    sent.set(key, (sent.get(key) ?? 0) + 1);
+  }
+  for (const [key, count] of sent) {
+    if (count > 1 && !retried.has(key)) {
+      anomalies.push({
+        kind: DUPLICATE_REQUEST,
+        control,
+        detail: `one press sent ${key} ${String(count)} times`,
+      });
+    }
   }
 }
 
