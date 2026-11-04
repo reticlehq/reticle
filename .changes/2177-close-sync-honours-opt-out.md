@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — `reticle drive` without a daemon, and a `verify` that starts its own server, sent your work to the platform when they closed, even with background sync switched off.** Their last sync cycle did not read `RETICLE_BACKGROUND_SYNC=0` or `"backgroundSync": false`, and it also sent every other linked project on the machine. That cycle now reads both switches, for its own project and for every other one. A key in the environment still sends on close, as in CI. `reticle sync` is still the way to send on purpose. Closes [#2177](https://github.com/reticlehq/reticle/issues/2177).

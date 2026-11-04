@@ -248,6 +248,44 @@ describe('where background sync sends', () => {
   });
 });
 
+describe('the sync that start() runs on close', () => {
+  // `reticle drive` without a daemon, a self-booting verify and the e2e harness attach this sync.
+  // It sent every linked project on the machine although the person had switched it off.
+  it('sends nothing for any linked project when background sync is switched off', async () => {
+    vi.useRealTimers();
+    const home = realpathSync(mkdtempSync(join(tmpdir(), 'reticle-bg-home-')));
+    const other = realpathSync(mkdtempSync(join(tmpdir(), 'reticle-bg-other-')));
+    const server = platform();
+    writeRun('r1', 'a request');
+    for (const dir of [root, other]) {
+      writeFileSync(
+        join(dir, 'cloud.json'),
+        JSON.stringify({ projectId: 'demo', url: URL_LINKED }),
+      );
+    }
+    mkdirSync(join(home, '.reticle'), { recursive: true });
+    writeFileSync(
+      join(home, '.reticle', 'credentials.json'),
+      JSON.stringify({ [`${URL_LINKED}::demo`]: 'rk_local' }),
+    );
+    const sync = attachCloudSync({
+      fs: createNodeFileSystem(),
+      reticleRoot: root,
+      homeDir: home,
+      env: { RETICLE_BACKGROUND_SYNC: '0' },
+      otherRoots: () => [other],
+      clientVersion: '3.8.0',
+      // No `signedIn`, as start() calls it.
+      request: server.request,
+      intervalMs: INTERVAL,
+    });
+    await sync.syncNow();
+    sync.stop();
+    expect(server.calls, 'switched off sends nothing, for this project or another').toEqual([]);
+    expect(sync.background().state).toBe(BackgroundSyncState.OPTED_OUT);
+  });
+});
+
 describe('the gate', () => {
   const gate = (overrides: Partial<Parameters<typeof backgroundSyncGate>[0]> = {}) =>
     backgroundSyncGate({

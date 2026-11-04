@@ -42,15 +42,17 @@ export interface BackgroundSyncGate {
 const OFF_VALUES: ReadonlySet<string> = new Set(['0', 'false', 'off', 'no']);
 const BACKGROUND_SYNC_SETTING = 'backgroundSync';
 
-/** May the daemon send this root's work now? Reads the disk, never the network. */
-export function backgroundSyncGate(input: {
-  reticleRoot: string;
-  cloud: ProjectCloud;
-  env: NodeJS.ProcessEnv;
-  /** The signed-in session's token for that address, or undefined. */
-  signedIn: (url: string) => string | undefined;
-}): BackgroundSyncGate {
-  const { reticleRoot, cloud, env, signedIn } = input;
+/**
+ * The switch a person set to stop sending without being asked, or undefined when nobody set it.
+ *
+ * Every send that nobody asked for reads it, the daemon's and the one `start()` runs on close. The
+ * close cycle read nothing, so a person who switched it off still sent this project and every
+ * other linked one when `reticle drive` or a self-booting `verify` closed.
+ */
+export function backgroundSyncOptOut(
+  reticleRoot: string,
+  env: NodeJS.ProcessEnv,
+): BackgroundSyncGate | undefined {
   if (OFF_VALUES.has((env[ReticleEnv.BACKGROUND_SYNC] ?? '').toLowerCase())) {
     return {
       state: BackgroundSyncState.OPTED_OUT,
@@ -62,6 +64,32 @@ export function backgroundSyncGate(input: {
       state: BackgroundSyncState.OPTED_OUT,
       why: `off in this project ("${BACKGROUND_SYNC_SETTING}": false in .reticle.json)`,
     };
+  }
+  return undefined;
+}
+
+/**
+ * The gate of the one cycle `start()` sends on close, with nobody signed in. CI's key in the
+ * environment still sends there, as the docs promise. A switch that a person set still stops it.
+ */
+export function closeCycleGate(reticleRoot: string, env: NodeJS.ProcessEnv): BackgroundSyncGate {
+  return (
+    backgroundSyncOptOut(reticleRoot, env) ?? { state: BackgroundSyncState.ON, why: 'on close' }
+  );
+}
+
+/** May the daemon send this root's work now? Reads the disk, never the network. */
+export function backgroundSyncGate(input: {
+  reticleRoot: string;
+  cloud: ProjectCloud;
+  env: NodeJS.ProcessEnv;
+  /** The signed-in session's token for that address, or undefined. */
+  signedIn: (url: string) => string | undefined;
+}): BackgroundSyncGate {
+  const { reticleRoot, cloud, env, signedIn } = input;
+  const optedOut = backgroundSyncOptOut(reticleRoot, env);
+  if (optedOut !== undefined) {
+    return optedOut;
   }
   // `link` is set only from the project's own link file; an environment key leaves it unset.
   if (cloud.link === undefined) {
