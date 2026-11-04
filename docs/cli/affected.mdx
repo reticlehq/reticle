@@ -1,14 +1,16 @@
 ---
-title: reticle affected
+title: reticle gate --list
 description: List which saved flows must re-verify for a set of changed files.
 icon: code-branch
 ---
 
-`reticle affected` answers one question: given these changed files, which saved flows cover them? It is the foundation the [gate](/cli/gate) is built on, and it costs your agent nothing per turn because it runs in the environment.
+`reticle gate --list` answers one question: given these changed files, which saved flows cover them? The [gate](/cli/gate) checks the same set. `--list` only names it and checks nothing. It costs your agent nothing per turn because it runs in the environment.
 
 ```bash
-npx @reticlehq/server affected [--since <ref>] [file...]
+npx @reticlehq/server gate --list [--since <ref>] [file...]
 ```
+
+`reticle affected` is the old name. It still works for one release and prints one line naming `gate --list`.
 
 ## Arguments and flags
 
@@ -17,7 +19,7 @@ npx @reticlehq/server affected [--since <ref>] [file...]
 | `file...` | strings, positional | none | Explicit changed files |
 | `--since <ref>` | string | `HEAD` when no files are given | Also include files git reports as changed since this ref |
 
-With nothing after it, `reticle affected` compares the working tree with `HEAD`.
+With no files, `reticle gate --list` compares the working tree with `HEAD`.
 
 ## What it prints
 
@@ -43,11 +45,11 @@ The real run named 47 flows in each list. The CLI prints this as a single line o
 
 ## Exit codes
 
-Always `0`. A load error is logged as `reticle_affected_failed`, not thrown. Use [`reticle gate`](/cli/gate) when you want a non-zero exit.
+Always `0`. A load error is logged as `reticle_affected_failed`, not thrown. Use [`reticle gate`](/cli/gate) without `--list` when you want a non-zero exit.
 
 ## Worked example
 
 ```bash
-npx @reticlehq/server affected --since origin/main
-npx @reticlehq/server affected src/components/Login.tsx
+npx @reticlehq/server gate --list --since origin/main
+npx @reticlehq/server gate --list src/components/Login.tsx
 ```

@@ -67,10 +67,10 @@ Put the key in the MCP server's own `env` block instead, then restart the editor
 ## Confirm it worked
 
 ```bash
-npx @reticlehq/server license
+npx @reticlehq/server status --json
 ```
 
-You do not need `NODE_ENV` set, a project, a dev server, or a running app. This reads the key and nothing else.
+Read `license.status` in the output. You do not need `NODE_ENV` set, a project, a dev server, or a running app. The license check reads the key and nothing else.
 
 | `status` | What it means | What to do |
 | --- | --- | --- |
@@ -142,4 +142,4 @@ export RETICLE_TELEMETRY=0
 
 [hey@reticle.sh](mailto:hey@reticle.sh) for activation problems, renewals and re-issues.
 
-Include the output of `npx @reticlehq/server license`. It carries your license id and no secrets, and it usually tells us the answer immediately.
+Include the output of `npx @reticlehq/server status --json`. It carries your license id and no secrets, and it usually tells us the answer immediately.

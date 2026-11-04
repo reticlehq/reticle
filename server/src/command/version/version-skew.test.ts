@@ -54,7 +54,7 @@ describe('describeSkew — the contract decides, not the version', () => {
   it('at the same version, names the restart and the reload, never installing that version again', () => {
     const msg = describeSkew(page({ contract: 'bbbb2222' }), SELF) ?? '';
     expect(msg).not.toMatch(/@2\.4\.1/);
-    expect(msg).toMatch(/reticle restart/);
+    expect(msg).toMatch(/reticle serve --restart/);
     expect(msg).toMatch(/reload/);
   });
 

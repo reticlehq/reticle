@@ -122,9 +122,10 @@ Do not weaken or skip an assertion to make the run pass — that is a finding, n
 ## If the user handed you a license key
 
 Append \`RETICLE_LICENSE_KEY=<key>\` to the project's \`.env\` (create it if absent), make sure \`.env\`
-is in \`.gitignore\`, and confirm with \`npx @reticlehq/server license\`. The CLI folds a project-local
-\`.env\` in on every invocation, so nothing else changes. Never echo the key back, and never put it in
-a commit, a comment, or a feedback report.
+is in \`.gitignore\`, and confirm that \`npx @reticlehq/server status --json\` shows
+\`license.status\` \`active\`. The CLI folds a project-local \`.env\` in on every invocation, so
+nothing else changes. Never echo the key back, and never put it in a commit, a comment, or a feedback
+report.
 
 ## Two things afterwards
 

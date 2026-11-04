@@ -104,7 +104,15 @@ function agentStatusFields(): { agents?: AgentStatus[] } {
     : { agents: agentStatuses(rows, connectedAgentClients(reticleStateHome())) };
 }
 
-export async function handleStatus(port: number, json = false): Promise<void> {
+/**
+ * `license` is what `reticle license` printed. The caller reads it, so this directory does not
+ * reach into the license feature.
+ */
+export async function handleStatus(
+  port: number,
+  json = false,
+  license?: Record<string, unknown>,
+): Promise<void> {
   // A broken session file must not cost the reader the rest of the status.
   const account = await accountStatusFields().catch(() => ({}));
   // At a workspace root that is no app of its own, each app and its link: "not linked" named none.
@@ -115,7 +123,7 @@ export async function handleStatus(port: number, json = false): Promise<void> {
     });
   }
   const report = (fields: Record<string, unknown>): void =>
-    reportStatus({ ...fields, ...account }, json);
+    reportStatus({ ...fields, ...account, ...(license === undefined ? {} : { license }) }, json);
   const pid = readPid(port);
   // Durable, so it survives the daemon idling out — which is the state `status` is most often run in.
   const projectId = readProjectId(process.cwd());

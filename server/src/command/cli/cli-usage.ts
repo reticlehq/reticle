@@ -122,14 +122,16 @@ const COMMANDS: readonly CommandDoc[] = [
   },
   {
     name: 'gate',
-    synopsis: 'gate [--since <ref>] [--accept-coverage] [--hook] [file...]',
+    synopsis: 'gate [--list] [--since <ref>] [--accept-coverage] [--hook] [file...]',
     summary: 'Fail unless passing checks cover the flows your changes touch',
     group: HelpGroup.CHECK,
+    detail: '--list names the saved flows your changes touch, and checks nothing.',
   },
   {
     name: 'status',
     synopsis: 'status [--json] [--port N]',
     summary: 'Is Reticle running, is your app connected, are you signed in',
+    detail: 'Shows the enterprise license when a key is set. --json always carries it.',
     group: HelpGroup.MACHINE,
   },
   {
@@ -158,16 +160,11 @@ const COMMANDS: readonly CommandDoc[] = [
       'proxy, and refuses a listener that is not Reticle.',
   },
   {
-    name: 'restart',
-    synopsis: 'restart [--force] [--port N]',
-    summary: 'Stop Reticle, then start it and wait until it is listening',
-    group: HelpGroup.MACHINE,
-  },
-  {
     name: 'update',
-    synopsis: 'update',
+    synopsis: 'update [--rollback]',
     summary: 'Install the latest version and restart',
     group: HelpGroup.MACHINE,
+    detail: '--rollback restores the previous version and restarts.',
   },
   {
     name: 'logout',
@@ -197,7 +194,7 @@ const COMMANDS: readonly CommandDoc[] = [
     summary: 'Send local runs to the dashboard and collect decisions',
     group: HelpGroup.MORE,
     detail:
-      '`reticle push` is the same command.\n\n  --watch          keep sending as runs are written\n' +
+      '  --watch          keep sending as runs are written\n' +
       '  --move-history   also send runs, flows and records made under the previous link',
   },
   {
@@ -218,12 +215,6 @@ const COMMANDS: readonly CommandDoc[] = [
     synopsis:
       'config [--runs on|off] [--memory on|off] [--flows on|off] [--verify local|server] [--harness on|off]',
     summary: 'What this project sends to the dashboard',
-    group: HelpGroup.MORE,
-  },
-  {
-    name: 'affected',
-    synopsis: 'affected [--since <ref>] [file...]',
-    summary: 'Which saved flows must re-verify for the changed files',
     group: HelpGroup.MORE,
   },
   {
@@ -270,7 +261,7 @@ const COMMANDS: readonly CommandDoc[] = [
       'serve [--port N] [--drive <url>] [--headless] [--headed] [--http] [--http-port N] [--http-token T]',
     summary: 'Start the daemon in the background; returns once it answers',
     group: HelpGroup.MORE,
-    detail: DAEMON_DETAIL,
+    detail: `--restart [--force] stops Reticle, then starts it and waits until it listens.\n\n${DAEMON_DETAIL}`,
   },
   {
     name: 'drive',
@@ -282,18 +273,6 @@ const COMMANDS: readonly CommandDoc[] = [
     name: 'setup',
     synopsis: 'setup mcp',
     summary: 'Register the MCP server with the coding agents on this machine',
-    group: HelpGroup.MORE,
-  },
-  {
-    name: 'license',
-    synopsis: 'license',
-    summary: 'Show the enterprise license status',
-    group: HelpGroup.MORE,
-  },
-  {
-    name: 'rollback',
-    synopsis: 'rollback',
-    summary: 'Restore the previous version and restart',
     group: HelpGroup.MORE,
   },
   {

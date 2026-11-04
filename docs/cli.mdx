@@ -42,17 +42,17 @@ npx @reticlehq/server <command>
 | --- | --- | --- |
 | `reticle verify <url>` | One-shot: drive the URL, verify saved flows or one predicate, exit 0 on pass | [verify](/cli/verify) |
 | `reticle gate [--since <ref>] [--accept-coverage] [--hook]` | Exit non-zero unless passing artifacts cover the affected flows | [gate](/cli/gate) |
+| `reticle gate --list [--since <ref>]` | Which saved flows must re-verify for the changed files | [affected](/cli/affected) |
 
 ### Reticle on this machine
 
 | Command | What it does | Page |
 | --- | --- | --- |
-| `reticle status [--json]` | Is the daemon up, which pages connected, who is signed in, is this repo linked | [status](/cli/status) |
+| `reticle status [--json]` | Is the daemon up, which pages connected, who is signed in, is this repo linked, which license is active | [status](/cli/status) |
 | `reticle doctor` | Find what is wrong with the setup (Chromium, daemon, port, agent link), and what is missing from coverage | [doctor](/cli/doctor) |
 | `reticle open [url]` | Show the app: reuse the connected tab, else open one | [open](/cli/open) |
 | `reticle stop [--force]` | Stop the daemon we started; `--force` frees the port by its listener, never the agent's MCP proxy | [stop](/cli/stop) |
-| `reticle restart` | Free the port, then start a daemon and wait for a real bind | [restart](/cli/restart) |
-| `reticle update` | Install the latest server version and restart | [update](/cli/update) |
+| `reticle update [--rollback]` | Install the latest server version and restart; `--rollback` restores the previous one | [update](/cli/update) |
 
 ### Account
 
@@ -75,14 +75,11 @@ npx @reticlehq/server <command>
 | `reticle config` | Choose what syncs: runs, memory, flows; where verification runs | [cloud](/cli/cloud#reticle-config) |
 | `reticle hook [status\|install\|uninstall]` | The prompt hook: is each prompt captured here, add it, or remove exactly what was added | [prompt capture](/prompt-capture#reticle-hook) |
 | `reticle setup mcp` | Register the MCP server with your coding agents (the installer's registration half) | [setup](/cli/setup) |
-| `reticle serve` | Start the daemon and wait for it to bind | [serve](/cli/serve) |
+| `reticle serve [--restart]` | Start the daemon and wait for it to bind; `--restart` frees the port first | [serve](/cli/serve) |
 | `reticle mcp` | The MCP stdio proxy your agent runs; starts the daemon if needed | [mcp](/cli/mcp) |
 | `reticle drive <url>` | Foreground mode, for debugging | [drive](/cli/drive) |
-| `reticle affected [--since <ref>]` | Which saved flows must re-verify for the changed files | [affected](/cli/affected) |
 | `reticle context --compact [--session <id>]` | Resume after a compaction: what was proved, failed and is still owed | none |
 | `reticle report [--session <id>] [--hook]` | What the latest session claimed, and what held | [report](/cli/report) |
-| `reticle rollback` | Restore the previous server version and restart | [rollback](/cli/rollback) |
-| `reticle license` | Enterprise license status: active, eval or missing | [license](/cli/license) |
 | `reticle version` | Print the version | [version](/cli/version) |
 | `reticle help [all\|<command>]` | Usage: the short list, every command, or one command | [help](/cli/help) |
 
@@ -90,16 +87,27 @@ npx @reticlehq/server <command>
 
 The old names below still work for one release and print one line naming the new one.
 
-| Old | Now |
+| Old                | Now                         |
+| ------------------ | --------------------------- |
+| `reticle affected` | `reticle gate --list`       |
+| `reticle license`  | `reticle status`            |
+| `reticle rollback` | `reticle update --rollback` |
+| `reticle restart`  | `reticle serve --restart`   |
+
+These names were removed. Each prints what to use instead and exits `1`.
+
+| Removed | Use |
 | --- | --- |
 | `reticle kill` | `reticle stop --force` |
-| `reticle login`, `reticle link` | `reticle connect`. `reticle login --email` is gone: sign-in is only in the browser, with Google or GitHub. Without a browser, set `RETICLE_API_KEY` |
+| `reticle login`, `reticle link` | `reticle connect`. Sign-in is only in the browser, with Google or GitHub. Without a browser, set `RETICLE_API_KEY` |
 | `reticle project` | `reticle connect --project <name\|id>` |
 | `reticle whoami` | `reticle status` |
 | `reticle push` | `reticle sync` |
 | `reticle regression`, `share`, `issues`, `memory` | `reticle runs regression`, `runs share`, `runs issues`, `runs memory` |
-
-`hunt`, `watch`, `capsules`, `tutorial` and `identify` were removed. Each prints what to use instead and exits `1`: `reticle affected` or `reticle gate` for `watch`, `reticle init` or `reticle try <url>` for `tutorial`, `reticle feedback` for `identify`. Saved capsules stay in `.reticle/capsules`.
+| `reticle watch` | `reticle gate --list` or `reticle gate` |
+| `reticle tutorial` | `reticle init` or `reticle try <url>` |
+| `reticle identify` | `reticle feedback` |
+| `reticle hunt`, `reticle capsules` | nothing. Saved capsules stay in `.reticle/capsules` |
 
 ## Setup and diagnosis
 
@@ -192,7 +200,7 @@ policy       https://github.com/reticlehq/reticle/blob/main/docs/telemetry.md
 | `reticle serve` | Start the daemon and wait for it to bind. `--drive <url>`, `--headless`, `--headed`, `--http`, `--http-port N`, `--http-token T` |
 | `reticle stop` | Stop the daemon we started, by its recorded pid. `--quiet` |
 | `reticle stop --force` | Free the port by asking who is **listening** on it |
-| `reticle restart` | Free the port, then start a daemon and wait for a real bind. `--force` |
+| `reticle serve --restart` | Free the port, then start a daemon and wait for a real bind. `--force` |
 | `reticle open [url]` | Show the app. Reuse the connected tab, or open one |
 | `reticle drive <url>` | Foreground mode, for debugging |
 | `reticle mcp` | The MCP stdio proxy. Auto-starts the daemon if needed. This is what your agent runs |
@@ -203,7 +211,7 @@ A bare `reticle` with no arguments is not help. In a project that `init` wired, 
   When the Reticle SDK installed in the project is a different **major** version from the CLI you ran,
   the CLI hands the same command to `npx @reticlehq/server@<that version>`, so an unpinned
   `npx @reticlehq/server` never pairs a daemon with an SDK it cannot talk to. `init`, `update`,
-  `rollback`, `setup install`, `version` and `help` always run as typed, and so does a command whose
+  `update --rollback`, `setup install`, `version` and `help` always run as typed, and so does a command whose
   version you pinned yourself (`npx @reticlehq/server@<version> …`). Set `RETICLE_NO_VERSION_MATCH=1` to
   turn it off. Because `--help` runs as typed too, it describes the CLI you ran. When the command it
   describes would run at the project's version instead, the help opens with a line naming that version.
@@ -238,12 +246,12 @@ Options:
 - `--results-json <file>`: also write one verdict per journey as JSON, for CI.
 - `--confirm-dangerous`: let this run press what the replay guard holds as destructive.
 
-### `reticle affected`
+### `reticle gate --list`
 
-Which saved flows must re-verify for a set of changed files.
+Which saved flows must re-verify for a set of changed files. It checks nothing.
 
 ```bash
-npx @reticlehq/server affected --since HEAD~1
+npx @reticlehq/server gate --list --since HEAD~1
 ```
 
 ```json
@@ -290,13 +298,13 @@ Measured exit code: **`1`**, with the flow lists trimmed above. That run genuine
 
 ## Maintenance
 
-| Command            | What it does                                        |
-| ------------------ | --------------------------------------------------- |
-| `reticle update`   | Install the latest server version and restart       |
-| `reticle rollback` | Restore the previous version and restart            |
-| `reticle license`  | Enterprise license status: active, eval, or missing |
-| `reticle version`  | Print the version                                   |
-| `reticle help`     | The short list; `help all` for every command        |
+| Command                     | What it does                                                 |
+| --------------------------- | ------------------------------------------------------------ |
+| `reticle update`            | Install the latest server version and restart                |
+| `reticle update --rollback` | Restore the previous version and restart                     |
+| `reticle status --json`     | Carries `license`: active, eval, missing, expired or invalid |
+| `reticle version`           | Print the version                                            |
+| `reticle help`              | The short list; `help all` for every command                 |
 
 <Tip>
   `rollback` exists because an auto-updating dev tool that cannot go back is a dev tool that can

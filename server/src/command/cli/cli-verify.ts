@@ -687,7 +687,7 @@ export function daemonLacksKeyMessage(port: number): string {
   return (
     `${ReticleEnv.API_KEY} is set in this shell, but the daemon on port ${String(port)} was ` +
     'started without it, and the daemon is what asks the platform to drive. Restart it from this ' +
-    `shell so it inherits the key: npx @reticlehq/server restart --port ${String(port)}`
+    `shell so it inherits the key: npx @reticlehq/server serve --restart --port ${String(port)}`
   );
 }
 

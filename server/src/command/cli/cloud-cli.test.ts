@@ -36,7 +36,7 @@ describe('cloud-cli api() JSON parse guard', () => {
         statusText: 'Unauthorized',
         text: () => Promise.resolve('{"error":{"message":"sign in or API key required"}}'),
       })) as unknown as typeof fetch;
-    const code = await runCloudCommand(['project', 'ls']);
+    const code = await runCloudCommand(['runs', 'regression']);
     expect(code).toBe(1);
     expect(stderrBuf).toContain('refused this API key (401)');
     expect(stderrBuf).not.toContain('sign in or API key required');
@@ -54,7 +54,7 @@ describe('cloud-cli api() JSON parse guard', () => {
         statusText: 'Unauthorized',
         text: () => Promise.resolve(JSON.stringify({ error: { code, message } })),
       })) as unknown as typeof fetch;
-    expect(await runCloudCommand(['project', 'ls'])).toBe(1);
+    expect(await runCloudCommand(['runs', 'regression'])).toBe(1);
     expect(stderrBuf).toContain(message.replace(/\.$/, ''));
     expect(stderrBuf).not.toContain('it was revoked');
   });
@@ -68,7 +68,7 @@ describe('cloud-cli api() JSON parse guard', () => {
         text: () => Promise.resolve(html),
       })) as unknown as typeof fetch;
 
-    const code = await runCloudCommand(['project', 'ls']);
+    const code = await runCloudCommand(['runs', 'regression']);
     expect(code).toBe(1);
     expect(stderrBuf).toContain('expected JSON');
     expect(stderrBuf).toContain('GET');

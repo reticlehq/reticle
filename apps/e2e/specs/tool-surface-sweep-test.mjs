@@ -188,7 +188,6 @@ const ref = q?.elements?.[0]?.ref;
 chk('a ref resolves, so the acting tools have something real to drive', typeof ref === 'string', String(ref));
 if (ref !== undefined) await record('reticle_inspect', { ref });
 for (const name of [
-  'reticle_explore',
   'reticle_domain',
   'reticle_project',
   'reticle_console',
@@ -266,7 +265,7 @@ await waitUntil(async () => 0 < ((await callRaw('reticle_query', { by: 'role', v
 await record('reticle_annotate', { kind: 'intent', text: 'sweep' });
 await record('reticle_record', { action: 'start', recordingName: 'sweep' });
 await record('reticle_record', { action: 'stop', recordingName: 'sweep' });
-await record('reticle_replay', { recordingName: 'sweep', confirmDangerous: true });
+await record('reticle_record', { action: 'replay', recordingName: 'sweep', confirmDangerous: true });
 await record('reticle_flow_save', { flowName: 'sweep-flow' });
 await record('reticle_flow_save_recorded', { flowName: 'sweep-flow-recorded' });
 await record('reticle_flow_replay', { flowName: 'sweep-flow', confirmDangerous: true });

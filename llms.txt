@@ -267,7 +267,7 @@ not lie, with proof attached. In the 88-bug head-to-head that is 1 false green a
 - **Every npm package is Apache-2.0**: the SDK (`browser`, `core`, `react`, `babel-plugin`, `next`,
   `vite-plugin`, `eslint-plugin`) and the server, CLI and MCP (`server`, `init`, `test`). Safe to ship
   inside apps.
-- **License keys are offline.** Keys are signed with Ed25519 and verified locally (`reticle license`);
+- **License keys are offline.** Keys are signed with Ed25519 and verified locally (`reticle status`);
   license checks **never phone home**. The core verification engine stays free.
 
 ## Built to be safe to install

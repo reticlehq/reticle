@@ -322,7 +322,7 @@ export const RECOVERY = {
     'what is wrong with the path). The call itself was fine, so retrying it will not help, and ' +
     'neither will installing Chromium. Ask the human to fix that path, or unset it to use ' +
     "Playwright's own Chromium, in the environment the daemon starts from, then run " +
-    '`npx @reticlehq/server restart`. Meanwhile drive a tab the human already has open, which ' +
+    '`npx @reticlehq/server serve --restart`. Meanwhile drive a tab the human already has open, which ' +
     'reticle_sessions lists. This is configuration, not a Reticle defect: there is nothing to report.',
   /**
    * The two ways a platform answer can refuse a drive. Neither is a fault, and both were telling the

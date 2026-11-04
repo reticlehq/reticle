@@ -16,7 +16,7 @@ import { parseCliArgs } from './cli-parse.js';
  */
 
 /** Every command that is dispatched before the local parser. */
-const CLOUD_COMMANDS = ['login', 'logout', 'whoami', 'link', 'project', 'push', 'runs'];
+const CLOUD_COMMANDS = ['connect', 'logout', 'sync', 'runs', 'config'];
 
 describe('asking any command what it does gets an answer, not an attempt', () => {
   it('the cloud commands really are dispatched separately', () => {

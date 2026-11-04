@@ -1,20 +1,22 @@
 ---
-title: reticle license
-description: Show the enterprise license status resolved from the environment, offline.
+title: License status
+description: Show the enterprise license status resolved from the environment, offline, with reticle status.
 icon: key
 ---
 
-`reticle license` reports whether an enterprise license is active. It resolves entirely from the environment. Nothing leaves the machine.
+[`reticle status`](/cli/status) reports whether an enterprise license is active. It resolves the license entirely from the environment. Nothing leaves the machine.
 
 ```bash
-npx @reticlehq/server license
+npx @reticlehq/server status --json
 ```
 
-No flags.
+The block that `status` prints has a `license` row only when a key is set. `--json` always carries the `license` object.
+
+`reticle license` is the old name. It still works for one release, prints one line naming `status`, and prints the `reticle_license` line below.
 
 ## What it prints
 
-One `reticle_license` JSON line, on stderr. On a checkout with no issuer key configured:
+The `license` object of `status --json`. `reticle license` printed the same fields as one `reticle_license` JSON line on stderr. On a checkout with no issuer key configured:
 
 ```json
 {
@@ -43,7 +45,7 @@ Always `0`.
 ## Worked example
 
 ```bash
-npx @reticlehq/server license 2>&1 | jq -r .status
+npx @reticlehq/server status --json | jq -r .license.status
 ```
 
 <Card title="Enterprise" icon="building" href="/enterprise">

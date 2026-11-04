@@ -75,7 +75,7 @@ export function wedgedDaemonRepair(
   return {
     row: DoctorRow.DAEMON,
     what: 'a Reticle daemon that does not answer',
-    step: `reticle restart --port ${String(port)}`,
+    step: `reticle serve --restart --port ${String(port)}`,
     needed: async () =>
       PortPresence.FOREIGN === (await deps.presence()) && true === deps.holder()?.reticleDaemon,
     apply: async () => {

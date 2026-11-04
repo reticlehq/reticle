@@ -1,0 +1,4 @@
+### Removed
+
+- **`@reticlehq/server` — the command names that 3.7.0 kept for one release are removed.** `kill`, `login`, `link`, `project`, `whoami`, `push`, `regression`, `share`, `issues` and `memory` now print the command that replaces each one and exit `1`. Use `stop --force`, `connect`, `connect --project <name|id>`, `status`, `sync` and `runs regression|share|issues|memory`. Closes [#2191](https://github.com/reticlehq/reticle/issues/2191).
+- **`@reticlehq/server` — two MCP tools left the surface.** `reticle_explore` listed the controls and a console-error count, which `reticle_look { action: "page", mode: "interactive" }` and `reticle_observe { action: "console" }` already give. `reticle_replay` is now `reticle_record { action: "replay" }`. A call to either old name answers with the call that replaces it.

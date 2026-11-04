@@ -39,7 +39,7 @@ reticle_run({ tool: "reticle_verify", sessionId, args: { action: "crawl", maxSte
 
 **`deadControls` and `contradictions` are the two counts that mean a real problem.** Console errors and failed requests are worth reading but a busy app produces both innocently. A dead control is a button wired to nothing; a contradiction is a channel disagreeing with what the screen showed.
 
-It clicks **everything**, so point it at a dev environment. `maxSteps` bounds it and defaults to 25. Want a non-destructive pass first: what is reachable, without touching it? `reticle_run({ tool: "reticle_explore", sessionId })`.
+It clicks **everything**, so point it at a dev environment. `maxSteps` bounds it and defaults to 25. Want a non-destructive pass first: what is reachable, without touching it? `reticle_look({ action: "page", mode: "interactive", sessionId })`.
 
 Do not hand-roll this sweep. The obvious version (click each control, assert no console error) **passes on exactly the bug you are sweeping for**, because a dead button throws nothing.
 

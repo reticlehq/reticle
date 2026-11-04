@@ -1,5 +1,5 @@
 /**
- * The self-update command pair — `reticle update` and `reticle rollback`.
+ * The self-update command pair — `reticle update` and `reticle update --rollback`.
  *
  * Split out of cli.ts, which sits at the 600-line cap: these two are one cohesive unit (swap the
  * installed version, restart) and the file they came from is the CLI's dispatch table, which grows
@@ -184,7 +184,7 @@ export async function handleUpdate(cwd: string = process.cwd()): Promise<void> {
   }
 }
 
-/** `reticle rollback` — restore the previous server version and restart. */
+/** `reticle update --rollback` — restore the previous server version and restart. */
 export async function handleRollback(): Promise<void> {
   try {
     await rollback(); // calls process.exit

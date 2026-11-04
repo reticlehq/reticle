@@ -5,7 +5,6 @@
  * `credentials.json` (per-project api keys from `reticle link`). The non-secret repo binding + sync policy
  * is `<repo>/.reticle/cloud.json`. Auth for a command = `RETICLE_API_KEY` env (agent) OR the login token.
  */
-import { CreatedProjectSchema } from './project-name.js';
 import { keyRefusalAtLastSync } from '@/memory/project/sync-status.js';
 import { ReticleEnv, apiKeyFrom } from '@reticlehq/core';
 import { writeHarnessSwitch } from '@/memory/cloud/harness-switch.js';
@@ -29,14 +28,12 @@ import { RETICLE_CONFIG_BASENAME } from './ports/resolve/cli-port.js';
 import { cmdLink, validateKey } from './cloud-link.js';
 // `link` moved to its own module; the CLI entry still imports it from here.
 export { cmdLink } from './cloud-link.js';
-import { normalizeUrl } from './auth/cloud-session.js';
 import { chooseWorkspace, cmdLogin, cmdLogout } from './cloud-login.js';
 import { cmdTry } from './try-command.js';
 import { CLOUD_COMMANDS } from './cli-parse-grammar.js';
 import {
   api,
   baseUrl,
-  bearer,
   emit,
   err,
   flags,
@@ -57,7 +54,6 @@ import {
   diskSink,
   diskSource,
   policyScreenshots,
-  readCloudIssues,
   readCloudState,
 } from '@/memory/cloud/sync-disk.js';
 import { fetchPlatformRun } from '@/features/harness/platform/platform-drives.js';
@@ -113,51 +109,6 @@ const linkedRoot = (): string => {
 };
 
 /**
- * `reticle whoami` — the one call an agent (or a confused human) makes to know its state: who am I logged
- * in as, and is THIS repo attached to a cloud project (and with what sync policy / verify mode)?
- */
-const cmdWhoami = async (): Promise<number> => {
-  const session = await readSession();
-  const fs = createNodeFileSystem();
-  const cloud = await resolveProjectCloud(fs, linkedRoot(), homedir(), process.env);
-  /*
-   * The sync half of "what is my state". Without it the honest answer to "why does the dashboard
-   * look old?" was to go and read a JSON file — and the two failure modes a person actually hits
-   * (nothing has synced yet, and the last attempt errored) looked identical from out here.
-   */
-  const reticleRoot = linkedRoot();
-  const state = readCloudState(reticleRoot);
-  const decisions = Object.keys(readCloudIssues(reticleRoot).triage).length;
-  emit({
-    loggedInAs: session?.orgName ?? null,
-    sync: {
-      lastPushAt: state.lastPushAt ?? null,
-      lastPullAt: state.lastPullAt ?? null,
-      /** Present only when the machine is behind BECAUSE something failed, which is the useful case. */
-      ...(state.lastError === undefined ? {} : { lastError: state.lastError }),
-      /** Decisions collected from the dashboard and readable locally. */
-      decisionsHeld: decisions,
-      neverSynced: state.lastPullAt === undefined,
-    },
-    repo: {
-      attached: cloud.config !== null,
-      projectId: cloud.projectId,
-      url: cloud.config?.url ?? null,
-      sync: cloud.policy,
-      verify: cloud.verify,
-    },
-  });
-  // Signed out, `link` refuses with "run reticle login first"; `connect` does both in one go.
-  if (null === cloud.config)
-    hint(
-      null === session
-        ? 'this repo is not attached — run `reticle connect` (signs in and links in one step)'
-        : 'this repo is not attached — run `reticle connect`',
-    );
-  return 0;
-};
-
-/**
  * Who is signed in and which project this repo is linked to, for `reticle status`. Local files
  * only: status must answer with no network.
  */
@@ -189,63 +140,6 @@ export const accountStatusFields = async (): Promise<{
       : {}),
     ...(refused === undefined ? {} : { keyRefused: refused }),
   };
-};
-
-/** `reticle project ls` / `reticle project create <name>` — key- or session-authed. */
-const cmdProject = async (argv: readonly string[]): Promise<number> => {
-  const active = await readSession();
-  const url = baseUrl(active);
-  const session = await readSessionFor(url);
-  const token = bearer(session);
-  if (null === token) {
-    // Name BOTH hosts when there is a session for a different one. "Run reticle login" on its own is
-    // baffling to somebody who just did — the useful fact is that they logged in somewhere else.
-    err(
-      null !== active && normalizeUrl(active.url) !== url
-        ? `signed in to ${normalizeUrl(active.url)}, but this command targets ${url} — run \`reticle connect --url ${url}\`, or set RETICLE_API_KEY`
-        : `not signed in to ${url} — run \`reticle connect --url ${url}\`, or set RETICLE_API_KEY`,
-    );
-    return 2;
-  }
-  const sub = argv[0];
-  if ('ls' === sub) {
-    emit(await api('GET', `${url}/v1/projects`, token));
-    return 0;
-  }
-  if ('create' === sub) {
-    const name = argv.slice(1).join(' ').trim();
-    if (0 === name.length) {
-      err('usage: reticle project create <name>');
-      return 2;
-    }
-    const created = CreatedProjectSchema.parse(
-      await api('POST', `${url}/v1/projects`, token, { name }),
-    );
-    emit(created);
-    hint(`next: \`reticle connect --project ${created.projectId}\` to bind this repo`);
-    return 0;
-  }
-  if ('rename' === sub) {
-    const id = argv[1];
-    const name = argv.slice(2).join(' ').trim();
-    if (id === undefined || 0 === name.length) {
-      err('usage: reticle project rename <projectId> <new name>');
-      return 2;
-    }
-    emit(await api('PATCH', `${url}/v1/projects/${encodeURIComponent(id)}`, token, { name }));
-    return 0;
-  }
-  if ('rm' === sub || 'delete' === sub) {
-    const id = argv[1];
-    if (id === undefined) {
-      err('usage: reticle project rm <projectId>');
-      return 2;
-    }
-    emit(await api('DELETE', `${url}/v1/projects/${encodeURIComponent(id)}`, token));
-    return 0;
-  }
-  err('usage: reticle project <ls|create <name>|rename <id> <name>|rm <id>>');
-  return 2;
 };
 
 const NO_INSTALL = '--no-install';
@@ -661,10 +555,6 @@ export const runCloudCommand = async (argv: readonly string[]): Promise<number> 
   const [cmd, ...rest] = argv;
   try {
     switch (cmd) {
-      case 'login':
-        // The linker is passed in rather than imported by cloud-login: login ends by linking and
-        // link needs a session, so the cycle is broken at this one call site.
-        return await cmdLogin(rest, cmdLink);
       case 'connect':
         return await cmdConnect(rest);
       case 'try':
@@ -674,29 +564,12 @@ export const runCloudCommand = async (argv: readonly string[]): Promise<number> 
         });
       case 'logout':
         return await cmdLogout(rest);
-      case 'whoami':
-        return await cmdWhoami();
-      case 'project':
-        return await cmdProject(rest);
-      case 'link':
-        return await cmdLink(rest);
       case 'config':
         return await cmdConfig(rest);
-      // `push` is the name people type, so it takes `--watch` too: the help and the README say so.
-      case 'push':
-        return await cmdSync(rest);
       case 'sync':
         return await cmdSync(rest);
       case 'runs':
         return await cmdRunsFamily(rest);
-      case 'issues':
-        return await cmdIssues(rest);
-      case 'memory':
-        return await cmdMemory(rest);
-      case 'regression':
-        return await cmdRegression();
-      case 'share':
-        return await cmdShare(rest);
       default:
         err(`unknown cloud command '${cmd ?? ''}'`);
         return 2;

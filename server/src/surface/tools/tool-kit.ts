@@ -417,7 +417,6 @@ export const REF_MINTING_TOOLS: ReadonlySet<string> = new Set([
   // The same three merged, on the `merged` surface. Its `state` action mints nothing, and
   // over-inclusion is the safe direction here: the worst case is a refusal naming two tabs.
   ReticleTool.LOOK,
-  ReticleTool.EXPLORE,
   // `crawl` mints refs for the controls it drives and `coverage` for the ones it reports untouched.
   // Both are actions on the merged verify tool now.
   ReticleTool.VERIFY,
@@ -459,11 +458,9 @@ export const SESSION_BOUND_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.ANIMATIONS,
   ReticleTool.BASELINE, // merged save/list/diff — save+diff are live reads
   ReticleTool.RECORD, // merged start/stop — both live
-  ReticleTool.REPLAY,
   ReticleTool.CLOCK,
   ReticleTool.STATE,
   ReticleTool.STORAGE,
-  ReticleTool.EXPLORE,
   ReticleTool.SCROLL_TO,
   ReticleTool.NAVIGATE,
 ]);

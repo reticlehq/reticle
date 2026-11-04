@@ -201,7 +201,7 @@ describe('wedgedDaemonRepair', () => {
       stop: () => Promise.resolve(true),
     });
     expect(await repair.needed()).toBe(false);
-    expect(repair.step).toContain('reticle restart --port 4400');
+    expect(repair.step).toContain('reticle serve --restart --port 4400');
   });
   it('leaves a daemon that answers alone', async () => {
     const repair = wedgedDaemonRepair(4400, {

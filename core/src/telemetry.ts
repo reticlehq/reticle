@@ -111,7 +111,7 @@ export const TelemetryEventKind = {
   PROJECT_PROFILED: 'project_profiled',
   /**
    * A start found a version that differs from the last start on this machine, or `reticle update` /
-   * `reticle rollback` moved it. Carries from → to.
+   * `reticle update --rollback` moved it. Carries from → to.
    */
   VERSION_CHANGED: 'version_changed',
   /** An uncaught exception or unhandled rejection reached the top of the daemon. Crash analytics. */

@@ -10,7 +10,7 @@ icon: circle-stop
 npx @reticlehq/server stop [--port N] [--quiet] [--force]
 ```
 
-`reticle kill` is the old name for `stop --force`. It still works for one release and prints one line naming the new spelling.
+`reticle kill` was removed. It prints that `stop --force` replaces it and exits `1`.
 
 ## Flags
 
@@ -94,7 +94,7 @@ Killed:
 Refused, because the listener is not ours. This one was captured with `python3 -m http.server 4498` holding the port:
 
 ```
-{"t":"2026-08-15T18:43:57.128Z","event":"reticle_kill_refused","port":4498,"reason":"pid 78795 (\"Python\") is listening, and it is not a Reticle daemon ... it never answered /status and it is not the pid Reticle recorded. Killing it would be killing someone else's process. If that is what you meant, `reticle restart --force` stops it and starts Reticle there (`stop --force` never does); or start Reticle on another port.","holder":"Python"}
+{"t":"2026-08-15T18:43:57.128Z","event":"reticle_kill_refused","port":4498,"reason":"pid 78795 (\"Python\") is listening, and it is not a Reticle daemon ... it never answered /status and it is not the pid Reticle recorded. Killing it would be killing someone else's process. If that is what you meant, `reticle serve --restart --force` stops it and starts Reticle there (`stop --force` never does); or start Reticle on another port.","holder":"Python"}
 ```
 
 Nothing to free:
@@ -118,6 +118,6 @@ With `--force`, exit `0` means the port is free and `1` means it is still held: 
 
 ```bash
 npx @reticlehq/server stop --port 4400 --quiet && npx @reticlehq/server serve --port 4400
-npx @reticlehq/server restart --port 4400   # the same thing, honest about each half
+npx @reticlehq/server serve --restart --port 4400   # the same thing, honest about each half
 npx @reticlehq/server stop --force          # the port is held and the pid file says nothing
 ```

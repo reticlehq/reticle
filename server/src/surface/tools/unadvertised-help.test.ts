@@ -39,10 +39,10 @@ describe('a Reticle tool that is real but not advertised', () => {
   });
 
   it('names the switch that actually takes effect, not the retired one', () => {
-    // EXPLORE rather than COVERAGE: coverage is an ACTION on reticle_verify now, so it correctly
+    // SCROLL_TO rather than COVERAGE: coverage is an ACTION on reticle_verify now, so it correctly
     // gets the merge redirect instead of this message — which is better guidance, and would make
     // this assertion pass or fail for a reason that has nothing to do with the env var.
-    const help = unadvertisedToolHelp(ReticleTool.EXPLORE, ADVERTISED, KNOWN) ?? '';
+    const help = unadvertisedToolHelp(ReticleTool.SCROLL_TO, ADVERTISED, KNOWN) ?? '';
     // This asserted RETICLE_TOOL_PROFILE for months, which is RETIRED: resolveToolSurface maps its
     // old values to a surface and everything else — including the 'all' this message told agents to
     // set — to DEFAULT. So the guidance named a variable that could not do what the sentence

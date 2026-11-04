@@ -62,19 +62,21 @@ describe('calling a known tool the default surface does not advertise', () => {
     const { client, close } = await openServer();
     try {
       const advertised = await client.listTools();
-      // The premise, asserted rather than assumed: if EXPLORE ever joins the default surface this
+      // The premise, asserted rather than assumed: if SCROLL_TO ever joins the default surface this
       // test would pass for the wrong reason.
       expect(
         advertised.tools.map((tool) => tool.name),
         'the tool under test must be un-advertised here',
-      ).not.toContain(ReticleTool.EXPLORE);
+      ).not.toContain(ReticleTool.SCROLL_TO);
 
-      const reply = await replyText(client.callTool({ name: ReticleTool.EXPLORE, arguments: {} }));
+      const reply = await replyText(
+        client.callTool({ name: ReticleTool.SCROLL_TO, arguments: {} }),
+      );
 
       expect(reply, 'the SDK’s "not found" is the lie this patch exists to remove').not.toMatch(
         /not found/i,
       );
-      expect(reply).toContain(ReticleTool.EXPLORE);
+      expect(reply).toContain(ReticleTool.SCROLL_TO);
       expect(reply, 'it must name the hatch that works').toContain(ReticleTool.RUN);
     } finally {
       await close();

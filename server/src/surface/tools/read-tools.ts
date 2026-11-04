@@ -170,7 +170,7 @@ export const READ_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          'Identifier for this recording. Pass the same name to reticle_record{action:"stop"} and reticle_replay.',
+          'Identifier for this recording. Pass the same name to reticle_record{action:"stop"} and reticle_record{action:"replay"}.',
         ),
       name: RECORDING_NAME_ALIAS,
       ...sessionIdShape,
