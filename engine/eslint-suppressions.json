@@ -14,11 +14,6 @@
       "count": 14
     }
   },
-  "src/disagreement/contradiction-evidence.ts": {
-    "no-nested-ternary": {
-      "count": 1
-    }
-  },
   "src/disagreement/contradiction-folds.test.ts": {
     "curly": {
       "count": 1

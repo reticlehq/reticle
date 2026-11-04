@@ -1,11 +1,14 @@
 import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
-// Four narrowed rules, in both directions, in a real browser (#2141).
+// Five narrowed rules, in both directions, in a real browser (#2141).
 //
 // #1627 (`write-field-ignored`), #1629 (`action-had-no-effect`) and #2127 (`pagination-not-fetched`)
 // each made a rule report less often. The merges took the merge queue's benchmark as the accuracy
 // measurement, but no benchmark scenario or e2e spec exercised any of the three rules. A change that
 // stopped a rule finding its defect would have passed every gate, and the agent would have read a
 // broken app as verified.
+//
+// #2172 narrowed `signal-contradicted`: a signal sent before a declared failed write is no longer a
+// claim about it. The pair below keeps the claim that follows the failure.
 //
 // For each rule, one `reticle_act_and_wait` must report it and one must not. The control it must
 // report is the defect closest to the shape the PR silenced, because that is where a narrowed rule
@@ -49,6 +52,13 @@ const NET_REQUEST = 'net.request';
 const NET_UNPATCHED = 'net.unpatched';
 const VERIFIED_YES = 'yes';
 const VERIFIED_UNKNOWN = 'unknown';
+const VERIFIED_NO = 'no';
+const SIGNAL_CONTRADICTED = 'signal-contradicted';
+const SIGNAL = 'signal';
+const NET_PENDING = 'net.pending';
+const INVITE = `${API}/invite`;
+const FORM_SUBMIT = 'form:submit';
+const INVITE_SENT = 'invite:sent';
 /** The words the engine's reason uses for a request sent through a `fetch` saved before connect. */
 const SAVED_FETCH_REASON = 'saved before Reticle connected';
 const BUILD_PLUGIN = 'build plugin';
@@ -382,6 +392,42 @@ for (const { tool, run } of tools) {
   const r = await run(OPEN);
   chk('the click is verified yes', VERIFIED_YES === r?.verified, verdictOf(r));
   chk('the click sent its request', 1 === (await toggles(r?.since ?? 0)));
+}
+
+/** The sequence number of the first event of `type` that `match` accepts in the window. */
+const seqOf = async (since, type, match) =>
+  (await events(since)).find((e) => type === e.type && match(e))?.seq;
+const signalSeq = (since, name) => seqOf(since, SIGNAL, (e) => name === e.data?.name);
+const inviteSentSeq = (since) =>
+  seqOf(since, NET_PENDING, (e) => String(e.data?.url ?? '').includes(INVITE));
+const declared409 = { kind: 'net', urlContains: INVITE, method: 'POST', status: 409 };
+
+console.log('\n=== signal-contradicted: a declared 409 after a signal sent before the request ===');
+const early = await act('rule-pairs-invite-early', declared409);
+if (early !== undefined) {
+  chk('the declared 409 is yes', VERIFIED_YES === early.verified, why(early));
+  chk('the early signal is not reported', !kindsOf(early).includes(SIGNAL_CONTRADICTED), why(early));
+  const signalled = await signalSeq(early.since, FORM_SUBMIT);
+  const sentAt = await inviteSentSeq(early.since);
+  chk(
+    'the signal was recorded before the invite was sent, otherwise this proves nothing',
+    signalled !== undefined && sentAt !== undefined && signalled < sentAt,
+    `signal=${String(signalled)} sent=${String(sentAt)}`,
+  );
+}
+
+console.log('\n=== signal-contradicted: a success signal after the declared 409 ===');
+const claimed = await act('rule-pairs-invite-claimed', declared409);
+if (claimed !== undefined) {
+  chk('the claim over the 409 is no', VERIFIED_NO === claimed.verified, why(claimed));
+  chk('the claim is reported', kindsOf(claimed).includes(SIGNAL_CONTRADICTED), why(claimed));
+  const signalled = await signalSeq(claimed.since, INVITE_SENT);
+  const sentAt = await inviteSentSeq(claimed.since);
+  chk(
+    'the signal was recorded after the invite was sent, otherwise this proves nothing',
+    signalled !== undefined && sentAt !== undefined && signalled > sentAt,
+    `signal=${String(signalled)} sent=${String(sentAt)}`,
+  );
 }
 
 await b.close();
