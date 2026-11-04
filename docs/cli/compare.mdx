@@ -1,0 +1,52 @@
+---
+title: reticle compare
+description: Drive two running builds of one app the same way and list each difference in what users see.
+icon: code-compare
+---
+
+`reticle compare` answers one question: does the candidate build show what the reference build shows? Use it to compare main with a pull request preview, or a known-good build with a changed build. The app needs nothing installed: no SDK, no plugin and no `reticle init`. Any URL works.
+
+```bash
+npx @reticlehq/server compare <reference-url> <candidate-url> [--base <url>] [--json]
+```
+
+| Argument | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `<reference-url>` | string | required | The build that is correct, for example main |
+| `<candidate-url>` | string | required | The build to check, for example a pull request preview |
+| `--base <url>` | string | unset | The build before the change. Each difference gets a tag, and the command prints a score |
+| `--json` | boolean | off | Print one JSON object instead of text |
+
+## What it does
+
+The command has one recipe and no other settings.
+
+1. **Plan on the reference, breadth first.** The plan has the start page and every single action on every control. It clicks each button, tab, checkbox and option. It fills each text field with two values chosen by the shape of the field's value (a time, a date, a number, text). It selects each option of each combobox. Each click is also followed by a 4 second wait. After each sequence, the plan goes one level deeper into the controls that appeared. On a page with two or more fields, it fills every field with its own value, then presses each button. The plan holds at most 220 sequences. A control is found by its test id when it has one, else by its role and name, numbered in page order.
+2. **Drive the plan.** Every sequence starts from a fresh load of the URL. The page is read only when it settles: two reads in a row, 400 ms apart, must match (at most 4 reads). A sequence that starts a longer planned sequence is not driven alone; the longer one is read after each step. The reference is driven two times, the candidate one time, and the base one time. Each run is a new browser tab that the daemon leases.
+3. **Compare what a person sees.** Names, text, values, and the checked, selected, disabled, expanded and pressed states, in page order. Case and spacing are folded, and elapsed times under one second are rounded to whole seconds. A line that differs between the two reference runs (a clock, a random id) is noise and is ignored. A step that the candidate cannot do and the reference could is a difference.
+
+The command presses every button it finds. Point it at builds whose data you can change, not at a production database.
+
+## What it prints
+
+The first line is the verdict: `SAME`, `DIFFERENT` or `INVALID`. Then the counts, the time for each build in seconds, and the first 5 differences. Each difference shows the steps that reproduce it, then `-` for the lines only the reference shows and `+` for the lines only the candidate shows. `--json` gives every difference.
+
+With `--base`, each difference gets a tag:
+
+| Tag             | Meaning                                                                     |
+| --------------- | --------------------------------------------------------------------------- |
+| `regression`    | The base and the reference show the same page, and the candidate changed it |
+| `target-missed` | The reference changed the page, and the candidate still shows the base page |
+| `changed`       | The candidate differs from both                                             |
+
+The score is `targets matched / targets x (1 - kept sequences changed / kept)`. A target is a sequence where the reference changed the base page. A kept sequence is one where it did not.
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Same: every compared sequence shows the same page |
+| `1` | Different |
+| `2` | Invalid: the browser session was lost, nothing could be compared, or the daemon or a build could not be reached. Run it again |
+
+The command uses the daemon on `--port` (or `RETICLE_PORT`), and starts one when there is none.

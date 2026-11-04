@@ -63,7 +63,8 @@ const ID_LENGTH = 12;
 const HASH = 'sha256';
 const HEX = 'hex';
 
-const idOf = (content: unknown): string =>
+/** A short stable id for a difference: the hash of what it holds. */
+export const differenceId = (content: unknown): string =>
   createHash(HASH).update(JSON.stringify(content)).digest(HEX).slice(0, ID_LENGTH);
 
 const keyOf = (r: { journey: number; step: number }): string =>
@@ -129,14 +130,18 @@ export function lineDiff(
  * reference runs is noise, and so is the candidate line in its place: a clock reads 10:01, 10:02 and
  * 10:03 on three runs, and none of the three is a change to the build.
  *
- * ponytail: "in its place" is by count inside the hunk, so a real change next to a clock in the same
- * hunk can be ignored with it. Align by position inside the hunk if that is seen in practice.
+ * A noise line the candidate shows in its place counts first, so a real change next to a counter
+ * in the same hunk is kept.
+ *
+ * ponytail: "in its place" is by count inside the hunk, so a real change next to a clock whose new
+ * value is not noise can still be ignored with it. Align by position if that is seen in practice.
  */
-function unmasked(hunk: Hunk, noise: ReadonlySet<string>): Hunk {
-  const removed = hunk.removed.filter((line) => !noise.has(line));
-  let replaced = hunk.removed.length - removed.length;
+function unmasked(hunk: Hunk, isNoise: (line: string) => boolean): Hunk {
+  const removed = hunk.removed.filter((line) => !isNoise(line));
+  const addedNoise = hunk.added.filter(isNoise).length;
+  let replaced = Math.max(0, hunk.removed.length - removed.length - addedNoise);
   const added = hunk.added.filter((line) => {
-    if (noise.has(line)) {
+    if (isNoise(line)) {
       return false;
     }
     if (replaced > 0) {
@@ -146,6 +151,32 @@ function unmasked(hunk: Hunk, noise: ReadonlySet<string>): Hunk {
     return true;
   });
   return { removed, added };
+}
+
+/**
+ * The lines of `got` that differ from `ours`, with the noise removed. A line that differs between
+ * `ours` and `repeat` (two runs of the reference) is noise, and so is a line `alsoNoise` names.
+ * `ignored` counts the lines removed as noise.
+ */
+export function maskedDiff(
+  ours: readonly string[],
+  repeat: readonly string[],
+  got: readonly string[],
+  alsoNoise: (line: string) => boolean = () => false,
+): { removed: string[]; added: string[]; ignored: number } {
+  const noise = lineDiff(ours, repeat);
+  const set = new Set([...noise.removed, ...noise.added]);
+  const masked = (line: string): boolean => set.has(line) || alsoNoise(line);
+  const removed: string[] = [];
+  const added: string[] = [];
+  let ignored = 0;
+  for (const hunk of hunks(ours, got)) {
+    const kept = unmasked(hunk, masked);
+    removed.push(...kept.removed);
+    added.push(...kept.added);
+    ignored += hunk.removed.length + hunk.added.length - kept.removed.length - kept.added.length;
+  }
+  return { removed, added, ignored };
 }
 
 /**
@@ -167,7 +198,7 @@ export function compareReadings(
   let unstable = 0;
   let ignored = 0;
   const note = (difference: Omit<Difference, 'id' | 'seen'>, content: unknown): void => {
-    const id = idOf(content);
+    const id = differenceId(content);
     const known = found.get(id);
     if (known === undefined) {
       found.set(id, { id, seen: 1, ...difference });
@@ -199,16 +230,8 @@ export function compareReadings(
       continue;
     }
     compared += 1;
-    const noise = lineDiff(ours.lines, repeat);
-    const masked = new Set([...noise.removed, ...noise.added]);
-    const removed: string[] = [];
-    const added: string[] = [];
-    for (const hunk of hunks(ours.lines, got)) {
-      const kept = unmasked(hunk, masked);
-      removed.push(...kept.removed);
-      added.push(...kept.added);
-      ignored += hunk.removed.length + hunk.added.length - kept.removed.length - kept.added.length;
-    }
+    const { removed, added, ignored: skipped } = maskedDiff(ours.lines, repeat, got);
+    ignored += skipped;
     if (0 === removed.length && 0 === added.length) {
       differed.delete(ours.journey);
       continue;

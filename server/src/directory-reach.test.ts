@@ -407,6 +407,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'lifetime',
     'binding',
     'drive',
+    // `reticle compare` drives two builds of one app and lists what differs.
+    'two-builds',
     'cli',
     'daemon',
     'change',
@@ -458,6 +460,10 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   exhaust: ['dir', 'fs', 'project', 'facts', 'session'],
   // Two builds are explored with the same breadth-first explorer the exhaustive crawl uses.
   compare: ['exhaust'],
+  // `reticle compare`: the rules are in `compare`; this directory reaches the daemon over the same
+  // MCP client and lease calls `cli` uses, with the pairing token (`bridge`) and the caller's
+  // project `.reticle` (`project`).
+  'two-builds': ['bridge', 'cli', 'compare', 'project'],
   // Edge cases, driven on the explorer's states and judged by the explorer's own checks.
   edges: ['exhaust'],
   // `ports`: port-state.ts names the process that holds the bridge port, so every surface says the

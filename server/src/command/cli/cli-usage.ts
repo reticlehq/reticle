@@ -75,6 +75,18 @@ const VERIFY_DETAIL = `Drives the URL and verifies the saved flows. Exit 0 means
                                 action --expect cannot do, use the HTTP MCP transport:
                                 https://docs.reticle.sh/http-transport.md`;
 
+const COMPARE_DETAIL = `Drives two running builds of one app the same way, for example main and a pull request
+preview, and reports each difference in what a person sees. Install nothing in the app.
+
+It plans every action on every control of the reference, drives the plan on the reference two
+times and on the candidate one time, and ignores what changes between the two reference runs.
+Point it at builds whose data you can change: it presses every button it finds.
+
+  --base <url>   the build before the change: tag each difference as a regression, a missed
+                 target or a change, and print a score
+  --json         print one JSON object
+Exit 0 = same, 1 = different, 2 = the run proves nothing (a lost browser session, or an error).`;
+
 const BROWSER_NOTE = `The browser Reticle opens for your agent is shown so you can watch the run. --headless hides
 it; CI, RETICLE_HEADLESS=1, or a Linux machine with no display hides it too.`;
 
@@ -121,6 +133,13 @@ const COMMANDS: readonly CommandDoc[] = [
       'Check saved flows, or one claim with --expect, against the running app; exit 0 = pass',
     group: HelpGroup.CHECK,
     detail: VERIFY_DETAIL,
+  },
+  {
+    name: 'compare',
+    synopsis: 'compare <reference-url> <candidate-url> [--base <url>] [--json]',
+    summary: 'Drive two builds the same way and list what users would see change',
+    group: HelpGroup.CHECK,
+    detail: COMPARE_DETAIL,
   },
   {
     name: 'gate',

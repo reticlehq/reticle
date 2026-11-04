@@ -1,0 +1,202 @@
+/**
+ * `reticle compare <reference-url> <candidate-url> [--base <url>] [--json]`.
+ *
+ * Drives two running builds of one app the same way and reports each difference in what a person
+ * sees, for example main against a pull request preview. The app needs nothing installed: each run
+ * is a tab the daemon leases, and a page with no Reticle SDK gets the daemon's own reader. The rules
+ * are in `@/features/compare/behaviour-compare.ts`; this file connects them to the daemon over its
+ * MCP transport, with the same tool calls an agent makes.
+ */
+import { ReticleTool, SnapshotMode } from '@reticlehq/core';
+import { runCompare, type OpenedPage } from '@/features/compare/behaviour-compare.js';
+import { invalidComparison, type BehaviourComparison } from '@/features/compare/behaviour-diff.js';
+import {
+  compareExitCode,
+  compareReportJson,
+  compareReportLines,
+  type CompareTimings,
+  type CompareUrls,
+} from '@/features/compare/behaviour-report.js';
+import { DriverLostError } from '@/features/compare/build-readings.js';
+import { callerArtifactRoot } from '@/memory/project/link-directory.js';
+import {
+  defaultPairingTokenDir,
+  readOrCreatePairingTokenSync,
+} from '@/portal/bridge/pairing-token.js';
+import {
+  acquireLease,
+  connectOverSse,
+  endpointFor,
+  refusalText,
+  releaseLease,
+  type ToolCaller,
+} from '../adhoc-verdict.js';
+import { payloadOf } from '../verify-against.js';
+
+/** How long a navigation may take before the start page counts as not loaded. */
+const NAVIGATE_WAIT_MS = 15_000;
+/** Room for one tool call past its own wait. */
+const CALL_MS = 60_000;
+/**
+ * Refusals that mean the driver lost its tab, not that the build did something. A run that sees
+ * one proves nothing about the build.
+ */
+const DRIVER_LOST =
+  /no browser session connected|no connected session|multiple sessions connected|session disconnected|names no session|no such session|session ended/i;
+const MSG_NO_DAEMON = 'could not reach the daemon on port';
+const MSG_LEASE_FAILED = 'could not open a browser on';
+
+const asText = (value: unknown): string | undefined =>
+  'string' === typeof value ? value : undefined;
+
+/** One leased tab as the compare driver. Every call goes through `reticle_run` on that tab. */
+export function leasedPage(caller: ToolCaller, url: string, sessionId: string): OpenedPage {
+  let id = sessionId;
+  const run = async (
+    tool: string,
+    args: Record<string, unknown>,
+    timeoutMs = CALL_MS,
+  ): Promise<{ payload: Record<string, unknown>; refusal?: string }> => {
+    let result: unknown;
+    try {
+      result = await caller.call(
+        ReticleTool.RUN,
+        { tool, args: { ...args, sessionId: id } },
+        timeoutMs,
+      );
+    } catch (error) {
+      throw new DriverLostError(error instanceof Error ? error.message : String(error));
+    }
+    const payload = payloadOf(result);
+    const refusal = refusalText(result) ?? asText(payload['error']);
+    if (refusal !== undefined && DRIVER_LOST.test(refusal)) {
+      throw new DriverLostError(refusal);
+    }
+    return refusal === undefined ? { payload } : { payload, refusal };
+  };
+  return {
+    async open() {
+      const { payload, refusal } = await run(
+        ReticleTool.NAVIGATE,
+        { url, timeout_ms: NAVIGATE_WAIT_MS },
+        NAVIGATE_WAIT_MS * 2,
+      );
+      id = asText(payload['sessionId']) ?? id;
+      return refusal === undefined && true === payload['ok'] && false !== payload['confirmed'];
+    },
+    async read() {
+      const { payload } = await run(ReticleTool.SNAPSHOT, { mode: SnapshotMode.FULL, ids: true });
+      return asText(payload['tree']) ?? '';
+    },
+    async act(ref, action, value) {
+      const { payload, refusal } = await run(ReticleTool.ACT, {
+        ref,
+        action,
+        args: value === undefined ? {} : { value },
+      });
+      return refusal === undefined && false !== payload['dispatched'];
+    },
+    async close() {
+      await releaseLease(caller, id);
+    },
+  };
+}
+
+export interface CompareCommandOptions extends CompareUrls {
+  json: boolean;
+  port: number;
+  token?: string;
+  /** The caller's project `.reticle`, where the leased tabs write their runs. */
+  root?: string;
+  /** Injected so a test can use its own transport. */
+  connect?: (endpoint: URL) => Promise<ToolCaller>;
+  sleep?: (ms: number) => Promise<void>;
+  now?: () => number;
+}
+
+/** The exit code, and the text or the one JSON line to print. */
+function render(
+  json: boolean,
+  urls: CompareUrls,
+  result: BehaviourComparison,
+  timings?: CompareTimings,
+): { code: number; lines: string[] } {
+  return {
+    code: compareExitCode(result),
+    lines: json
+      ? [JSON.stringify(compareReportJson(urls, result, timings))]
+      : compareReportLines(urls, result, timings),
+  };
+}
+
+/** Compare the builds through the daemon on `port`. Returns the lines to print and the exit code. */
+export async function runCompareCommand(
+  options: CompareCommandOptions,
+): Promise<{ code: number; lines: string[] }> {
+  const urls: CompareUrls = {
+    reference: options.reference,
+    candidate: options.candidate,
+    ...(options.base === undefined ? {} : { base: options.base }),
+  };
+  const connect = options.connect ?? connectOverSse;
+  let caller: ToolCaller;
+  try {
+    caller = await connect(endpointFor(options.port, options.token));
+  } catch (error) {
+    const why = error instanceof Error ? error.message : String(error);
+    const reason = `${MSG_NO_DAEMON} ${String(options.port)}: ${why}`;
+    return render(options.json, urls, invalidComparison(reason, 0));
+  }
+  const open = async (url: string): Promise<OpenedPage> => {
+    const lease = await acquireLease(caller, url, false, options.root);
+    if ('failed' in lease) {
+      throw new Error([`${MSG_LEASE_FAILED} ${url}`, ...lease.failed].join(' '));
+    }
+    return leasedPage(caller, url, lease.leased);
+  };
+  try {
+    const { result, timings } = await runCompare({
+      ...urls,
+      open,
+      sleep: options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
+      now: options.now ?? Date.now,
+    });
+    return render(options.json, urls, result, timings);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    return render(options.json, urls, invalidComparison(reason, 0));
+  } finally {
+    await caller.close().catch(() => undefined);
+  }
+}
+
+/**
+ * The command. It needs a daemon, as an agent does: `ensureDaemon` attaches to the one on the port,
+ * or starts one. Nothing here stops a daemon, so an agent's MCP link stays up.
+ */
+export async function handleCompare(
+  parsed: CompareUrls & { json: boolean; port: number },
+  ensureDaemon: (port: number) => Promise<void>,
+  out: { line: (text: string) => void; exit: (code: number) => void },
+): Promise<void> {
+  const fail = (reason: string): void => {
+    const result = render(parsed.json, parsed, invalidComparison(reason, 0));
+    result.lines.forEach(out.line);
+    out.exit(result.code);
+  };
+  try {
+    await ensureDaemon(parsed.port);
+  } catch (error) {
+    fail(error instanceof Error ? error.message : String(error));
+    return;
+  }
+  const token = readOrCreatePairingTokenSync(defaultPairingTokenDir());
+  const root = callerArtifactRoot(process.cwd());
+  const result = await runCompareCommand({
+    ...parsed,
+    ...(token === undefined || 0 === token.length ? {} : { token }),
+    ...(root === undefined ? {} : { root }),
+  });
+  result.lines.forEach(out.line);
+  out.exit(result.code);
+}

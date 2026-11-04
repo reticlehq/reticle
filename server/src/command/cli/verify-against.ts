@@ -58,7 +58,7 @@ export interface LeasedTab {
 }
 
 /** The payload of a tool result: its structured content, or the JSON object in its text. */
-function payloadOf(result: unknown): Record<string, unknown> {
+export function payloadOf(result: unknown): Record<string, unknown> {
   const structured = (result as { structuredContent?: unknown } | undefined)?.structuredContent;
   if ('object' === typeof structured && null !== structured) {
     return structured as Record<string, unknown>;

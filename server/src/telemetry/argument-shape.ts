@@ -136,6 +136,7 @@ const KNOWN_CLI_FLAGS: ReadonlySet<string> = new Set([
   '--accept-coverage',
   '--agent',
   '--app',
+  '--base',
   '--bug',
   '--capture-bodies',
   '--confirm-dangerous',
