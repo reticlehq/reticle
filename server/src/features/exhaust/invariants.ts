@@ -25,6 +25,7 @@ export const Invariant = {
   SHOWN_IS_SENT: 'the value shown after a write is the value the write sent',
   DETERMINISTIC: 'two identical drives give the same result',
   FAILURE_HANDLED: 'no success over a failed write',
+  NO_FAULT: 'an edge case gets an answer, not an error',
 } as const;
 export type Invariant = (typeof Invariant)[keyof typeof Invariant];
 

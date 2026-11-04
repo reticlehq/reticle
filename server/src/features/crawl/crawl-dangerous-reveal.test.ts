@@ -39,7 +39,9 @@ describe('confirmDangerous does not carry over to what a click revealed', () => 
         const ref = String(args?.['ref']);
         const extra = (args?.['args'] ?? {}) as Record<string, unknown>;
         clicks.push({ ref, confirmed: true === extra[DANGEROUS_ACTION_CONFIRM_ARG] });
-        if ('e1' === ref) opened = true;
+        if ('e1' === ref) {
+          opened = true;
+        }
         return ok({ ok: true, dispatched: true });
       },
     };

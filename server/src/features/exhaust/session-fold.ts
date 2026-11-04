@@ -25,11 +25,14 @@ const ID_SEGMENT =
  * refund of order 41 and of order 42 are one endpoint with one failure path to drive, not two.
  */
 export function writeKeyOf(event: ReticleEvent): string | undefined {
-  if (EventType.NET_REQUEST !== event.type) return undefined;
+  if (EventType.NET_REQUEST !== event.type) {
+    return undefined;
+  }
   const method = asString(event.data['method'])?.toUpperCase();
   const url = asString(event.data['url']);
-  if (method === undefined || url === undefined || !MUTATING_METHODS.includes(method))
+  if (method === undefined || url === undefined || !MUTATING_METHODS.includes(method)) {
     return undefined;
+  }
   let path: string;
   try {
     path = new URL(url, 'http://localhost').pathname;
@@ -90,7 +93,9 @@ export function isConsoleError(e: ReticleEvent): boolean {
 /** Requests that answered at or above `floor`. */
 export function failedRequests(events: ReticleEvent[], floor: number): ReticleEvent[] {
   return events.filter((e) => {
-    if (e.type !== EventType.NET_REQUEST) return false;
+    if (e.type !== EventType.NET_REQUEST) {
+      return false;
+    }
     const status = asNumber(e.data['status']);
     return status !== undefined && status >= floor;
   });

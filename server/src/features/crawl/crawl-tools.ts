@@ -5,7 +5,7 @@ import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
 import { stepCountSchema, timeoutMsSchema } from '@/surface/tools/args/numeric-bounds.js';
 import { crawl, type CrawlOptions } from './crawl.js';
-import { EXHAUST_DEFAULT_ACTIONS, runExhaustive } from '@/features/exhaust/exhaust-run.js';
+import { EXHAUST_DEFAULT_ACTIONS, runExhaustive } from './crawl-exhaustive.js';
 import { heuristicFillValue } from '@/features/harness/fill-values.js';
 import { secretEnvKey } from '@/language/flows/flows.js';
 import type { MockRule } from '@/portal/input/network-mock.js';
@@ -61,7 +61,7 @@ export const CRAWL_TOOLS: ToolDef[] = [
         .boolean()
         .optional()
         .describe(
-          "Walk every state it can tell apart, drive each write's failure path, fold into the coverage ledger.",
+          "Walk every state it can tell apart, drive each write's failure path and edge cases, fold into the coverage ledger.",
         ),
       confirmDangerous: z
         .boolean()
@@ -114,7 +114,7 @@ export const CRAWL_TOOLS: ToolDef[] = [
         .describe(
           'Controls clicked whose silence could not be judged, e.g. on a background tab. They are NOT reported as dead, and they are not known to work either.',
         ),
-      // Only on `exhaustive` — see features/exhaust/exhaust-run.ts. Loose: it carries the levels.
+      // Only on `exhaustive` — see crawl-exhaustive.ts. Loose: it carries the levels.
       exhaustive: z.record(z.string(), z.unknown()).optional(),
     },
     handler: async (deps: ToolDeps, args) => {
@@ -167,8 +167,9 @@ export const CRAWL_TOOLS: ToolDef[] = [
         ...(initialRoute === undefined ? [] : [initialRoute]),
         ...routesFromEvents(session.eventsSince(since)),
       ];
-      if (routes.length > 0)
+      if (routes.length > 0) {
         await projectForRoot(deps, sessionRoot(deps, session.id)).recordRoutes(routes);
+      }
       return report;
     },
   },

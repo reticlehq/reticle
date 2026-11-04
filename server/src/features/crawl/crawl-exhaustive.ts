@@ -1,6 +1,7 @@
 /**
  * `reticle_crawl { exhaustive: true }` — explore every reachable state, drive every write's failure
- * path, take the code coverage, fold all of it into the ledger, and say what is left.
+ * path and the edge cases of every state, take the code coverage, fold all of it into the ledger,
+ * and say what is left.
  *
  * It answers in crawl's own shape, so every caller that reads a crawl keeps working, and adds one
  * `exhaustive` block with what only this mode knows.
@@ -8,17 +9,27 @@
 
 import { BehaviourFindingKind } from '@reticlehq/core';
 import type { FileSystemPort } from '@/memory/project/fs/fs-port.js';
-import { emptyCodeCoverage, foldCodeCoverage, type RawScriptCoverage } from './code-coverage.js';
-import { explore } from './explorer.js';
-import { driveFailureBranches } from './failure-branches.js';
-import { failureFindings } from './invariants.js';
-import { LedgerStore, levelsOf, regressions } from './ledger.js';
-import { sessionPort, type PortSession } from './session-port.js';
+import {
+  emptyCodeCoverage,
+  foldCodeCoverage,
+  type RawScriptCoverage,
+} from '@/features/exhaust/code-coverage.js';
+import { driveEdges } from '@/features/exhaust/edges/edge-drive.js';
+import { explore } from '@/features/exhaust/explorer.js';
+import { driveFailureBranches } from '@/features/exhaust/failure-branches.js';
+import { failureFindings } from '@/features/exhaust/invariants.js';
+import { LedgerStore, levelsOf, regressions } from '@/features/exhaust/ledger.js';
+import { sessionPort, type PortSession } from '@/features/exhaust/session-port.js';
 
 /** Default action budget: generous, because every edge replays its path from a fresh load. */
 export const EXHAUST_DEFAULT_ACTIONS = 400;
 /** The share of the budget kept back for failure paths, so exploring cannot starve them. */
 const FAILURE_SHARE = 0.25;
+/**
+ * The share kept back for edge cases. Exploring keeps the rest, so edge cases cannot starve it; what
+ * exploring leaves unspent goes to edge cases too.
+ */
+export const EDGE_SHARE = 0.25;
 
 export async function runExhaustive(input: {
   sessions: { get(id: string): PortSession | undefined };
@@ -48,11 +59,18 @@ export async function runExhaustive(input: {
     ...(input.setMocks === undefined ? {} : { setMocks: input.setMocks }),
   });
   const failureBudget = Math.floor(input.maxActions * FAILURE_SHARE);
+  const edgeBudget = Math.floor(input.maxActions * EDGE_SHARE);
+  const exploreBudget = input.maxActions - failureBudget - edgeBudget;
   const report = await explore(port, {
-    maxActions: input.maxActions - failureBudget,
+    maxActions: exploreBudget,
     fillValue: (label) => input.fillValue(label, port.current().url),
   });
   const branches = await driveFailureBranches(port, report.writes, { maxActions: failureBudget });
+  const edges = await driveEdges(port, report.surfaces, {
+    maxActions: edgeBudget + Math.max(0, exploreBudget - report.actions),
+    now: input.now,
+    known: report.anomalies.map((a) => `${a.control}\n${a.kind}`),
+  });
   const take = await input.takeCode?.(port.current().url);
   const ledger = await new LedgerStore(input.fs, input.reticleRoot).merge({
     routes: { reached: report.routes },
@@ -62,7 +80,8 @@ export async function runExhaustive(input: {
       branched: branches.branched,
       unhandled: branches.unhandled.map((u) => u.key),
     },
-    findings: failureFindings(branches, report.writes),
+    edges: { probed: edges.probed },
+    findings: [...failureFindings(branches, report.writes), ...edges.found.map((f) => f.finding)],
     ...(take === undefined
       ? {}
       : { code: foldCodeCoverage(emptyCodeCoverage(), take), codeTakenAt: input.now() }),
@@ -75,9 +94,18 @@ export async function runExhaustive(input: {
       desc: u.key,
       detail: u.detail,
     })),
+    ...edges.found.map((f) => ({
+      kind: f.finding.kind,
+      ref: '',
+      desc: f.control,
+      detail: f.finding.detail,
+      ...(f.finding.source === undefined ? {} : { source: f.finding.source }),
+    })),
   ];
   const counts: Record<string, number> = {};
-  for (const a of anomalies) counts[a.kind] = (counts[a.kind] ?? 0) + 1;
+  for (const a of anomalies) {
+    counts[a.kind] = (counts[a.kind] ?? 0) + 1;
+  }
   return {
     interactiveFound: report.seen.length,
     stepsRun: report.actions,
@@ -93,6 +121,13 @@ export async function runExhaustive(input: {
       budgetExhausted: report.budgetExhausted,
       writes: report.writes.map((w) => w.key),
       failureBranches: branches,
+      edges: {
+        probed: edges.probed.length,
+        findings: edges.found.length,
+        actions: edges.actions,
+        budgetExhausted: edges.budgetExhausted,
+        ...(edges.failed > 0 ? { failed: edges.failed } : {}),
+      },
       levels: levelsOf(ledger),
       regressed: regressions(ledger),
       ...(take === undefined

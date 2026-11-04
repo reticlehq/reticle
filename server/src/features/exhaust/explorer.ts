@@ -24,6 +24,7 @@
  */
 
 import {
+  EventType,
   asNumber,
   asString,
   isAbsenceDerived,
@@ -34,18 +35,57 @@ import {
 import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
 import { controlKey, failedRequests, isConsoleError, writeKeyOf } from './session-fold.js';
 
+/** What one action gives back. */
+export interface ActResult {
+  ok: boolean;
+  /** The events this action caused. */
+  events: readonly ReticleEvent[];
+  /** The element's source, when the app gives source attribution. */
+  source?: { file: string; line: number };
+}
+
+/** A page as the explorer reads it: the snapshot tree and the route. */
+export interface PageRead {
+  tree: string;
+  route?: string;
+}
+
+/** The attributes `fieldAttrs` reads: what a field takes, for its edge-case values. */
+export const FIELD_ATTRS = [
+  'type',
+  'min',
+  'max',
+  'maxlength',
+  'minlength',
+  'pattern',
+  'required',
+  'inputmode',
+] as const;
+
 /** What the explorer needs from a driven page. The tool layer adapts a session to it. */
 export interface ExplorePort {
   /** Load the start page fresh. False when it did not come back. */
   reset(): Promise<boolean>;
   /** The interactive tree and route of the page now. */
-  look(): Promise<{ tree: string; route?: string }>;
-  /** Act on a control; the events are the ones this action caused. */
+  look(): Promise<PageRead>;
+  /**
+   * Act on a control. `settle: false` returns as soon as the action is sent, so the next action
+   * runs back to back with it; its late events then arrive with the next action's.
+   */
   act(
     ref: string,
     action: 'click' | 'fill',
     value?: string,
-  ): Promise<{ ok: boolean; events: readonly ReticleEvent[] }>;
+    opts?: { settle?: boolean },
+  ): Promise<ActResult>;
+  /** The whole page, text included. Absent when the port reads only the interactive tree. */
+  lookFull?: () => Promise<PageRead>;
+  /** Go back to the page before the last action. False when it did not come back. */
+  back?: () => Promise<boolean>;
+  /** Reload the page now. False when it did not come back. */
+  reload?: () => Promise<boolean>;
+  /** The `FIELD_ATTRS` the field `control` (a control key) carries, for its edge-case values. */
+  fieldAttrs?: (control: string) => Promise<Record<string, string> | undefined>;
   /** Install network mocks ([] clears). Absent, or false, when no driven browser can. */
   mock?: (rules: { urlContains: string; method?: string; abort?: boolean }[]) => Promise<boolean>;
 }
@@ -69,6 +109,22 @@ export interface ExploredWrite {
   successState: string;
 }
 
+/** One explored state, as the edge-case drive needs it. */
+export interface ExploredSurface {
+  /** How to reach the state from a fresh start page, before its fields are filled. */
+  path: Step[];
+  /** What the explorer typed into the state's empty fields, in page order. */
+  fills: Step[];
+  /** Each field's `FIELD_ATTRS`, by control key. */
+  attrs: Record<string, Record<string, string>>;
+  /** The controls the explorer clicked on this state, in page order. */
+  order: string[];
+  /** The controls whose click sent a request. */
+  requests: string[];
+  /** The controls whose click sent a write. */
+  writes: string[];
+}
+
 export interface ExploreReport {
   states: number;
   actions: number;
@@ -89,6 +145,8 @@ export interface ExploreReport {
   budgetExhausted: boolean;
   /** Every click tried, as its path from a fresh start page, in the order the explorer tried them. */
   paths: Step[][];
+  /** Every explored state, with its fields, controls and the controls that sent a request. */
+  surfaces: ExploredSurface[];
 }
 
 export interface ExploreOptions {
@@ -141,13 +199,10 @@ export async function explore(port: ExplorePort, opts: ExploreOptions): Promise<
   const queued = new Set<string>();
   const queue: { path: Step[]; key?: string }[] = [{ path: [] }];
   const paths: Step[][] = [];
+  const surfaces: ExploredSurface[] = [];
   const spent = (): boolean => actions >= opts.maxActions;
 
-  const act = async (
-    ref: string,
-    action: 'click' | 'fill',
-    value?: string,
-  ): Promise<{ ok: boolean; events: readonly ReticleEvent[] }> => {
+  const act = async (ref: string, action: 'click' | 'fill', value?: string): Promise<ActResult> => {
     actions += 1;
     return port.act(ref, action, value);
   };
@@ -188,6 +243,13 @@ export async function explore(port: ExplorePort, opts: ExploreOptions): Promise<
       action: 'fill',
       value: opts.fillValue(c.key, index),
     }));
+    const attrs: ExploredSurface['attrs'] = {};
+    for (const c of typed) {
+      const read = await port.fieldAttrs?.(c.key);
+      if (read !== undefined) {
+        attrs[c.key] = read;
+      }
+    }
     // Fills first, then the targets: valid input can reveal the button that moves on (a Continue,
     // a Submit), and a list drawn before the fill would never contain it.
     const fillHere = async (): Promise<Control[]> => {
@@ -210,6 +272,15 @@ export async function explore(port: ExplorePort, opts: ExploreOptions): Promise<
     const untried = [
       ...new Set(ready.filter((c) => !TYPED.test(c.key) && !CHOOSER.test(c.key)).map((c) => c.key)),
     ];
+    const surface: ExploredSurface = {
+      path: node.path,
+      fills,
+      attrs,
+      order: untried,
+      requests: [],
+      writes: [],
+    };
+    surfaces.push(surface);
 
     for (const [index, target] of untried.entries()) {
       if (spent()) {
@@ -233,6 +304,12 @@ export async function explore(port: ExplorePort, opts: ExploreOptions): Promise<
       const after = await port.look();
       const next = stateKey(after.route, controlsOf(after.tree));
       noteWrites(result.events, path, key, next, writes);
+      if (result.events.some((e) => EventType.NET_REQUEST === e.type)) {
+        surface.requests.push(target);
+      }
+      if (result.events.some((e) => writeKeyOf(e) !== undefined)) {
+        surface.writes.push(target);
+      }
       noteAnomalies(result.events, target, anomalies);
       if (!explored.has(next) && !queued.has(next)) {
         queued.add(next);
@@ -253,6 +330,7 @@ export async function explore(port: ExplorePort, opts: ExploreOptions): Promise<
     unreachable,
     budgetExhausted: spent(),
     paths,
+    surfaces,
   };
 }
 
@@ -303,10 +381,12 @@ function noteWrites(
   }
 }
 
-function noteAnomalies(
+/** The faults in an action's events: page errors, requests at or above `floor`, contradictions. */
+export function noteAnomalies(
   events: readonly ReticleEvent[],
   control: string,
   anomalies: ExploreReport['anomalies'],
+  floor = FAILED_STATUS,
 ): void {
   const list = [...events];
   for (const e of list.filter(isConsoleError)) {
@@ -316,7 +396,7 @@ function noteAnomalies(
       detail: asString(e.data['message']) ?? e.type,
     });
   }
-  for (const e of failedRequests(list, FAILED_STATUS)) {
+  for (const e of failedRequests(list, floor)) {
     anomalies.push({
       kind: 'failed-request',
       control,

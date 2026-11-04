@@ -62,7 +62,9 @@ export async function driveFailureBranches(
 ): Promise<FailureBranches> {
   const out: FailureBranches = { branched: [], unhandled: [], indistinguishable: [] };
   const mock = port.mock;
-  if (mock === undefined) return { ...out, ...(0 < writes.length ? { skipped: NO_MOCKS } : {}) };
+  if (mock === undefined) {
+    return { ...out, ...(0 < writes.length ? { skipped: NO_MOCKS } : {}) };
+  }
   let actions = 0;
   const spent = (): boolean => actions >= opts.maxActions;
   const act = (ref: string, action: 'click' | 'fill', value?: string) => {
@@ -70,23 +72,34 @@ export async function driveFailureBranches(
     return port.act(ref, action, value);
   };
   for (const write of writes) {
-    if (spent()) break;
+    if (spent()) {
+      break;
+    }
     const last = write.path.at(-1);
-    if (last === undefined) continue;
+    if (last === undefined) {
+      continue;
+    }
     try {
       // Everything up to the step that fires the write, THEN the break. Installed before the replay,
       // the abort also broke any setup step sending the same request, and the replay died short of
       // the action it existed to reach.
-      if (!(await replayPath(port, write.path.slice(0, -1), act, spent))) continue;
-      if (!(await mock([{ urlContains: write.urlPath, method: write.method, abort: true }])))
+      if (!(await replayPath(port, write.path.slice(0, -1), act, spent))) {
+        continue;
+      }
+      if (!(await mock([{ urlContains: write.urlPath, method: write.method, abort: true }]))) {
         return { ...out, skipped: NO_MOCKS };
+      }
       const control = controlsOf((await port.look()).tree).find((c) => c.key === last.key);
-      if (control === undefined) continue;
+      if (control === undefined) {
+        continue;
+      }
       const result = await act(control.ref, last.action, last.value);
       // Driven means the write was SENT and did not complete. An action that never dispatched, or a
       // request the rule did not match, drove nothing — and judging where the app landed after a
       // write that succeeded would accuse it of claiming success over a failure that never happened.
-      if (!result.ok || !result.events.some((e) => aborted(e, write.key))) continue;
+      if (!result.ok || !result.events.some((e) => aborted(e, write.key))) {
+        continue;
+      }
       out.branched.push(write.key);
       const after = await port.look();
       const reached = stateKey(after.route, controlsOf(after.tree));
@@ -98,20 +111,23 @@ export async function driveFailureBranches(
         actionSince: 0,
         expectedFailures: [{ method: write.method, urlContains: write.urlPath }],
       }).find((c) => !isAdvisory(c.kind) && !isAbsenceDerived(c.kind));
-      if (contradiction !== undefined)
+      if (contradiction !== undefined) {
         out.unhandled.push({
           key: write.key,
           detail: `${contradiction.claim}, but ${contradiction.counter}`,
         });
+      }
       // Landing where success lands only ACCUSES when success visibly moved the app. A write whose
       // success shows nothing looks identical failing, and the first version of this called that
       // "claimed success" — found by driving the fixture, whose add-item panel claims nothing at all.
-      else if (write.successState === write.beforeState) out.indistinguishable.push(write.key);
-      else if (reached === write.successState)
+      else if (write.successState === write.beforeState) {
+        out.indistinguishable.push(write.key);
+      } else if (reached === write.successState) {
         out.unhandled.push({
           key: write.key,
           detail: `with ${write.key} failing, the app arrived exactly where it goes when the write succeeds (${after.route ?? 'same page'}) — it claimed success over a failure`,
         });
+      }
     } finally {
       await mock([]);
     }

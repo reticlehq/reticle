@@ -26,7 +26,9 @@ function deadButtonSession(): Session {
     elapsed: () => clock,
     eventsSince: (since) => buffer.filter((e) => e.t > since),
     command: (name) => {
-      if (name === ReticleCommand.SNAPSHOT) return ok({ tree: 'button "Dead" (ref=e1)' });
+      if (name === ReticleCommand.SNAPSHOT) {
+        return ok({ tree: 'button "Dead" (ref=e1)' });
+      }
       if (name === ReticleCommand.ACT) {
         clock += 1;
         return ok({ dispatched: true });
@@ -39,7 +41,9 @@ function deadButtonSession(): Session {
 
 function tool(name: string) {
   const t = TOOLS.find((x) => x.name === name);
-  if (t === undefined) throw new Error(`no tool ${name}`);
+  if (t === undefined) {
+    throw new Error(`no tool ${name}`);
+  }
   return t;
 }
 
@@ -79,7 +83,9 @@ describe('reticle_crawl tool', () => {
       elapsed: () => clock,
       eventsSince: (since: number) => buffer.filter((event) => event.t > since),
       command: (name: string) => {
-        if (name === ReticleCommand.SNAPSHOT) return ok({ tree: 'link "Deployments" (ref=e1)' });
+        if (name === ReticleCommand.SNAPSHOT) {
+          return ok({ tree: 'link "Deployments" (ref=e1)' });
+        }
         if (name === ReticleCommand.ACT) {
           clock += 1;
           buffer.push({
@@ -157,13 +163,17 @@ describe('the crawl output schema declares everything crawl returns', () => {
    */
   const tool = (): ToolDef => {
     const found = CRAWL_TOOLS.find((t) => t.name === ReticleTool.CRAWL);
-    if (found === undefined) throw new Error('the crawl tool definition is gone');
+    if (found === undefined) {
+      throw new Error('the crawl tool definition is gone');
+    }
     return found;
   };
 
   it('declares every top-level field of the report', () => {
     const declared = new Set(Object.keys(tool().outputSchema ?? {}));
-    for (const key of Object.keys(report)) expect(declared).toContain(key);
+    for (const key of Object.keys(report)) {
+      expect(declared).toContain(key);
+    }
   });
 
   it('declares every field of an anomaly', () => {

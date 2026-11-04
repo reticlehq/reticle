@@ -12,6 +12,7 @@ import {
   ReticleCommand,
   ReticleTool,
   SnapshotMode,
+  asNumber,
   asRecord,
   asString,
   type CommandResult,
@@ -22,7 +23,7 @@ import {
   waitForReconnect,
 } from '@/portal/session/session-reconnect.js';
 import { isSessionReplacedError } from '@/portal/session/facts/session-replaced.js';
-import type { ExplorePort } from './explorer.js';
+import { FIELD_ATTRS, type ActResult, type ExplorePort, type PageRead } from './explorer.js';
 
 export interface PortSession {
   readonly id: string;
@@ -47,6 +48,8 @@ export function sessionPort(input: {
   ) => Promise<boolean>;
 }): ExplorePort & { current(): PortSession } {
   let current = input.start;
+  /** The URL the page had before the last action, for `back`. */
+  let lastUrl: string | undefined;
 
   /** Wait for the document that replaced `before`. False when none arrived in time. */
   const successor = async (before: PortSession): Promise<boolean> => {
@@ -58,71 +61,129 @@ export function sessionPort(input: {
       sleep: input.sleep,
     });
     const next = input.sessions.get(before.id);
-    if (!back || next === undefined) return false;
+    if (!back || next === undefined) {
+      return false;
+    }
     current = next;
     return true;
   };
 
-  const look = async (): Promise<{ tree: string; route?: string }> => {
+  const read = async (mode: SnapshotMode): Promise<PageRead> => {
     for (let attempt = 0; attempt < 2; attempt += 1) {
       try {
-        const res = await current.command(ReticleCommand.SNAPSHOT, {
-          mode: SnapshotMode.INTERACTIVE,
-        });
+        const res = await current.command(ReticleCommand.SNAPSHOT, { mode });
         const body = asRecord(res.result);
         const route = asString(asRecord(body['status'])['route']);
         return { tree: asString(body['tree']) ?? '', ...(route === undefined ? {} : { route }) };
       } catch (error) {
         // A click that followed a real link leaves the next read on a dead document.
-        if (!isSessionReplacedError(error) || !(await successor(current))) break;
+        if (!isSessionReplacedError(error) || !(await successor(current))) {
+          break;
+        }
       }
     }
     return { tree: '' };
   };
 
+  /** Send a command that replaces the document, then wait for the new one and let it settle. */
+  const load = async (name: string, args: Record<string, unknown>): Promise<boolean> => {
+    const was = current;
+    try {
+      const res = await was.command(name, args);
+      if (!res.ok) {
+        return false;
+      }
+    } catch (error) {
+      if (!isSessionReplacedError(error)) {
+        return false;
+      }
+    }
+    if (!(await successor(was))) {
+      return false;
+    }
+    await input.sleep(input.settleMs);
+    return true;
+  };
+
   return {
     current: () => current,
-    look,
+    look: () => read(SnapshotMode.INTERACTIVE),
+    lookFull: () => read(SnapshotMode.FULL),
+    reset: () => load(ReticleCommand.NAVIGATE, { url: input.startUrl }),
+    reload: () => load(ReticleCommand.REFRESH, {}),
 
-    async reset(): Promise<boolean> {
-      const before = current;
-      try {
-        const res = await before.command(ReticleCommand.NAVIGATE, { url: input.startUrl });
-        if (!res.ok) return false;
-      } catch (error) {
-        if (!isSessionReplacedError(error)) return false;
+    // ponytail: a load of the URL the page had before the last action, not the browser's history
+    // back, which no page command sends. An app that keeps state in its history entries comes back
+    // fresh here; add a history command if a finding needs it.
+    back: () =>
+      lastUrl === undefined
+        ? Promise.resolve(false)
+        : load(ReticleCommand.NAVIGATE, { url: lastUrl }),
+
+    async fieldAttrs(control) {
+      const [, role, name] = /^(\S+)(?:\s+"((?:[^"\\]|\\.)*)")?/.exec(control) ?? [];
+      if (role === undefined) {
+        return undefined;
       }
-      if (!(await successor(before))) return false;
-      await input.sleep(input.settleMs);
-      return true;
+      try {
+        const res = await current.command(ReticleCommand.QUERY, {
+          role,
+          ...(name === undefined ? {} : { name }),
+          attrs: [...FIELD_ATTRS],
+        });
+        const first: unknown = asRecord(res.result)['elements'];
+        const attrs = Array.isArray(first) ? asRecord(asRecord(first[0])['attrs']) : {};
+        const out: Record<string, string> = {};
+        for (const [key, value] of Object.entries(attrs)) {
+          if ('string' === typeof value) {
+            out[key] = value;
+          }
+        }
+        return out;
+      } catch {
+        return undefined;
+      }
     },
 
-    async act(ref, action, value) {
+    async act(ref, action, value, opts): Promise<ActResult> {
       const session = current;
+      lastUrl = session.url;
       const since = session.elapsed();
       session.beginAction?.(ReticleTool.CRAWL, { ref, action });
       let ok = false;
       let replaced = false;
+      let source: ActResult['source'];
       try {
         const res = await session.command(ReticleCommand.ACT, {
           ref,
           action: 'fill' === action ? ActionType.FILL : ActionType.CLICK,
           args: value === undefined ? {} : { value },
         });
-        ok = res.ok && false !== asRecord(res.result)['dispatched'];
+        const body = asRecord(res.result);
+        ok = res.ok && false !== body['dispatched'];
+        const src = asRecord(body['source']);
+        const file = asString(src['file']);
+        const line = asNumber(src['line']);
+        source = file === undefined || line === undefined ? undefined : { file, line };
       } catch (error) {
         // Following a real link replaces the document mid-command: the click WORKED.
-        if (!isSessionReplacedError(error)) throw error;
+        if (!isSessionReplacedError(error)) {
+          throw error;
+        }
         replaced = true;
         ok = true;
       } finally {
         session.finishAction?.();
       }
-      await input.sleep(input.settleMs);
+      if (false !== opts?.settle) {
+        await input.sleep(input.settleMs);
+      }
       const events = session.eventsSince(since);
-      if (replaced && (await successor(session)))
-        return { ok, events: [...events, ...current.eventsSince(0)] };
-      return { ok, events };
+      const found = source === undefined ? {} : { source };
+      if (replaced && (await successor(session))) {
+        return { ok, events: [...events, ...current.eventsSince(0)], ...found };
+      }
+      return { ok, events, ...found };
     },
 
     ...(input.setMocks === undefined

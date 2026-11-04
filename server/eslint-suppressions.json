@@ -671,72 +671,9 @@
       "count": 1
     }
   },
-  "src/features/crawl/crawl-dangerous-reveal.test.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
-  "src/features/crawl/crawl-empty.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
-  "src/features/crawl/crawl-tools.test.ts": {
-    "curly": {
-      "count": 5
-    }
-  },
-  "src/features/crawl/crawl-tools.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
-  "src/features/crawl/crawl.test.ts": {
-    "curly": {
-      "count": 5
-    }
-  },
   "src/features/crawl/crawl.ts": {
-    "curly": {
-      "count": 26
-    },
     "no-nested-ternary": {
       "count": 1
-    }
-  },
-  "src/features/exhaust/code-coverage.ts": {
-    "curly": {
-      "count": 4
-    }
-  },
-  "src/features/exhaust/exhaust-run.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
-  "src/features/exhaust/failure-branches.ts": {
-    "curly": {
-      "count": 10
-    }
-  },
-  "src/features/exhaust/ledger.ts": {
-    "curly": {
-      "count": 10
-    }
-  },
-  "src/features/exhaust/session-fold.ts": {
-    "curly": {
-      "count": 3
-    }
-  },
-  "src/features/exhaust/session-port.test.ts": {
-    "curly": {
-      "count": 2
-    }
-  },
-  "src/features/exhaust/session-port.ts": {
-    "curly": {
-      "count": 7
     }
   },
   "src/features/harness/app-findings.ts": {

@@ -32,7 +32,9 @@ function fakeSession(
     elapsed: () => clock,
     eventsSince: (since) => buffer.filter((e) => e.t > since),
     command: (name, args = {}) => {
-      if (name === ReticleCommand.SNAPSHOT) return ok({ tree, truncated: snapshotTruncated });
+      if (name === ReticleCommand.SNAPSHOT) {
+        return ok({ tree, truncated: snapshotTruncated });
+      }
       if (name === ReticleCommand.ACT) {
         const ref = 'string' === typeof args['ref'] ? args['ref'] : '';
         clock += 1;
@@ -158,19 +160,21 @@ describe('crawl — autonomous smart-monkey', () => {
       elapsed: () => clock,
       eventsSince: (since) => buffer.filter((e) => e.t > since),
       command: (name, args = {}) => {
-        if (name === ReticleCommand.SNAPSHOT)
+        if (name === ReticleCommand.SNAPSHOT) {
           return Promise.resolve({
             kind: 'command_result' as const,
             id: 'c',
             ok: true,
             result: { tree: tree(['button "Flaky" (ref=e1)']), truncated: false },
           });
+        }
         if (name === ReticleCommand.ACT && 'e1' === args['ref']) {
           clock += 1;
           clicks += 1;
           // Silent the first time, alive the second — a flake, not a dead control.
-          if (clicks > 1)
+          if (clicks > 1) {
             buffer.push({ t: clock, type: EventType.DOM_ADDED, sessionId: 's', data: {} });
+          }
           return Promise.resolve({
             kind: 'command_result' as const,
             id: 'c',
@@ -259,7 +263,9 @@ describe('crawl anomalies name the file that needs attention', () => {
     });
     const r = await crawl(session, {}, noSleep);
     expect(r.anomalies.length).toBeGreaterThanOrEqual(2);
-    for (const a of r.anomalies) expect(a.source).toBe('src/views/Checkout.tsx:88');
+    for (const a of r.anomalies) {
+      expect(a.source).toBe('src/views/Checkout.tsx:88');
+    }
   });
 
   it('prefers the crashing component over the navigation control that exposed it', async () => {
@@ -469,7 +475,9 @@ describe('crawl never ends the session it is crawling', () => {
     const session: CrawlSession = {
       ...base,
       command: (name, args = {}) => {
-        if (ReticleCommand.ACT === name) pressed.push(String(args['ref']));
+        if (ReticleCommand.ACT === name) {
+          pressed.push(String(args['ref']));
+        }
         return base.command(name, args);
       },
     };
