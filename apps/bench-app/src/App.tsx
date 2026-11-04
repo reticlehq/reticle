@@ -16,6 +16,7 @@ import { ExpiringAuth } from './views/ExpiringAuth.js';
 import { AwkwardControls } from './views/AwkwardControls.js';
 import { StaleRace } from './views/StaleRace.js';
 import { RulePairs } from './views/RulePairs.js';
+import { AckPairs } from './views/AckPairs.js';
 
 export function App(): React.ReactElement {
   const auth = useApp((s) => s.auth);
@@ -34,7 +35,9 @@ export function App(): React.ReactElement {
     return () => window.removeEventListener('keydown', onKey);
   }, [setPalette]);
 
-  if (null === auth) return <Login />;
+  if (null === auth) {
+    return <Login />;
+  }
 
   return (
     <div className="shell">
@@ -53,6 +56,7 @@ export function App(): React.ReactElement {
           {'awkward' === view ? <AwkwardControls /> : null}
           {'stale-race' === view ? <StaleRace /> : null}
           {'rule-pairs' === view ? <RulePairs /> : null}
+          {'ack-pairs' === view ? <AckPairs /> : null}
         </div>
       </div>
       <Toasts />

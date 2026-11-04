@@ -1,9 +1,4 @@
 {
-  "src/App.tsx": {
-    "curly": {
-      "count": 1
-    }
-  },
   "src/components/BuildLogStream.tsx": {
     "curly": {
       "count": 3
@@ -92,11 +87,6 @@
   "src/reticle-render-setup.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/store/store.ts": {
-    "curly": {
-      "count": 6
     }
   },
   "src/views/AwkwardControls.tsx": {

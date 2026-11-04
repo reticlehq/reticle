@@ -729,3 +729,54 @@ export function successClaims(
     .map(nameOf)
     .filter((name) => claims.has(name));
 }
+
+const isPlainObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  'object' === typeof value && value !== null && !Array.isArray(value);
+
+/**
+ * The values one store write set: the value itself, or each key of an object that changed. The
+ * store observer diffs only the top level, so `invite: { status: 429 }` arrives as one object.
+ */
+function writtenValues(value: unknown, old: unknown): readonly unknown[] {
+  if (!isPlainObject(value)) {
+    return [value];
+  }
+  const before = isPlainObject(old) ? old : {};
+  return Object.entries(value).flatMap(([key, v]) => (Object.is(before[key], v) ? [] : [v]));
+}
+
+/**
+ * Did the store record the HTTP status of a call that failed in this window?
+ *
+ * A structural echo, like the echo of the error text: an app that keeps `status: 429` beside a
+ * retry button knows that the call failed. Strict, because a false acknowledgement hides a failed
+ * write. The value must be exactly that status (a number or its string), it must change in this
+ * write, and the write must come after the call was sent. The status of a call that succeeded is
+ * not one. The limit is the send and not the answer for the reason `successClaims` gives: the
+ * browser observer records the answer after the app's own handler ran.
+ */
+export function storeEchoesFailedStatus(events: readonly ReticleEvent[]): boolean {
+  return events.some((answer) => {
+    if (answer.type !== EventType.NET_REQUEST) {
+      return false;
+    }
+    const call = netCall(answer);
+    if (false !== call.ok || call.status === undefined) {
+      return false;
+    }
+    const status = String(call.status);
+    const id = asString(answer.data['id']);
+    const sent = events.find(
+      (e) => e.type === EventType.NET_PENDING && id !== undefined && asString(e.data['id']) === id,
+    );
+    const after = sent ?? answer;
+    return events.some(
+      (e) =>
+        e.type === EventType.STATE_CHANGE &&
+        emittedBefore(after, e) &&
+        writtenValues(e.data['value'], e.data['old']).some(
+          (v) => ('number' === typeof v || 'string' === typeof v) && String(v) === status,
+        ),
+    );
+  });
+}
