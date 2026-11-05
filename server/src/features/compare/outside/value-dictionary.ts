@@ -2,7 +2,8 @@
  * Values the app compares its fields with, read from the scripts it serves. No instrumentation:
  * the page HTML and its scripts are fetched the way a browser fetches them.
  *
- * In `values.route === "progress"` the field named route gets "progress". An explorer that does not
+ * In `values.route === "progress"` the field named route gets "progress". `switch (x.route)` cases
+ * and `["a", "b"].includes(x.route)` give their literals the same way. An explorer that does not
  * know this never types the value, and the branch behind it (a conditional step, a special mode)
  * stays unseen. A field matches a name when its folded name equals the name, or ends with a name of
  * three or more characters.
@@ -27,6 +28,13 @@ const CHUNK = /["'](\.{0,2}\/[\w./@-]+\.(?:m?js|jsx|tsx?)(?:\?[^"']*)?)["']/g;
 const NOT_APP = /\/node_modules\/|^\/@/;
 const NAME_THEN_LITERAL = /\.([A-Za-z_$][\w$]*)\s*[!=]==?\s*["']([^"'\\]{1,40})["']/g;
 const LITERAL_THEN_NAME = /["']([^"'\\]{1,40})["']\s*[!=]==?\s*[\w$.]*\.([A-Za-z_$][\w$]*)\b/g;
+/** `switch (x.name) { ... }`: the body, up to a bound, holds the cases. */
+const SWITCH = /switch\s*\(\s*[\w$.]*\.([A-Za-z_$][\w$]*)\s*\)\s*\{([\s\S]{0,3000}?)\}/g;
+const CASE = /case\s*["']([^"'\\]{1,40})["']\s*:/g;
+/** `["a", "b"].includes(x.name)`. */
+const INCLUDES =
+  /\[((?:\s*["'][^"'\\]{1,40}["']\s*,?)+)\]\.includes\(\s*[\w$.]*\.([A-Za-z_$][\w$]*)\s*\)/g;
+const QUOTED = /["']([^"'\\]{1,40})["']/g;
 
 /** A name, lowercase, letters and digits only. */
 export const foldName = (name: string): string => name.toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -47,6 +55,16 @@ export function comparedLiterals(js: string): [string, string][] {
   }
   for (const m of js.matchAll(LITERAL_THEN_NAME)) {
     found.push({ at: m.index, pair: [m[2] ?? '', m[1] ?? ''] });
+  }
+  for (const m of js.matchAll(SWITCH)) {
+    for (const c of (m[2] ?? '').matchAll(CASE)) {
+      found.push({ at: m.index + c.index, pair: [m[1] ?? '', c[1] ?? ''] });
+    }
+  }
+  for (const m of js.matchAll(INCLUDES)) {
+    for (const v of (m[1] ?? '').matchAll(QUOTED)) {
+      found.push({ at: m.index + v.index, pair: [m[2] ?? '', v[1] ?? ''] });
+    }
   }
   return found.sort((a, b) => a.at - b.at).map((f) => f.pair);
 }

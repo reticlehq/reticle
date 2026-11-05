@@ -6,6 +6,7 @@
  * shows the first `TOP_DIFFERENCES` differences and the first `MAX_DIFFERENCE_LINES` lines of each,
  * and says how many it left out. `--json` gives everything.
  */
+import { Verified } from '@reticlehq/core';
 import { DifferenceKind } from './compare-diff.js';
 import {
   CompareVerdict,
@@ -47,6 +48,13 @@ const EXIT: Record<CompareVerdict, number> = {
 };
 
 export const compareExitCode = (result: BehaviourComparison): number => EXIT[result.verdict];
+
+/** The verdict in Reticle's own word: a run that proves nothing is `unknown`, never `no`. */
+const VERIFIED: Record<CompareVerdict, Verified> = {
+  [CompareVerdict.SAME]: Verified.YES,
+  [CompareVerdict.DIFFERENT]: Verified.NO,
+  [CompareVerdict.INVALID]: Verified.UNKNOWN,
+};
 
 const plural = (n: number, one: string, many: string): string =>
   `${String(n)} ${1 === n ? one : many}`;
@@ -143,11 +151,17 @@ export function compareReportJson(
   result: BehaviourComparison,
   timings?: CompareTimings,
 ): CompareUrls &
-  BehaviourComparison & { schemaVersion: number; exitCode: number; seconds?: CompareTimings } {
+  BehaviourComparison & {
+    schemaVersion: number;
+    verified: Verified;
+    exitCode: number;
+    seconds?: CompareTimings;
+  } {
   return {
     schemaVersion: COMPARE_SCHEMA_VERSION,
     ...urls,
     ...result,
+    verified: VERIFIED[result.verdict],
     exitCode: compareExitCode(result),
     ...(timings === undefined ? {} : { seconds: timings }),
   };

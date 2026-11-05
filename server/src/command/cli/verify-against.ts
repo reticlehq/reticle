@@ -30,10 +30,11 @@ import {
   acquireLease,
   connectOverSse,
   endpointFor,
+  payloadOf,
   refusalText,
   releaseLease,
   type ToolCaller,
-} from './adhoc-verdict.js';
+} from './daemon-link/daemon-client.js';
 
 /** How long a navigation may take before the start page counts as not loaded. */
 const NAVIGATE_WAIT_MS = 15_000;
@@ -55,30 +56,6 @@ export interface LeasedTab {
   /** Release the lease when the run ends. */
   closeLease: boolean;
   confirmDangerous?: boolean;
-}
-
-/** The payload of a tool result: its structured content, or the JSON object in its text. */
-export function payloadOf(result: unknown): Record<string, unknown> {
-  const structured = (result as { structuredContent?: unknown } | undefined)?.structuredContent;
-  if ('object' === typeof structured && null !== structured) {
-    return structured as Record<string, unknown>;
-  }
-  const content = (result as { content?: unknown } | undefined)?.content;
-  for (const part of Array.isArray(content) ? content : []) {
-    const text = (part as { text?: unknown }).text;
-    if ('string' !== typeof text) {
-      continue;
-    }
-    try {
-      const parsed: unknown = JSON.parse(text);
-      if ('object' === typeof parsed && null !== parsed) {
-        return parsed as Record<string, unknown>;
-      }
-    } catch {
-      // Not JSON; the next part may be.
-    }
-  }
-  return {};
 }
 
 const asText = (value: unknown): string | undefined =>

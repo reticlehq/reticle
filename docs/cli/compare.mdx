@@ -51,3 +51,5 @@ The score is `targets matched / targets x (1 - kept sequences changed / kept)`. 
 | `2` | Invalid: the browser session was lost, nothing could be compared, or the daemon or a build could not be reached. Run it again |
 
 The command uses the daemon on `--port` (or `RETICLE_PORT`), and starts one when there is none.
+
+An agent whose Reticle tools are loaded runs the same compare with `reticle_verify { action: "compare", reference, candidate, base? }`. It answers the same JSON as `--json`; see [reticle_verify](/tools/verify).

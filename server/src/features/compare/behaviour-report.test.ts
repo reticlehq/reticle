@@ -81,6 +81,12 @@ describe('compare report', () => {
     expect(text).toContain('[regression]');
   });
 
+  it('gives the JSON a verified field, yes for same, no for different, unknown for invalid', () => {
+    expect(compareReportJson(urls, result([])).verified).toBe('yes');
+    expect(compareReportJson(urls, result([difference(1)])).verified).toBe('no');
+    expect(compareReportJson(urls, invalidComparison('lost', 0)).verified).toBe('unknown');
+  });
+
   it('writes every difference to the JSON, not only the top ones', () => {
     const many = Array.from({ length: TOP_DIFFERENCES + 2 }, (_, i) => difference(i));
     const json = compareReportJson(urls, result(many), timings);

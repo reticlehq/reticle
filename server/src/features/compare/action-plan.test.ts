@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildDictionary } from './outside/value-dictionary.js';
 import {
   EDGE_TEXT,
+  MAX_CHAIN,
   MAX_SEQUENCES,
   WAIT_AFTER_CLICK_MS,
   actionsOf,
@@ -131,6 +132,80 @@ describe('buildPlan', () => {
     expect(labels).not.toContain(
       'click button "Log in" > click button "Compose" > click button "Settings"',
     );
+  });
+
+  it('follows a form past depth 3 while each press brings new fields, up to a chain limit', async () => {
+    const login = [
+      '- textbox "Email" (ref=e1)',
+      '- textbox "Password" (ref=e2)',
+      '- button "Log in" (ref=e3)',
+    ].join('\n');
+    const deployForm = '- textbox "Service" (ref=e4)\n- button "Deploy" (ref=e5) [disabled]';
+    const regionForm = '- textbox "Region" (ref=e6)\n- button "Confirm" (ref=e7) [disabled]';
+    const tree = (seq: Sequence): string => {
+      const labels = seq.map(stepLabel);
+      const pressed = (b: string): boolean =>
+        labels.some(
+          (l, i) =>
+            l === `click button "${b}"` && true === labels[i - 1]?.startsWith('fill every field'),
+        );
+      if (pressed('Deploy')) {
+        return regionForm;
+      }
+      return pressed('Log in') ? deployForm : login;
+    };
+    const plan = await buildPlan(login, (seq) =>
+      Promise.resolve({ tree: tree(seq), active: true }),
+    );
+    const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
+    const chain = labels.find((l) => l.endsWith('> click button "Confirm"'));
+    expect(chain, 'the third form step is planned').toBeDefined();
+    expect(chain?.split(' > ').length).toBeGreaterThan(3);
+    expect(chain).toContain('fill every field (textbox "Service"=');
+    expect(plan.every((seq) => seq.length <= MAX_CHAIN)).toBe(true);
+  });
+
+  it('plans the submit of a form step before presses of the buttons that were already there', async () => {
+    const login =
+      '- textbox "Email" (ref=e1)\n- textbox "Password" (ref=e2)\n- button "Log in" (ref=e3)';
+    const nav = '- button "Home" (ref=e4)\n- button "Reports" (ref=e5)';
+    const home = `${nav}\n- textbox "Search" (ref=e6)\n- button "New" (ref=e7)`;
+    const dialog = `${home}\n- textbox "Name" (ref=e8)\n- button "Submit" (ref=e9) [disabled]`;
+    const tree = (seq: Sequence): string => {
+      const labels = seq.map(stepLabel);
+      if (labels.includes('click button "New"')) {
+        return dialog;
+      }
+      return labels.includes('click button "Log in"') ? home : login;
+    };
+    const plan = await buildPlan(login, (seq) =>
+      Promise.resolve({ tree: tree(seq), active: true }),
+    );
+    const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
+    const inDialog = (button: string): number =>
+      labels.findIndex(
+        (l) =>
+          l.includes('click button "New" > fill every field') &&
+          l.endsWith(`click button "${button}"`),
+      );
+    expect(inDialog('Submit')).toBeGreaterThanOrEqual(0);
+    expect(inDialog('Home') < 0 || inDialog('Submit') < inDialog('Home')).toBe(true);
+  });
+
+  it('plans the submit of a form that opens on a busy page before the cap runs out', async () => {
+    const busyPage = [
+      ...Array.from({ length: 150 }, (_, i) => `- button "B${String(i)}" (ref=b${String(i)})`),
+      '- button "Open form" (ref=e1)',
+    ].join('\n');
+    const form = `${busyPage}\n- textbox "Name" (ref=e2)\n- textbox "Mail" (ref=e3)\n- button "Submit" (ref=e4) [disabled]`;
+    const plan = await buildPlan(busyPage, (seq) =>
+      Promise.resolve({
+        tree: seq.map(stepLabel).includes('click button "Open form"') ? form : busyPage,
+        active: true,
+      }),
+    );
+    const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
+    expect(labels.some((l) => l.endsWith('> click button "Submit"'))).toBe(true);
   });
 
   it('presses a button that is disabled until the fields are filled, after filling them', async () => {

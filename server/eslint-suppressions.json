@@ -24,11 +24,6 @@
       "count": 8
     }
   },
-  "src/command/cli/adhoc-verdict.ts": {
-    "curly": {
-      "count": 10
-    }
-  },
   "src/command/cli/answers/gate-hook-message.ts": {
     "curly": {
       "count": 9

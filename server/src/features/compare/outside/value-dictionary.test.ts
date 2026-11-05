@@ -42,6 +42,18 @@ describe('value dictionary', () => {
     ]);
   });
 
+  it('collects switch cases and includes() lists for the named value, from minified code', () => {
+    const js =
+      'function r(e){switch(e.kind){case"draft":return 1;case"live":return 2;default:return 0}}' +
+      'const v=t=>["pro","team"].includes(t.plan);';
+    expect(comparedLiterals(js)).toEqual([
+      ['kind', 'draft'],
+      ['kind', 'live'],
+      ['plan', 'pro'],
+      ['plan', 'team'],
+    ]);
+  });
+
   it('gives a field the values of its folded name, or of a name of 3+ characters it ends with', () => {
     const dict = buildDictionary([
       ['route', 'progress'],

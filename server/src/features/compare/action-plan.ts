@@ -14,7 +14,10 @@
  * - after each sequence, one level deeper into the controls its last action made appear (a menu, a
  *   dialog): controls that were not on the page before that action;
  * - on a page with two or more fields: fill every field with its own value, then press each button,
- *   also a button that is disabled until the fields are filled.
+ *   also a button that is disabled until the fields are filled. When such a press brings new
+ *   fields (the next step of a form, a dialog), fill those and press again, past the depth limit
+ *   up to `MAX_CHAIN` steps. A form step and its own buttons (new with its fields, or disabled
+ *   until they are filled) are planned first, so the cap does not starve them.
  *   Only this shows a build that takes the start time for the end time.
  *
  * A control is targeted by its test id when it has one, else by its role and name. Controls with the
@@ -59,6 +62,12 @@ export interface PlanControl {
 export const MAX_SEQUENCES = 220;
 /** A sequence this long is not probed for controls that appeared. */
 const MAX_DEPTH = 3;
+/**
+ * A form chain goes on past `MAX_DEPTH` up to this many steps: fill every field, press a button, and
+ * when the press brought new fields, fill those and press again. A wizard's later steps and a
+ * dialog's submit sit there.
+ */
+export const MAX_CHAIN = 8;
 /** The wait after a click: a slideshow advances, a countdown ends, a delivery settles. */
 export const WAIT_AFTER_CLICK_MS = 4000;
 const MS_PER_S = 1000;
@@ -275,6 +284,8 @@ export async function buildPlan(
   ];
   const plan: Sequence[] = [[]];
   const seen = new Set([sequenceKey([])]);
+  /** Sequences that end in a press after "fill every field": they may go on past `MAX_DEPTH`. */
+  const chains = new Set<string>();
   while (queue.length > 0 && plan.length < MAX_SEQUENCES) {
     const seq = queue.shift() ?? [];
     const key = sequenceKey(seq);
@@ -282,31 +293,59 @@ export async function buildPlan(
       continue;
     }
     seen.add(key);
+    const deeper =
+      seq.length < MAX_DEPTH || (chains.has(key) && seq.length < MAX_CHAIN) || endsInWait(seq);
     // A wait is probed before it is planned: it stays only where the reference showed activity.
-    const probed = seq.length < MAX_DEPTH || endsInWait(seq) ? await probe(seq) : undefined;
+    const probed = deeper ? await probe(seq) : undefined;
     if (endsInWait(seq) && true !== probed?.active) {
       continue;
     }
     plan.push(seq);
-    if (seq.length >= MAX_DEPTH || probed === undefined) {
+    if (probed === undefined || (seq.length >= MAX_DEPTH && !chains.has(key))) {
       continue;
     }
     before.set(key, keysOf(probed.tree));
+    // The page before the last action: the nearest shorter sequence that was probed. A
+    // "fill every field" step on its own is not probed, and it adds no control anyway.
+    let parent: Set<string> | undefined;
+    for (let n = seq.length - 1; n >= 0 && parent === undefined; n -= 1) {
+      parent = before.get(sequenceKey(seq.slice(0, n)));
+    }
     const all = planControls(probed.tree);
     const now = all.filter((c) => !c.disabled);
     const fields = now.filter((c) => ControlKind.FILL === c.kind);
-    if (fields.length >= 2 && !seq.some((s) => 'fillall' === s.action)) {
+    const filled = seq.some((s) => 'fillall' === s.action);
+    const firstForm = fields.length >= 2 && !filled;
+    // The press after a "fill every field" brought fields that were not there before it.
+    const nextForm =
+      fields.length >= 1 &&
+      filled &&
+      ControlKind.CLICK === seq.at(-1)?.action &&
+      fields.some((f) => parent?.has(targetKey(f.target)) !== true);
+    // A form step adds two steps: the fill and the press.
+    if ((firstForm || nextForm) && seq.length + 2 <= MAX_CHAIN) {
       const fillall: PlanStep = {
         action: 'fillall',
         fields: fields.map((f, i) => ({ target: f.target, value: ownValue(f, i, dictionary) })),
       };
-      queue.unshift([...seq, fillall]);
       // Also a disabled button: a submit is often disabled until the fields are filled.
-      for (const button of all.filter((c) => ControlKind.CLICK === c.kind)) {
-        queue.push([...seq, fillall, { action: ControlKind.CLICK, target: button.target }]);
+      const buttons = all.filter((c) => ControlKind.CLICK === c.kind);
+      const pressOf = (b: PlanControl): Sequence => [
+        ...seq,
+        fillall,
+        { action: ControlKind.CLICK, target: b.target },
+      ];
+      for (const b of buttons) {
+        chains.add(sequenceKey(pressOf(b)));
       }
+      // The form's own buttons: new with its fields, or disabled until they are filled.
+      const own = (b: PlanControl): boolean =>
+        b.disabled || parent?.has(targetKey(b.target)) !== true;
+      // The form step and its own buttons go first, so the cap does not starve them. A button that
+      // was already there (a nav bar, the page's other controls) is pressed after the rest.
+      queue.unshift([...seq, fillall], ...buttons.filter(own).map(pressOf));
+      queue.push(...buttons.filter((b) => !own(b)).map(pressOf));
     }
-    const parent = before.get(sequenceKey(seq.slice(0, -1))) ?? before.get(sequenceKey([]));
     for (const control of now.filter((c) => parent?.has(targetKey(c.target)) !== true)) {
       for (const step of steps(control)) {
         queue.push([...seq, step]);

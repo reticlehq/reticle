@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
 import { DriverLostError } from '@/features/compare/build-readings.js';
 import { leasedPage, runCompareCommand } from './compare-command.js';
-import type { ToolCaller } from '../adhoc-verdict.js';
+import type { ToolCaller } from '../daemon-link/daemon-client.js';
 
 const text = (body: unknown): unknown => ({
   content: [{ type: 'text', text: JSON.stringify(body) }],
@@ -109,6 +109,7 @@ describe('leasedPage', () => {
       's1',
     );
     await expect(page.act('e1', 'click')).rejects.toBeInstanceOf(DriverLostError);
+    await expect(page.act('e1', 'click')).rejects.toThrow(`${ReticleTool.ACT}: `);
   });
 });
 

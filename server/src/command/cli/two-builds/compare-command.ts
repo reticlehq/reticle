@@ -28,11 +28,11 @@ import {
   acquireLease,
   connectOverSse,
   endpointFor,
+  payloadOf,
   refusalText,
   releaseLease,
   type ToolCaller,
-} from '../adhoc-verdict.js';
-import { payloadOf } from '../verify-against.js';
+} from '../daemon-link/daemon-client.js';
 
 /** How long a navigation may take before the start page counts as not loaded. */
 const NAVIGATE_WAIT_MS = 15_000;
@@ -54,6 +54,12 @@ const MSG_LEASE_FAILED = 'could not open a browser on';
 const asText = (value: unknown): string | undefined =>
   'string' === typeof value ? value : undefined;
 
+/** The pairing token the daemon asks for, or undefined when there is none. */
+export function pairingToken(): string | undefined {
+  const token = readOrCreatePairingTokenSync(defaultPairingTokenDir());
+  return token === undefined || 0 === token.length ? undefined : token;
+}
+
 /** One leased tab as the compare driver. Every call goes through `reticle_run` on that tab. */
 export function leasedPage(caller: ToolCaller, url: string, sessionId: string): OpenedPage {
   let id = sessionId;
@@ -70,12 +76,15 @@ export function leasedPage(caller: ToolCaller, url: string, sessionId: string): 
         timeoutMs,
       );
     } catch (error) {
-      throw new DriverLostError(error instanceof Error ? error.message : String(error));
+      // Name the call, so a run that lost its driver says where.
+      throw new DriverLostError(
+        `${tool}: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
     const payload = payloadOf(result);
     const refusal = refusalText(result) ?? asText(payload['error']);
     if (refusal !== undefined && DRIVER_LOST.test(refusal)) {
-      throw new DriverLostError(refusal);
+      throw new DriverLostError(`${tool}: ${refusal}`);
     }
     return refusal === undefined ? { payload } : { payload, refusal };
   };
@@ -220,11 +229,11 @@ export async function handleCompare(
     fail(error instanceof Error ? error.message : String(error));
     return;
   }
-  const token = readOrCreatePairingTokenSync(defaultPairingTokenDir());
+  const token = pairingToken();
   const root = callerArtifactRoot(process.cwd());
   const result = await runCompareCommand({
     ...parsed,
-    ...(token === undefined || 0 === token.length ? {} : { token }),
+    ...(token === undefined ? {} : { token }),
     ...(root === undefined ? {} : { root }),
   });
   result.lines.forEach(out.line);

@@ -53,6 +53,7 @@ import { buildCoverageTools } from './coverage-tools.js';
 import { VERIFY_CHANGE_TOOLS } from '@/language/flows/verify-change-tools.js';
 import { CRAWL_TOOLS } from '@/features/crawl/crawl-tools.js';
 import { EXPLORE_TOOLS } from './explore-tools.js';
+import { COMPARE_TOOLS } from './compare-tools.js';
 import { SCROLL_TOOLS } from '@/portal/input/scroll-tools.js';
 import { NETWORK_MOCK_TOOLS } from '@/portal/input/network-mock-tools.js';
 import { VIEWPORT_TOOLS } from '@/portal/input/viewport-tools.js';
@@ -606,6 +607,7 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
   // reticle_crawl — autonomous click-everything + anomaly report. See crawl-tools.ts.
   ...CRAWL_TOOLS,
   ...EXPLORE_TOOLS,
+  ...COMPARE_TOOLS,
   // reticle_scroll_to — reveal a virtualized off-screen row. See scroll-tools.ts.
   ...SCROLL_TOOLS,
   // Session lifecycle: reticle_session — tune the presenter session (idle-end). See session-tools.ts.
@@ -701,7 +703,7 @@ export const MERGE_PLANS: MergePlan[] = [
   {
     name: ReticleTool.VERIFY,
     description:
-      'The Reticle Harness is { action: "explore" }: when the user asks for the Harness, or asks Reticle to drive and verify the app for you, call it and do not drive the app yourself. Every other action says what is proved, and what is not. Start from a change: { action: "affected" } names which saved flows must re-verify for the files you edited (pass `files`, and/or `since` for a git ref), and "change" goes further and actually replays them, answering with one `verified` plus `because`. `unknown` there is the honest answer when NO saved flow covers the change: nothing ran, so nothing was proved, and it is never reported as green. Without a change to start from: "flows" replays every saved flow for one consolidated suite verdict (deterministic, no LLM per flow), and "coverage" lists the interactive controls you have and have NOT driven this session — an untouched list still holding the controls your change affects means you are not done. "crawl" is the no-script option: it drives every reachable control itself and reports single-channel faults (console errors, failed requests, dead controls) and CONTRADICTIONS, two channels disagreeing about the same click — the false greens a human cannot see, because a human watches the screen and the screen looks correct. "explore" is the Reticle Harness: it drives the app for you on the platform — pass a `persona` and it completes that whole journey — and RECORDS what it drove, so the next run replays it with no model in the loop and none of the driving costs your context. "mutate" grades the FLOW rather than the app: it breaks the endpoint a saved flow declared it depends on and replays it, and a flow that stays GREEN through a broken subject is a click sequence, not a test. "heal" repairs a flow whose LOCATOR drifted (a renamed testid), re-asserting the saved consequence before it writes and refusing when that stops firing — it heals a locator, never an intent. DESTRUCTIVE: crawl and explore really click, and may navigate or mutate state; "mutate" really fails a request on a driven page, and always puts it back.',
+      'The Reticle Harness is { action: "explore" }: when the user asks for the Harness, or asks Reticle to drive and verify the app for you, call it and do not drive the app yourself. Every other action says what is proved, and what is not. Start from a change: { action: "affected" } names which saved flows must re-verify for the files you edited (pass `files`, and/or `since` for a git ref), and "change" goes further and actually replays them, answering with one `verified` plus `because`. `unknown` there is the honest answer when NO saved flow covers the change: nothing ran, so nothing was proved, and it is never reported as green. Without a change to start from: "flows" replays every saved flow for one consolidated suite verdict (deterministic, no LLM per flow), and "coverage" lists the interactive controls you have and have NOT driven this session — an untouched list still holding the controls your change affects means you are not done. "crawl" is the no-script option: it drives every reachable control itself and reports single-channel faults (console errors, failed requests, dead controls) and CONTRADICTIONS, two channels disagreeing about the same click — the false greens a human cannot see, because a human watches the screen and the screen looks correct. "explore" is the Reticle Harness: it drives the app for you on the platform — pass a `persona` and it completes that whole journey — and RECORDS what it drove, so the next run replays it with no model in the loop and none of the driving costs your context. "mutate" grades the FLOW rather than the app: it breaks the endpoint a saved flow declared it depends on and replays it, and a flow that stays GREEN through a broken subject is a click sequence, not a test. "heal" repairs a flow whose LOCATOR drifted (a renamed testid), re-asserting the saved consequence before it writes and refusing when that stops firing — it heals a locator, never an intent. "compare" drives two running builds (`reference`, `candidate`, optional `base`) the same way and lists what users would see differ and what the app sent; poll with `runId`. DESTRUCTIVE: crawl, explore and compare really click, and may navigate or mutate state; "mutate" really fails a request on a driven page, and always puts it back.',
     members: {
       change: ReticleTool.VERIFY_CHANGE,
       flows: ReticleTool.FLOW_VERIFY,
@@ -719,6 +721,9 @@ export const MERGE_PLANS: MergePlan[] = [
       // An action rather than a tenth tool, and safe to fold in because heal only rebinds a LOCATOR:
       // it re-asserts the saved consequence before writing and refuses when that stops firing.
       heal: ReticleTool.FLOW_HEAL,
+      // Two running builds, driven the same way from outside the app: what differs. The same run
+      // and JSON as `reticle compare --json`.
+      compare: ReticleTool.VERIFY_COMPARE,
     },
     // No default action ON PURPOSE. The name implies no single member, and one of them really
     // clicks: a fallthrough that guessed wrong would drive the app rather than read it. Every action
