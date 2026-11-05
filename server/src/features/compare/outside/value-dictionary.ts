@@ -31,9 +31,13 @@ const LITERAL_THEN_NAME = /["']([^"'\\]{1,40})["']\s*[!=]==?\s*[\w$.]*\.([A-Za-z
 /** `switch (x.name) { ... }`: the body, up to a bound, holds the cases. */
 const SWITCH = /switch\s*\(\s*[\w$.]*\.([A-Za-z_$][\w$]*)\s*\)\s*\{([\s\S]{0,3000}?)\}/g;
 const CASE = /case\s*["']([^"'\\]{1,40})["']\s*:/g;
-/** `["a", "b"].includes(x.name)`. */
+/**
+ * `["a", "b"].includes(x.name)`. Each repeated item must end in a comma and the count is bounded, so
+ * there is one way to match a list: an optional comma inside a repeated group backtracked exponentially
+ * on a hostile script, and compare reads scripts from any page.
+ */
 const INCLUDES =
-  /\[((?:\s*["'][^"'\\]{1,40}["']\s*,?)+)\]\.includes\(\s*[\w$.]*\.([A-Za-z_$][\w$]*)\s*\)/g;
+  /\[\s*((?:["'][^"'\\]{1,40}["']\s*,\s*){0,30}["'][^"'\\]{1,40}["'])\s*,?\s*\]\.includes\(\s*[\w$.]*\.([A-Za-z_$][\w$]*)\s*\)/g;
 const QUOTED = /["']([^"'\\]{1,40})["']/g;
 
 /** A name, lowercase, letters and digits only. */

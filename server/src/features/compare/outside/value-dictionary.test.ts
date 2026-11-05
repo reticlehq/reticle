@@ -42,6 +42,23 @@ describe('value dictionary', () => {
     ]);
   });
 
+  it('reads an includes() list with spaces and a trailing comma, and a one-item list', () => {
+    const pairs = comparedLiterals(
+      'const a=[ "pro" , "team", ].includes(u.plan);const b=["x"].includes(u.mode);',
+    );
+    expect(pairs).toEqual(
+      expect.arrayContaining([
+        ['plan', 'pro'],
+        ['plan', 'team'],
+        ['mode', 'x'],
+      ]),
+    );
+  });
+
+  it('reads nothing from a bracket of quoted strings that is not an includes() call', () => {
+    expect(comparedLiterals(`[${'"!" '.repeat(24)}`)).toEqual([]);
+  });
+
   it('collects switch cases and includes() lists for the named value, from minified code', () => {
     const js =
       'function r(e){switch(e.kind){case"draft":return 1;case"live":return 2;default:return 0}}' +
