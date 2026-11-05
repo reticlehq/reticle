@@ -135,6 +135,7 @@
                   "cli/open",
                   "cli/drive",
                   "cli/verify",
+                  "cli/compare",
                   "cli/try",
                   "cli/affected",
                   "cli/gate",

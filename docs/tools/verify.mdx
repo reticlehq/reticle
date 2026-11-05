@@ -1,6 +1,6 @@
 ---
 title: reticle_verify
-description: Prove what is and is not working, by action. Replay saved flows for a change or for the whole suite, list coverage, crawl, explore, mutate or heal.
+description: Prove what is and is not working, by action. Replay saved flows for a change or for the whole suite, list coverage, crawl, explore, mutate, heal, or compare two builds.
 icon: shield-check
 ---
 
@@ -20,6 +20,7 @@ icon: shield-check
 | `explore` | The Harness, Reticle's model-driven explorer, drives the journey you name in `persona` and saves what it drove as flows. Runs on the Reticle platform: run `reticle connect` first. A new account gets free credits to try it. **Destructive** | no |
 | `mutate` | Grades a saved flow: breaks the endpoint it depends on and replays it. A flow that stays green is a click sequence, not a test | no |
 | `heal` | Rebinds a flow whose locator was renamed. Re-asserts the saved consequence first and refuses if it stops firing. `apply: true` writes the fix | no |
+| `compare` | Drives two running builds (`reference`, `candidate`, optional `base`) the same way and lists each difference in what users see and in the requests and console errors the app made. Nothing is installed in the app. Answers the JSON of [`reticle compare --json`](/cli/compare), with `verified` `yes` (same), `no` (different) or `unknown` (the run proves nothing). Within `wait` seconds it gives the result, or `{ status: "running", runId }` to poll with `runId`. **Destructive:** it presses every button it finds | yes |
 
 Only `verified: "yes"` is a pass. `unknown` means Reticle could not tell, and `no-fault` means nothing was declared to prove.
 

@@ -79,6 +79,8 @@ export const ReticleTool = {
   VERIFY_CHANGE: 'reticle_verify_change',
   /** drive the app with a model and SAVE what it drove, for a project with nothing to replay yet. */
   VERIFY_EXPLORE: 'reticle_verify_explore',
+  /** drive two running builds the same way and list what differs, from outside the app. */
+  VERIFY_COMPARE: 'reticle_verify_compare',
   /** Merged: change/flows/affected/coverage/crawl — "what is proved, and what is not". */
   INTENT: 'reticle_intent',
   /** what THIS run has established, proved, and not yet discharged — pulled when memory is gone. */

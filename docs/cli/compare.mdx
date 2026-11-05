@@ -1,0 +1,55 @@
+---
+title: reticle compare
+description: Drive two running builds of one app the same way and list each difference in what users see.
+icon: code-compare
+---
+
+`reticle compare` answers one question: does the candidate build show what the reference build shows? Use it to compare main with a pull request preview, or a known-good build with a changed build. The app needs nothing installed: no SDK, no plugin and no `reticle init`. Any URL works.
+
+```bash
+npx @reticlehq/server compare <reference-url> <candidate-url> [--base <url>] [--json]
+```
+
+| Argument | Type | Default | What it does |
+| --- | --- | --- | --- |
+| `<reference-url>` | string | required | The build that is correct, for example main |
+| `<candidate-url>` | string | required | The build to check, for example a pull request preview |
+| `--base <url>` | string | unset | The build before the change. Each difference gets a tag, and the command prints a score |
+| `--json` | boolean | off | Print one JSON object instead of text |
+
+## What it does
+
+The command has one recipe and no other settings.
+
+1. **Read the values the app checks for.** The command fetches the reference page and its scripts the way a browser does (at most 40 files). It collects each string that a named value is compared with, for example `values.route === "progress"`. A field whose name matches that name also gets those values, so a branch behind a special value is reached.
+2. **Plan on the reference, breadth first.** The plan has the start page and every single action on every control. It clicks each button, tab, checkbox and option. It fills each text field with two values chosen by the shape of the field's value (a time, a date, a number, text), one edge value of that shape (`23:59`, `2024-02-29`, `-1`, or a long text with markup characters), and the values from step 1. It selects each option of each combobox. After each sequence, the plan goes one level deeper into the controls that appeared. On a page with two or more fields, it fills every field with its own value, then presses each button. A click is also followed by a 4 second wait, but only where the reference showed delayed activity: a request still pending, a page that kept changing while it settled, or a change during the wait. The plan holds at most 220 sequences. A control is found by its test id when it has one, else by its role and name, numbered in page order.
+3. **Drive the plan.** Every sequence starts from a fresh load of the URL. The page is read only when it settles: two reads in a row, 400 ms apart, must match (at most 4 reads). A sequence that starts a longer planned sequence is not driven alone; the longer one is read after each step. The reference is driven two times, the candidate one time, and the base one time. Each run is a new browser tab that the daemon leases.
+4. **Compare what a person sees, and what the app did.** Names, text, values, and the checked, selected, disabled, expanded and pressed states, in page order. Then each network call since the sequence's first action (method, path with the query values removed, status, and the start of the request body) and each console error and warning. Case and spacing of page text are folded, and elapsed times under one second are rounded to whole seconds. A line that differs between the two reference runs (a clock, a random id) is noise and is ignored. A step that the candidate cannot do and the reference could is a difference. When a network or console read fails, the reading says `effects failed`, so an empty list always means that nothing happened.
+
+The command presses every button it finds. On a build served from loopback (`localhost`, `127.0.0.1`) or a `*.localhost` name, that includes the controls the act guard holds back, such as "Place order" or "Delete": those builds are disposable copies, and their submits are the actions most worth comparing. On any other host the guard stays on and those controls are not pressed. Point it at builds whose data you can change, not at a production database.
+
+## What it prints
+
+The first line is the verdict: `SAME`, `DIFFERENT` or `INVALID`. Then the counts, the time for each build in seconds, and the first 5 differences. Each difference shows the steps that reproduce it, then `-` for the lines only the reference shows and `+` for the lines only the candidate shows. `--json` gives every difference.
+
+With `--base`, each difference gets a tag:
+
+| Tag             | Meaning                                                                     |
+| --------------- | --------------------------------------------------------------------------- |
+| `regression`    | The base and the reference show the same page, and the candidate changed it |
+| `target-missed` | The reference changed the page, and the candidate still shows the base page |
+| `changed`       | The candidate differs from both                                             |
+
+The score is `targets matched / targets x (1 - kept sequences changed / kept)`. A target is a sequence where the reference changed the base page. A kept sequence is one where it did not.
+
+## Exit codes
+
+| Code | Meaning |
+| --- | --- |
+| `0` | Same: every compared sequence shows the same page |
+| `1` | Different |
+| `2` | Invalid: the browser session was lost, nothing could be compared, or the daemon or a build could not be reached. Run it again |
+
+The command uses the daemon on `--port` (or `RETICLE_PORT`), and starts one when there is none.
+
+An agent whose Reticle tools are loaded runs the same compare with `reticle_verify { action: "compare", reference, candidate, base? }`. It answers the same JSON as `--json`; see [reticle_verify](/tools/verify).

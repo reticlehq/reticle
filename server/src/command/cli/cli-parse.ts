@@ -58,6 +58,9 @@ const RESTART_FLAG = '--restart';
 const STATUS_COMMAND = 'status';
 const OPEN_COMMAND = 'open';
 const DRIVE_COMMAND = 'drive';
+const COMPARE_COMMAND = 'compare';
+/** `compare --base <url>`: the build before the change. */
+const BASE_FLAG = '--base';
 /** Kept for one release as `gate --list`. */
 const AFFECTED_COMMAND = 'affected';
 const GATE_COMMAND = 'gate';
@@ -124,6 +127,7 @@ export const LOCAL_COMMANDS: readonly string[] = [
   OPEN_COMMAND,
   DRIVE_COMMAND,
   VERIFY_COMMAND,
+  COMPARE_COMMAND,
   AFFECTED_COMMAND,
   GATE_COMMAND,
   REPORT_COMMAND,
@@ -320,6 +324,7 @@ export type CliResult =
   | { kind: 'drive'; port: number; driveUrl: string; headless: boolean }
   // The verify fields are the suffix parser's, by type: a copied list dropped a new flag (#2061).
   | ({ kind: 'verify' } & Omit<Extract<VerifySuffix, { kind: 'ok' }>, 'kind'>)
+  | ({ kind: 'compare' } & Omit<Extract<CompareArgs, { kind: 'ok' }>, 'kind'>)
   | { kind: 'affected'; files: string[]; since?: string }
   | { kind: 'gate'; files: string[]; since?: string; hook?: boolean; acceptCoverage?: boolean }
   | { kind: 'report'; session?: string; hook: boolean }
@@ -841,6 +846,14 @@ export function parseCliArgs(
       const { kind: _ok, ...fields } = r;
       return { kind: 'verify', ...fields };
     }
+    case COMPARE_COMMAND: {
+      const r = parseCompareArgs(rest, defaultPort);
+      if ('error' === r.kind) {
+        return r;
+      }
+      const { kind: _ok, ...fields } = r;
+      return { kind: 'compare', ...fields };
+    }
     case AFFECTED_COMMAND: {
       const t = parseTargetArgs(rest);
       const since = t.since ?? implicitSince(t.files);
@@ -907,4 +920,63 @@ export function parseCliArgs(
       // word somebody typed, and naming it is strictly more useful than reprinting the whole help.
       return unknownCommand(cmd);
   }
+}
+
+/*
+ * `reticle compare <reference-url> <candidate-url> [--base <url>] [--json]`. The command has one
+ * recipe, so it has no other settings. `--port` names the daemon, as on every command that uses one.
+ */
+
+/** `compare` takes exactly a reference url and a candidate url. */
+const COMPARE_URLS = 2;
+
+type CompareArgs =
+  | {
+      kind: 'ok';
+      reference: string;
+      candidate: string;
+      base?: string;
+      json: boolean;
+      port: number;
+    }
+  | ParseError;
+
+export function parseCompareArgs(args: readonly string[], defaultPort: number): CompareArgs {
+  const urls: string[] = [];
+  let base: string | undefined;
+  let json = false;
+  let port = defaultPort;
+  for (let i = 0; i < args.length; i += 1) {
+    const arg = args[i] ?? '';
+    if (JSON_FLAG === arg) {
+      json = true;
+      continue;
+    }
+    if (BASE_FLAG === arg || PORT_FLAG === arg) {
+      const value = args[i + 1];
+      if (value === undefined || value.startsWith('--')) {
+        return missingValue(arg);
+      }
+      i += 1;
+      if (BASE_FLAG === arg) {
+        base = value;
+        continue;
+      }
+      const n = Number(value);
+      if (!Number.isInteger(n)) {
+        return notANumber(arg, value);
+      }
+      port = n;
+      continue;
+    }
+    if (arg.startsWith('--') || COMPARE_URLS === urls.length) {
+      return unknownArgument(arg);
+    }
+    urls.push(arg);
+  }
+  const [reference, candidate] = urls;
+  if (reference === undefined || candidate === undefined) {
+    return missingOperand(COMPARE_COMMAND, 'a reference url and a candidate url');
+  }
+  return { kind: 'ok', reference, candidate, ...(base === undefined ? {} : { base }), json, port };
 }

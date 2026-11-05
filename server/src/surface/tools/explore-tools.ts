@@ -105,7 +105,7 @@ export const EXPLORE_TOOLS: ToolDef[] = [
       runId: z
         .string()
         .optional()
-        .describe('The run id an explore call answered with; pass it to poll that run.'),
+        .describe('The run id a call answered with; pass it to poll that run.'),
       planId: z.string().optional().describe('Run a plan saved on the dashboard, as it stands.'),
       stop: z.boolean().optional().describe('With runId: stop that Harness run.'),
       say: z.string().optional().describe('With runId: a note to the running Harness.'),

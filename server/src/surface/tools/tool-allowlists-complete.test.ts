@@ -183,7 +183,17 @@ describe('tool allowlists are complete', () => {
      * metric with reads). On no advertised surface (CORE, EXTENDED, VERIFY, LEAN): unproven, so one
      * `reticle_run` hop like `reticle_context`, and the extended surface is at its shared cap.
      */
-    const PINNED_RAW_TOOL_COUNT = 66;
+    /*
+     * 67 since `reticle_verify { action: "compare" }` (`reticle_verify_compare`): two running builds
+     * driven the same way, from outside the app. Decided against `crawl` and `explore`, its siblings
+     * on the facade, and like them it is in NONE of the ten sets. It drives no page of a session of
+     * its own (it leases its own tabs, through the same tool calls the CLI makes), so neither
+     * SESSION set, and not CDP or ACTION. It mints no ref. VERDICT_TOOLS no BY NAME: the facade
+     * `VERIFY` is already there, and its answer carries `verified` (yes, no or unknown), so
+     * `verificationOf` counts a finished compare and skips a `running` poll. On no surface list: it
+     * is reached as an action of `reticle_verify`.
+     */
+    const PINNED_RAW_TOOL_COUNT = 67;
 
     expect(
       RAW_TOOLS.length,

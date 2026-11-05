@@ -321,6 +321,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   ],
   capsule: ['dir', 'fs'],
   cli: [
+    // The link to a running daemon, shared with `reticle compare`.
+    'daemon-link',
     // `reticle status` (status-fields.ts) prints its facts through the renderer in `status`.
     'status',
     // `doctor` prints, per agent, whether its prompt hook is installed: `hook` holds that table.
@@ -407,6 +409,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'lifetime',
     'binding',
     'drive',
+    // `reticle compare` drives two builds of one app and lists what differs.
+    'two-builds',
     'cli',
     'daemon',
     'change',
@@ -457,7 +461,17 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // (session-port.ts) with the same reconnect wait `navigate { reload }` uses.
   exhaust: ['dir', 'fs', 'project', 'facts', 'session'],
   // Two builds are explored with the same breadth-first explorer the exhaustive crawl uses.
-  compare: ['exhaust'],
+  // `outside` holds what `reticle compare` reads beside the page tree: the network and console
+  // lines, and the values the app's scripts compare fields with.
+  compare: ['exhaust', 'outside'],
+  // `reticle compare`: the rules are in `compare`; this directory reaches the daemon over the same
+  // MCP client and lease calls `cli` uses, with the pairing token (`bridge`) and the caller's
+  // project `.reticle` (`project`).
+  'two-builds': ['bridge', 'compare', 'daemon-link', 'outside', 'project'],
+  // The CLI's link to a running daemon (MCP over HTTP/SSE, the lease calls, the result readers),
+  // split out of `adhoc-verdict.ts` so `reticle compare` and its tool do not reach the browser
+  // launcher. `runs` names the client, `bridge` the token, `tools` the lease sentences.
+  'daemon-link': ['bridge', 'runs', 'tools'],
   // Edge cases, driven on the explorer's states and judged by the explorer's own checks.
   edges: ['exhaust'],
   // `ports`: port-state.ts names the process that holds the bridge port, so every surface says the
@@ -807,6 +821,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // the goal check next door and is handed its tools, so like `script` it reaches nothing else.
   explore: ['harness'],
   tools: [
+    // `reticle_verify { action: "compare" }` runs the CLI's own compare, so the two answer the same.
+    'two-builds',
     // The episode log: every call, its result and its effect, written at the one dispatch point.
     // `journal` imports nothing from `tools`, so this adds no mutual pair.
     'journal',

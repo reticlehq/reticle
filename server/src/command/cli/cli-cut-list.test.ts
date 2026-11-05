@@ -23,6 +23,7 @@ const SHORT_HELP = [
   'connect',
   'try',
   'verify',
+  'compare',
   'gate',
   'status',
   'doctor',
