@@ -54,6 +54,38 @@ describe('an element keeps its own text alongside its children', () => {
     expect(occurrences, 'named controls say it once').toBe(1);
   });
 
+  it('keeps the own text of an element whose name comes from aria-label', () => {
+    // `<output aria-label="Total">7</output>` read as `- status "Total"`: the 7 a person sees was not
+    // in the tree, so a value that changed there was invisible. Playwright's ariaSnapshot shows
+    // `- status "Total": "7"` for the same element.
+    mount(
+      '<p>Total: <output aria-label="Total">7</output></p><button aria-label="Close">x</button>',
+    );
+    const tree = treeOf();
+    expect(tree).toContain('- status "Total"');
+    expect(tree).toContain('[text="7"]');
+    expect(tree).toContain('- button "Close"');
+  });
+
+  it('adds no own text to a named control: its name says what it does, its text is a glyph', () => {
+    // An icon button's own text is "x" or "⋯". Printing it beside every labelled control grew the snapshot
+    // on every page and carried nothing a caller acts on. Values hide in outputs and statuses, not controls.
+    mount('<button aria-label="Close">x</button><a href="#" aria-label="More">⋯</a>');
+    expect(treeOf()).not.toContain('[text=');
+  });
+
+  it('adds no own text to an element whose name comes from its content', () => {
+    // The name of `<button>Save <b>draft</b></button>` is "Save draft", read from its content. Its direct text
+    // "Save" says nothing new, and printing it grew every snapshot on the benchmark by 3%.
+    mount('<button>Save <b>draft</b></button><a href="#">Open <span>settings</span></a>');
+    expect(treeOf()).not.toContain('[text=');
+  });
+
+  it('does not repeat own text that only differs from the name in case or spacing', () => {
+    mount('<button aria-label="save  draft">Save draft</button>');
+    expect(treeOf()).not.toContain('[text=');
+  });
+
   it('keeps the role rather than replacing the node with a bare text line', () => {
     // "- text" loses what kind of element it was, which is half of what a snapshot is for.
     mount('<p>hello<span> world</span></p>');
