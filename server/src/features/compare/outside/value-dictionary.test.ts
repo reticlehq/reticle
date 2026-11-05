@@ -59,6 +59,14 @@ describe('value dictionary', () => {
     expect(comparedLiterals(`[${'"!" '.repeat(24)}`)).toEqual([]);
   });
 
+  it('skips type names from typeof checks: library code is full of them, and they are not values', () => {
+    // A bundled library's `typeof e.name === "string"` gave a field named Name the value "string".
+    const pairs = comparedLiterals(
+      'if(typeof e.name==="string"&&e.name==="ada")x();if("function"===typeof t.render)y();',
+    );
+    expect(pairs).toEqual([['name', 'ada']]);
+  });
+
   it('collects switch cases and includes() lists for the named value, from minified code', () => {
     const js =
       'function r(e){switch(e.kind){case"draft":return 1;case"live":return 2;default:return 0}}' +

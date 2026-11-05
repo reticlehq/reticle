@@ -38,6 +38,20 @@ const CASE = /case\s*["']([^"'\\]{1,40})["']\s*:/g;
  */
 const INCLUDES =
   /\[\s*((?:["'][^"'\\]{1,40}["']\s*,\s*){0,30}["'][^"'\\]{1,40}["'])\s*,?\s*\]\.includes\(\s*[\w$.]*\.([A-Za-z_$][\w$]*)\s*\)/g;
+/**
+ * What `typeof` returns. A `typeof x.name === "string"` check compares a type, not a value the app expects in
+ * the field; bundled libraries are full of them, and they gave a field named Name the value "string".
+ */
+const TYPE_NAMES: ReadonlySet<string> = new Set([
+  'string',
+  'number',
+  'boolean',
+  'object',
+  'function',
+  'undefined',
+  'symbol',
+  'bigint',
+]);
 const QUOTED = /["']([^"'\\]{1,40})["']/g;
 
 /** A name, lowercase, letters and digits only. */
@@ -70,7 +84,10 @@ export function comparedLiterals(js: string): [string, string][] {
       found.push({ at: m.index + v.index, pair: [m[2] ?? '', v[1] ?? ''] });
     }
   }
-  return found.sort((a, b) => a.at - b.at).map((f) => f.pair);
+  return found
+    .filter((f) => !TYPE_NAMES.has(f.pair[1]))
+    .sort((a, b) => a.at - b.at)
+    .map((f) => f.pair);
 }
 
 export function buildDictionary(pairs: readonly (readonly [string, string])[]): ValueDictionary {
