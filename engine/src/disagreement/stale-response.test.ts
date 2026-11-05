@@ -26,6 +26,10 @@ const stateApplied = (t: number, path: string) =>
   ({ type: EventType.STATE_CHANGE, t, data: { name: 'filters', path } }) as unknown as ReticleEvent;
 const domApplied = (t: number, ref: string) =>
   ({ type: EventType.DOM_TEXT, t, ref, data: { text: 'loaded' } }) as unknown as ReticleEvent;
+const signalApplied = (t: number) =>
+  ({ type: EventType.SIGNAL, t, data: { name: 'loaded' } }) as unknown as ReticleEvent;
+const unidentifiedDomApplied = (t: number) =>
+  ({ type: EventType.DOM_TEXT, t, data: { text: 'loaded' } }) as unknown as ReticleEvent;
 
 describe('stale response detection', () => {
   it('reports overlapping reads of one endpoint that settled out of order', () => {
@@ -328,6 +332,22 @@ describe('parallel fan-out is not a race', () => {
       ['state path', stateApplied(150, 'shipments.rows'), stateApplied(700, 'shipments.rows')],
       ['DOM target', domApplied(150, 'shipments-table'), domApplied(700, 'shipments-table')],
     ])('still reports a race when both responses update the same %s', (_name, newer, older) => {
+      expect(race(newer, older)).toHaveLength(1);
+    });
+
+    it.each([
+      ['only a signal', signalApplied(150), stateApplied(700, 'shipments.rows')],
+      [
+        'only a DOM target',
+        domApplied(150, 'shipments-table'),
+        stateApplied(700, 'shipments.rows'),
+      ],
+      [
+        'a DOM event without a ref',
+        unidentifiedDomApplied(150),
+        domApplied(700, 'shipments-table'),
+      ],
+    ])('keeps the timing fallback when the winner has %s', (_name, newer, older) => {
       expect(race(newer, older)).toHaveLength(1);
     });
   });

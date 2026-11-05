@@ -64,6 +64,9 @@ interface AppState {
   rulePairsClicks: number;
   /** The one store path the Rule Pairs "Remember" button moves. */
   rulePairsChoice: string;
+  rulePairsGenderOptions: string;
+  rulePairsStateOptions: string;
+  shipments: { rows: string };
   saveItem: (label: string, renderDelayMs?: number, serverDelayMs?: number) => Promise<void>;
 
   setView: (v: ViewId) => void;
@@ -109,6 +112,9 @@ export const useApp = create<AppState>((set, get) => ({
   savedItemsStatus: 'idle',
   rulePairsClicks: 0,
   rulePairsChoice: '',
+  rulePairsGenderOptions: '',
+  rulePairsStateOptions: '',
+  shipments: { rows: '' },
   saveItem: async (label, renderDelayMs = 0, serverDelayMs = 0) => {
     // Do NOT set savedItemsStatus:'saving' here — that STATE_CHANGE fires before the response
     // lands and makes uiAdvanced()=true, which suppresses response-ignored in both polarities.

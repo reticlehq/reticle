@@ -311,14 +311,21 @@ function appliedAfter(
       .map(reactionTarget)
       .filter((target): target is string => target !== undefined),
   );
+  const winnerTargetKinds = new Set(
+    [...winnerTargets].map((target) => target.slice(0, target.indexOf(':'))),
+  );
   return events.some((event) => {
     if (!belongsTo(event, loser, all)) {
       return false;
     }
-    // A known target proves an overwrite only when both answers wrote it. Signals and older SDK events
-    // without a target keep the timing fallback because the event stream cannot compare them.
+    // Different known targets rule out an overwrite only when they are comparable. Signals, older SDK
+    // events and targets of another kind keep the timing fallback because the stream cannot compare them.
     const target = reactionTarget(event);
-    return target === undefined || winnerTargets.has(target);
+    if (target === undefined) {
+      return true;
+    }
+    const kind = target.slice(0, target.indexOf(':'));
+    return !winnerTargetKinds.has(kind) || winnerTargets.has(target);
   });
 }
 

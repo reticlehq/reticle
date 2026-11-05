@@ -3,7 +3,7 @@ import { useApp } from '../store/store.js';
 import { emit, Sig } from '../lib/reticle-bridge.js';
 
 /**
- * The shapes that three narrowed rules must tell apart in a real browser.
+ * The shapes that narrowed rules must tell apart in a real browser.
  *
  * #1627, #1629 and #2127 each made a rule report less often, and only unit tests covered those
  * changes (#2141). A rule that reports less can hide a real defect as a pass. Each panel gives one
@@ -26,6 +26,8 @@ import { emit, Sig } from '../lib/reticle-bridge.js';
  *    same request and must still give `yes`.
  *  - `signal-contradicted` over a declared 409: a `form:submit` signal fired before the invite was
  *    sent (silent), and an `invite:sent` signal fired after the 409 (report) (#2172).
+ *  - `stale-response-applied`: same-path reads that update different store keys (silent), and the
+ *    same race when both answers update `shipments.rows` (report) (#2175).
  */
 const API = 'http://localhost:8787/api/rule-pairs';
 /**
@@ -72,12 +74,21 @@ async function readPage(list: string): Promise<void> {
   await fetch(`${API}/${list}?page=1`);
 }
 
+async function readOptions(query: string): Promise<string> {
+  const response = await fetch(`${API}/options?${query}`);
+  const data = (await response.json()) as { value?: unknown };
+  return 'string' === typeof data.value ? data.value : '';
+}
+
 export function RulePairs(): React.ReactElement {
   const [saved, setSaved] = useState('');
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(0);
   const [batch, setBatch] = useState('');
   const [invited, setInvited] = useState('');
+  const genderOptions = useApp((state) => state.rulePairsGenderOptions);
+  const stateOptions = useApp((state) => state.rulePairsStateOptions);
+  const shipments = useApp((state) => state.shipments);
 
   useEffect(() => {
     void readPage('pages');
@@ -178,6 +189,48 @@ export function RulePairs(): React.ReactElement {
             Stream archived
           </button>
         </div>
+      </div>
+      <div className="panel panel-pad" style={{ maxWidth: 560 }}>
+        <h3>Response targets</h3>
+        <button
+          data-testid="rule-pairs-options-gender"
+          onClick={() =>
+            void readOptions('kind=gender').then((rulePairsGenderOptions) =>
+              useApp.setState({ rulePairsGenderOptions }),
+            )
+          }
+        >
+          Load gender options
+        </button>
+        <output data-testid="rule-pairs-gender-options">{genderOptions}</output>
+        <button
+          data-testid="rule-pairs-options-state"
+          onClick={() =>
+            void readOptions('kind=state').then((rulePairsStateOptions) =>
+              useApp.setState({ rulePairsStateOptions }),
+            )
+          }
+        >
+          Load state options
+        </button>
+        <output data-testid="rule-pairs-state-options">{stateOptions}</output>
+        <button
+          data-testid="rule-pairs-shipments-all"
+          onClick={() =>
+            void readOptions('status=all').then((rows) => useApp.setState({ shipments: { rows } }))
+          }
+        >
+          Load all shipments
+        </button>
+        <button
+          data-testid="rule-pairs-shipments-held"
+          onClick={() =>
+            void readOptions('status=held').then((rows) => useApp.setState({ shipments: { rows } }))
+          }
+        >
+          Load held shipments
+        </button>
+        <output data-testid="rule-pairs-shipments">{shipments.rows}</output>
       </div>
       <div className="panel panel-pad" style={{ maxWidth: 560 }}>
         <h3>Invite</h3>
