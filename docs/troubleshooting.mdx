@@ -99,6 +99,43 @@ docker compose build frontend && docker compose up -d --renew-anon-volumes front
 
 `reticle init` prints all three as a notice when it finds a `Dockerfile` or a compose file near the app, so on a fresh install you should meet this page having already been told.
 
+### Agent in WSL, browser on Windows
+
+When an agent or daemon runs inside WSL and you open the web application in a Windows browser (such as Google Chrome), the session list remains empty by default. Reticle cannot auto-drive a Linux browser if none is installed, and the browser running on the Windows host connects across the WSL boundary.
+
+Follow this recipe to connect them:
+
+1. **Launch Windows Chrome with remote debugging enabled:**
+
+   Run in PowerShell or Windows Command Prompt:
+
+   ```powershell
+   & "C:\Program Files\Google\Chrome\Application\chrome.exe" --remote-debugging-port=9222
+   ```
+
+2. **Point the WSL daemon to Windows Chrome:**
+
+   In WSL 2, the Windows host is accessible at `localhost` (via mirrored networking) or via your default gateway. Export `RETICLE_CDP_URL` before running the daemon or verification commands:
+
+   ```bash
+   export RETICLE_CDP_URL=http://localhost:9222
+   ```
+
+   If mirrored networking is disabled in your `.wslconfig`, use the host IP address from `/etc/resolv.conf`:
+
+   ```bash
+   HOST_IP=$(grep nameserver /etc/resolv.conf | awk '{print $2}')
+   export RETICLE_CDP_URL=http://${HOST_IP}:9222
+   ```
+
+3. **Verify the bridge connection from the app:**
+
+   Ensure the app loaded in Windows Chrome can dial the Reticle daemon listening inside WSL on port `4400`. If you run the dev server inside WSL, Vite and Next.js forward `localhost` ports automatically. If you wired `reticle.connect()` manually, verify it targets `ws://localhost:4400/reticle`.
+
+4. **Run verification:**
+
+   With `RETICLE_CDP_URL` set, `reticle drive <url>` and visual tools inside WSL attach directly to the running Windows Chrome instance without installing Linux Chromium.
+
 ### The port mismatch
 
 Your app dials a port; the daemon listens on one. When they disagree, the app runs perfectly and silently never connects. The browser console says so:
