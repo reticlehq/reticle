@@ -70,6 +70,14 @@ function directText(el: Element): string {
   return collapsed.length > TEXT_MAX ? `${collapsed.slice(0, TEXT_MAX)}…` : collapsed;
 }
 
+/** Case and spacing folded, to tell whether an element's text only repeats its name. */
+const foldText = (s: string): string => s.toLowerCase().replace(/\s+/g, ' ').trim();
+
+/** The element's own text, or '' when it says nothing the accessible name does not already say. */
+function textBesideName(own: string, name: string): string {
+  return 0 < name.length && foldText(own) === foldText(name) ? '' : own;
+}
+
 function readingParts(el: Element): { text: string; own: boolean } {
   let text = '';
   let own = false;
@@ -446,9 +454,10 @@ function visit(child: Element, depth: number, ctx: WalkCtx, inLive: boolean): vo
   // second was a sentence whose two halves (`connects this project ` and ` .`) both vanished, leaving
   // only the `<b>` between them and making the spacing look broken.
   //
-  // Skipped when the element HAS an accessible name: for a button the name IS its text, and printing
-  // both would double every control on the page.
-  const text = !lean && 0 === name.length ? directText(child) : '';
+  // Skipped when it only repeats the accessible name: for a button the name IS its text, and printing
+  // both would double every control on the page. A name from `aria-label` is not the text, so
+  // `<output aria-label="Total">7</output>` keeps its 7, as Playwright's ariaSnapshot does.
+  const text = lean ? '' : textBesideName(directText(child), name);
   // Layout signature for grid/flex containers — makes CLS/layout regressions visible.
   const layout = lean ? '' : layoutSignature(style);
   // Actionable WITHOUT an interactive role, which is most of the real web.
@@ -494,7 +503,7 @@ function visit(child: Element, depth: number, ctx: WalkCtx, inLive: boolean): vo
       // A bare `- text` line only for a GENERIC container, where there is no role worth keeping.
       // Any other role keeps its line and carries the text as a field, because "- text" would throw
       // away what kind of element it was, which is half of what a snapshot is for.
-      'generic' === role && text.length > 0 && 0 === layout.length
+      'generic' === role && 0 === name.length && text.length > 0 && 0 === layout.length
         ? formatTextLine(depth, text)
         : formatLine(child, depth, role, name, layout, text, true === ctx.ids),
     );
