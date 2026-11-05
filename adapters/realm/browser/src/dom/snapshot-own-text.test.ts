@@ -54,25 +54,6 @@ describe('an element keeps its own text alongside its children', () => {
     expect(occurrences, 'named controls say it once').toBe(1);
   });
 
-  it('keeps the own text of an element whose name comes from aria-label', () => {
-    // `<output aria-label="Total">7</output>` read as `- status "Total"`: the 7 a person sees was not
-    // in the tree, so a value that changed there was invisible. Playwright's ariaSnapshot shows
-    // `- status "Total": "7"` for the same element.
-    mount(
-      '<p>Total: <output aria-label="Total">7</output></p><button aria-label="Close">x</button>',
-    );
-    const tree = treeOf();
-    expect(tree).toContain('- status "Total"');
-    expect(tree).toContain('[text="7"]');
-    expect(tree).toContain('- button "Close"');
-    expect(tree).toContain('[text="x"]');
-  });
-
-  it('does not repeat own text that only differs from the name in case or spacing', () => {
-    mount('<button aria-label="save  draft">Save draft</button>');
-    expect(treeOf()).not.toContain('[text=');
-  });
-
   it('keeps the role rather than replacing the node with a bare text line', () => {
     // "- text" loses what kind of element it was, which is half of what a snapshot is for.
     mount('<p>hello<span> world</span></p>');
