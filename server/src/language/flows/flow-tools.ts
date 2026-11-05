@@ -764,7 +764,9 @@ export const FLOW_TOOLS: ToolDef[] = [
             durationMs: o.ok && o.value !== undefined ? o.value.durationMs : 0,
           }));
           const flaky = await recordSuiteFlakes(deps.fs, rootForTarget(deps, target), parallelRuns);
-          const runId = await persistAndSyncVerificationRun(deps, timed, target);
+          const replaySessionId = deps.sessions.resolve(sessionId).id;
+          const identity = { sessionId: replaySessionId, root: rootForTarget(deps, target) };
+          const runId = await persistAndSyncVerificationRun(deps, timed, target, identity);
           const verdict = buildSuiteVerdict(
             parallelRuns,
             selected.knownRoutes,
@@ -819,7 +821,9 @@ export const FLOW_TOOLS: ToolDef[] = [
         // one an agent uses was the blind half.
         const flaky = await recordSuiteFlakes(deps.fs, rootForTarget(deps, target), runs);
         // Emit the consolidated run artifact (Runs tab) + best-effort cloud push. Never blocks the verdict.
-        const runId = await persistAndSyncVerificationRun(deps, timed, target);
+        const replaySessionId = deps.sessions.resolve(sessionId).id;
+        const identity = { sessionId: replaySessionId, root: rootForTarget(deps, target) };
+        const runId = await persistAndSyncVerificationRun(deps, timed, target, identity);
         const verdict = Bounded.withStop(
           buildSuiteVerdict(runs, selected.knownRoutes, SuiteIsolation.SHARED_SESSION),
           stoppedEarly.notRun,

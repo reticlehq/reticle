@@ -77,7 +77,13 @@ function journalledSession(): {
 } {
   const session = new Session(hello(), noopSocket, () => 0);
   const sink = fakeSink();
-  session.setJournal(new JournalRecorder(sink, { now: () => session.elapsed(), flushAt: 100 }));
+  session.setJournal(
+    new JournalRecorder(sink, {
+      now: () => session.elapsed(),
+      flushAt: 100,
+      identity: { sessionId: session.id, root: '/repo/demo' },
+    }),
+  );
   const sessions: Partial<SessionManager> = { resolve: () => session };
   return {
     session,

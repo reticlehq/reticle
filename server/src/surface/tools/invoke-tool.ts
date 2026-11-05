@@ -14,7 +14,7 @@ import { ArtifactRootReason } from '@/memory/project/artifact-root.js';
 import { agentNudge, takePlatformMoment } from './platform-moment.js';
 import { RESULT_FIELD, trackVerdict } from './reticle-result.js';
 import { endsRun, noteToolResult, runReportField } from './run-report.js';
-import { runLedger } from '@/judgement/runs/run-ledger.js';
+import { runLedger, type RunIdentity } from '@/judgement/runs/run-ledger.js';
 import { readAppNotes } from './agent/app-notes.js';
 import { forTheAgent } from './agent/for-the-agent.js';
 import { inRepeatStreak, withHintOn } from './repeat-hint.js';
@@ -305,72 +305,137 @@ export async function runTool<Ext>(
   given: Record<string, unknown>,
   call?: ToolCall,
 ): Promise<unknown> {
-  // A replay's secrets leave the arguments here, before the tool log, the journal or telemetry can
-  // see them, and are supplied to this call alone.
+  // A replay's secrets leave the arguments here, before the tool log,
+  // the journal or telemetry can see them.
   const { secrets, rest: args } = takeCallSecrets(given);
-  // A verdict still being decided is waited for by a session end (`trackVerdict`); the result is
-  // compacted for the agent last, after telemetry and the tool log have read the full result.
+
   return trackVerdict(
     tool.name,
     withCallSecrets(secrets, async () => {
-      // The agent's own calls make its run; `reticle_run` is counted once, as the tool it reached.
-      // A host that wires no clock (an embedding, a test double) gets no report, never an error.
       const agentCall =
         currentDrivenBy() === undefined &&
         deps.attachId !== undefined &&
         ReticleTool.RUN !== tool.name &&
         'function' === typeof deps.now;
-      // Closes the offer of an earlier first session call: did the agent do the offered step?
+
       if (agentCall) {
         noteNextCall(tool.name, args);
       }
+
       const ends = endsRun(tool.name, args);
-      // A call that only ends a run starts none: a second yield in a row carries no empty report.
-      if (agentCall && !ends && deps.attachId !== undefined) {
-        runLedger.begin(deps.now(), deps.attachId);
+
+      let identity: RunIdentity | undefined;
+
+      // dispatchTool resolves sessions for these tools itself.
+      const dispatchResolvesSession =
+        SESSION_BOUND_TOOLS.has(tool.name) || CDP_TOOLS.has(tool.name);
+
+      // Session-exempt tools retain the existing resolution behavior.
+      if (!dispatchResolvesSession) {
+        const runSession = safeRoot(() =>
+          deps.sessions.resolve(sessionIdFromArgs(args)),
+        );
+
+        if (runSession !== undefined) {
+          identity = {
+            sessionId: runSession.id,
+            root: runSession.artifactRoot ?? deps.reticleRoot,
+          };
+        }
       }
-      // The project of the session a call ends, read while the session still exists: releasing a
-      // tab removes it, and an unreadable project lost an unlinked user's cloud line.
-      const endedIn =
-        agentCall && ends ? safeRoot(() => sessionRoot(deps, sessionIdFromArgs(args))) : undefined;
-      // `reticle_run` is counted once, as the tool it reached; never another agent's call (rule 8).
-      const owner = currentDrivenBy() === undefined && ReticleTool.RUN !== tool.name;
+
+      let notesBefore: string[] = [];
+
+      if (agentCall && identity !== undefined) {
+        notesBefore = readAppNotes(identity.root);
+      }
+
+      // Start the run before the handler executes.
+      if (agentCall && !ends && identity !== undefined) {
+        runLedger.begin(deps.now(), identity);
+      }
+
+      // For session-bound/CDP tools, use the exact session chosen by dispatchTool.
+      const onSessionResolved = (session: Session): void => {
+        identity = {
+          sessionId: session.id,
+          root: session.artifactRoot ?? deps.reticleRoot,
+        };
+
+        if (agentCall) {
+          notesBefore = readAppNotes(identity.root);
+        }
+
+        if (agentCall && !ends) {
+          runLedger.begin(deps.now(), identity);
+        }
+      };
+
+      const owner =
+        currentDrivenBy() === undefined && ReticleTool.RUN !== tool.name;
+
       const { raw, hint } = await inRepeatStreak(
         owner ? deps.attachId : undefined,
         tool.name,
         args,
-        () => loggedTool(tool, deps, args, call),
+        () => loggedTool(tool, deps, args, call, onSessionResolved),
       );
-      const attach = currentDrivenBy() === undefined ? deps.attachId : undefined;
-      const root =
-        attach === undefined
-          ? undefined
-          : safeRoot(() => sessionRoot(deps, sessionIdFromArgs(args)));
-      // The app notes before this call, so a note it learns counts as memory written.
-      const notesBefore = agentCall && root !== undefined ? readAppNotes(root) : [];
+
+      const attach =
+        currentDrivenBy() === undefined ? deps.attachId : undefined;
+
       const answer = withHintOn(
-        forTheAgent({ name: tool.name, args, result: raw, attach, root, fold: NOTICE_FOLD }),
+        forTheAgent({
+          name: tool.name,
+          args,
+          result: raw,
+          attach,
+          root: identity?.root,
+          fold: NOTICE_FOLD,
+        }),
         hint,
       );
+
       if (!agentCall) {
         return answer;
       }
-      runLedger.after(deps.now(), deps.attachId);
-      noteToolResult(runLedger, tool.name, args, raw);
-      const notesAfter = root === undefined ? [] : readAppNotes(root);
-      runLedger.memoryWritten(notesAfter.filter((note) => !notesBefore.includes(note)).length);
-      runLedger.memoryRead(notesBefore);
-      if (!ends || null === answer || 'object' !== typeof answer) {
+
+      if (identity !== undefined) {
+        runLedger.after(deps.now(), identity);
+        noteToolResult(runLedger, tool.name, args, raw, identity);
+
+        const notesAfter = readAppNotes(identity.root);
+
+        runLedger.memoryWritten(
+          identity,
+          notesAfter.filter((note) => !notesBefore.includes(note)).length,
+        );
+
+        runLedger.memoryRead(notesBefore, identity);
+      }
+
+      if (
+        !ends ||
+        null === answer ||
+        'object' !== typeof answer ||
+        identity === undefined
+      ) {
         return answer;
       }
+
       return {
         ...answer,
-        ...runReportField(runLedger, endedIn ?? root, process.env, deps.now(), deps.attachId),
+        ...runReportField(
+          runLedger,
+          identity.root,
+          process.env,
+          deps.now(),
+          identity,
+        ),
       };
     }),
   );
 }
-
 /** Advisories that become once-per-session notice lines. See agent/notices.ts. */
 export const NOTICE_FOLD: NoticeFold = {
   advisories: [
@@ -401,11 +466,14 @@ async function loggedTool<Ext>(
   deps: ToolDeps<Ext>,
   args: Record<string, unknown>,
   call?: ToolCall,
+  onSessionResolved?: (session: Session) => void,
 ): Promise<unknown> {
   const logPath = toolLogPath();
   const at = Date.now();
-  // The tab this call drove, and where its events start: the call's effect on the page.
-  const seen: DispatchSeen = {};
+
+  // The tab this call drove, and where its events start.
+  const seen: DispatchSeen = onSessionResolved === undefined ? {} : { onSessionResolved };
+
   const episode = (outcome: { result: unknown } | { error: string }): void => {
     // A record that cannot be built never fails the call it describes.
     safeRoot(() => {
@@ -414,35 +482,59 @@ async function loggedTool<Ext>(
         seen.session === undefined || from === undefined
           ? undefined
           : seen.session.eventsSince(from);
+
       const drivenBy = currentDrivenBy();
       const agent = agentNameOf(deps.attachId);
       const agentSession = agentSessionOf(deps.attachId);
-      recordEpisodeCall(seen.session?.artifactRoot ?? deps.reticleRoot, deps.attachId, Date.now, {
-        tool: tool.name,
-        args,
-        startedAt: at,
-        endedAt: Date.now(),
-        ...outcome,
-        ...(seen.session === undefined ? {} : { sessionId: seen.session.id }),
-        ...(agent === undefined ? {} : { agent }),
-        ...(agentSession === undefined ? {} : { agentSession }),
-        ...(drivenBy === undefined ? {} : { drivenBy }),
-        ...(effect === undefined ? {} : { effect }),
-      });
+
+      recordEpisodeCall(
+        seen.session?.artifactRoot ?? deps.reticleRoot,
+        deps.attachId,
+        Date.now,
+        {
+          tool: tool.name,
+          args,
+          startedAt: at,
+          endedAt: Date.now(),
+          ...outcome,
+          ...(seen.session === undefined ? {} : { sessionId: seen.session.id }),
+          ...(agent === undefined ? {} : { agent }),
+          ...(agentSession === undefined ? {} : { agentSession }),
+          ...(drivenBy === undefined ? {} : { drivenBy }),
+          ...(effect === undefined ? {} : { effect }),
+        },
+      );
     });
   };
+
   try {
     const result = await dispatchTool(tool, deps, args, call, seen);
+
     if (logPath !== undefined) {
-      logToolCall(logPath, { tool: tool.name, args, at, ms: Date.now() - at, result });
+      logToolCall(logPath, {
+        tool: tool.name,
+        args,
+        at,
+        ms: Date.now() - at,
+        result,
+      });
     }
+
     episode({ result });
     return result;
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+
     if (logPath !== undefined) {
-      logToolCall(logPath, { tool: tool.name, args, at, ms: Date.now() - at, error: message });
+      logToolCall(logPath, {
+        tool: tool.name,
+        args,
+        at,
+        ms: Date.now() - at,
+        error: message,
+      });
     }
+
     episode({ error: message });
     throw error;
   }
@@ -452,6 +544,8 @@ async function loggedTool<Ext>(
 interface DispatchSeen {
   session?: Session;
   from?: number | undefined;
+  onSessionResolved?: (session: Session) => void;
+
 }
 
 async function dispatchTool<Ext>(
@@ -583,9 +677,13 @@ async function dispatchTool<Ext>(
   // One identity for the whole call: the handler drives the session everything above is attributed
   // to, rather than resolving again against a registry that can have changed underneath it.
   const dispatchArgs = pinnedArgs(args, rawSessionId, session);
+
   if (session !== undefined) {
     seen.session = session;
     seen.from = safeRoot(() => session?.elapsed());
+
+    // Pass the exact session selected by dispatch to runTool.
+    seen.onSessionResolved?.(session);
   }
 
   let raw: unknown;

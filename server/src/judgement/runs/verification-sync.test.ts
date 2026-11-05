@@ -28,6 +28,8 @@ import {
   setMcpClientIdentityHook,
 } from '@/surface/mcp/peer/client-identity.js';
 
+const TEST_IDENTITY = { sessionId: 'verification-session', root: '/repo/verification' };
+
 const timed = (name: string, status: ReplayStatus): TimedReplay => ({
   replay: { name, status, steps: [] } satisfies FlowReplayResult,
   durationMs: 50,
@@ -77,7 +79,7 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
 
     const runId = await persistAndSyncVerificationRun(deps, [timed('checkout', ReplayStatus.OK)], {
       projectId: asProjectId('shop'),
-    });
+    }, TEST_IDENTITY);
 
     expect(runId).toBeDefined();
     expect(calls).toHaveLength(0); // no creds → nothing leaves the machine
@@ -94,6 +96,7 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
       deps,
       [timed('checkout', ReplayStatus.OK), timed('signup', ReplayStatus.DRIFT)],
       { projectId: asProjectId('shop') },
+      TEST_IDENTITY,
     );
 
     expect(calls).toHaveLength(1);
@@ -121,7 +124,7 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
 
     const runId = await persistAndSyncVerificationRun(deps, [timed('checkout', ReplayStatus.OK)], {
       projectId: asProjectId('shop'),
-    });
+    }, TEST_IDENTITY);
     expect(runId).toBeDefined(); // swallowed; local artifact still written
   });
 
@@ -136,9 +139,9 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
     setMcpClientIdentityHook(() => ({ name: 'claude-code', version: '1' }));
     const asked = await persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], {
       projectId: undefined,
-    });
+    }, TEST_IDENTITY);
     const byAgent = await runAsAgent('a1', () =>
-      persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], { projectId: undefined }),
+      persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], { projectId: undefined }, TEST_IDENTITY),
     );
     forgetAgents();
     clearMcpClientIdentityHook();
@@ -178,7 +181,7 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
     forgetAgents();
     noteAgentAttached('ci', CLI_CLIENT_NAME);
     const id = await runAsAgent('ci', () =>
-      persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], { projectId: undefined }),
+      persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], { projectId: undefined }, TEST_IDENTITY),
     );
     forgetAgents();
     const read = await new RunStore(fs, root).read(id as RunId);
@@ -200,7 +203,7 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
     forgetAgents();
     noteAgentAttached('laptop', CLI_CLIENT_NAME);
     const id = await runAsAgent('laptop', () =>
-      persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], { projectId: undefined }),
+      persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], { projectId: undefined }, TEST_IDENTITY),
     );
     forgetAgents();
     const read = await new RunStore(fs, root).read(id as RunId);
@@ -215,7 +218,7 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
    */
   it('writes no separate run for a replay the Harness made inside its own drive', async () => {
     const id = await runDrivenBy({ harness: 'h1', driver: 'server' }, () =>
-      persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], { projectId: undefined }),
+      persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], { projectId: undefined }, TEST_IDENTITY),
     );
     expect(id).toBeUndefined();
   });
@@ -228,13 +231,18 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
     );
     const runId = await persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], {
       projectId: undefined,
-    });
+    }, TEST_IDENTITY);
     const stored = await new RunStore(fs, root).read(runId as RunId);
     expect(stored.ok && stored.run.project.name).toBe('bench-checkout');
   });
 
   it('is a no-op for an empty suite (nothing to verify)', async () => {
-    const runId = await persistAndSyncVerificationRun(deps, [], { projectId: asProjectId('shop') });
+    const runId = await persistAndSyncVerificationRun(
+      deps,
+      [],
+      { projectId: asProjectId('shop') },
+      TEST_IDENTITY,
+    );
     expect(runId).toBeUndefined();
   });
 });

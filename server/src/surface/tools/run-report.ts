@@ -16,7 +16,7 @@ import {
   asString,
   type RunReport,
 } from '@reticlehq/core';
-import type { RunLedger } from '@/judgement/runs/run-ledger.js';
+import type { RunLedger, RunIdentity } from '@/judgement/runs/run-ledger.js';
 import { ResultWord, linkedToPlatform, seconds } from './reticle-result.js';
 
 const HEAD = '**Reticle run report: ';
@@ -125,6 +125,7 @@ export function noteToolResult(
   tool: string,
   args: Record<string, unknown>,
   result: unknown,
+  identity: RunIdentity,
 ): void {
   if (!isRecord(result) || result['error'] !== undefined) {
     return;
@@ -132,7 +133,7 @@ export function noteToolResult(
   if (ReticleTool.FLOW_SAVE === tool || ReticleTool.FLOW_SAVE_RECORDED === tool) {
     const name = result['name'];
     if ('string' === typeof name) {
-      ledger.flowSaved(name);
+      ledger.flowSaved(name, identity);
     }
     return;
   }
@@ -140,14 +141,14 @@ export function noteToolResult(
   if (ReticleTool.INTENT === tool) {
     // The intent ledger in `.reticle/intent/` is the memory an unlinked project has.
     if (IntentWrite.RECORD === action) {
-      ledger.memoryWritten();
+      ledger.memoryWritten(identity);
     }
     const declared = args['intents'];
     if (IntentWrite.DECLARE === action && Array.isArray(declared)) {
-      ledger.memoryWritten(declared.length);
+      ledger.memoryWritten(identity, declared.length);
     }
     if (action !== undefined && INTENT_READS.has(action)) {
-      ledger.memoryRead([JSON.stringify(result)]);
+      ledger.memoryRead([JSON.stringify(result)], identity);
     }
     return;
   }
@@ -155,11 +156,11 @@ export function noteToolResult(
     return;
   }
   if ('add' === action && result['added'] !== undefined) {
-    ledger.memoryWritten();
+    ledger.memoryWritten(identity);
   }
   const known = result['known'];
   if (Array.isArray(known)) {
-    ledger.memoryRead(known.map((entry) => JSON.stringify(entry)));
+    ledger.memoryRead(known.map((entry) => JSON.stringify(entry)), identity);
   }
 }
 
@@ -169,14 +170,15 @@ export function runReportField(
   root: string | undefined,
   env: Record<string, string | undefined>,
   now: number,
-  owner?: string,
+  identity: RunIdentity
 ): Partial<
   Record<typeof RUN_REPORT_FIELD, { report: RunReport; markdown: string; instruction: string }>
 > {
-  if (ledger.isEmpty(owner)) {
+
+  if (ledger.isEmpty(identity)) {
     return {};
   }
-  const taken = ledger.take(now, owner);
+  const taken = ledger.take(now, identity);
   const silenced = env[UPGRADE_HINT_SILENCE_ENV] !== undefined;
   const linked = root === undefined || linkedToPlatform(root, env);
   const report: RunReport = silenced || linked ? taken : { ...taken, cloud: CLOUD_VALUE_LINE };

@@ -3,6 +3,7 @@ import { EventType, type ReticleEvent } from '@reticlehq/core';
 import { JournalRecorder, type JournalSink } from './journal-recorder.js';
 
 const SESSION = 'demo';
+const TEST_IDENTITY = { sessionId: SESSION, root: '/repo/demo' };
 
 function net(type: ReticleEvent['type'], url: string, seq: number): ReticleEvent {
   return { t: seq, seq, type, sessionId: SESSION, data: { id: `r${String(seq)}`, url } };
@@ -29,7 +30,7 @@ function urlsOf(events: readonly ReticleEvent[]): string[] {
 describe('the journal does not record Reticle watching itself load', () => {
   it('drops a fetch of Reticle’s own SDK bundle from node_modules', async () => {
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100 });
+    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100, identity: TEST_IDENTITY });
     rec.observe(
       net(
         EventType.NET_REQUEST,
@@ -43,7 +44,7 @@ describe('the journal does not record Reticle watching itself load', () => {
 
   it('drops the Vite dep-optimizer copy of the same bundle', async () => {
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100 });
+    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100, identity: TEST_IDENTITY });
     rec.observe(
       net(
         EventType.NET_REQUEST,
@@ -57,7 +58,7 @@ describe('the journal does not record Reticle watching itself load', () => {
 
   it('drops the pending and detail halves too, so nothing is left looking hung', async () => {
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100 });
+    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100, identity: TEST_IDENTITY });
     const url = 'https://cdn.jsdelivr.net/npm/@reticlehq/browser/dist/index.js';
     rec.observe(net(EventType.NET_PENDING, url, 0));
     rec.observe(net(EventType.NET_DETAIL, url, 1));
@@ -69,7 +70,7 @@ describe('the journal does not record Reticle watching itself load', () => {
 
   it('keeps the app’s own requests, including ones whose path merely resembles ours', async () => {
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100 });
+    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100, identity: TEST_IDENTITY });
     const kept = [
       'http://localhost:5173/src/main.tsx',
       'http://localhost:5173/api/reticlehq/orders',
@@ -85,7 +86,7 @@ describe('the journal does not record Reticle watching itself load', () => {
 
   it('keeps every non-network event untouched', async () => {
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100 });
+    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100, identity: TEST_IDENTITY });
     rec.observe({
       t: 0,
       seq: 0,

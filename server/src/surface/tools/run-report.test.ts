@@ -20,7 +20,7 @@ import {
   Verified,
   type RunReport,
 } from '@reticlehq/core';
-import { RunLedger } from '@/judgement/runs/run-ledger.js';
+import { RunLedger, type RunIdentity } from '@/judgement/runs/run-ledger.js';
 import { endsRun, noteToolResult, renderRunReport, runReportField } from './run-report.js';
 import { runTool } from './invoke-tool.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
@@ -50,6 +50,9 @@ const REPORT: RunReport = {
   firstVerdictMs: 18_200,
   cloud: CLOUD_VALUE_LINE,
 };
+const IDENTITY_A: RunIdentity = { sessionId: 'session-a', root: '/repo/worktree-a' };
+const IDENTITY_B: RunIdentity = { sessionId: 'session-b', root: '/repo/worktree-a' };
+const IDENTITY_A_ROOT_B: RunIdentity = { sessionId: 'session-a', root: '/repo/worktree-b' };
 
 function project(linked: boolean): string {
   const root = join(mkdtempSync(join(tmpdir(), 'run-report-')), ReticleDir.ROOT);
@@ -94,8 +97,8 @@ describe('the end-of-run report', () => {
   it('shows the cloud line only when the project is not linked, and never with the silence switch', () => {
     const take = (root: string, env: Record<string, string | undefined>): RunReport => {
       const ledger = new RunLedger();
-      ledger.begin(0, 'attach-1');
-      const field = runReportField(ledger, root, env, 10)[RUN_REPORT_FIELD];
+      ledger.begin(0, IDENTITY_A);
+      const field = runReportField(ledger, root, env, 10, IDENTITY_A)[RUN_REPORT_FIELD];
       expect(field?.instruction).toBe(RUN_REPORT_INSTRUCTION);
       return RunReportSchema.parse(field?.report);
     };
@@ -106,18 +109,92 @@ describe('the end-of-run report', () => {
 
   it('is offered once: an empty ledger adds no field', () => {
     const ledger = new RunLedger();
-    expect(runReportField(ledger, project(false), {}, 0)).toEqual({});
+    expect(runReportField(ledger, project(false), {}, 0, IDENTITY_A)).toEqual({});
   });
 
-  it("ends only the caller's run, so another agent's run on the daemon gets its own report", () => {
+  it("ends only the caller's identity run, so another session on the daemon gets its own report", () => {
     const ledger = new RunLedger();
-    ledger.begin(0, 'attach-1');
-    ledger.begin(100, 'attach-2');
-    const mine = runReportField(ledger, project(true), {}, 1_000, 'attach-1')[RUN_REPORT_FIELD];
+    ledger.begin(0, IDENTITY_A);
+    ledger.begin(100, IDENTITY_B);
+    const mine = runReportField(ledger, project(true), {}, 1_000, IDENTITY_A)[RUN_REPORT_FIELD];
     expect(mine?.report.wallMs).toBe(1_000);
-    expect(runReportField(ledger, project(true), {}, 1_000, 'attach-1')).toEqual({});
-    const theirs = runReportField(ledger, project(true), {}, 1_000, 'attach-2')[RUN_REPORT_FIELD];
+    expect(runReportField(ledger, project(true), {}, 1_000, IDENTITY_A)).toEqual({});
+    const theirs = runReportField(ledger, project(true), {}, 1_000, IDENTITY_B)[RUN_REPORT_FIELD];
     expect(theirs?.report.wallMs).toBe(900);
+  });
+
+  it('does not include another session’s claims in this session’s report', () => {
+    const ledger = new RunLedger();
+    ledger.begin(0, IDENTITY_A);
+    ledger.verdict(
+      {
+        v: 1,
+        actionId: 'session-a',
+        tool: ReticleTool.ACT,
+        args: {},
+        effect: { claim: 'claim from session A', verified: Verified.YES },
+        tRange: { from: 0, to: 0 },
+        at: 0,
+      },
+      IDENTITY_A,
+    );
+    ledger.begin(100, IDENTITY_B);
+    ledger.verdict(
+      {
+        v: 1,
+        actionId: 'session-b',
+        tool: ReticleTool.ACT,
+        args: {},
+        effect: { claim: 'claim from session B', verified: Verified.NO },
+        tRange: { from: 0, to: 0 },
+        at: 100,
+      },
+      IDENTITY_B,
+    );
+
+    const sessionAReport = runReportField(
+      ledger,
+      project(true),
+      {},
+      1_000,
+      IDENTITY_A,
+    )[RUN_REPORT_FIELD];
+    expect(sessionAReport?.report.claims).toEqual([
+      expect.objectContaining({ claim: 'claim from session A', verified: Verified.YES }),
+    ]);
+  });
+
+  it('does not include another worktree root in this identity report', () => {
+    const ledger = new RunLedger();
+    ledger.begin(0, IDENTITY_A);
+    ledger.verdict(
+      {
+        v: 1,
+        actionId: 'root-a',
+        tool: ReticleTool.ACT,
+        args: {},
+        effect: { claim: 'claim from worktree A', verified: Verified.YES },
+        tRange: { from: 0, to: 0 },
+        at: 0,
+      },
+      IDENTITY_A,
+    );
+    ledger.begin(100, IDENTITY_A_ROOT_B);
+    ledger.verdict(
+      {
+        v: 1,
+        actionId: 'root-b',
+        tool: ReticleTool.ACT,
+        args: {},
+        effect: { claim: 'claim from worktree B', verified: Verified.NO },
+        tRange: { from: 0, to: 0 },
+        at: 100,
+      },
+      IDENTITY_A_ROOT_B,
+    );
+
+    const report = runReportField(ledger, project(true), {}, 1_000, IDENTITY_A)[RUN_REPORT_FIELD];
+    expect(report?.report.claims.map((claim) => claim.claim)).toEqual(['claim from worktree A']);
   });
 
   it('ends a run on a session end, a yield, or a released tab, however the call was spelled', () => {
@@ -133,17 +210,17 @@ describe('the end-of-run report', () => {
 
   it('counts a saved flow and memory from the tool answers, never an answer that refused', () => {
     const ledger = new RunLedger();
-    ledger.begin(0, 'attach-1');
-    noteToolResult(ledger, ReticleTool.FLOW_SAVE, {}, { name: 'invite', stepCount: 1 });
-    noteToolResult(ledger, ReticleTool.FLOW_SAVE, {}, { error: 'no recording named "x"' });
-    noteToolResult(ledger, ReticleTool.MEMORY, { action: 'add' }, { error: 'not linked' });
-    noteToolResult(ledger, ReticleTool.MEMORY, { action: 'add' }, { added: { id: 's1' } });
-    noteToolResult(ledger, ReticleTool.MEMORY, {}, { known: [{ id: 's1' }, { id: 's2' }] });
+    ledger.begin(0, IDENTITY_A);
+    noteToolResult(ledger, ReticleTool.FLOW_SAVE, {}, { name: 'invite', stepCount: 1 }, IDENTITY_A);
+    noteToolResult(ledger, ReticleTool.FLOW_SAVE, {}, { error: 'no recording named "x"' }, IDENTITY_A);
+    noteToolResult(ledger, ReticleTool.MEMORY, { action: 'add' }, { error: 'not linked' }, IDENTITY_A);
+    noteToolResult(ledger, ReticleTool.MEMORY, { action: 'add' }, { added: { id: 's1' } }, IDENTITY_A);
+    noteToolResult(ledger, ReticleTool.MEMORY, {}, { known: [{ id: 's1' }, { id: 's2' }] }, IDENTITY_A);
     // The proof run wrote three notes to the intent ledger and its report said "0 notes written".
-    noteToolResult(ledger, ReticleTool.INTENT, { action: 'record', id: 'seats' }, { recorded: 1 });
-    noteToolResult(ledger, ReticleTool.INTENT, { action: 'record' }, { error: 'needs `id`' });
-    noteToolResult(ledger, ReticleTool.INTENT, { action: 'subject', subject: 'x' }, { known: [] });
-    const report = ledger.take(1);
+    noteToolResult(ledger, ReticleTool.INTENT, { action: 'record', id: 'seats' }, { recorded: 1 }, IDENTITY_A);
+    noteToolResult(ledger, ReticleTool.INTENT, { action: 'record' }, { error: 'needs `id`' }, IDENTITY_A);
+    noteToolResult(ledger, ReticleTool.INTENT, { action: 'subject', subject: 'x' }, { known: [] }, IDENTITY_A);
+    const report = ledger.take(1, IDENTITY_A);
     expect(report.flows.saved).toEqual(['invite']);
     expect(report.memory).toEqual({ written: 2, read: 3 });
   });
@@ -158,7 +235,13 @@ describe('the call that ends an agent run carries the report', () => {
   });
   const deps = (root: string, attachId?: string): ToolDeps =>
     ({
-      sessions: { resolve: () => undefined } as unknown as SessionManager,
+      sessions: {
+        resolve: () => ({
+          id: 'session-a',
+          artifactRoot: root,
+          url: 'http://localhost:3000',
+        }),
+      } as unknown as SessionManager,
       reticleRoot: root,
       now: () => 0,
       ...(attachId === undefined ? {} : { attachId }),
