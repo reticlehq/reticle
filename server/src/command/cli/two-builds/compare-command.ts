@@ -7,7 +7,12 @@
  * are in `@/features/compare/behaviour-compare.ts`; this file connects them to the daemon over its
  * MCP transport, with the same tool calls an agent makes.
  */
-import { ReticleTool, SnapshotMode } from '@reticlehq/core';
+import {
+  isLocalhostSubdomain,
+  isLoopbackHostname,
+  ReticleTool,
+  SnapshotMode,
+} from '@reticlehq/core';
 import { runCompare, type OpenedPage } from '@/features/compare/behaviour-compare.js';
 import { invalidComparison, type BehaviourComparison } from '@/features/compare/behaviour-diff.js';
 import {
@@ -60,9 +65,24 @@ export function pairingToken(): string | undefined {
   return token === undefined || 0 === token.length ? undefined : token;
 }
 
+/**
+ * A build on loopback or a `*.localhost` name is a disposable copy, so compare presses its guarded
+ * controls too ("Place order", "Delete"): they are the actions most worth comparing. On any other
+ * host the act guard stays on, so a compare can never delete real data.
+ */
+function isDisposableBuild(url: string): boolean {
+  try {
+    const { hostname } = new URL(url);
+    return isLoopbackHostname(hostname) || isLocalhostSubdomain(hostname);
+  } catch {
+    return false;
+  }
+}
+
 /** One leased tab as the compare driver. Every call goes through `reticle_run` on that tab. */
 export function leasedPage(caller: ToolCaller, url: string, sessionId: string): OpenedPage {
   let id = sessionId;
+  const guarded = isDisposableBuild(url) ? { confirmDangerous: true } : {};
   const run = async (
     tool: string,
     args: Record<string, unknown>,
@@ -106,7 +126,7 @@ export function leasedPage(caller: ToolCaller, url: string, sessionId: string): 
       const { payload, refusal } = await run(ReticleTool.ACT, {
         ref,
         action,
-        args: value === undefined ? {} : { value },
+        args: value === undefined ? guarded : { value, ...guarded },
       });
       const ok = refusal === undefined && false !== payload['dispatched'];
       const since = payload['since'];

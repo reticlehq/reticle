@@ -51,6 +51,28 @@ describe('leasedPage', () => {
     expect((calls[1] as { args: { sessionId: string } }).args.sessionId).toBe('s2');
   });
 
+  it('presses a guarded control on a local build, and leaves the guard on a public one', async () => {
+    // A submit named "Place order" or "Delete" is refused without confirmDangerous, so compare never
+    // pressed the actions that matter most. On loopback or *.localhost the builds are disposable copies;
+    // on any other host the guard stays, so a compare cannot delete real data.
+    const local: unknown[] = [];
+    await leasedPage(
+      caller({ [ReticleTool.ACT]: text({ dispatched: true }) }, local),
+      'http://127.0.0.1:4310/',
+      's1',
+    ).act('e1', 'click');
+    expect((local[0] as { args: { args: Record<string, unknown> } }).args.args).toEqual({
+      confirmDangerous: true,
+    });
+    const preview: unknown[] = [];
+    await leasedPage(
+      caller({ [ReticleTool.ACT]: text({ dispatched: true }) }, preview),
+      'https://pr-12.app.example.com/',
+      's1',
+    ).act('e1', 'click');
+    expect((preview[0] as { args: { args: Record<string, unknown> } }).args.args).toEqual({});
+  });
+
   it('returns the cursor an action gives, for the effects of its sequence', async () => {
     const page = leasedPage(
       caller({ [ReticleTool.ACT]: text({ dispatched: true, since: 41 }) }),
