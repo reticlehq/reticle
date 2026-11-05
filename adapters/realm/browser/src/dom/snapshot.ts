@@ -456,8 +456,10 @@ function visit(child: Element, depth: number, ctx: WalkCtx, inLive: boolean): vo
   //
   // Skipped when it only repeats the accessible name: for a button the name IS its text, and printing
   // both would double every control on the page. A name from `aria-label` is not the text, so
-  // `<output aria-label="Total">7</output>` keeps its 7, as Playwright's ariaSnapshot does.
-  const text = lean ? '' : textBesideName(directText(child), name);
+  // `<output aria-label="Total">7</output>` keeps its 7, as Playwright's ariaSnapshot does. A named
+  // CONTROL keeps no own text: its name says what it does, and its text is a glyph ("x", "⋯").
+  const ownText = lean || (interactive && 0 < name.length) ? '' : directText(child);
+  const text = textBesideName(ownText, name);
   // Layout signature for grid/flex containers — makes CLS/layout regressions visible.
   const layout = lean ? '' : layoutSignature(style);
   // Actionable WITHOUT an interactive role, which is most of the real web.

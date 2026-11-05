@@ -65,7 +65,20 @@ describe('an element keeps its own text alongside its children', () => {
     expect(tree).toContain('- status "Total"');
     expect(tree).toContain('[text="7"]');
     expect(tree).toContain('- button "Close"');
-    expect(tree).toContain('[text="x"]');
+  });
+
+  it('adds no own text to a named control: its name says what it does, its text is a glyph', () => {
+    // An icon button's own text is "x" or "⋯". Printing it beside every labelled control grew the snapshot
+    // on every page and carried nothing a caller acts on. Values hide in outputs and statuses, not controls.
+    mount('<button aria-label="Close">x</button><a href="#" aria-label="More">⋯</a>');
+    expect(treeOf()).not.toContain('[text=');
+  });
+
+  it('adds no own text to an element whose name comes from its content', () => {
+    // The name of `<button>Save <b>draft</b></button>` is "Save draft", read from its content. Its direct text
+    // "Save" says nothing new, and printing it grew every snapshot on the benchmark by 3%.
+    mount('<button>Save <b>draft</b></button><a href="#">Open <span>settings</span></a>');
+    expect(treeOf()).not.toContain('[text=');
   });
 
   it('does not repeat own text that only differs from the name in case or spacing', () => {
