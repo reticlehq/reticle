@@ -93,6 +93,8 @@ export function createBrowserPool(
   onPageError?: (leaseId: string, error: PooledPageError) => void,
   onLeaseClosed?: (leaseId: string) => void,
   nonces?: Pick<NonceMinter, 'mint'>,
+  /** Accept a self-signed or local-CA dev certificate for every lease context (#1713). */
+  ignoreHTTPSErrors = false,
 ): BrowserPool {
   const maxContexts = resolveMaxContexts(process.env[ReticleEnv.MAX_CONTEXTS], cpus().length);
   const genSessionId = (): string =>
@@ -108,6 +110,7 @@ export function createBrowserPool(
     // The reader dials this origin; a lease off loopback adds it to the page CSP (#2016).
     daemonOrigin: new URL(reader.url).origin,
     launchHeaded: playwrightLauncher({ headless: false }),
+    ...(ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
     ...(onPageError === undefined ? {} : { onPageError }),
     ...(onLeaseClosed === undefined ? {} : { onLeaseClosed }),
   });
@@ -201,6 +204,7 @@ export async function resolveRealInput(
   const driveUrl = options.driveUrl;
   if (driveUrl !== undefined && driveUrl.length > 0) {
     const headless = options.headless ?? true;
+    const ignoreHTTPSErrors = true === options.ignoreHTTPSErrors;
     // The one place that knows. Everything downstream reads it rather than re-deriving it, and a
     // daemon that launches nothing keeps the default (ATTACHED) rather than guessing.
     setBrowserMode(headless ? BrowserMode.HEADLESS : BrowserMode.HEADED);
@@ -212,12 +216,17 @@ export async function resolveRealInput(
         new LaunchedRealInputProvider({
           driveUrl: opts.driveUrl,
           headless: opts.headless,
+          ...(true === opts.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
           ...(injectConnect !== undefined ? { injectConnect } : {}),
           ...(storageState !== undefined ? { storageState } : {}),
           ...(onNetworkDetail !== undefined ? { onNetworkDetail } : {}),
           ...(reader !== undefined ? { zeroInstallScript: zeroInstallLoader(reader) } : {}),
         }));
-    const launched = factory({ driveUrl, headless });
+    const launched = factory({
+      driveUrl,
+      headless,
+      ...(ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
+    });
     try {
       await launched.navigate();
     } catch (error) {

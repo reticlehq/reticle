@@ -486,6 +486,8 @@ function handleDaemonInner(parsed: {
   port: number;
   driveUrl?: string;
   headless: boolean;
+  /** `--ignore-https-errors`, forwarded by daemonStartOptions to the daemon's pool (#1713). */
+  ignoreHTTPSErrors?: boolean;
   http: boolean;
   httpPort?: number;
   httpToken?: string;

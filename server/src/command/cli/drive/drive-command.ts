@@ -27,7 +27,13 @@ import {
 
 /** `projectId` is the one in this directory's `.reticle.json`, read by the caller. */
 export function handleDrive(
-  parsed: { port: number; driveUrl: string; headless: boolean },
+  parsed: {
+    port: number;
+    driveUrl: string;
+    headless: boolean;
+    /** `--ignore-https-errors`: accept the dev server's self-signed certificate (#1713). */
+    ignoreHTTPSErrors?: boolean;
+  },
   projectId?: string,
 ): void {
   void driveWithHonestConflict(parsed, projectId);
@@ -50,6 +56,7 @@ async function driveWithHonestConflict(
     port: number;
     driveUrl: string;
     headless: boolean;
+    ignoreHTTPSErrors?: boolean;
   },
   projectId: string | undefined,
 ): Promise<void> {
@@ -63,7 +70,7 @@ async function driveWithHonestConflict(
     return;
   }
   if (DriveMode.ATTACH === mode) {
-    await attachToRunningDaemon(parsed.port, parsed.driveUrl, parsed.headless, projectId);
+    await attachToRunningDaemon(parsed, projectId);
     return;
   }
   // The probe cannot close the race: something can take the port between here and the bind, and the
@@ -82,6 +89,7 @@ async function driveWithHonestConflict(
     port: parsed.port,
     driveUrl: parsed.driveUrl,
     headless: parsed.headless,
+    ...(true === parsed.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
   };
   try {
     await start(options);
@@ -101,12 +109,20 @@ async function driveWithHonestConflict(
  * calls at it.
  */
 async function attachToRunningDaemon(
-  port: number,
-  url: string,
-  headless: boolean,
+  parsed: {
+    port: number;
+    driveUrl: string;
+    headless: boolean;
+    ignoreHTTPSErrors?: boolean;
+  },
   projectId: string | undefined,
 ): Promise<void> {
-  const result = await requestDriveSession(port, url);
+  const { port, driveUrl: url, headless } = parsed;
+  // The daemon owns the browser plane, so the certificate option has to travel WITH the request: its
+  // pool was launched at boot, and a per-lease override is the only thing that can still be honoured.
+  const result = await requestDriveSession(port, url, {
+    ...(true === parsed.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
+  });
   if (!result.ok) {
     log('reticle_drive_attach_failed', { port, url, reason: result.reason });
     process.stderr.write(`${result.reason}\n`);

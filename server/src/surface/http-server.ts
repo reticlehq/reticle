@@ -57,7 +57,7 @@ export interface SharedServer {
    * owns the browser plane, so driving is a request to it — see cli/drive/drive-attach.ts. Left
    * unattached, the route 404s, which is exactly what a newer CLI needs to hear from an older daemon.
    */
-  attachDrive(provider: (url: string) => Promise<unknown>): void;
+  attachDrive(provider: (url: string, opts: DriveRequestOptions) => Promise<unknown>): void;
   /**
    * Register the handler behind POST /shutdown: the daemon's normal shutdown path. Only a loopback
    * caller with the pairing token reaches it. Left unattached, the route 404s, and the caller falls
@@ -97,7 +97,7 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
   let mcpFactory: McpFactory | undefined;
   let pageSdkVersions: () => readonly (string | undefined)[] = () => [];
   let statusProvider: ((held: boolean) => unknown) | undefined;
-  let driveProvider: ((url: string) => Promise<unknown>) | undefined;
+  let driveProvider: ((url: string, opts: DriveRequestOptions) => Promise<unknown>) | undefined;
   let shutdownHandler: (() => void) | undefined;
   let agentPresence: ((connected: boolean) => void) | undefined;
   const transports = new Map<string, SSEServerTransport>();
@@ -229,12 +229,13 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
       const provider = driveProvider;
       readBody(req)
         .then(async (body) => {
-          const url = urlFromDriveRequest(body);
-          if (url === undefined) {
+          const request = driveRequestFromBody(body);
+          if (request === undefined) {
             res.writeHead(400, { 'Content-Type': 'text/plain' });
             res.end('drive requires a url');
             return;
           }
+          const url = request.url;
           // Before the browser is asked for anything. See driveSchemeRefusal.
           const refusal = driveSchemeRefusal(url);
           if (refusal !== undefined) {
@@ -245,7 +246,9 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
           // A refusal is an ANSWER. The caller is a foreground CLI waiting on this socket: a thrown
           // handler that took the response down with it would hang `reticle drive` on a request
           // that can never complete — the same shape of silence the raw EADDRINUSE bind had.
-          const payload = await provider(url).catch((err: unknown) => ({
+          const payload = await provider(url, {
+            ...(true === request.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
+          }).catch((err: unknown) => ({
             error: err instanceof Error ? err.message : String(err),
           }));
           res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -366,7 +369,9 @@ export function createSharedServer(options: { token?: string } = {}): SharedServ
     statusProvider = provider;
   }
 
-  function attachDrive(provider: (url: string) => Promise<unknown>): void {
+  function attachDrive(
+    provider: (url: string, opts: DriveRequestOptions) => Promise<unknown>,
+  ): void {
     driveProvider = provider;
   }
 
@@ -538,7 +543,26 @@ function driveSchemeRefusal(url: string): string | undefined {
   );
 }
 
-function urlFromDriveRequest(body: string): string | undefined {
+/**
+ * What a drive request may ask for beside the url.
+ *
+ * `ignoreHTTPSErrors` accepts a self-signed or local-CA dev certificate for the lease this request
+ * opens, so `reticle drive <https-url> --ignore-https-errors` is honoured by a daemon that was
+ * started WITHOUT the flag. The daemon's pool default covers agents that cannot pass it; this is
+ * the per-request route for the CLI, which can (#1713).
+ *
+ * A daemon older than the field ignores it, and its lease then fails on the certificate, which is
+ * the loud answer from the one process that knows what its own pool was launched with.
+ */
+export interface DriveRequestOptions {
+  ignoreHTTPSErrors?: boolean;
+}
+
+interface DriveRequest extends DriveRequestOptions {
+  url: string;
+}
+
+function driveRequestFromBody(body: string): DriveRequest | undefined {
   let parsed: unknown;
   try {
     parsed = JSON.parse(body);
@@ -548,8 +572,12 @@ function urlFromDriveRequest(body: string): string | undefined {
   if (typeof parsed !== 'object' || null === parsed) {
     return undefined;
   }
-  const url = (parsed as Record<string, unknown>)['url'];
-  return 'string' === typeof url && url.length > 0 ? url : undefined;
+  const record = parsed as Record<string, unknown>;
+  const url = record['url'];
+  if ('string' !== typeof url || 0 === url.length) {
+    return undefined;
+  }
+  return { url, ...(true === record['ignoreHTTPSErrors'] ? { ignoreHTTPSErrors: true } : {}) };
 }
 
 /**

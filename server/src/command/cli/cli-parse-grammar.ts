@@ -40,6 +40,15 @@ export const missingOperand = (command: string, what: string): ParseError => ({
 
 /** Show the browser. Shared by every command that can drive one. */
 export const HEADED_FLAG = '--headed';
+/**
+ * Accept a self-signed or local-CA dev certificate for the browser this command opens.
+ *
+ * Shared by every command that launches one: `serve`, `mcp`, the detached `_daemon`, `drive` and
+ * `verify`. Declared in `certificate-error.ts`, because the browser driver names the same flag in
+ * its message and cannot reach into this module for it (#1713). Re-exported so the parsers keep
+ * reading every flag from here.
+ */
+export { IGNORE_HTTPS_ERRORS_FLAG } from '@/certificate-error.js';
 export const PORT_FLAG = '--port';
 export const VERIFY_COMMAND = 'verify';
 /**

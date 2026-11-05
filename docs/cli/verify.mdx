@@ -7,7 +7,7 @@ icon: circle-check
 `reticle verify` is the CI command: no model in the loop, no MCP. On a free port it boots the engine in drive mode, waits for the in-page SDK to dial back, replays every saved flow, renders the verdict, and exits. When a Reticle daemon already owns the port, it asks that daemon to replay the flows instead.
 
 ```bash
-npx @reticlehq/server verify <url> [--headed] [--timeout N] [--storage-state <file>] [--expect <json> | --expect-file <path>]
+npx @reticlehq/server verify <url> [--headed] [--timeout N] [--storage-state <file>] [--expect <json> | --expect-file <path>] [--ignore-https-errors]
 ```
 
 It uses the same runner and the same verdict as the MCP and HTTP paths, so a platform agent that can only run a shell command gets a byte-identical artifact.
@@ -19,6 +19,7 @@ It uses the same runner and the same verdict as the MCP and HTTP paths, so a pla
 | `url` | string, positional, **required** | none | The preview URL to drive |
 | `--headed` | boolean | `false` (headless) | Show the browser |
 | `--timeout N` | number, ms | `15000` | How long to wait for a browser session to dial back. With `--expect`, how long the predicate may take to come true instead, default `4000` |
+| `--ignore-https-errors` | boolean | `false` | Accept a self-signed or local-CA dev certificate for the browser this run opens. It needs a browser of its own, so with a daemon already on the port it refuses rather than drop the flag |
 | `--storage-state <file>` | string | unset | A Playwright storage state file. This is how you verify flows behind a login without scripting the login every time |
 | `--results-json <file>` | string | unset | Also write one verdict per journey to this file: `{ schemaVersion, verdict, results: [{ journey, verdict, reason?, runId?, steps }], score }`, each verdict `yes`, `no` or `unknown`. `schemaVersion` is 2 (a file without it has only `verdict` and `results`). `steps` is `{ passed, failed, unknown }` for the journey, and `score` is the total with `value` = passed / total. A step counts only when every earlier step of its journey passed; a step never reached is `unknown` and stays in the total. With `--sweep`, verdicts after a failed step are reported apart as `steps.swept` and never raise the score. A skipped journey is `unknown`, and the run is `yes` only when every journey is. `runId` names the run the journey came from, and is set only when that run reached the platform. Written when verify boots its own browser and a run finishes; a refusal before that writes nothing. The [GitHub Action](https://github.com/reticlehq/reticle/tree/main/action) posts this file |
 | `--port N` | number | `RETICLE_PORT`, else the project's port, else `4400` | The bridge port the app dials |
@@ -89,11 +90,11 @@ Call log:
 <Warning>
   `verify` never starts a second daemon on a port that already has one. With a daemon there, it
   replays the saved flows (or answers `--expect`, or runs `--explore`) through that daemon. Only
-  `--headed` and `--storage-state` need a browser of its own, so with a daemon on the port those
-  refuse and print the ways out (drive through the running daemon, ask it via `reticle_run`, move
-  both to another port with `--port` or `RETICLE_PORT`, or stop it). This bites most often on a
-  developer machine, where an agent has usually left a daemon running; in CI the port is normally
-  free.
+  `--headed`, `--storage-state` and `--ignore-https-errors` need a browser of its own, so with a
+  daemon on the port those refuse and print the ways out (drive through the running daemon with the
+  flag, ask it via `reticle_run`, move both to another port with `--port` or `RETICLE_PORT`, or stop
+  it). This bites most often on a developer machine, where an agent has usually left a daemon
+  running; in CI the port is normally free.
 </Warning>
 
 ## Exit codes

@@ -13,7 +13,6 @@ import {
 } from '@/judgement/runs/artifact/build-verification-run.js';
 import {
   expectNeedsDaemonMessage,
-  portBusyMessage,
   runVerify,
   urlParts,
   type VerifyConnection,
@@ -21,6 +20,7 @@ import {
   runSyncFailure,
   verifyProjectName,
 } from './cli-verify.js';
+import { portBusyMessage } from './verify-port-busy-message.js';
 import { PortPresence } from '../daemon/binding/port-presence.js';
 import { renderHelp } from './cli-usage.js';
 import { verifyResults, type VerifyResults } from './verify-results.js';

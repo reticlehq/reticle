@@ -11,7 +11,7 @@
  * needs no tools and stops nothing, and the message did not mention it.
  */
 import { describe, expect, it } from 'vitest';
-import { portBusyMessage } from './cli-verify.js';
+import { portBusyMessage } from './verify-port-busy-message.js';
 
 const message = portBusyMessage(4400);
 

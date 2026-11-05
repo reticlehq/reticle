@@ -36,8 +36,17 @@ export interface StartOptions {
   driveUrl?: string;
   /** launch headless (default true; CLI `--headed` sets false). */
   headless?: boolean;
+  /**
+   * Accept a self-signed or local-CA dev certificate for every browser this start opens: the
+   * driven page and each lease context. CLI `--ignore-https-errors` sets it (#1713).
+   */
+  ignoreHTTPSErrors?: boolean;
   /** injected so tests swap in a fake launched provider instead of real Playwright. */
-  realInputFactory?: (opts: { driveUrl: string; headless: boolean }) => OwnedRealInputProvider;
+  realInputFactory?: (opts: {
+    driveUrl: string;
+    headless: boolean;
+    ignoreHTTPSErrors?: boolean;
+  }) => OwnedRealInputProvider;
   /** When driving, force the page's SDK to (re)connect to our bridge with this token — verify a hosted preview. */
   injectConnect?: InjectConnectOptions;
   /** Path to a Playwright storageState JSON so the driven browser starts authenticated (past a login wall). */

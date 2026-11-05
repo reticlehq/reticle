@@ -50,6 +50,7 @@ import {
   MAX_REMEMBERED_REAPED_LEASES,
   NO_HEADED_BROWSER,
   ORPHANED_LEASE_GRACE_MS,
+  leaseContextOptions,
   navStatusOf,
   pageLoading,
   PoolAtCapacityError,
@@ -85,6 +86,7 @@ export class BrowserPool {
   readonly #daemonOrigin: string | undefined;
   readonly #pageErrorHooks: LeasePageErrorHooks | undefined;
   readonly #navTimeout: number;
+  readonly #ignoreHTTPSErrors: boolean;
 
   readonly #headless: BrowserSlot;
   readonly #headed: BrowserSlot;
@@ -128,6 +130,7 @@ export class BrowserPool {
     this.#now = opts.now ?? ((): number => Date.now());
     this.#ttl = opts.leaseTtlMs ?? DEFAULT_LEASE_TTL_MS;
     this.#navTimeout = opts.navTimeoutMs ?? DEFAULT_NAV_TIMEOUT_MS;
+    this.#ignoreHTTPSErrors = true === opts.ignoreHTTPSErrors;
     this.#zeroInstall = opts.zeroInstallScript;
     this.#daemonOrigin = opts.daemonOrigin;
     this.#pageErrorHooks = { onPageError: opts.onPageError, onLeaseClosed: opts.onLeaseClosed };
@@ -632,12 +635,8 @@ export class BrowserPool {
     let pendingDialogMessage: string | undefined;
     try {
       const browser = await this.#ensureBrowser(slot);
-      const contextOpts = {
-        ...(true === opts.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
-        ...opts.emulate,
-      };
       context = await browser.newContext(
-        0 < Object.keys(contextOpts).length ? contextOpts : undefined,
+        leaseContextOptions(opts.ignoreHTTPSErrors, this.#ignoreHTTPSErrors, opts.emulate),
       );
       if (opts.permissions !== undefined) {
         await grantLeasePermissions(context, opts.permissions, url);
@@ -727,7 +726,7 @@ export class BrowserPool {
         ...(opts.owner === undefined ? {} : { owner: opts.owner }),
         touchedAt: this.#now(),
         permissions: opts.permissions ?? [],
-        ignoresHTTPSErrors: true === opts.ignoreHTTPSErrors,
+        ignoresHTTPSErrors: true === opts.ignoreHTTPSErrors || this.#ignoreHTTPSErrors,
         csp,
         ...(pending === undefined ? {} : { dialFailureUrl: pending }),
         ...(pendingDialogMessage === undefined ? {} : { lastDialogMessage: pendingDialogMessage }),

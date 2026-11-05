@@ -9,6 +9,7 @@ import { parseVerifySuffix, type VerifySuffix } from './cli-parse-verify.js';
 import { DAEMON_INNER_COMMAND } from '@/command/daemon/daemon-argv.js';
 import {
   HEADED_FLAG,
+  IGNORE_HTTPS_ERRORS_FLAG,
   PORT_FLAG,
   VERIFY_COMMAND,
   missingOperand,
@@ -293,6 +294,7 @@ export type CliResult =
       port: number;
       driveUrl?: string;
       headless: boolean;
+      ignoreHTTPSErrors?: boolean;
       http: boolean;
       httpPort?: number;
       httpToken?: string;
@@ -317,11 +319,18 @@ export type CliResult =
       port: number;
       driveUrl?: string;
       headless: boolean;
+      ignoreHTTPSErrors?: boolean;
       http: boolean;
       httpPort?: number;
       httpToken?: string;
     }
-  | { kind: 'drive'; port: number; driveUrl: string; headless: boolean }
+  | {
+      kind: 'drive';
+      port: number;
+      driveUrl: string;
+      headless: boolean;
+      ignoreHTTPSErrors?: boolean;
+    }
   // The verify fields are the suffix parser's, by type: a copied list dropped a new flag (#2061).
   | ({ kind: 'verify' } & Omit<Extract<VerifySuffix, { kind: 'ok' }>, 'kind'>)
   | ({ kind: 'compare' } & Omit<Extract<CompareArgs, { kind: 'ok' }>, 'kind'>)
@@ -336,6 +345,7 @@ export type CliResult =
       port: number;
       driveUrl?: string;
       headless: boolean;
+      ignoreHTTPSErrors?: boolean;
       http: boolean;
       httpPort?: number;
       httpToken?: string;
@@ -373,17 +383,26 @@ function parsePortFlag(args: string[], defaultPort: number): number {
 }
 
 type DriveSuffix =
-  | { kind: 'ok'; port: number; driveUrl: string; headless: boolean }
+  | {
+      kind: 'ok';
+      port: number;
+      driveUrl: string;
+      headless: boolean;
+      ignoreHTTPSErrors?: boolean;
+    }
   | { kind: 'error'; message: string };
 
 function parseDriveSuffix(args: string[], port: number, defaultHeadless: boolean): DriveSuffix {
   let headless = defaultHeadless;
+  let ignoreHTTPSErrors = false;
   let driveUrl: string | undefined;
   for (const arg of args) {
     if (arg === HEADED_FLAG) {
       headless = false;
     } else if (arg === HEADLESS_FLAG) {
       headless = true;
+    } else if (arg === IGNORE_HTTPS_ERRORS_FLAG) {
+      ignoreHTTPSErrors = true;
     } else if (arg.startsWith('--')) {
       return unknownArgument(arg);
     } else if (driveUrl === undefined) {
@@ -395,7 +414,13 @@ function parseDriveSuffix(args: string[], port: number, defaultHeadless: boolean
   if (driveUrl === undefined) {
     return missingOperand(DRIVE_COMMAND, 'a url');
   }
-  return { kind: 'ok', port, driveUrl, headless };
+  return {
+    kind: 'ok',
+    port,
+    driveUrl,
+    headless,
+    ...(ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
+  };
 }
 
 type InitFlags =
@@ -720,6 +745,7 @@ export function parseCliArgs(
         kind: 'serve',
         port: r.port,
         headless: r.headless,
+        ...(true === r.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
         http: r.http,
         ...(r.driveUrl !== undefined ? { driveUrl: r.driveUrl } : {}),
         ...(r.httpPort !== undefined ? { httpPort: r.httpPort } : {}),
@@ -820,7 +846,13 @@ export function parseCliArgs(
       if ('error' === r.kind) {
         return r;
       }
-      return { kind: 'drive', port: r.port, driveUrl: r.driveUrl, headless: r.headless };
+      return {
+        kind: 'drive',
+        port: r.port,
+        driveUrl: r.driveUrl,
+        headless: r.headless,
+        ...(true === r.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
+      };
     }
     case DAEMON_INNER_COMMAND: {
       const r = parseServeFlags(rest, defaultPort, defaultHeadless);
@@ -831,6 +863,7 @@ export function parseCliArgs(
         kind: '_daemon',
         port: r.port,
         headless: r.headless,
+        ...(true === r.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
         http: r.http,
         ...(r.driveUrl !== undefined ? { driveUrl: r.driveUrl } : {}),
         ...(r.httpPort !== undefined ? { httpPort: r.httpPort } : {}),
@@ -909,6 +942,7 @@ export function parseCliArgs(
         kind: 'mcp',
         port: r.port,
         headless: r.headless,
+        ...(true === r.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
         http: r.http,
         ...(r.driveUrl !== undefined ? { driveUrl: r.driveUrl } : {}),
         ...(r.httpPort !== undefined ? { httpPort: r.httpPort } : {}),

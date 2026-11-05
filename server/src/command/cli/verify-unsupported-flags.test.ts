@@ -23,7 +23,8 @@
 
 import { describe, expect, it } from 'vitest';
 import { parseCliArgs } from './cli-parse.js';
-import { portBusyMessage, routeVerify, VerifyRoute } from './cli-verify.js';
+import { routeVerify, VerifyRoute } from './cli-verify.js';
+import { portBusyMessage } from './verify-port-busy-message.js';
 import { PortPresence } from '@/command/daemon/binding/port-presence.js';
 
 const URL_ = 'http://localhost:3000';
@@ -210,6 +211,57 @@ describe('the flag combinations verify does support', () => {
     // names the shell doing the stripping rather than a bare parse error.
     expect(parsed).toMatchObject({ kind: 'error' });
     expect(String((parsed as { message?: string }).message)).toContain('double quotes removed');
+  });
+});
+
+/**
+ * `--ignore-https-errors` (#1713) and a daemon on the port.
+ *
+ * The daemon opens the browser, so the certificate setting is the one that daemon was started with.
+ * Asking it for a tab cannot change that, and a flag that cannot be honoured has to say so rather
+ * than be dropped in the run that needed it.
+ */
+describe('--ignore-https-errors when a daemon owns the port', () => {
+  it.each([
+    ['replaying saved flows', {}],
+    ['a one-shot predicate', { hasPredicate: true }],
+    ['an explore', { explore: true }],
+  ])('refuses %s instead of dropping the flag', (_label, extra) => {
+    const plan = routeVerify({
+      hasPredicate: false,
+      ignoreHTTPSErrors: true,
+      presence: PortPresence.DAEMON,
+      port: PORT,
+      ...extra,
+    });
+    expect(plan.route).toBe(VerifyRoute.REFUSE);
+  });
+
+  it('offers a drive command that carries the flag', () => {
+    const plan = routeVerify({
+      hasPredicate: false,
+      ignoreHTTPSErrors: true,
+      presence: PortPresence.DAEMON,
+      port: PORT,
+    });
+    const message = plan.route === VerifyRoute.REFUSE ? plan.message : '';
+    expect(message).toContain('drive <url> --ignore-https-errors');
+    expect(message).toContain('the flags IT was started with decide');
+  });
+
+  it('is honoured on a free port, where verify opens the browser', () => {
+    expect(
+      routeVerify({
+        hasPredicate: false,
+        ignoreHTTPSErrors: true,
+        presence: PortPresence.FREE,
+        port: PORT,
+      }),
+    ).toEqual({ route: VerifyRoute.FLOWS });
+  });
+
+  it('leaves the busy-port message alone when the flag was not passed', () => {
+    expect(portBusyMessage(PORT)).not.toContain('--ignore-https-errors');
   });
 });
 

@@ -353,6 +353,40 @@ describe('POST /drive', () => {
     expect(res.status).toBe(200);
   });
 
+  /**
+   * #1713: the caller can ask for a self-signed dev certificate, and the daemon forwards that to the
+   * lease it opens. The pool default covers agents that cannot pass it; this is the route for the
+   * CLI, which can, through a daemon that was started without the flag.
+   */
+  it('forwards ignoreHTTPSErrors to the provider', async () => {
+    shared = createSharedServer();
+    const seen: { ignoreHTTPSErrors?: boolean }[] = [];
+    shared.attachDrive((_url, opts) => {
+      seen.push(opts);
+      return Promise.resolve({ sessionId: 'lease-1', ready: true });
+    });
+    const port = await listen(shared);
+    const res = await post(
+      port,
+      DRIVE_PATH,
+      JSON.stringify({ url: 'https://localhost:5173', ignoreHTTPSErrors: true }),
+    );
+    expect(res.status).toBe(200);
+    expect(seen).toEqual([{ ignoreHTTPSErrors: true }]);
+  });
+
+  it('does not ask for it when the request did not', async () => {
+    shared = createSharedServer();
+    let seen: { ignoreHTTPSErrors?: boolean } | undefined;
+    shared.attachDrive((_url, opts) => {
+      seen = opts;
+      return Promise.resolve({ sessionId: 'lease-1', ready: true });
+    });
+    const port = await listen(shared);
+    await post(port, DRIVE_PATH, JSON.stringify({ url: 'https://localhost:5173' }));
+    expect(seen).toEqual({});
+  });
+
   it('answers a provider failure as an error field, not a dead socket', async () => {
     // The CLI reads `error` and prints it. A thrown handler that killed the response would leave
     // `drive` hanging on a request that can never answer — the failure mode this whole path exists

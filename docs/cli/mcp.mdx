@@ -7,7 +7,7 @@ icon: plug
 `reticle mcp` is the command your agent runs. It is the MCP server the editor launches: a stdio proxy that bridges the client to the daemon's SSE endpoint, starting a daemon first if the port is empty.
 
 ```bash
-npx @reticlehq/server mcp [--port N] [--drive <url>] [--headless] [--headed] [--http] [--http-port N] [--http-token T]
+npx @reticlehq/server mcp [--port N] [--drive <url>] [--headless] [--headed] [--http] [--http-port N] [--http-token T] [--ignore-https-errors]
 ```
 
 This is what `reticle init` registers, so you rarely type it yourself.
@@ -23,6 +23,7 @@ This is what `reticle init` registers, so you rarely type it yourself.
 | `--http` | boolean | `false` | Forward the HTTP verify endpoint flags to the daemon it spawns |
 | `--http-port N` | number | unset | Port for that endpoint |
 | `--http-token T` | string | unset | Bearer token for it |
+| `--ignore-https-errors` | boolean | `false` | Forward the certificate flag to the daemon it spawns: accept a self-signed or local-CA dev certificate for every browser that daemon opens, the same way `reticle_lease { ignoreHTTPSErrors: true }` does for one lease |
 
 ## The rule this command lives by
 

@@ -14,6 +14,7 @@ import { cliRunAuthor } from '@/judgement/runs/verification-sync.js';
 import { join, basename } from 'node:path';
 import { readFileSync } from 'node:fs';
 import { noSessionMessage } from './verify-no-session.js';
+import { portBusyMessage } from './verify-port-busy-message.js';
 import { runAdhocVerdict } from './adhoc-verdict.js';
 import { callerArtifactRoot } from '@/memory/project/link-directory.js';
 import { verifyResults } from './verify-results.js';
@@ -479,6 +480,8 @@ interface LiveOpts {
    *  (--port / RETICLE_PORT / .reticle.json), or a custom-port app never connects. */
   port: number;
   storageState?: string;
+  /** `--ignore-https-errors`: accept the dev server's self-signed certificate (#1713). */
+  ignoreHTTPSErrors?: boolean;
   /** Which connected tab to verify, when the app has more than one open on this port. */
   sessionId?: string;
   /** `--confirm-dangerous`: acknowledge the replay guard's destructive steps for this run. */
@@ -527,6 +530,9 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
     port,
     driveUrl: opts.url,
     headless: opts.headless,
+    // The browser this run owns is the only one the flag can reach: a replay asked of a running
+    // daemon happens in a tab the daemon already opened, and the flag is not a per-tab choice.
+    ...(true === opts.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
     mcp: false,
     reticleRoot: opts.reticleRoot,
     now: opts.now,
@@ -600,55 +606,6 @@ async function openLiveConnection(opts: LiveOpts): Promise<VerifyConnection> {
     },
     close: () => running.close(),
   };
-}
-
-/** CLI entry — wires the live ports and runs the one-shot verification. Exits the process itself. */
-/**
- * What a user reads when the bridge port is already taken by a daemon.
- *
- * `verify` boots its OWN daemon, and it has to do so on the port the APP dials — a loopback page
- * connects natively to the port baked into its config, so verify cannot simply pick a free one and
- * still be found. On any machine with Reticle set up, that port already belongs to a running daemon.
- *
- * It used to die there. The listen failure surfaces asynchronously on the server object, after
- * `start` has resolved, so nothing caught it and the process printed a raw `node:net` stack — the
- * worst answer available, and reached most often by the people with the fewest other options, since
- * the skill offers this command as the way to a verdict with no MCP at all.
- *
- * The message says every way out rather than picking one, and it says FIRST that a busy port is the
- * normal state rather than a fault — an install that worked leaves a daemon on it, so a reader who
- * arrives here has done nothing wrong and should not go looking for what they broke (#689).
- *
- * `reticle drive` leads, because it is the only option that works in the state most people are in
- * when they reach this message: the client exposes no `reticle_*` tools (Codex, Cursor Cloud,
- * Antigravity, a session whose MCP link dropped), which is exactly when the CLI is reached for. It
- * ATTACHES to the running daemon rather than binding — see cli/drive/drive-attach.ts — so there is nothing
- * to stop, nothing to race, and it hands back a sessionId the daemon owns. The advice that used to
- * lead, "ask the daemon through the tools", is the one thing that reader by construction cannot do.
- *
- * Stopping the daemon stays on the list and stays LAST of the working options, with the reason: the
- * MCP proxy respawns one into the gap, so `stop` is a race the caller usually loses, and it kills
- * the agent's own link on the way past.
- *
- * `verify` itself attaching, rather than needing the port at all, is the real fix and is #689's
- * first bullet — not this change.
- */
-export function portBusyMessage(port: number): string {
-  return (
-    `reticle verify needs port ${String(port)} — the port your app dials — and a Reticle daemon is ` +
-    'already listening on it. It did not start a second one.\n\n' +
-    '  This is the NORMAL state after a working install, not a fault: the daemon your MCP client ' +
-    'started owns that port.\n\n' +
-    `  • Drive the app through the daemon that is already there — this needs no tools and stops ` +
-    `nothing: npx @reticlehq/server drive <url>\n` +
-    '  • If your client HAS the Reticle tools, ask that daemon directly: ' +
-    'reticle_run { tool: "reticle_verify", args: { action: "change", files: ["..."] } }\n' +
-    `  • Or run both on another port, if your app is configured for it: RETICLE_PORT=<port> ` +
-    'npx @reticlehq/server verify <url>\n' +
-    `  • Stopping the daemon (npx @reticlehq/server stop --port ${String(port)}) works, but it cuts ` +
-    "your agent's MCP link and the proxy usually respawns a daemon into the gap before verify can " +
-    'bind — prefer one of the above.'
-  );
 }
 
 /**
@@ -738,6 +695,12 @@ export function routeVerify(args: {
    */
   explore?: boolean;
   /**
+   * `--ignore-https-errors`: accept the dev server's self-signed certificate for the browser this
+   * command opens. A daemon on the port opens the browser instead, and its own start flags decide,
+   * so this is a reason to need our own browser (#1713).
+   */
+  ignoreHTTPSErrors?: boolean;
+  /**
    * Whether the project already has saved flows. `--explore` without a daemon drives only when there
    * are none (a drive spends model credits, a replay does not), and this path keeps the same rule.
    */
@@ -745,6 +708,11 @@ export function routeVerify(args: {
   presence: PortPresence;
   port: number;
 }): VerifyPlan {
+  // Before every daemon route, because all of them are the daemon's browser: the flag cannot be
+  // honoured there, and the one run that asked for it is the one that must hear so.
+  if (true === args.ignoreHTTPSErrors && args.presence === PortPresence.DAEMON) {
+    return { route: VerifyRoute.REFUSE, message: portBusyMessage(args.port, true) };
+  }
   if (args.hasPredicate) {
     return args.presence === PortPresence.DAEMON
       ? { route: VerifyRoute.ADHOC }
@@ -763,6 +731,7 @@ export function routeVerify(args: {
     : { route: VerifyRoute.ADHOC_SUITE };
 }
 
+/** CLI entry: wires the live ports and runs the one-shot verification. Exits the process itself. */
 export function handleVerify(
   parsed: {
     url: string;
@@ -773,6 +742,8 @@ export function handleVerify(
     headless: boolean;
     timeoutMs?: number;
     storageState?: string;
+    /** `--ignore-https-errors`: accept the dev server's self-signed certificate (#1713). */
+    ignoreHTTPSErrors?: boolean;
     sessionId?: string;
     /** Verify only flows carrying ANY of these labels. */
     select?: string[];
@@ -844,6 +815,7 @@ export function handleVerify(
         now,
         port: parsed.port ?? RETICLE_DEFAULT_PORT,
         ...(parsed.storageState !== undefined ? { storageState: parsed.storageState } : {}),
+        ...(true === parsed.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
         ...(parsed.sessionId !== undefined ? { sessionId: parsed.sessionId } : {}),
         ...(true === parsed.confirmDangerous ? { confirmDangerous: true } : {}),
         ...(true === parsed.requireStartControl ? { requireStartControl: true } : {}),
@@ -882,6 +854,9 @@ export function handleVerify(
         parsed.storageState !== undefined ||
         true === parsed.requireStartControl ||
         true === parsed.sweep,
+      // Its own rule, and it comes first in routeVerify: refusing is what a flag the daemon cannot
+      // honour gets, on every daemon route including `--expect` and `--explore`.
+      ignoreHTTPSErrors: true === parsed.ignoreHTTPSErrors,
       explore: true === parsed.explore || parsed.persona !== undefined,
       hasSavedFlows:
         0 <

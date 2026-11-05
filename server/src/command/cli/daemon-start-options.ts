@@ -12,6 +12,7 @@
  * replay, the spec runner), which exists whether or not a drive URL was named.
  */
 import type { StartOptions } from '@/index.js';
+import { IGNORE_HTTPS_ERRORS_FLAG } from './cli-parse-grammar.js';
 import {
   DAEMON_INNER_COMMAND,
   DRIVE_FLAG,
@@ -27,6 +28,7 @@ type DaemonFlags = {
   port: number;
   driveUrl?: string;
   headless: boolean;
+  ignoreHTTPSErrors?: boolean;
   http: boolean;
   httpPort?: number;
   httpToken?: string;
@@ -36,6 +38,7 @@ export function daemonStartOptions(parsed: DaemonFlags): StartOptions {
   return {
     port: parsed.port,
     headless: parsed.headless,
+    ...(true === parsed.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
     ...(parsed.driveUrl !== undefined ? { driveUrl: parsed.driveUrl } : {}),
     ...(parsed.http
       ? {
@@ -57,14 +60,24 @@ export function daemonStartOptions(parsed: DaemonFlags): StartOptions {
  */
 export function daemonSpawnArgs(parsed: DaemonFlags): string[] {
   const args = [DAEMON_INNER_COMMAND, PORT_FLAG, String(parsed.port)];
-  if (parsed.driveUrl !== undefined) args.push(DRIVE_FLAG, parsed.driveUrl);
+  if (parsed.driveUrl !== undefined) {
+    args.push(DRIVE_FLAG, parsed.driveUrl);
+  }
   // Said either way: the child decides its own default from its environment, so a parent that
   // resolved hidden must say so rather than leave it to a default that may differ.
   args.push(parsed.headless ? HEADLESS_FLAG : HEADED_FLAG);
+  // The parent launches no browser; the detached child is the process that does (#1713).
+  if (true === parsed.ignoreHTTPSErrors) {
+    args.push(IGNORE_HTTPS_ERRORS_FLAG);
+  }
   if (parsed.http) {
     args.push(HTTP_FLAG);
-    if (parsed.httpPort !== undefined) args.push(HTTP_PORT_FLAG, String(parsed.httpPort));
-    if (parsed.httpToken !== undefined) args.push(HTTP_TOKEN_FLAG, parsed.httpToken);
+    if (parsed.httpPort !== undefined) {
+      args.push(HTTP_PORT_FLAG, String(parsed.httpPort));
+    }
+    if (parsed.httpToken !== undefined) {
+      args.push(HTTP_TOKEN_FLAG, parsed.httpToken);
+    }
   }
   return args;
 }
@@ -90,7 +103,9 @@ export function headlessByDefault(
   platform: string,
 ): boolean {
   const forced = env[HEADLESS_ENV];
-  if (env['CI'] !== undefined || (forced !== undefined && !OFF.has(forced))) return true;
+  if (env['CI'] !== undefined || (forced !== undefined && !OFF.has(forced))) {
+    return true;
+  }
   return (
     'linux' === platform && env['DISPLAY'] === undefined && env['WAYLAND_DISPLAY'] === undefined
   );

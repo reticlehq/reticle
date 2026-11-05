@@ -11,6 +11,7 @@ import type {
   PooledPage,
   PooledPageError,
 } from './pool-contract.js';
+import type { LeaseEmulation } from './lease-emulation.js';
 
 /** A leased context+page for one flow. `release` frees the slot and closes the context. */
 export interface Lease {
@@ -57,6 +58,14 @@ export interface BrowserPoolOptions {
   /** Per-lease navigation timeout — a page that won't load fails its own lease, never blocks a slot. */
   navTimeoutMs?: number;
   /**
+   * Accept a self-signed or local-CA dev certificate for EVERY lease context by default.
+   *
+   * A daemon started with `--ignore-https-errors` was told the app's certificate is acceptable, and
+   * an agent leasing a tab from it has no way to pass the option through. A lease may still opt in
+   * per acquire; there is no per-lease way to opt out of this (#1713).
+   */
+  ignoreHTTPSErrors?: boolean;
+  /**
    * The zero-install reader, built where the daemon knows its own port and pairing token. A thunk so
    * the ~450KB build is only read if some page ever needs it; undefined when there is none to give.
    * Called with the lease url, because a page off loopback gets its own nonce, not the token.
@@ -85,6 +94,26 @@ export interface BrowserPoolOptions {
    * first headed lease is asked for. Absent: a headed lease is refused.
    */
   launchHeaded?: Launcher;
+}
+
+/**
+ * The browser-context options for one lease.
+ *
+ * A certificate opt-in may come from the lease itself (`reticle_lease { ignoreHTTPSErrors: true }`)
+ * or from the daemon it runs in (`--ignore-https-errors`). The pool default is how a flag on
+ * `serve` reaches an agent that has no argument to pass. `undefined` when there is nothing to set,
+ * so the context keeps Playwright's defaults (#1713).
+ */
+export function leaseContextOptions(
+  perLease: boolean | undefined,
+  poolDefault: boolean,
+  emulate: LeaseEmulation | undefined,
+): (LeaseEmulation & { ignoreHTTPSErrors?: boolean }) | undefined {
+  const opts = {
+    ...(true === perLease || poolDefault ? { ignoreHTTPSErrors: true } : {}),
+    ...emulate,
+  };
+  return 0 < Object.keys(opts).length ? opts : undefined;
 }
 
 /** One browser the pool may hold, and the launch in flight for it. */

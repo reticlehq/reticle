@@ -40,6 +40,8 @@ export function handleServe(parsed: {
   port: number;
   driveUrl?: string;
   headless: boolean;
+  /** `--ignore-https-errors`, forwarded by daemonStartOptions to the daemon's pool (#1713). */
+  ignoreHTTPSErrors?: boolean;
   http: boolean;
   httpPort?: number;
   httpToken?: string;
@@ -62,6 +64,7 @@ async function serveWithHonestExit(parsed: {
   port: number;
   driveUrl?: string;
   headless: boolean;
+  ignoreHTTPSErrors?: boolean;
   http: boolean;
   httpPort?: number;
   httpToken?: string;
@@ -92,7 +95,11 @@ async function serveWithHonestExit(parsed: {
       // `drive` deliberately does not accept --port: use its existing RETICLE_PORT input.
       // Quote the URL so copying the suggestion preserves its query string.
       const safeUrlArg = `'${parsed.driveUrl.replace(/'/g, String.raw`'\''`)}'`;
-      const driveCommand = `reticle drive ${safeUrlArg}`;
+      // The flag rides along: the daemon that would have been started with it is the one `drive`
+      // would attach to, so a suggestion without it sends the user to a lease that fails on the
+      // certificate (#1713).
+      const certFlag = true === parsed.ignoreHTTPSErrors ? ' --ignore-https-errors' : '';
+      const driveCommand = `reticle drive ${safeUrlArg}${certFlag}`;
       const runnableCommand =
         RETICLE_DEFAULT_PORT === parsed.port
           ? driveCommand

@@ -79,6 +79,38 @@ describe('readAttachResponse', () => {
     expect(result.reason).toContain('boom');
   });
 
+  // #1713: the daemon's refusal quotes the LEASE tool's wording, which offers an MCP option. The
+  // reader here ran a shell command and may have no tools at all, so a certificate refusal names
+  // the flag it can actually type.
+  it('names the CLI flag when the refusal was the certificate', () => {
+    const result = readAttachResponse(4400, 'https://localhost:5173', {
+      status: 200,
+      body: JSON.stringify({
+        error:
+          'could not open https://localhost:5173: the browser refused its TLS certificate. ' +
+          'If it is your dev server, acquire again with ignoreHTTPSErrors: true to accept it for ' +
+          'this lease (net::ERR_CERT_AUTHORITY_INVALID)',
+      }),
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.reason).toContain('--ignore-https-errors');
+  });
+
+  it('leaves a refusal that was not the certificate as the daemon worded it', () => {
+    const result = readAttachResponse(4400, 'http://localhost:5173', {
+      status: 200,
+      body: JSON.stringify({ error: 'all 4 lease slots are in use' }),
+    });
+    expect(result.ok).toBe(false);
+    if (result.ok) {
+      return;
+    }
+    expect(result.reason).not.toContain('--ignore-https-errors');
+  });
+
   it('treats an unparseable body as a failure rather than a session', () => {
     const result = readAttachResponse(4400, 'http://localhost:5173', {
       status: 200,
@@ -91,24 +123,47 @@ describe('readAttachResponse', () => {
 describe('requestDriveSession', () => {
   it('posts the url to the daemon and returns the session it handed back', async () => {
     const seen: { path: string; body: string }[] = [];
-    const result = await requestDriveSession(4400, 'http://localhost:5173', (port, path, body) => {
-      seen.push({ path, body });
-      expect(port).toBe(4400);
-      return Promise.resolve({
-        status: 200,
-        body: JSON.stringify({ sessionId: 'lease-9', ready: true }),
-      });
+    const result = await requestDriveSession(4400, 'http://localhost:5173', {
+      post: (port, path, body) => {
+        seen.push({ path, body });
+        expect(port).toBe(4400);
+        return Promise.resolve({
+          status: 200,
+          body: JSON.stringify({ sessionId: 'lease-9', ready: true }),
+        });
+      },
     });
     expect(result.ok).toBe(true);
     expect(JSON.parse(seen[0]?.body ?? '{}')).toEqual({ url: 'http://localhost:5173' });
   });
 
+  // #1713: a daemon nearly always owns the port when `drive` runs, so the flag has to ride the
+  // request. Dropping it here would leave the one run that needed a certificate with no route to
+  // every other browser the daemon opens.
+  it('carries the certificate option when asked', async () => {
+    let sent = '';
+    await requestDriveSession(4400, 'https://localhost:5173', {
+      ignoreHTTPSErrors: true,
+      post: (_port, _path, body) => {
+        sent = body;
+        return Promise.resolve({
+          status: 200,
+          body: JSON.stringify({ sessionId: 'lease-9', ready: true }),
+        });
+      },
+    });
+    expect(JSON.parse(sent)).toEqual({
+      url: 'https://localhost:5173',
+      ignoreHTTPSErrors: true,
+    });
+  });
+
   // #1535: the daemon took the request and was still busy (a full lease pool, a cold browser) when
   // the client gave up. That is not a shutdown, and saying it was sent agents into a retry loop.
   it('reports a timeout as a busy daemon, not one that is shutting down', async () => {
-    const result = await requestDriveSession(4400, 'http://localhost:5173', () =>
-      Promise.reject(new DriveRequestTimeout(60_000)),
-    );
+    const result = await requestDriveSession(4400, 'http://localhost:5173', {
+      post: () => Promise.reject(new DriveRequestTimeout(60_000)),
+    });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.reason).toBe(
@@ -119,18 +174,18 @@ describe('requestDriveSession', () => {
   });
 
   it('still reports a refused connection as a daemon that has gone', async () => {
-    const result = await requestDriveSession(4400, 'http://localhost:5173', () =>
-      Promise.reject(new Error('connect ECONNREFUSED 127.0.0.1:4400')),
-    );
+    const result = await requestDriveSession(4400, 'http://localhost:5173', {
+      post: () => Promise.reject(new Error('connect ECONNREFUSED 127.0.0.1:4400')),
+    });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.reason).toContain('shutting down or has just been stopped');
   });
 
   it('turns a dead socket into a sentence instead of a raw errno', async () => {
-    const result = await requestDriveSession(4400, 'http://localhost:5173', () =>
-      Promise.reject(new Error('connect ECONNREFUSED 127.0.0.1:4400')),
-    );
+    const result = await requestDriveSession(4400, 'http://localhost:5173', {
+      post: () => Promise.reject(new Error('connect ECONNREFUSED 127.0.0.1:4400')),
+    });
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.reason).toContain('4400');
