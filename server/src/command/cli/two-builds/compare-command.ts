@@ -18,6 +18,7 @@ import {
   type CompareUrls,
 } from '@/features/compare/behaviour-report.js';
 import { DriverLostError } from '@/features/compare/build-readings.js';
+import { consoleLines, networkLines } from '@/features/compare/outside/effect-lines.js';
 import { callerArtifactRoot } from '@/memory/project/link-directory.js';
 import {
   defaultPairingTokenDir,
@@ -37,6 +38,10 @@ import { payloadOf } from '../verify-against.js';
 const NAVIGATE_WAIT_MS = 15_000;
 /** Room for one tool call past its own wait. */
 const CALL_MS = 60_000;
+/** The most network calls and console lines read for one sequence. */
+const EFFECTS_LIMIT = 50;
+/** How long fetching one page or script file may take. */
+const FETCH_MS = 10_000;
 /**
  * Refusals that mean the driver lost its tab, not that the build did something. A run that sees
  * one proves nothing about the build.
@@ -94,7 +99,20 @@ export function leasedPage(caller: ToolCaller, url: string, sessionId: string): 
         action,
         args: value === undefined ? {} : { value },
       });
-      return refusal === undefined && false !== payload['dispatched'];
+      const ok = refusal === undefined && false !== payload['dispatched'];
+      const since = payload['since'];
+      return 'number' === typeof since ? { ok, since } : { ok };
+    },
+    async effects(since) {
+      // A refused read is passed on as `{ error }`, so it becomes a visible line, not an empty list.
+      const read = async (tool: string, args: Record<string, unknown>): Promise<unknown> => {
+        const { payload, refusal } = await run(tool, { since, ...args, limit: EFFECTS_LIMIT });
+        return refusal === undefined ? payload : { error: refusal };
+      };
+      return [
+        ...networkLines(await read(ReticleTool.NETWORK, { bodies: true })),
+        ...consoleLines(await read(ReticleTool.CONSOLE, {})),
+      ];
     },
     async close() {
       await releaseLease(caller, id);
@@ -112,6 +130,17 @@ export interface CompareCommandOptions extends CompareUrls {
   connect?: (endpoint: URL) => Promise<ToolCaller>;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
+  fetchText?: (url: string) => Promise<string | undefined>;
+}
+
+/** Fetch a page or script file as a browser would. Undefined when it could not be fetched. */
+async function fetchText(url: string): Promise<string | undefined> {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(FETCH_MS) });
+    return response.ok ? await response.text() : undefined;
+  } catch {
+    return undefined;
+  }
 }
 
 /** The exit code, and the text or the one JSON line to print. */
@@ -160,6 +189,7 @@ export async function runCompareCommand(
       open,
       sleep: options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
       now: options.now ?? Date.now,
+      fetchText: options.fetchText ?? fetchText,
     });
     return render(options.json, urls, result, timings);
   } catch (error) {

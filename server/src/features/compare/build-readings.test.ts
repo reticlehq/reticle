@@ -14,16 +14,25 @@ import {
 const noSleep = (): Promise<void> => Promise.resolve();
 
 /** A page with one counter button: each click adds one. `refuse` names refs whose act fails. */
-function counterPage(opts: { refuse?: string; trees?: string[] } = {}): PageDriver & {
+function counterPage(
+  opts: { refuse?: string; trees?: string[]; effects?: (since: number) => string[] } = {},
+): PageDriver & {
   reads: number;
   opens: number;
   acts: string[];
+  cursors: number[];
 } {
   let count = 0;
+  let clock = 100;
   const page = {
     reads: 0,
     opens: 0,
     acts: [] as string[],
+    cursors: [] as number[],
+    effects: (since: number) => {
+      page.cursors.push(since);
+      return Promise.resolve(opts.effects?.(since) ?? []);
+    },
     open: () => {
       page.opens += 1;
       count = 0;
@@ -39,11 +48,12 @@ function counterPage(opts: { refuse?: string; trees?: string[] } = {}): PageDriv
     },
     act: (ref: string, action: string) => {
       page.acts.push(`${action} ${ref}`);
+      clock += 1;
       if (ref === opts.refuse) {
-        return Promise.resolve(false);
+        return Promise.resolve({ ok: false, since: clock });
       }
       count += 1;
-      return Promise.resolve(true);
+      return Promise.resolve({ ok: true, since: clock });
     },
   };
   return page;
@@ -111,9 +121,49 @@ describe('readBuild', () => {
   });
 });
 
+describe('what the app did', () => {
+  it('adds the network calls and console errors since the sequence began to each reading', async () => {
+    const page = counterPage({ effects: () => ['net: POST /api/add 500'] });
+    const readings = await readBuild(page, [[], [add], [add, add]], noSleep);
+    expect(readings.get(sequenceKey([add, add]))?.lines).toEqual([
+      'add',
+      'count 2',
+      'other',
+      'net: POST /api/add 500',
+    ]);
+    // Read from the cursor of the run's FIRST act, for every step of the run.
+    expect(new Set(page.cursors)).toEqual(new Set([101]));
+    // The start page has no action yet, so it has no effects.
+    expect(readings.get(sequenceKey([]))?.lines).not.toContain('net: POST /api/add 500');
+  });
+});
+
 describe('probeSequence', () => {
+  const wait: PlanStep = { action: 'wait', ms: 4000 };
+
   it('returns the settled tree after the last step, or undefined when a step failed', async () => {
-    expect(await probeSequence(counterPage(), [add], noSleep)).toContain('[text="1"]');
+    expect((await probeSequence(counterPage(), [add], noSleep))?.tree).toContain('[text="1"]');
     expect(await probeSequence(counterPage({ refuse: 'e1' }), [add], noSleep)).toBeUndefined();
+  });
+
+  it('calls a wait quiet when nothing changed during it and nothing was pending', async () => {
+    expect((await probeSequence(counterPage(), [add, wait], noSleep))?.active).toBe(false);
+  });
+
+  it('calls a wait active when the page changed during it', async () => {
+    const page = counterPage();
+    let waited = false;
+    const plain = counterPage();
+    page.read = () => (waited ? Promise.resolve('- status "Toast" [text="Saved"]') : plain.read());
+    const sleep = (ms: number): Promise<void> => {
+      waited ||= 4000 === ms;
+      return Promise.resolve();
+    };
+    expect((await probeSequence(page, [add, wait], sleep))?.active).toBe(true);
+  });
+
+  it('calls a wait active when a network call was still pending before it', async () => {
+    const page = counterPage({ effects: () => ['net: GET /slow pending'] });
+    expect((await probeSequence(page, [add, wait], noSleep))?.active).toBe(true);
   });
 });

@@ -459,11 +459,13 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // (session-port.ts) with the same reconnect wait `navigate { reload }` uses.
   exhaust: ['dir', 'fs', 'project', 'facts', 'session'],
   // Two builds are explored with the same breadth-first explorer the exhaustive crawl uses.
-  compare: ['exhaust'],
+  // `outside` holds what `reticle compare` reads beside the page tree: the network and console
+  // lines, and the values the app's scripts compare fields with.
+  compare: ['exhaust', 'outside'],
   // `reticle compare`: the rules are in `compare`; this directory reaches the daemon over the same
   // MCP client and lease calls `cli` uses, with the pairing token (`bridge`) and the caller's
   // project `.reticle` (`project`).
-  'two-builds': ['bridge', 'cli', 'compare', 'project'],
+  'two-builds': ['bridge', 'cli', 'compare', 'outside', 'project'],
   // Edge cases, driven on the explorer's states and judged by the explorer's own checks.
   edges: ['exhaust'],
   // `ports`: port-state.ts names the process that holds the bridge port, so every surface says the

@@ -76,7 +76,8 @@ const VERIFY_DETAIL = `Drives the URL and verifies the saved flows. Exit 0 means
                                 https://docs.reticle.sh/http-transport.md`;
 
 const COMPARE_DETAIL = `Drives two running builds of one app the same way, for example main and a pull request
-preview, and reports each difference in what a person sees. Install nothing in the app.
+preview, and reports each difference in what a person sees and in the requests and console
+errors the app made. Install nothing in the app.
 
 It plans every action on every control of the reference, drives the plan on the reference two
 times and on the candidate one time, and ignores what changes between the two reference runs.

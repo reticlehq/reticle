@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+import { buildDictionary } from './outside/value-dictionary.js';
 import {
+  EDGE_TEXT,
   MAX_SEQUENCES,
   WAIT_AFTER_CLICK_MS,
   actionsOf,
@@ -12,6 +14,9 @@ import {
   valuesFor,
   type Sequence,
 } from './action-plan.js';
+
+const busy = (tree: string | undefined) => () =>
+  Promise.resolve(tree === undefined ? undefined : { tree, active: true });
 
 const START = [
   '- heading "Shop"',
@@ -52,11 +57,20 @@ describe('planControls', () => {
 });
 
 describe('actionsOf', () => {
-  it('fills a field with two values chosen by the shape of its value', () => {
-    expect(valuesFor('09:30')).toEqual(['09:15', '17:45']);
-    expect(valuesFor('2024-01-01')).toEqual(['2024-02-03', '2024-11-28']);
-    expect(valuesFor('12')).toEqual(['0', '7']);
-    expect(valuesFor('Ada')).toEqual(['', 'Reticle 42']);
+  it('fills a field with two values chosen by the shape of its value, and one edge value', () => {
+    expect(valuesFor('09:30')).toEqual(['09:15', '17:45', '23:59']);
+    expect(valuesFor('2024-01-01')).toEqual(['2024-02-03', '2024-11-28', '2024-02-29']);
+    expect(valuesFor('12')).toEqual(['0', '7', '-1']);
+    expect(valuesFor('Ada')).toEqual(['', 'Reticle 42', EDGE_TEXT]);
+    expect(EDGE_TEXT).toBe(`${'W'.repeat(120)} <b>&amp;</b> "q" ✓`);
+  });
+
+  it('also fills a field with the values the app compares its name with', () => {
+    const route = planControls('- textbox "Route" (ref=e1)')[0];
+    const dict = buildDictionary([['route', 'progress']]);
+    expect(route === undefined ? [] : actionsOf(route, dict).map(stepLabel)).toContain(
+      'fill textbox "Route" with "progress"',
+    );
   });
 
   it('selects every option, clicks a button, and does nothing to a disabled control', () => {
@@ -65,6 +79,7 @@ describe('actionsOf', () => {
     expect(name === undefined ? [] : actionsOf(name).map(stepLabel)).toEqual([
       'fill textbox "Name" with ""',
       'fill textbox "Name" with "Reticle 42"',
+      `fill textbox "Name" with "${EDGE_TEXT}"`,
     ]);
     expect(size === undefined ? [] : actionsOf(size).map(stepLabel)).toEqual([
       'select "Small" in combobox "Size"',
@@ -75,7 +90,7 @@ describe('actionsOf', () => {
 
 describe('buildPlan', () => {
   it('plans the start page, every single action, a wait after each click, and each action under each option', async () => {
-    const plan = await buildPlan(START, () => Promise.resolve(START));
+    const plan = await buildPlan(START, busy(START));
     const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
     expect(labels[0]).toBe('');
     expect(labels).toContain(`wait ${String(WAIT_AFTER_CLICK_MS / 1000)} s`);
@@ -89,10 +104,44 @@ describe('buildPlan', () => {
   it('goes one level deeper into the controls an action made appear', async () => {
     const dialog = `${START}\n  - button "Confirm" (ref=e9)`;
     const plan = await buildPlan(START, (seq) =>
-      Promise.resolve('click [testid=add]' === seq.map(stepLabel).join() ? dialog : START),
+      Promise.resolve({
+        tree: 'click [testid=add]' === seq.map(stepLabel).join() ? dialog : START,
+        active: true,
+      }),
     );
     const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
     expect(labels).toContain('click [testid=add] > click button "Confirm"');
+  });
+
+  it('goes deeper only into what the last action made appear, not into what was already there', async () => {
+    const login = '- button "Log in" (ref=e1)';
+    const home = '- button "Compose" (ref=e2)\n- button "Settings" (ref=e3)';
+    const compose = `${home}\n- button "Generate" (ref=e4)`;
+    const trees: Record<string, string> = {
+      'click button "Log in"': home,
+      'click button "Log in",click button "Compose"': compose,
+    };
+    const plan = await buildPlan(login, (seq) =>
+      Promise.resolve({ tree: trees[seq.map(stepLabel).join()] ?? home, active: true }),
+    );
+    const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
+    expect(labels).toContain(
+      'click button "Log in" > click button "Compose" > click button "Generate"',
+    );
+    expect(labels).not.toContain(
+      'click button "Log in" > click button "Compose" > click button "Settings"',
+    );
+  });
+
+  it('presses a button that is disabled until the fields are filled, after filling them', async () => {
+    const form = [
+      '- textbox "Title" (ref=e1)',
+      '- textbox "Prompt" (ref=e2)',
+      '- button "Generate" (ref=e3) [disabled]',
+    ].join('\n');
+    const plan = await buildPlan(form, busy(form));
+    const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
+    expect(labels.some((l) => l.endsWith('> click button "Generate"'))).toBe(true);
   });
 
   it('fills every field with its own value, then presses each button, when a page has two fields', async () => {
@@ -101,11 +150,35 @@ describe('buildPlan', () => {
       '- textbox "End" (ref=e2) [value="10:00"]',
       '- button "Save" (ref=e3)',
     ].join('\n');
-    const plan = await buildPlan(form, () => Promise.resolve(form));
+    const plan = await buildPlan(form, busy(form));
     const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
     expect(labels).toContain(
       'wait 4 s > fill every field (textbox "Start"="09:15", textbox "End"="18:45") > click button "Save"',
     );
+  });
+
+  it('keeps a wait after a click only when the reference showed delayed activity there', async () => {
+    const plan = await buildPlan(START, (seq) =>
+      Promise.resolve({
+        tree: START,
+        active: 'click [testid=add],wait 4 s' === seq.map(stepLabel).join(),
+      }),
+    );
+    const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
+    expect(labels).toContain('click [testid=add] > wait 4 s');
+    expect(labels).not.toContain('click button "Open" > wait 4 s');
+    expect(labels).not.toContain('wait 4 s');
+  });
+
+  it('fills every field with the value the app compares it with first', async () => {
+    const form = '- textbox "Route" (ref=e1)\n- textbox "Note" (ref=e2)';
+    const plan = await buildPlan(form, busy(form), buildDictionary([['route', 'progress']]));
+    const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
+    expect(
+      labels.some((l) =>
+        l.includes('fill every field (textbox "Route"="progress", textbox "Note"='),
+      ),
+    ).toBe(true);
   });
 
   it('stops at the sequence cap', async () => {
@@ -113,12 +186,12 @@ describe('buildPlan', () => {
       { length: 300 },
       (_, i) => `- button "B${String(i)}" (ref=e${String(i)})`,
     ).join('\n');
-    const plan = await buildPlan(many, () => Promise.resolve(many));
+    const plan = await buildPlan(many, busy(many));
     expect(plan).toHaveLength(MAX_SEQUENCES);
   });
 
   it('does not go deeper after a probe that could not be done', async () => {
-    const plan = await buildPlan(START, () => Promise.resolve(undefined));
+    const plan = await buildPlan(START, busy(undefined));
     expect(plan.every((seq) => seq.length <= 2)).toBe(true);
   });
 });

@@ -4,17 +4,25 @@
  * The plan is made on the reference, breadth first, with no model and no settings:
  * - the start page, and a wait on the start page;
  * - every single action on every control: click each button, tab, checkbox and option; fill each
- *   text field with two values chosen by the shape of its value; select each option of a combobox;
- * - each click again, followed by a wait, so behaviour on a timer can show;
+ *   text field with two values chosen by the shape of its value, one edge value of that shape, and
+ *   the values the app's scripts compare the field's name with (`value-dictionary.ts`); select each
+ *   option of a combobox;
+ * - each click again, followed by a wait, so behaviour on a timer can show. The wait stays in the
+ *   plan only when the reference showed delayed activity there: a call still pending, a page that
+ *   kept changing while it settled, or a change during the wait;
  * - each single action again under each option of each combobox (a mode, a variant);
- * - after each sequence, one level deeper into the controls that appeared (a menu, a dialog);
- * - on a page with two or more fields: fill every field with its own value, then press each button.
+ * - after each sequence, one level deeper into the controls its last action made appear (a menu, a
+ *   dialog): controls that were not on the page before that action;
+ * - on a page with two or more fields: fill every field with its own value, then press each button,
+ *   also a button that is disabled until the fields are filled.
  *   Only this shows a build that takes the start time for the end time.
  *
  * A control is targeted by its test id when it has one, else by its role and name. Controls with the
  * same target are numbered in page order, so "fill every field" fills eight fields, not one field
  * eight times. Every sequence starts from a fresh load of the start page.
  */
+
+import { magicValues, type ValueDictionary } from './outside/value-dictionary.js';
 
 /** A control on the page, by identity. `nth` counts the controls with the same identity before it. */
 export interface Target {
@@ -68,10 +76,13 @@ const FIELD_ROLES: ReadonlySet<string> = new Set(['textbox', 'spinbutton']);
 const TIME = /^\d{1,2}:\d{2}$/;
 const DATE = /^\d{4}-\d{2}-\d{2}|^\d{1,2}\/\d{1,2}\/\d{4}$/;
 const NUMBER = /^-?\d+(\.\d+)?$/;
-const TIME_VALUES: [string, string] = ['09:15', '17:45'];
-const DATE_VALUES: [string, string] = ['2024-02-03', '2024-11-28'];
-const NUMBER_VALUES: [string, string] = ['0', '7'];
-const TEXT_VALUES: [string, string] = ['', 'Reticle 42'];
+/** Long text with markup characters and a non-ASCII mark: a build that breaks only on such input. */
+export const EDGE_TEXT = `${'W'.repeat(120)} <b>&amp;</b> "q" ✓`;
+/** Two ordinary values of a shape, then one edge value: the last minute, a leap day, a negative. */
+const TIME_VALUES = ['09:15', '17:45', '23:59'] as const;
+const DATE_VALUES = ['2024-02-03', '2024-11-28', '2024-02-29'] as const;
+const NUMBER_VALUES = ['0', '7', '-1'] as const;
+const TEXT_VALUES = ['', 'Reticle 42', EDGE_TEXT] as const;
 const FIELD_TEXT = 'Reticle';
 const HOURS_PER_DAY = 24;
 
@@ -142,8 +153,11 @@ export function refFor(tree: string, target: Target): string | undefined {
   return planControls(tree).find((c) => targetKey(c.target) === key)?.ref;
 }
 
-/** Two values for a field, by the shape of its value: they differ from it and from each other. */
-export function valuesFor(value: string): [string, string] {
+/**
+ * Values for a field, by the shape of its value: two that differ from it and from each other, so a
+ * build that mixes up two fields shows a difference, and one edge value of that shape.
+ */
+export function valuesFor(value: string): readonly string[] {
   if (TIME.test(value)) {
     return TIME_VALUES;
   }
@@ -156,8 +170,16 @@ export function valuesFor(value: string): [string, string] {
   return TEXT_VALUES;
 }
 
+const EMPTY_DICTIONARY: ValueDictionary = new Map();
+
+/** The name the app's scripts would compare a field with: its accessible name, else its test id. */
+const fieldName = (c: PlanControl): string => c.target.name ?? c.target.testid ?? '';
+
 /** The single actions on one control. None on a disabled control. */
-export function actionsOf(control: PlanControl): PlanStep[] {
+export function actionsOf(
+  control: PlanControl,
+  dictionary: ValueDictionary = EMPTY_DICTIONARY,
+): PlanStep[] {
   if (control.disabled) {
     return [];
   }
@@ -166,13 +188,24 @@ export function actionsOf(control: PlanControl): PlanStep[] {
     return control.options.map((value) => ({ action: ControlKind.SELECT, target, value }));
   }
   if (ControlKind.FILL === control.kind) {
-    return valuesFor(control.value).map((value) => ({ action: ControlKind.FILL, target, value }));
+    const values = new Set([
+      ...valuesFor(control.value),
+      ...magicValues(dictionary, fieldName(control)),
+    ]);
+    return [...values].map((value) => ({ action: ControlKind.FILL, target, value }));
   }
   return [{ action: ControlKind.CLICK, target }];
 }
 
-/** Field `index`'s own value in "fill every field": a time moves by one hour for each field. */
-function ownValue(field: PlanControl, index: number): string {
+/**
+ * Field `index`'s own value in "fill every field": the first value the app compares it with, else an
+ * ordinary value of its shape, where a time moves by one hour for each field.
+ */
+function ownValue(field: PlanControl, index: number, dictionary: ValueDictionary): string {
+  const magic = magicValues(dictionary, fieldName(field))[0];
+  if (magic !== undefined) {
+    return magic;
+  }
   const value = valuesFor(field.value)[index % 2] ?? '';
   if ('' === value) {
     return `${FIELD_TEXT} ${String(index + 1)}`;
@@ -206,18 +239,33 @@ export const sequenceKey = (seq: Sequence): string => JSON.stringify(seq);
 const targetOf = (step: PlanStep): string | undefined =>
   'target' in step ? targetKey(step.target) : undefined;
 
+/** What a probe of one sequence saw. */
+export interface Probe {
+  /** The settled tree after the last step. */
+  tree: string;
+  /** For a sequence that ends in a wait: whether the reference showed delayed activity there. */
+  active: boolean;
+}
+
+const endsInWait = (seq: Sequence): boolean => 'wait' === seq.at(-1)?.action;
+
 /**
- * Make the plan on the reference. `probe` drives one sequence from a fresh load and returns the
- * tree after its last step, or undefined when a step could not be done.
+ * Make the plan on the reference. `probe` drives one sequence from a fresh load, or answers
+ * undefined when a step could not be done.
  */
 export async function buildPlan(
   startTree: string,
-  probe: (seq: Sequence) => Promise<string | undefined>,
+  probe: (seq: Sequence) => Promise<Probe | undefined>,
+  dictionary: ValueDictionary = EMPTY_DICTIONARY,
 ): Promise<Sequence[]> {
   const start = planControls(startTree);
-  const startKeys = new Set(start.map((c) => targetKey(c.target)));
-  const singles = start.flatMap(actionsOf);
-  const modes = start.filter((c) => ControlKind.SELECT === c.kind).flatMap(actionsOf);
+  const keysOf = (tree: string): Set<string> =>
+    new Set(planControls(tree).map((c) => targetKey(c.target)));
+  /** The controls on the page after each probed sequence, to tell what its next action added. */
+  const before = new Map<string, Set<string>>([[sequenceKey([]), keysOf(startTree)]]);
+  const steps = (c: PlanControl): PlanStep[] => actionsOf(c, dictionary);
+  const singles = start.flatMap(steps);
+  const modes = start.filter((c) => ControlKind.SELECT === c.kind).flatMap(steps);
   const wait: PlanStep = { action: 'wait', ms: WAIT_AFTER_CLICK_MS };
   const queue: Sequence[] = [
     [wait],
@@ -234,28 +282,33 @@ export async function buildPlan(
       continue;
     }
     seen.add(key);
+    // A wait is probed before it is planned: it stays only where the reference showed activity.
+    const probed = seq.length < MAX_DEPTH || endsInWait(seq) ? await probe(seq) : undefined;
+    if (endsInWait(seq) && true !== probed?.active) {
+      continue;
+    }
     plan.push(seq);
-    if (seq.length >= MAX_DEPTH) {
+    if (seq.length >= MAX_DEPTH || probed === undefined) {
       continue;
     }
-    const tree = await probe(seq);
-    if (tree === undefined) {
-      continue;
-    }
-    const now = planControls(tree).filter((c) => !c.disabled);
+    before.set(key, keysOf(probed.tree));
+    const all = planControls(probed.tree);
+    const now = all.filter((c) => !c.disabled);
     const fields = now.filter((c) => ControlKind.FILL === c.kind);
     if (fields.length >= 2 && !seq.some((s) => 'fillall' === s.action)) {
       const fillall: PlanStep = {
         action: 'fillall',
-        fields: fields.map((f, i) => ({ target: f.target, value: ownValue(f, i) })),
+        fields: fields.map((f, i) => ({ target: f.target, value: ownValue(f, i, dictionary) })),
       };
       queue.unshift([...seq, fillall]);
-      for (const button of now.filter((c) => ControlKind.CLICK === c.kind)) {
+      // Also a disabled button: a submit is often disabled until the fields are filled.
+      for (const button of all.filter((c) => ControlKind.CLICK === c.kind)) {
         queue.push([...seq, fillall, { action: ControlKind.CLICK, target: button.target }]);
       }
     }
-    for (const control of now.filter((c) => !startKeys.has(targetKey(c.target)))) {
-      for (const step of actionsOf(control)) {
+    const parent = before.get(sequenceKey(seq.slice(0, -1))) ?? before.get(sequenceKey([]));
+    for (const control of now.filter((c) => parent?.has(targetKey(c.target)) !== true)) {
+      for (const step of steps(control)) {
         queue.push([...seq, step]);
       }
     }

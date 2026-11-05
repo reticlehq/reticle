@@ -51,13 +51,55 @@ describe('leasedPage', () => {
     expect((calls[1] as { args: { sessionId: string } }).args.sessionId).toBe('s2');
   });
 
+  it('returns the cursor an action gives, for the effects of its sequence', async () => {
+    const page = leasedPage(
+      caller({ [ReticleTool.ACT]: text({ dispatched: true, since: 41 }) }),
+      'http://a/',
+      's1',
+    );
+    expect(await page.act('e1', 'click')).toEqual({ ok: true, since: 41 });
+  });
+
+  it('reads the network with bodies and the console from the cursor, with no window_ms', async () => {
+    const calls: unknown[] = [];
+    const page = leasedPage(
+      caller(
+        {
+          [ReticleTool.NETWORK]: text({
+            calls: [{ method: 'POST', url: 'http://a/api/x?k=1', status: 500, requestBody: '{}' }],
+          }),
+          [ReticleTool.CONSOLE]: text({ logs: [{ level: 'error', text: 'boom' }] }),
+        },
+        calls,
+      ),
+      'http://a/',
+      's1',
+    );
+    expect(await page.effects(41)).toEqual(['net: POST /api/x?k= 500 {}', 'console error: boom']);
+    expect(calls).toEqual([
+      { tool: ReticleTool.NETWORK, args: { since: 41, bodies: true, limit: 50, sessionId: 's1' } },
+      { tool: ReticleTool.CONSOLE, args: { since: 41, limit: 50, sessionId: 's1' } },
+    ]);
+  });
+
+  it('writes a refused effects read as a line instead of dropping it', async () => {
+    const page = leasedPage(
+      caller({ [ReticleTool.NETWORK]: refused('window_ms is not allowed here') }),
+      'http://a/',
+      's1',
+    );
+    expect(await page.effects(1)).toContain(
+      'effects failed: network: window_ms is not allowed here',
+    );
+  });
+
   it('counts a refused action as a step that could not be done', async () => {
     const page = leasedPage(
       caller({ [ReticleTool.ACT]: refused('ref e9 no longer resolves') }),
       'http://a/',
       's1',
     );
-    expect(await page.act('e9', 'click')).toBe(false);
+    expect((await page.act('e9', 'click')).ok).toBe(false);
   });
 
   it('throws a lost driver when the session is gone, so the run is invalid', async () => {
