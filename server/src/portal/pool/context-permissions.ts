@@ -16,6 +16,7 @@
  * "granted" there would be reporting something the page cannot see.
  */
 import { isLoopbackHostname } from '@reticlehq/core';
+import { allowDaemonInCsp, allowDaemonInHtml } from './csp-widen.js';
 import type { PooledContext, PooledPage } from './pool-contract.js';
 
 /** The permission whose grant the headless shell does not pass on to `Notification.permission`. */
@@ -120,18 +121,61 @@ export async function readNotificationPermission(page: PooledPage): Promise<stri
   }
 }
 
+/** How long the loopback CSP probe may take. Bounded because acquire waits on it. */
+export const CSP_PROBE_TIMEOUT_MS = 2_000;
+
+/** The part of `fetch` the probe uses. */
+export type CspProbeFetch = (
+  url: string,
+  init: { signal: AbortSignal },
+) => Promise<Pick<Response, 'headers' | 'text'>>;
+
 /**
- * On a lease off loopback, add `daemonOrigin` to the page CSP `connect-src` (#2016). The returned
- * record gets `widenedFor` once a response was really widened, so the lease can say so.
+ * Whether the document at `url` sends a CSP (header or meta tag) that would block a dial to
+ * `daemonOrigin` (#2163). False when it cannot be asked: the lease then opens as before.
+ */
+export async function pageCspBlocksDaemon(
+  url: string,
+  daemonOrigin: string,
+  probe: CspProbeFetch = fetch,
+): Promise<boolean> {
+  try {
+    const response = await probe(url, { signal: AbortSignal.timeout(CSP_PROBE_TIMEOUT_MS) });
+    const header = response.headers.get('content-security-policy');
+    if (header !== null && allowDaemonInCsp(header, daemonOrigin).changed) {
+      return true;
+    }
+    if (!/html/i.test(response.headers.get('content-type') ?? '')) {
+      return false;
+    }
+    return allowDaemonInHtml(await response.text(), daemonOrigin).changed;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * On a lease whose page's CSP would block the daemon, add `daemonOrigin` to its `connect-src`
+ * (#2016). Off loopback this always installs the route. On loopback it installs it only when a
+ * probe of the page finds a CSP that blocks the dial (#2163), because the route sees every request
+ * in the context, and a dev server that sends no CSP should not pay for it. The returned record
+ * gets `widenedFor` once a response was really widened, so the lease can say so.
  */
 export async function widenLeaseCsp(
   context: PooledContext,
   url: string,
   daemonOrigin: string | undefined,
+  probe?: CspProbeFetch,
 ): Promise<{ widenedFor?: string }> {
   const widening: { widenedFor?: string } = {};
-  if (daemonOrigin !== undefined && offLoopbackOrigin(url) !== undefined) {
-    await context.widenCsp?.(daemonOrigin, () => {
+  if (daemonOrigin === undefined || context.widenCsp === undefined) {
+    return widening;
+  }
+  const needed =
+    offLoopbackOrigin(url) !== undefined ||
+    (URL.canParse(url) && (await pageCspBlocksDaemon(url, daemonOrigin, probe)));
+  if (needed) {
+    await context.widenCsp(daemonOrigin, () => {
       widening.widenedFor = daemonOrigin;
     });
   }
