@@ -96,6 +96,10 @@ const SELF_RECOVERING: readonly { readonly match: RegExp; readonly reason: Refus
   // Both are the caller's to fix, and the defect ask on top told an agent to file a bug about them.
   { match: literally(EMPTY_FIND_OPENING), reason: RefusalReason.BAD_ARGS },
   { match: literally(UNKNOWN_FLOW_OPENING), reason: RefusalReason.NO_MATCH },
+  // A lease `root` outside any project: the refusal names the path to pass (`Pass <dir>/.reticle`),
+  // so it already spells out the exact retry — and the defect ask on top told an agent its own bad
+  // argument might be a Reticle defect worth a root-cause report.
+  { match: /root must be .*project folder/i, reason: RefusalReason.BAD_ARGS },
 ];
 
 /**

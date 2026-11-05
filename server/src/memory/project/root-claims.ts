@@ -19,21 +19,24 @@ const everClaimed = new Set<string>();
 
 /**
  * The `.reticle` folder a caller meant by `root`. Agents pass the project folder, the one they work
- * in, so a folder that holds a `.reticle` stands for it. Anything else is refused with the path to pass.
+ * in: an existing directory stands for the `.reticle` inside it, which Reticle creates when the
+ * first run is written. A `.reticle` folder stands for itself, whether it exists yet or not.
+ * Anything else is refused with the path to pass.
  */
 function resolveArtifactRoot(root: string): string {
   if (!isAbsolute(root)) {
-    throw new Error(`root must be an absolute path to a ${ReticleDir.ROOT} folder, got ${root}`);
+    throw new Error(
+      `root must be an absolute path to a project folder or its ${ReticleDir.ROOT} folder, got ${root}`,
+    );
   }
   if (ReticleDir.ROOT === basename(root)) {
     return root;
   }
-  const inside = join(root, ReticleDir.ROOT);
-  if (isDirectory(inside)) {
-    return inside;
+  if (isDirectory(root)) {
+    return join(root, ReticleDir.ROOT);
   }
   throw new Error(
-    `root must be the ${ReticleDir.ROOT} folder, or a project folder that contains one, got ${root}. Pass ${inside}`,
+    `root must be a project folder or its ${ReticleDir.ROOT} folder, got ${root}. Pass ${join(root, ReticleDir.ROOT)}`,
   );
 }
 
@@ -45,7 +48,7 @@ function isDirectory(path: string): boolean {
   }
 }
 
-/** Claim `root` for the session a lease registers. Takes a `.reticle` folder or the project folder holding one. */
+/** Claim `root` for the session a lease registers. Takes a project folder or its `.reticle` folder. */
 export function claimArtifactRoot(leaseId: string, root: string): void {
   const resolved = resolveArtifactRoot(root);
   claims.set(leaseId, resolved);

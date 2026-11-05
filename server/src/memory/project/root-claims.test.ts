@@ -51,11 +51,35 @@ describe('artifact root claims', () => {
     }
   });
 
-  it('refuses a folder with no .reticle and names the path to pass', () => {
+  it('takes a project folder with no .reticle yet as that .reticle', () => {
     const project = mkdtempSync(join(tmpdir(), 'reticle-root-'));
     try {
-      expect(() => claimArtifactRoot('lease-1', project)).toThrow(
-        `Pass ${join(project, '.reticle')}`,
+      claimArtifactRoot('lease-1', project);
+      expect(claimedArtifactRoot('lease-1', 'http://localhost:3000/')).toBe(
+        join(project, '.reticle'),
+      );
+    } finally {
+      rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it('takes a .reticle folder that does not exist yet', () => {
+    const project = mkdtempSync(join(tmpdir(), 'reticle-root-'));
+    try {
+      const missing = join(project, '.reticle');
+      claimArtifactRoot('lease-1', missing);
+      expect(claimedArtifactRoot('lease-1', 'http://localhost:3000/')).toBe(missing);
+    } finally {
+      rmSync(project, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses a path that does not exist and names the path to pass', () => {
+    const project = mkdtempSync(join(tmpdir(), 'reticle-root-'));
+    try {
+      const missing = join(project, 'no-such-project');
+      expect(() => claimArtifactRoot('lease-1', missing)).toThrow(
+        `Pass ${join(missing, '.reticle')}`,
       );
       expect(claimedArtifactRoot('lease-1', 'http://localhost:3000/')).toBeUndefined();
     } finally {
