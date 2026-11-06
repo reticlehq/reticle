@@ -32,8 +32,14 @@ import { URL_RAW } from './net.js';
 // reaches the agent as `{"planId":"team","card":"4111111111111111"}` — `credit_card` and
 // `card_number` are not the only spellings, and `card` is what Stripe's own object calls it. The
 // anchors keep `discard`, `cardinality` and `panel` visible.
+// Bank-transfer identifiers mirror `PAYMENT_FIELD_WORDS` in `core/src/verdict/security.ts`, which
+// already treats `iban`, `account number`, `routing number` and `sort code` as payment-sensitive.
+// Without them a bank-transfer or payout POST leaks `{"iban":"…","accountNumber":"…"}` into the
+// journal and the agent transcript — the same class of leak as the unredacted `card` field above.
+// Bare `account`, `routing`, `sort` and `code` stay visible: `accountId`, `accountType`,
+// `accountName`, `routingPath`, `sortOrder` and `sortBy` are ordinary app data an agent needs.
 const SENSITIVE_KEY =
-  /password|passwd|passcode|pass[-_]?phrase|(?:otp|totp|mfa|recovery|backup)[-_]?codes?|(?:^|[-_])(?:otp|totp)(?=$|[-_])|secret|(?:(?:access|refresh|auth|bearer|api|id|session|csrf|client)[-_]?tokens?|(?:^|[-_])tokens?(?=$|[-_]))|session[-_]?id|(?:^|[-_])(?:sid|pwd|jwt)(?=$|[-_])|authorization|(?:^|[-_])(?:set[-_])?cookie(?=$|[-_])|api[-_]?key|access[-_]?key|private[-_]?key|client[-_]?secret|credit[-_]?card|card[-_]?(?:number|num|no|pan)(?=$|[-_])|(?:^|[-_])(?:card|pan)(?=$|[-_])|cvv|cvc|ssn|(?:^|[-_])(?:signature|sig)$|(?:^|[-_])credential$|x-(?:amz|goog)-(?:signature|credential|security-token)$/i;
+  /password|passwd|passcode|pass[-_]?phrase|(?:otp|totp|mfa|recovery|backup)[-_]?codes?|(?:^|[-_])(?:otp|totp)(?=$|[-_])|secret|(?:(?:access|refresh|auth|bearer|api|id|session|csrf|client)[-_]?tokens?|(?:^|[-_])tokens?(?=$|[-_]))|session[-_]?id|(?:^|[-_])(?:sid|pwd|jwt)(?=$|[-_])|authorization|(?:^|[-_])(?:set[-_])?cookie(?=$|[-_])|api[-_]?key|access[-_]?key|private[-_]?key|client[-_]?secret|credit[-_]?card|card[-_]?(?:number|num|no|pan)(?=$|[-_])|(?:^|[-_])(?:card|pan)(?=$|[-_])|(?:^|[-_])iban(?=$|[-_])|account[-_]?(?:number|num|no)(?=$|[-_])|routing[-_]?number(?=$|[-_])|sort[-_]?code(?=$|[-_])|cvv|cvc|ssn|(?:^|[-_])(?:signature|sig)$|(?:^|[-_])credential$|x-(?:amz|goog)-(?:signature|credential|security-token)$/i;
 
 /**
  * The built-in rule, always available and never configurable.
