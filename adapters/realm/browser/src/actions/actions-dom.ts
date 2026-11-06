@@ -521,6 +521,10 @@ export async function fireTapSequence(
 
 /** A pointer event that says it came from a FINGER — the discriminator a touch handler reads. */
 function firePointerTouch(el: Element, type: string): void {
+  // At the element's centre, like the touch events fired beside it: a handler that hit-tests
+  // from clientX/Y read (0, 0) off these, a touch in the top-left corner that never happened
+  // (#1851). The mouse path learned the same lesson at #1003.
+  const at = centreOf(el);
   asSyntheticInput(() =>
     el.dispatchEvent(
       pointerEventFor(el, type, {
@@ -530,6 +534,8 @@ function firePointerTouch(el: Element, type: string): void {
         isPrimary: true,
         width: 23,
         height: 23,
+        clientX: at.x,
+        clientY: at.y,
       }),
     ),
   );
