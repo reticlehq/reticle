@@ -146,6 +146,9 @@ const ORDER = [
   // A coarse pointer on a leased context, read as the page reads it: matchMedia and the rule behind
   // it. Serves its own page, like the three specs above.
   'lease-pointer-test',
+  // A deterministic lease read and driven through the tool handlers while its clock stands still.
+  // Serves its own page, like the four specs above.
+  'lease-deterministic-test',
   'atlas-hard-fixture-test',
   // Drives a real session and then checks that the EVENTS describe it — a different question from
   // telemetry-events-test, which only proves each kind can be sent. Owns a browser and writes a flow,

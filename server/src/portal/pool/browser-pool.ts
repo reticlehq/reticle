@@ -31,7 +31,8 @@ import type {
 } from './pool-contract.js';
 import type { RealInputArgs, RealInputResult } from '@/portal/input/real-input.js';
 import { readViewport, type LeaseEmulation, type LeaseMedia } from './lease-emulation.js';
-import { NotHtmlDocumentError, READER_NOT_HTML } from './zero-install.js';
+import { injectReaderInto } from './zero-install.js';
+import { stepPage, type DeterminismStep } from './determinism.js';
 export type {
   InitScriptHandle,
   Launcher,
@@ -476,6 +477,13 @@ export class BrowserPool {
     }
   }
 
+  /** Step a deterministic lease's clock by `frames` frames; undefined when it is not one. */
+  stepLease(sessionId: string, frames: number): Promise<DeterminismStep | undefined> {
+    const page = this.#active.get(this.#leaseIdOf(sessionId))?.page;
+    this.touch(sessionId);
+    return page === undefined ? Promise.resolve(undefined) : stepPage(page, frames);
+  }
+
   /** Guard a leased page's requests, or false when this is not a lease or its page cannot. */
   async guardLease(
     sessionId: string,
@@ -740,17 +748,7 @@ export class BrowserPool {
         url,
         ...(navStatus !== undefined ? { navStatus } : {}),
         release: () => this.#release(sessionId),
-        injectReader: async (): Promise<boolean> => {
-          const script = this.#zeroInstall?.(url);
-          if (script === undefined || page.evaluate === undefined) {
-            return false;
-          }
-          await page.addInitScript?.(script);
-          if (READER_NOT_HTML === (await page.evaluate(script))) {
-            throw new NotHtmlDocumentError();
-          }
-          return true;
-        },
+        injectReader: () => injectReaderInto(page, this.#zeroInstall?.(url)),
         isLoading: () => pageLoading(page),
       };
     } catch (err) {

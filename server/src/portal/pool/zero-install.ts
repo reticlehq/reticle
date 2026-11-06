@@ -147,6 +147,24 @@ export class NotHtmlDocumentError extends Error {
   }
 }
 
+/**
+ * Run the reader in a leased page now, and again before the page's own scripts on each later load.
+ * False when there is no reader or the page cannot run one; throws when the page is not HTML.
+ */
+export async function injectReaderInto(
+  page: { evaluate?(script: string): Promise<unknown>; addInitScript?(script: string): unknown },
+  script: string | undefined,
+): Promise<boolean> {
+  if (script === undefined || page.evaluate === undefined) {
+    return false;
+  }
+  await page.addInitScript?.(script);
+  if (READER_NOT_HTML === (await page.evaluate(script))) {
+    throw new NotHtmlDocumentError();
+  }
+  return true;
+}
+
 let cached: string | null | undefined;
 
 /**

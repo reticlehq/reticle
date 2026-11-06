@@ -6,6 +6,8 @@
  * Playwright context, which takes all three before the first paint and the media again per call.
  */
 
+import type { DeterminismOptions } from './determinism.js';
+
 export const ColorScheme = {
   LIGHT: 'light',
   DARK: 'dark',
@@ -33,12 +35,15 @@ export interface LeaseEmulation extends LeaseMedia {
    * every `(pointer: coarse)` query with a mouse (#1903).
    */
   pointer?: Pointer;
+  /** A seeded random source and a stepped clock, installed before any page script (determinism.ts). */
+  deterministic?: DeterminismOptions;
 }
 
 /** The same emulation in the names Playwright's own context options use. */
 export interface ContextEmulation extends LeaseMedia {
   viewport?: { width: number; height: number };
   hasTouch?: boolean;
+  deviceScaleFactor?: number;
 }
 
 /**
@@ -50,10 +55,12 @@ export interface ContextEmulation extends LeaseMedia {
  * changes viewport-meta handling, so it is deliberately left out.
  */
 export function contextEmulationOf(emulate: LeaseEmulation): ContextEmulation {
-  const { pointer, ...rest } = emulate;
+  const { pointer, deterministic, ...rest } = emulate;
   return {
     ...rest,
     ...(pointer === undefined ? {} : { hasTouch: Pointer.COARSE === pointer }),
+    // A deterministic page draws at one density on every machine.
+    ...(deterministic === undefined ? {} : { deviceScaleFactor: 1 }),
   };
 }
 

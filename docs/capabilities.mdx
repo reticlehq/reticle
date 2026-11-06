@@ -105,6 +105,35 @@ The reliable pattern is:
 3. Advance by the required interval.
 4. Assert the consequence.
 
+### Deterministic lease: the same pixels on every run
+
+A canvas game or an animation draws something different on each run, because time and randomness differ. Acquire a lease with `deterministic` to make two runs the same:
+
+```json
+{ "tool": "reticle_lease", "args": { "action": "acquire", "url": "http://localhost:5173", "deterministic": { "seed": 7, "platform": "Linux x86_64" } } }
+{ "tool": "reticle_clock", "args": { "stepFrames": 30 } }
+```
+
+```json
+{ "frozen": true, "frame": 30, "nowMs": 500 }
+```
+
+Before any page script runs, the lease installs these in the tab:
+
+- `Math.random`, `crypto.getRandomValues` and `crypto.randomUUID` take values from a generator with the given `seed` (default 1).
+- `Date`, `performance.now`, `setTimeout`, `setInterval` and `requestAnimationFrame` use a virtual clock. It starts at 2026-01-01T00:00:00Z and moves only on `stepFrames`.
+- `devicePixelRatio` is 1. `platform` sets `navigator.platform`, the platform in `navigator.userAgent` and `navigator.userAgentData.platform`.
+
+Each step frame is 16.67 ms. In each frame, the due timers run in time order, then each `requestAnimationFrame` callback runs once. Then capture or read the page.
+
+<Warning>
+  Time stands still on this tab until you step it. A wait for a timer or an animation does not end
+  on its own. These still run on real time: CSS animations and transitions, workers, WebAssembly
+  threads, media playback and network responses. Mock the network with `reticle_network_mock` if the
+  page draws what it fetches. GPU drawing can differ between machines; compare runs on the same
+  machine.
+</Warning>
+
 ### Crawl: click everything, report anomalies
 
 ```json
