@@ -126,9 +126,9 @@ describe('what the app did', () => {
     const page = counterPage({ effects: () => ['net: POST /api/add 500'] });
     const readings = await readBuild(page, [[], [add], [add, add]], noSleep);
     expect(readings.get(sequenceKey([add, add]))?.lines).toEqual([
-      'add',
+      'button add',
       'count 2',
-      'other',
+      'button other',
       'net: POST /api/add 500',
     ]);
     // Read from the cursor of the run's FIRST act, for every step of the run.

@@ -26,7 +26,7 @@ import {
   type Sequence,
   type Target,
 } from './action-plan.js';
-import { visibleLines } from './visible-content.js';
+import { structureLines } from './visible-content.js';
 
 /** A browser tab on one build. */
 export interface PageDriver {
@@ -85,9 +85,12 @@ const roundTimes = (line: string): string =>
     .replace(ELAPSED_MS, (_, n: string) => `${String(Math.round(Number(n) / MS_PER_S))}s`)
     .replace(ELAPSED, (_, n: string) => `${String(Math.round(Number(n)))}s`);
 
-/** What a person sees on the page, one line for each element, with sub-second times rounded. */
+/**
+ * What a person sees on the page, one line for each element, with the role of each control and
+ * structure element kept (`structureLines`) and sub-second times rounded.
+ */
 export function pageLines(tree: string): string[] {
-  return visibleLines(tree).map(roundTimes);
+  return structureLines(tree).map(roundTimes);
 }
 
 const same = (a: readonly string[], b: readonly string[]): boolean =>

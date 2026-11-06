@@ -134,6 +134,29 @@ describe('runCompare', () => {
     expect(result.differences[0]?.actions).toContain('fill textbox "Route" with "progress"');
   });
 
+  it('reports a removed empty table cell, which the text alone cannot show', async () => {
+    const table = (url: string): OpenedPage => ({
+      open: () => Promise.resolve(true),
+      read: () =>
+        Promise.resolve(
+          'cand' === url ? '- row "Ada"\n  - cell "Ada"' : '- row "Ada"\n  - cell\n  - cell "Ada"',
+        ),
+      act: () => Promise.resolve({ ok: true }),
+      effects: () => Promise.resolve([]),
+      close: () => Promise.resolve(),
+    });
+    const { result } = await runCompare({
+      reference: 'ref',
+      candidate: 'cand',
+      open: (url) => Promise.resolve(table(url)),
+      sleep,
+      now,
+      fetchText: noScripts,
+    });
+    expect(result.verdict).toBe(CompareVerdict.DIFFERENT);
+    expect(result.differences[0]?.removed).toEqual(['cell']);
+  });
+
   it('is invalid, not different, when the driver loses its session', async () => {
     const { result } = await runCompare({
       reference: 'ref',
