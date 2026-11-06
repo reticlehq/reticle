@@ -42,6 +42,7 @@ import { asSettleBudget, nativeSetTimeout, settle } from '@/timers/native/native
 import { publishSettledField, watchActedField } from '@/observers/field.js';
 import { AppearedText } from './appeared-text.js';
 import { alreadyAtCheckedState, assertAriaToggleLanded, isAriaToggle } from './check-state.js';
+import { resolveUploadInput } from './upload-input.js';
 import {
   focusedOrDocument,
   isReflessDocumentPress,
@@ -652,9 +653,7 @@ async function dispatchOther(
       return false;
     }
     case ActionType.UPLOAD: {
-      if (!isInput(el) || el.type !== 'file') {
-        throw new Error('upload target must be a <input type="file">');
-      }
+      const input = isInput(el) && 'file' === el.type ? el : resolveUploadInput(el);
       assertUploadArgs(args);
       // When the daemon read a file from disk it base64-encoded the bytes so they survive JSON
       // serialisation across the bridge. Decode back to binary before handing to the File API.
@@ -678,9 +677,9 @@ async function dispatchOther(
       });
       const dt = new DataTransfer();
       dt.items.add(file);
-      el.files = dt.files;
-      const inputOk = el.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
-      el.dispatchEvent(new Event('change', { bubbles: true }));
+      input.files = dt.files;
+      const inputOk = input.dispatchEvent(new Event('input', { bubbles: true, cancelable: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
       return !inputOk;
     }
     case ActionType.DRAG: {
