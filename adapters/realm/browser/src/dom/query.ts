@@ -20,6 +20,7 @@ import {
   isHiddenByAriaOnly,
   isHiddenSubtree,
   isInViewport,
+  isPainted,
   isRenderedOutsideAriaHidden,
   isVisible,
 } from './visibility.js';
@@ -312,6 +313,9 @@ function inState(el: Element, state: ElementState, memo?: Map<Element, boolean>)
   if (ElementState.HIDDEN === state) {
     return !isVisible(el, memo);
   }
+  if (ElementState.PAINTED === state) {
+    return isPainted(el, memo);
+  }
   return getStates(el, isVisible(el, memo)).includes(state);
 }
 
@@ -378,6 +382,7 @@ export function matchQuery(
   // caller explicitly filtered by that state (so the evidence proves the verdict, #1279). Omitted
   // from unfiltered single-match and snapshot-wide describes to avoid bloat (#398).
   const stampViewport = described.length > 1 || ElementState.IN_VIEWPORT === state;
+  const stampPainted = ElementState.PAINTED === state;
   const descriptors: ElementDescriptor[] = described.map((el) => {
     let base = describe(el, visMemo, fullText);
     if (
@@ -386,6 +391,9 @@ export function matchQuery(
       !base.states.includes(ElementState.IN_VIEWPORT)
     ) {
       base = { ...base, states: [...base.states, ElementState.IN_VIEWPORT] };
+    }
+    if (stampPainted && isPainted(el, visMemo) && !base.states.includes(ElementState.PAINTED)) {
+      base = { ...base, states: [...base.states, ElementState.PAINTED] };
     }
     if (attrs === undefined || 0 === attrs.length) {
       return base;
@@ -881,6 +889,14 @@ function buildEmptyHint(
   ) {
     if (roots.some((root) => textInAriaHidden(root, wanted))) {
       hint.ariaHiddenMatch = true;
+    }
+  }
+  // An element query in state: 'visible' or state: 'inViewport' that missed because the matching
+  // element is painted on screen but excluded from the accessible tree by aria-hidden (#1648).
+  if (diagnose && (state === ElementState.VISIBLE || state === ElementState.IN_VIEWPORT)) {
+    const candidates = findCandidates(query).candidates;
+    if (candidates.some((el) => isHiddenByAriaOnly(el))) {
+      hint.ariaHiddenState = true;
     }
   }
   const near = firstListIn(roots, (root) => nameNearMisses(root, query));

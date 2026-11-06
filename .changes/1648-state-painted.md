@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/core`, `@reticlehq/browser`, `@reticlehq/engine` — `state: "painted"` and aria-hidden diagnostic hint.** An element with `aria-hidden="true"` (like a decorative WebGL `<canvas>` or background graphic) read as hidden under `state: "visible"`, and the result did not explain that `aria-hidden` caused the miss. `state: "painted"` now asserts that an element is CSS-painted on screen regardless of whether it is hidden from assistive tech. When an element check in `state: "visible"` misses solely due to `aria-hidden="true"`, the failure message explicitly names `aria-hidden` and suggests using `state: "painted"`. Closes [#1648](https://github.com/reticlehq/reticle/issues/1648).

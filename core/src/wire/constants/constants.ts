@@ -842,6 +842,12 @@ export interface ComponentStateResult {
 /** Element states the assertion engine can check. */
 export const ElementState = {
   VISIBLE: 'visible',
+  /**
+   * Rendered on screen (CSS-painted: not display:none, not opacity:0, not visibility:hidden, not
+   * [hidden], and not in a closed <details>), regardless of whether aria-hidden="true" excludes it
+   * from the accessibility tree. Use when asserting visual decoration or canvas graphics (#1648).
+   */
+  PAINTED: 'painted',
   HIDDEN: 'hidden',
   ENABLED: 'enabled',
   DISABLED: 'disabled',

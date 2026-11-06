@@ -262,10 +262,16 @@ export interface QueryEmptyHint {
    */
   ariaHiddenMatch?: boolean;
   /**
+  /**
    * Present only when a query missed and the page has visible targets like the one asked for: up
    * to three, ranked by role and then by name similarity. Advice for one retry, never a match.
    */
   nearest?: NearestTarget[];
+  /**
+   * Present only when an element search in state 'visible' or 'inViewport' missed, but a matching
+   * element IS painted on screen and excluded from the accessible tree by aria-hidden="true" (#1648).
+   */
+  ariaHiddenState?: boolean;
 }
 
 /**

@@ -1,7 +1,12 @@
 import { expect, it } from 'vitest';
 import { ElementState, PredicateKind, type ElementDescriptor, type Ref } from '@reticlehq/core';
 
-import { ARIA_HIDDEN_NOTE, evalElement, HTML_TAG_TO_ARIA_ROLE } from './predicate-element.js';
+import {
+  ARIA_HIDDEN_NOTE,
+  ARIA_HIDDEN_STATE_NOTE,
+  evalElement,
+  HTML_TAG_TO_ARIA_ROLE,
+} from './predicate-element.js';
 import { waitForPredicate } from './predicate.js';
 import { residualQueryChecks, satisfiesResiduals } from './predicate-schema.js';
 import type { PredicateSession } from './predicate-session.js';
@@ -252,6 +257,55 @@ it('names the aria-hidden subtree when the hint says so (#1070)', async () => {
   const result = await evalElement(withHint, { text: 'Hello' }, undefined, false, true);
   expect(result.pass).toBe(false);
   expect(result.failureReason).toContain(ARIA_HIDDEN_NOTE);
+});
+
+it('names aria-hidden when a visible state miss is caused only by aria-hidden (#1648)', async () => {
+  const withHint: PredicateSession = {
+    ...session,
+    command: (_cmd, payload) => {
+      const p = payload as { state?: ElementState };
+      if (p?.state !== undefined) {
+        return Promise.resolve({
+          ok: true,
+          id: '1',
+          kind: 'command_result' as const,
+          result: {
+            matched: false,
+            count: 0,
+            elements: [],
+            hint: {
+              route: '/',
+              presentTestids: [],
+              presentRegions: [],
+              knownEmptyState: false,
+              ariaHiddenState: true,
+            },
+          },
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        id: '2',
+        kind: 'command_result' as const,
+        result: {
+          matched: true,
+          count: 1,
+          elements: [
+            {
+              ref: '1',
+              role: 'generic',
+              name: '',
+              states: [ElementState.PRESENT, ElementState.HIDDEN],
+              visible: false,
+            },
+          ],
+        },
+      });
+    },
+  };
+  const result = await evalElement(withHint, { testid: 'bg' }, ElementState.VISIBLE, false, true);
+  expect(result.pass).toBe(false);
+  expect(result.failureReason).toContain(ARIA_HIDDEN_STATE_NOTE);
 });
 
 it('does not blame aria-hidden when a visible element exists in the wrong state (#1070)', async () => {
