@@ -5,5 +5,6 @@
   - It clicks visible text that has no control role, such as an accordion header or a table row built from plain elements. A text click stays in the plan only when it changes the screen on the reference.
   - It opens the start page with each value of each url parameter that the app's scripts read and compare, such as `?scenario=deferred`, and explores each one as a start page of its own.
   - It presses keys: Escape, Enter, Tab, the arrow keys, Home and End, and each key or shortcut that the app's scripts listen for (a "mod" shortcut is pressed with Meta and with Control). It also presses Escape after each action that made controls appear.
+  - It waits on each new screen that two or more steps reached, and keeps that wait when the screen changed by itself. Before, it waited only after single clicks, so a toast or a countdown deeper in the app was not seen.
   - It explores screens, not paths. A path of two or more steps that ends on a screen it already reached is kept for at most two paths, and it does not go deeper from there. This leaves more of the plan for screens it has not seen.
   - The JSON has a new `planDropped` object. It counts what each cap of the plan left out, and the text output says when a cap left out something.

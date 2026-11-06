@@ -17,9 +17,10 @@
  *   event with or name in a shortcut, up to `MAX_KEYS`, each on the start page. A key goes to the
  *   first element of the page and bubbles to the document. Escape again after each sequence that
  *   made controls appear: what opened must close;
- * - each click again, followed by a wait, so behaviour on a timer can show. The wait stays in the
- *   plan only when the reference showed delayed activity there: a call still pending, a page that
- *   kept changing while it settled, or a change during the wait;
+ * - each click again, followed by a wait, so behaviour on a timer can show. Also each path of two or
+ *   more steps that reached a new screen, followed by a wait. The wait stays in the plan only when
+ *   the reference showed delayed activity there: a call still pending, a page that kept changing
+ *   while it settled, or a change during the wait;
  * - each single action again under each option of each combobox (a mode, a variant);
  * - after each sequence, one level deeper into the controls its last action made appear (a menu, a
  *   dialog): controls that were not on the page before that action;
@@ -505,6 +506,11 @@ export async function buildPlan(
       continue;
     }
     before.set(key, keysOf(probed.tree));
+    // A new screen reached by two or more steps can change by itself: a toast goes, a countdown
+    // ends. The wait is probed like any wait, and it stays only where the screen did not hold still.
+    if (seq.length > 1 && !endsInWait(seq)) {
+      queue.push([...seq, wait]);
+    }
     // The page before the last action: the nearest shorter sequence that was probed. A
     // "fill every field" step on its own is not probed, and it adds no control anyway. After a
     // start page opened by its url, every control is new.

@@ -259,6 +259,27 @@ describe('buildPlan', () => {
     );
   });
 
+  it('waits after a new screen reached by two steps, and keeps the wait when the screen changed by itself', async () => {
+    const start = '- button "A" (ref=e1)\n- button "C" (ref=e3)';
+    const trees: Record<string, string> = {
+      'click button "A"': `${start}\n- button "B" (ref=e2)\n- button "D" (ref=e4)`,
+      'click button "A",click button "B"': `${start}\n- heading "Toast"`,
+      'click button "A",click button "D"': `${start}\n- heading "Quiet"`,
+    };
+    const { sequences: plan } = await buildPlan(start, (seq) => {
+      const labels = seq.map(stepLabel);
+      const last = labels.at(-1) ?? '';
+      const path = (last.startsWith('wait') ? labels.slice(0, -1) : labels).join();
+      return Promise.resolve({
+        tree: trees[path] ?? start,
+        active: last.startsWith('wait') && path.endsWith('click button "B"'),
+      });
+    });
+    const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
+    expect(labels).toContain('click button "A" > click button "B" > wait 4 s');
+    expect(labels).not.toContain('click button "A" > click button "D" > wait 4 s');
+  });
+
   it('keeps a wait after a click only when the reference showed delayed activity there', async () => {
     const { sequences: plan } = await buildPlan(START, (seq) =>
       Promise.resolve({
