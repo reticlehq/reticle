@@ -5,6 +5,9 @@ import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // store that records the failed call's HTTP status acknowledges the failure. A 429 kept as
 // `status: 429` beside a retry message is `yes`. The same 429 while the store says `sent: true`
 // stays `no`, and so does an order that fails with a 500 while the page says it was saved.
+// Error text that the app writes into an alert region already on the page also acknowledges the
+// failure: a 401 with "Wrong email or password" there is `yes`. The same 401 while a plain element
+// says "Welcome back" and the store says `signedIn: true` stays `no`.
 //
 // Each direction also reads the session's own events, so a fixture that stops producing its shape
 // fails here instead of passing for free.
@@ -40,6 +43,10 @@ const VERIFIED_YES = 'yes';
 const VERIFIED_NO = 'no';
 const TOO_MANY = 429;
 const SERVER_ERROR = 500;
+const UNAUTHORIZED = 401;
+const DOM_TEXT = 'dom.text';
+const LIVE_ASSERTIVE = 'assertive';
+const WRONG_PASSWORD = 'Wrong email or password';
 const ORDER = `${API}/order`;
 
 const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
@@ -158,6 +165,40 @@ if (order !== undefined) {
     'the order answered 500 only in this window, otherwise this proves nothing',
     (await statusesOf(order.since, ORDER)).includes(SERVER_ERROR) &&
       0 === (await statusesOf(0, ORDER)).length - (await statusesOf(order.since, ORDER)).length,
+  );
+}
+
+console.log('\n=== a 401 whose error text lands in an alert region already on the page ===');
+const refused = await act('ack-pairs-login', { kind: 'text', contains: WRONG_PASSWORD });
+if (refused !== undefined) {
+  chk('the acknowledged 401 is yes', VERIFIED_YES === refused.verified, why(refused));
+  chk('the rule is silent', !kindsOf(refused).includes(UI_ADVANCED_REQUEST_FAILED), why(refused));
+  chk(
+    'the sign-in answered 401, otherwise this proves nothing',
+    (await statusesOf(refused.since, `${API}/login`)).includes(UNAUTHORIZED),
+  );
+  const texts = (await events(refused.since)).filter((e) => DOM_TEXT === e.type);
+  chk(
+    'the text arrived as an assertive text change, not a mount, otherwise this proves nothing',
+    texts.some((e) => WRONG_PASSWORD === e.data?.text && LIVE_ASSERTIVE === e.data?.live),
+    JSON.stringify(texts.map((e) => e.data)),
+  );
+}
+
+console.log('\n=== the same 401 while a plain element says welcome and the store signs in ===');
+const welcomed = await act('ack-pairs-login-claimed', { kind: 'text', contains: 'Welcome back' });
+if (welcomed !== undefined) {
+  chk('the hidden 401 is no', VERIFIED_NO === welcomed.verified, why(welcomed));
+  chk('the rule reports it', kindsOf(welcomed).includes(UI_ADVANCED_REQUEST_FAILED), why(welcomed));
+  chk(
+    'the sign-in answered 401, otherwise this proves nothing',
+    (await statusesOf(welcomed.since, `${API}/login-claimed`)).includes(UNAUTHORIZED),
+  );
+  const stored = await storedAt(welcomed.since, 'ackLogin');
+  chk(
+    'the store says signed in, otherwise this proves nothing',
+    stored.some((v) => true === v?.signedIn),
+    JSON.stringify(stored),
   );
 }
 

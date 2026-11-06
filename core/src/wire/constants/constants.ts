@@ -539,6 +539,7 @@ export { CanvasTrigger, EventType, MediaEvent };
 export {
   FieldChangeField,
   FieldChangeKind,
+  LivePoliteness,
   ROUTE_CHANGE_HOW_FIELD,
   RouteChangeHow,
   ScrollDirection,

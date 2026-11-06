@@ -20,6 +20,7 @@ import {
   isSamePathnameReplace,
   isSteadyCadence,
   appIsSilent,
+  liveAlertAfterFailedSend,
   netCall,
   TargetFate,
   targetFate,
@@ -126,7 +127,8 @@ const SERVER_FAULT_MIN = 500;
  */
 function failureAcknowledged(events: readonly ReticleEvent[]): boolean {
   // STRUCTURAL first, and language-independent: an app that put the failed call's OWN error text or
-  // HTTP status into its state knows the call failed (#2173). The patterns below are English-only.
+  // HTTP status into its state knows the call failed (#2173). So does an app that wrote text into
+  // an existing alert region after it sent the call. The patterns below are English-only.
   const errors = events
     .filter((e) => e.type === EventType.NET_REQUEST && e.data['ok'] !== true)
     .map((e) => asString(e.data['error']))
@@ -144,7 +146,7 @@ function failureAcknowledged(events: readonly ReticleEvent[]): boolean {
     const value = field === undefined ? undefined : asString(e.data[field]);
     return value !== undefined && errors.some((text) => value.includes(text));
   });
-  if (echoesAnError || storeEchoesFailedStatus(events)) {
+  if (echoesAnError || storeEchoesFailedStatus(events) || liveAlertAfterFailedSend(events)) {
     return true;
   }
   // So does the accessible way of telling a user something went wrong: an alert appearing, or a

@@ -387,6 +387,15 @@ app.post('/api/ack-pairs/order', (_req, res) => {
   res.status(500).json({ message: 'order store down' });
 });
 
+// Both sign-in routes answer 401. Only the page tells an alert region from a false "Welcome back".
+app.post('/api/ack-pairs/login', (_req, res) => {
+  res.status(401).json({ message: 'bad credentials' });
+});
+
+app.post('/api/ack-pairs/login-claimed', (_req, res) => {
+  res.status(401).json({ message: 'bad credentials' });
+});
+
 server.listen(PORT, () => {
   // eslint-disable-next-line no-console -- server startup banner
   console.log(`[reticle-api] listening on http://localhost:${PORT} (reflect=${REFLECT_MS}ms)`);

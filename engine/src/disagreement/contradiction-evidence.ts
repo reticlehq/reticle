@@ -747,30 +747,45 @@ function writtenValues(value: unknown, old: unknown): readonly unknown[] {
 }
 
 /**
+ * Each call that failed in this window, with the event after which the app can react to it: the
+ * send, or the answer when the window does not hold the send. The limit is the send and not the
+ * answer for the reason `successClaims` gives: the browser observer records the answer after the
+ * app's own handler ran.
+ */
+function failedCalls(
+  events: readonly ReticleEvent[],
+): readonly { readonly call: NetCall; readonly after: ReticleEvent }[] {
+  return events.flatMap((answer) => {
+    if (answer.type !== EventType.NET_REQUEST) {
+      return [];
+    }
+    const call = netCall(answer);
+    if (false !== call.ok) {
+      return [];
+    }
+    const id = asString(answer.data['id']);
+    const sent = events.find(
+      (e) => e.type === EventType.NET_PENDING && id !== undefined && asString(e.data['id']) === id,
+    );
+    return [{ call, after: sent ?? answer }];
+  });
+}
+
+/**
  * Did the store record the HTTP status of a call that failed in this window?
  *
  * A structural echo, like the echo of the error text: an app that keeps `status: 429` beside a
  * retry button knows that the call failed. Strict, because a false acknowledgement hides a failed
  * write. The value must be exactly that status (a number or its string), it must change in this
  * write, and the write must come after the call was sent. The status of a call that succeeded is
- * not one. The limit is the send and not the answer for the reason `successClaims` gives: the
- * browser observer records the answer after the app's own handler ran.
+ * not one.
  */
 export function storeEchoesFailedStatus(events: readonly ReticleEvent[]): boolean {
-  return events.some((answer) => {
-    if (answer.type !== EventType.NET_REQUEST) {
-      return false;
-    }
-    const call = netCall(answer);
-    if (false !== call.ok || call.status === undefined) {
+  return failedCalls(events).some(({ call, after }) => {
+    if (call.status === undefined) {
       return false;
     }
     const status = String(call.status);
-    const id = asString(answer.data['id']);
-    const sent = events.find(
-      (e) => e.type === EventType.NET_PENDING && id !== undefined && asString(e.data['id']) === id,
-    );
-    const after = sent ?? answer;
     return events.some(
       (e) =>
         e.type === EventType.STATE_CHANGE &&
@@ -780,6 +795,32 @@ export function storeEchoesFailedStatus(events: readonly ReticleEvent[]): boolea
         ),
     );
   });
+}
+
+/** Core's `LivePoliteness.ASSERTIVE`; not imported: coupling only shrinks. */
+const LIVE_ASSERTIVE = 'assertive';
+
+/**
+ * Did the app write text into an existing ASSERTIVE live region after a failed call was sent?
+ *
+ * The common way to show "Wrong email or password" is to write it into a `role="alert"` region that
+ * is already on the page, which a mount event does not record (#2173). The words do not decide, the
+ * level does. ARIA keeps the assertive level for errors and urgent warnings. A polite region
+ * (`role="status"`) is where an app writes "Saved", so text there is not an acknowledgement. The
+ * ceiling: an app that writes a success word into an alert region over a failed write is read as
+ * acknowledging it, as a mounted alert already is. Text written before the send cannot answer the
+ * call, and a cleared region says nothing.
+ */
+export function liveAlertAfterFailedSend(events: readonly ReticleEvent[]): boolean {
+  return failedCalls(events).some(({ after }) =>
+    events.some(
+      (e) =>
+        e.type === EventType.DOM_TEXT &&
+        LIVE_ASSERTIVE === e.data['live'] &&
+        (asString(e.data['text']) ?? '').length > 0 &&
+        emittedBefore(after, e),
+    ),
+  );
 }
 
 /** Reticle's own instrumentation's signals (core's `RETICLE_HYDRATION_SIGNAL`); not imported: coupling only shrinks. */
