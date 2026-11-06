@@ -80,6 +80,16 @@ This is often misdiagnosed as "synthetic events don't reach the app". That is th
 
 That bug is fixed, and the reason it is written down here is that it is the exact shape of failure Reticle exists to catch. An action that reports success while doing something else.
 
+## Scrolling by fraction
+
+While `scroll` steps down by default, setting `fraction` (a number from `0` to `1`) jumps directly to that proportion of the scrollable height:
+
+```json
+{ "action": "scroll", "args": { "fraction": 0.5 } }
+```
+
+When given a `ref`, Reticle finds the nearest scrollable ancestor container (such as a virtualized list) and sets its scroll position. When called without a `ref`, it scrolls the document page. This enables jumping directly to known offsets or bisecting long lists without multiple incremental step calls.
+
 ## Batching
 
 Several actions in one round trip:
