@@ -75,6 +75,9 @@ interface AppState {
   compose: { title: string; prompt: string; result: string; generating: boolean };
   savedItems: { id: number; label: string; savedAt: string }[];
   savedItemsStatus: 'idle' | 'saving' | 'error';
+  rulePairsGenderOptions: string;
+  rulePairsStateOptions: string;
+  shipments: { rows: string };
   /** Every click on the Rule Pairs view, counted by a page-wide listener. Nothing renders it. */
   rulePairsClicks: number;
   /** The one store path the Rule Pairs "Remember" button moves. */
@@ -128,6 +131,9 @@ export const useApp = create<AppState>((set, get) => ({
   compose: { title: '', prompt: '', result: '', generating: false },
   savedItems: [],
   savedItemsStatus: 'idle',
+  rulePairsGenderOptions: '',
+  rulePairsStateOptions: '',
+  shipments: { rows: '' },
   rulePairsClicks: 0,
   rulePairsChoice: '',
   ackInvite: null,

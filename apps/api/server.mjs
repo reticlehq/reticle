@@ -273,7 +273,7 @@ app.get('/api/stale-race/items', async (req, res) => {
   res.json({ type });
 });
 
-// --- Rule pairs: the shapes three narrowed rules must still tell apart ------
+// --- Rule pairs: the shapes narrowed rules must still tell apart ------------
 //
 // `profile` keeps the record's id and returns the old values: an ignored write. `derive` returns a
 // new record with its own id: a copy, not an ignored write. `pages` and `rows` answer the page that
@@ -323,6 +323,14 @@ app.post('/api/rule-pairs/invite', (_req, res) => {
 // one through `window.fetch`, so the server gets both while only the second is recorded (#1660).
 app.post('/api/rule-pairs/ping/:via', (req, res) => {
   res.json({ via: req.params.via });
+});
+
+const RULE_PAIR_OPTION_DELAYS = { gender: 700, state: 90, all: 700, held: 90 };
+
+app.get('/api/rule-pairs/options', async (req, res) => {
+  const kind = String(req.query.kind ?? req.query.status ?? '');
+  await new Promise((resolve) => setTimeout(resolve, RULE_PAIR_OPTION_DELAYS[kind] ?? 0));
+  res.json({ value: req.query.kind === undefined ? `${kind} shipments` : `${kind} options` });
 });
 
 // `toggle` answers 200 to every switch in the reach panel, so the request alone decides nothing.
