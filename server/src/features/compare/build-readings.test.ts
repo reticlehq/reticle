@@ -114,6 +114,77 @@ describe('readBuild', () => {
     expect(readings.get(sequenceKey([gone]))?.failedAt).toBe('click [testid=gone]');
   });
 
+  it('clicks a text probe by its text, because a text line has no ref', async () => {
+    const page = counterPage();
+    const probe: PlanStep = { action: 'click', target: { text: 'Count', nth: 0 } };
+    const at: unknown[] = [];
+    page.act = (ref: unknown) => {
+      at.push(ref);
+      return Promise.resolve({ ok: true });
+    };
+    const readings = await readBuild(page, [[], [probe]], noSleep);
+    expect(at).toEqual([{ text: 'Count' }]);
+    expect(readings.get(sequenceKey([probe]))?.actions).toEqual([START_STEP, 'click text "Count"']);
+  });
+
+  it('opens a url parameter value on the same tab, and fails the step on a driver that cannot', async () => {
+    const page = counterPage();
+    const opened: string[] = [];
+    const root: PlanStep = { action: 'goto', query: '?view=grid' };
+    const withGoto = {
+      ...page,
+      goto: (query: string) => {
+        opened.push(query);
+        return Promise.resolve(true);
+      },
+    };
+    const readings = await readBuild(withGoto, [[], [root]], noSleep);
+    expect(opened).toEqual(['?view=grid']);
+    expect(readings.get(sequenceKey([root]))?.lines).toBeDefined();
+    const without = await readBuild(counterPage(), [[], [root]], noSleep);
+    expect(without.get(sequenceKey([root]))?.failedAt).toBe('open "?view=grid"');
+  });
+
+  it('makes a request fail, then loads the start page again so its requests see the fault', async () => {
+    const page = counterPage();
+    const calls: unknown[] = [];
+    const faulted = {
+      ...page,
+      mock: (rules: readonly unknown[]) => {
+        calls.push(rules);
+        return Promise.resolve(true);
+      },
+      goto: (query: string) => {
+        calls.push(`goto ${query}`);
+        return Promise.resolve(true);
+      },
+    };
+    const fault: PlanStep = { action: 'fault', method: 'GET', path: '/api/items', fault: '500' };
+    const readings = await readBuild(faulted, [[], [fault, add]], noSleep);
+    expect(calls).toEqual([
+      [{ urlContains: '/api/items', method: 'GET', status: 500, body: '{"error":"fault"}' }],
+      'goto ',
+    ]);
+    expect(readings.get(sequenceKey([fault, add]))?.actions).toEqual([
+      START_STEP,
+      'fail GET /api/items (500)',
+      'click button "Add"',
+    ]);
+    const without = await readBuild(counterPage(), [[], [fault]], noSleep);
+    expect(without.get(sequenceKey([fault]))?.failedAt).toBe('fail GET /api/items (500)');
+  });
+
+  it('presses a key on the first element of the page', async () => {
+    const page = counterPage();
+    const press: PlanStep = { action: 'press', key: 'Escape' };
+    const readings = await readBuild(page, [[], [press]], noSleep);
+    expect(page.acts).toEqual(['press e1']);
+    expect(readings.get(sequenceKey([press]))?.actions).toEqual([START_STEP, 'press Escape']);
+    const empty = counterPage({ trees: ['- heading "Nothing"', '- heading "Nothing"'] });
+    const none = await readBuild(empty, [[press]], noSleep);
+    expect(none.get(sequenceKey([press]))?.failedAt).toBe('press Escape');
+  });
+
   it('lets a lost driver end the run, so it is never read as a difference', async () => {
     const page = counterPage();
     page.act = () => Promise.reject(new DriverLostError('no connected session with id s1'));
@@ -126,9 +197,9 @@ describe('what the app did', () => {
     const page = counterPage({ effects: () => ['net: POST /api/add 500'] });
     const readings = await readBuild(page, [[], [add], [add, add]], noSleep);
     expect(readings.get(sequenceKey([add, add]))?.lines).toEqual([
-      'add',
+      'button add',
       'count 2',
-      'other',
+      'button other',
       'net: POST /api/add 500',
     ]);
     // Read from the cursor of the run's FIRST act, for every step of the run.
@@ -144,6 +215,13 @@ describe('probeSequence', () => {
   it('returns the settled tree after the last step, or undefined when a step failed', async () => {
     expect((await probeSequence(counterPage(), [add], noSleep))?.tree).toContain('[text="1"]');
     expect(await probeSequence(counterPage({ refuse: 'e1' }), [add], noSleep)).toBeUndefined();
+  });
+
+  it('returns what the app did since the first action, so the plan can fail those requests', async () => {
+    const page = counterPage({ effects: () => ['net: POST /api/add 201'] });
+    expect((await probeSequence(page, [add], noSleep))?.effects).toEqual([
+      'net: POST /api/add 201',
+    ]);
   });
 
   it('calls a wait quiet when nothing changed during it and nothing was pending', async () => {

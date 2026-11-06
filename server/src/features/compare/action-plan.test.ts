@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import { buildDictionary } from './outside/value-dictionary.js';
 import {
+  DEFAULT_KEYS,
   EDGE_TEXT,
   MAX_CHAIN,
+  MAX_FAULT_REQUESTS,
+  MAX_KEYS,
   MAX_SEQUENCES,
+  MAX_TEXT_PROBES,
+  MAX_URL_ROOTS,
+  MAX_VALUES_PER_PARAM,
   WAIT_AFTER_CLICK_MS,
   actionsOf,
   buildPlan,
@@ -13,11 +19,30 @@ import {
   sequenceKey,
   stepLabel,
   valuesFor,
+  type PlanStep,
+  type Probe,
   type Sequence,
 } from './action-plan.js';
 
 const busy = (tree: string | undefined) => () =>
   Promise.resolve(tree === undefined ? undefined : { tree, active: true });
+
+const wait4: PlanStep = { action: 'wait', ms: 4000 };
+
+type ProbeOf = (seq: Sequence) => Promise<Probe | undefined>;
+
+/**
+ * Each sequence ends on its own screen, as a real page does when a fill shows its value. Then no
+ * path is left out as a path to a screen already reached.
+ */
+const unique =
+  (probe: ProbeOf): ProbeOf =>
+  async (seq) => {
+    const got = await probe(seq);
+    return got === undefined
+      ? undefined
+      : { ...got, tree: `${got.tree}\n- heading "${sequenceKey(seq)}"` };
+  };
 
 const START = [
   '- heading "Shop"',
@@ -91,7 +116,7 @@ describe('actionsOf', () => {
 
 describe('buildPlan', () => {
   it('plans the start page, every single action, a wait after each click, and each action under each option', async () => {
-    const plan = await buildPlan(START, busy(START));
+    const { sequences: plan } = await buildPlan(START, unique(busy(START)));
     const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
     expect(labels[0]).toBe('');
     expect(labels).toContain(`wait ${String(WAIT_AFTER_CLICK_MS / 1000)} s`);
@@ -104,11 +129,14 @@ describe('buildPlan', () => {
 
   it('goes one level deeper into the controls an action made appear', async () => {
     const dialog = `${START}\n  - button "Confirm" (ref=e9)`;
-    const plan = await buildPlan(START, (seq) =>
-      Promise.resolve({
-        tree: 'click [testid=add]' === seq.map(stepLabel).join() ? dialog : START,
-        active: true,
-      }),
+    const { sequences: plan } = await buildPlan(
+      START,
+      unique((seq) =>
+        Promise.resolve({
+          tree: 'click [testid=add]' === seq.map(stepLabel).join() ? dialog : START,
+          active: true,
+        }),
+      ),
     );
     const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
     expect(labels).toContain('click [testid=add] > click button "Confirm"');
@@ -122,7 +150,7 @@ describe('buildPlan', () => {
       'click button "Log in"': home,
       'click button "Log in",click button "Compose"': compose,
     };
-    const plan = await buildPlan(login, (seq) =>
+    const { sequences: plan } = await buildPlan(login, (seq) =>
       Promise.resolve({ tree: trees[seq.map(stepLabel).join()] ?? home, active: true }),
     );
     const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
@@ -154,7 +182,7 @@ describe('buildPlan', () => {
       }
       return pressed('Log in') ? deployForm : login;
     };
-    const plan = await buildPlan(login, (seq) =>
+    const { sequences: plan } = await buildPlan(login, (seq) =>
       Promise.resolve({ tree: tree(seq), active: true }),
     );
     const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
@@ -178,7 +206,7 @@ describe('buildPlan', () => {
       }
       return labels.includes('click button "Log in"') ? home : login;
     };
-    const plan = await buildPlan(login, (seq) =>
+    const { sequences: plan } = await buildPlan(login, (seq) =>
       Promise.resolve({ tree: tree(seq), active: true }),
     );
     const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
@@ -198,11 +226,14 @@ describe('buildPlan', () => {
       '- button "Open form" (ref=e1)',
     ].join('\n');
     const form = `${busyPage}\n- textbox "Name" (ref=e2)\n- textbox "Mail" (ref=e3)\n- button "Submit" (ref=e4) [disabled]`;
-    const plan = await buildPlan(busyPage, (seq) =>
-      Promise.resolve({
-        tree: seq.map(stepLabel).includes('click button "Open form"') ? form : busyPage,
-        active: true,
-      }),
+    const { sequences: plan } = await buildPlan(
+      busyPage,
+      unique((seq) =>
+        Promise.resolve({
+          tree: seq.map(stepLabel).includes('click button "Open form"') ? form : busyPage,
+          active: true,
+        }),
+      ),
     );
     const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
     expect(labels.some((l) => l.endsWith('> click button "Submit"'))).toBe(true);
@@ -214,7 +245,7 @@ describe('buildPlan', () => {
       '- textbox "Prompt" (ref=e2)',
       '- button "Generate" (ref=e3) [disabled]',
     ].join('\n');
-    const plan = await buildPlan(form, busy(form));
+    const { sequences: plan } = await buildPlan(form, unique(busy(form)));
     const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
     expect(labels.some((l) => l.endsWith('> click button "Generate"'))).toBe(true);
   });
@@ -225,15 +256,36 @@ describe('buildPlan', () => {
       '- textbox "End" (ref=e2) [value="10:00"]',
       '- button "Save" (ref=e3)',
     ].join('\n');
-    const plan = await buildPlan(form, busy(form));
+    const { sequences: plan } = await buildPlan(form, unique(busy(form)));
     const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
     expect(labels).toContain(
       'wait 4 s > fill every field (textbox "Start"="09:15", textbox "End"="18:45") > click button "Save"',
     );
   });
 
+  it('waits after a new screen reached by two steps, and keeps the wait when the screen changed by itself', async () => {
+    const start = '- button "A" (ref=e1)\n- button "C" (ref=e3)';
+    const trees: Record<string, string> = {
+      'click button "A"': `${start}\n- button "B" (ref=e2)\n- button "D" (ref=e4)`,
+      'click button "A",click button "B"': `${start}\n- heading "Toast"`,
+      'click button "A",click button "D"': `${start}\n- heading "Quiet"`,
+    };
+    const { sequences: plan } = await buildPlan(start, (seq) => {
+      const labels = seq.map(stepLabel);
+      const last = labels.at(-1) ?? '';
+      const path = (last.startsWith('wait') ? labels.slice(0, -1) : labels).join();
+      return Promise.resolve({
+        tree: trees[path] ?? start,
+        active: last.startsWith('wait') && path.endsWith('click button "B"'),
+      });
+    });
+    const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
+    expect(labels).toContain('click button "A" > click button "B" > wait 4 s');
+    expect(labels).not.toContain('click button "A" > click button "D" > wait 4 s');
+  });
+
   it('keeps a wait after a click only when the reference showed delayed activity there', async () => {
-    const plan = await buildPlan(START, (seq) =>
+    const { sequences: plan } = await buildPlan(START, (seq) =>
       Promise.resolve({
         tree: START,
         active: 'click [testid=add],wait 4 s' === seq.map(stepLabel).join(),
@@ -247,7 +299,9 @@ describe('buildPlan', () => {
 
   it('fills every field with the value the app compares it with first', async () => {
     const form = '- textbox "Route" (ref=e1)\n- textbox "Note" (ref=e2)';
-    const plan = await buildPlan(form, busy(form), buildDictionary([['route', 'progress']]));
+    const { sequences: plan } = await buildPlan(form, busy(form), {
+      dictionary: buildDictionary([['route', 'progress']]),
+    });
     const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
     expect(
       labels.some((l) =>
@@ -261,12 +315,183 @@ describe('buildPlan', () => {
       { length: 300 },
       (_, i) => `- button "B${String(i)}" (ref=e${String(i)})`,
     ).join('\n');
-    const plan = await buildPlan(many, busy(many));
+    const { sequences: plan, dropped } = await buildPlan(many, busy(many));
     expect(plan).toHaveLength(MAX_SEQUENCES);
+    expect(dropped.sequences).toBeGreaterThan(0);
+  });
+
+  it('opens each url parameter value as a start page of its own, not counted in the depth', async () => {
+    const trees: Record<string, string> = {
+      'open "?scenario=deferred"': '- button "Go" (ref=e1)',
+      'open "?scenario=deferred",click button "Go"': '- button "Next" (ref=e2)',
+      'open "?scenario=deferred",click button "Go",click button "Next"': '- button "Last" (ref=e3)',
+    };
+    const urlParams = new Map([['scenario', ['deferred']]]);
+    const { sequences: plan } = await buildPlan(
+      '- heading "Home"',
+      (seq) => Promise.resolve({ tree: trees[seq.map(stepLabel).join()] ?? '', active: false }),
+      { urlParams },
+    );
+    const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
+    expect(labels).toContain('open "?scenario=deferred"');
+    expect(labels).toContain(
+      'open "?scenario=deferred" > click button "Go" > click button "Next" > click button "Last"',
+    );
+  });
+
+  it('keeps at most 2 paths to a screen it already reached, and goes deeper only from the first', async () => {
+    const start = '- button "A" (ref=e1)\n- button "B" (ref=e2)\n- button "C" (ref=e3)';
+    const tree = (seq: Sequence): string => {
+      const labels = seq.map(stepLabel);
+      if (labels.includes('click button "Next"')) {
+        return `${start}\n- heading "Two"\n- button "Deep" (ref=e5)`;
+      }
+      return labels.length > 0 ? `${start}\n- heading "One"\n- button "Next" (ref=e4)` : start;
+    };
+    const { sequences: plan, dropped } = await buildPlan(start, (seq) =>
+      Promise.resolve({ tree: tree(seq), active: false }),
+    );
+    const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
+    // Single actions are always kept, even when they reach a screen already reached.
+    expect(labels).toEqual(
+      expect.arrayContaining(['click button "A"', 'click button "B"', 'click button "C"']),
+    );
+    const toTwo = labels.filter((l) => l.endsWith('> click button "Next"'));
+    expect(toTwo).toEqual([
+      'click button "A" > click button "Next"',
+      'click button "B" > click button "Next"',
+    ]);
+    expect(labels).toContain('click button "A" > click button "Next" > click button "Deep"');
+    expect(labels).not.toContain('click button "B" > click button "Next" > click button "Deep"');
+    expect(dropped.sameScreenPaths).toBeGreaterThan(0);
+  });
+
+  it('fails each request made on load three ways, and leaves out the files the page is built from', async () => {
+    const loadEffects = [
+      'net: GET /api/items 200',
+      'net: GET /assets/index-a1.js 200',
+      'net: GET / 200',
+      'console error: boom',
+    ];
+    const { sequences: plan } = await buildPlan(START, unique(busy(START)), { loadEffects });
+    const failed = plan
+      .filter((seq) => 'fault' === seq[0]?.action)
+      .map((seq) => seq.map(stepLabel).join(' > '));
+    expect(failed).toEqual([
+      'fail GET /api/items (500)',
+      'fail GET /api/items (abort)',
+      'fail GET /api/items (empty)',
+    ]);
+  });
+
+  it('fails each request an action made two ways, and replays the action', async () => {
+    // The failed request shows an error, so each fault reaches a screen of its own.
+    const { sequences: plan } = await buildPlan(
+      START,
+      unique((seq) =>
+        Promise.resolve({
+          tree: START,
+          active: false,
+          effects:
+            'click [testid=add]' === seq.map(stepLabel).join()
+              ? ['net: POST /api/cart?id= 201 {"qty":1}']
+              : [],
+        }),
+      ),
+    );
+    const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
+    expect(labels).toContain('fail POST /api/cart (500) > click [testid=add]');
+    expect(labels).toContain('fail POST /api/cart (abort) > click [testid=add]');
+    expect(labels).not.toContain('fail POST /api/cart (empty) > click [testid=add]');
+  });
+
+  it('fails at most MAX_FAULT_REQUESTS requests, and reports the rest', async () => {
+    const loadEffects = Array.from({ length: 10 }, (_, i) => `net: GET /api/r${String(i)} 200`);
+    const { sequences: plan, dropped } = await buildPlan('', busy(''), { loadEffects });
+    const paths = new Set(
+      plan.filter((seq) => 'fault' === seq[0]?.action).map((seq) => stepLabel(seq[0] ?? wait4)),
+    );
+    expect(paths.size).toBe(MAX_FAULT_REQUESTS * 3);
+    expect(dropped.faultRequests).toBe(10 - MAX_FAULT_REQUESTS);
+  });
+
+  it('presses each common key and each key the app compares, on the start page', async () => {
+    const { sequences: plan } = await buildPlan(START, busy(START), { keys: ['k', 'Escape'] });
+    const pressed = plan
+      .filter((seq) => 1 === seq.length && 'press' === seq[0]?.action)
+      .map((seq) => seq.map(stepLabel).join());
+    expect(pressed).toEqual([...DEFAULT_KEYS, 'k'].map((key) => `press ${key}`));
+  });
+
+  it('presses at most MAX_KEYS keys, and reports the rest', async () => {
+    const keys = Array.from({ length: 30 }, (_, i) => `F${String(i + 1)}`);
+    const { sequences: plan, dropped } = await buildPlan('', busy(''), { keys });
+    expect(plan.filter((seq) => 'press' === seq[0]?.action)).toHaveLength(MAX_KEYS);
+    expect(dropped.keys).toBe(DEFAULT_KEYS.length + keys.length - MAX_KEYS);
+  });
+
+  it('presses Escape after an action that made controls appear', async () => {
+    const dialog = `${START}\n- button "Close" (ref=e9)`;
+    const { sequences: plan } = await buildPlan(
+      START,
+      unique((seq) =>
+        Promise.resolve({
+          tree: 'click [testid=add]' === seq.map(stepLabel).join() ? dialog : START,
+          active: false,
+        }),
+      ),
+    );
+    const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
+    expect(labels).toContain('click [testid=add] > press Escape');
+    expect(labels).not.toContain('click button "Open" > press Escape');
+  });
+
+  it('opens at most 8 values of one parameter and 12 in all, and reports the rest', async () => {
+    const values = Array.from({ length: 10 }, (_, i) => `v${String(i)}`);
+    const urlParams = new Map(['a', 'b', 'c'].map((p) => [p, values]));
+    const { sequences: plan, dropped } = await buildPlan('', busy(''), { urlParams });
+    const opened = plan.filter((seq) => 1 === seq.length && 'goto' === seq[0]?.action);
+    expect(opened).toHaveLength(MAX_URL_ROOTS);
+    expect(opened.filter((seq) => seq.map(stepLabel).join().includes('?a='))).toHaveLength(
+      MAX_VALUES_PER_PARAM,
+    );
+    expect(dropped.urlRoots).toBe(30 - MAX_URL_ROOTS);
+  });
+
+  it('clicks visible text with no control role, and keeps it only when the screen changes', async () => {
+    const page = [
+      '- text "Details"',
+      '- generic "Row one" (ref=e1)',
+      '- text "Details"',
+      '- text "Static note"',
+    ].join('\n');
+    const opened = `${page}\n- heading "More"`;
+    const { sequences: plan } = await buildPlan(page, (seq) =>
+      Promise.resolve({
+        tree: 'click text "Details"' === seq.map(stepLabel).join() ? opened : page,
+        active: true,
+      }),
+    );
+    const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
+    expect(labels).toContain('click text "Details"');
+    expect(labels).not.toContain('click text "Row one"');
+    expect(labels).not.toContain('click text "Static note"');
+    expect(labels.filter((l) => 'click text "Details"' === l)).toHaveLength(1);
+  });
+
+  it('clicks at most MAX_TEXT_PROBES distinct texts, and reports the rest', async () => {
+    const many = Array.from({ length: MAX_TEXT_PROBES + 5 }, (_, i) => `- text "T${String(i)}"`);
+    const page = many.join('\n');
+    const { sequences: plan, dropped } = await buildPlan(page, (seq) =>
+      Promise.resolve({ tree: `${page}\n- text "${seq.map(stepLabel).join()}"`, active: false }),
+    );
+    const clicks = plan.filter((seq) => 1 === seq.length && 'click' === seq[0]?.action);
+    expect(clicks).toHaveLength(MAX_TEXT_PROBES);
+    expect(dropped.textProbes).toBe(5);
   });
 
   it('does not go deeper after a probe that could not be done', async () => {
-    const plan = await buildPlan(START, busy(undefined));
+    const { sequences: plan } = await buildPlan(START, busy(undefined));
     expect(plan.every((seq) => seq.length <= 2)).toBe(true);
   });
 });

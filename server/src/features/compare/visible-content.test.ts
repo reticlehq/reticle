@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { visibleLines } from './visible-content.js';
+import { structureLines, visibleLines } from './visible-content.js';
 
 describe('visibleLines', () => {
   it('keeps names, values, own text and states, in page order, and drops the rest', () => {
@@ -28,5 +28,41 @@ describe('visibleLines', () => {
 
   it('reads an empty tree as no lines', () => {
     expect(visibleLines('')).toEqual([]);
+  });
+});
+
+describe('structureLines', () => {
+  it('keeps the role of controls and structure, and reads a text-only role as its text', () => {
+    const tree = [
+      '- row "John Doe 28" (ref=e1)',
+      '  - cell',
+      '  - cell "John Doe" (ref=e2)',
+      '  - generic (ref=e3)',
+      '  - paragraph [text="Waiting"]',
+      '  - button "Go" (ref=e4) [pressed]',
+      '  - text "Pay   now"',
+    ].join('\n');
+    expect(structureLines(tree)).toEqual([
+      'row john doe 28',
+      'cell',
+      'cell john doe',
+      'waiting',
+      'button go [pressed]',
+      'pay now',
+    ]);
+  });
+
+  it('sees a removed empty cell, a button that became text, and a removed checkbox', () => {
+    const differ = (a: string, b: string): boolean =>
+      structureLines(a).join('\n') !== structureLines(b).join('\n');
+    expect(differ('- cell\n- cell "Ada"', '- cell "Ada"')).toBe(true);
+    expect(differ('- button "Save"', '- text "Save"')).toBe(true);
+    expect(differ('- checkbox (ref=e1)\n- text "Agree"', '- text "Agree"')).toBe(true);
+  });
+
+  it('reads the same text in another text-only role as the same', () => {
+    expect(structureLines('- status "Waiting for you"')).toEqual(
+      structureLines('- paragraph [text="Waiting for you"]'),
+    );
   });
 });

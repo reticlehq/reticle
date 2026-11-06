@@ -77,3 +77,56 @@ export function visibleLines(tree: string): string[] {
     .map(visibleLine)
     .filter((line) => line.length > 0);
 }
+
+/** The role at the start of a tree line. */
+const ROLE = /^\s*- ([\w-]+)/;
+/**
+ * Roles that only hold text. A correct build can show the same words in another container, so a
+ * line with one of these roles is compared as its text alone.
+ */
+const TEXT_ROLES: ReadonlySet<string> = new Set([
+  'generic',
+  'text',
+  'none',
+  'presentation',
+  'group',
+  'paragraph',
+  'status',
+  'note',
+  'log',
+  'strong',
+  'emphasis',
+  'code',
+  'blockquote',
+  'caption',
+  'label',
+  'time',
+  'mark',
+  'subscript',
+  'superscript',
+  'deletion',
+  'insertion',
+]);
+
+/**
+ * The visible content with the role of each control and structure element kept: `cell`,
+ * `cell john doe`, `button save`. Text alone cannot see a change of structure: an empty cell that
+ * keeps the columns of a table aligned, a button that became plain text, or a checkbox removed while
+ * its label stays. A line with a text-only role is its text, and it is dropped when it has no text.
+ */
+export function structureLines(tree: string): string[] {
+  const out: string[] = [];
+  for (const line of tree.split('\n')) {
+    const role = ROLE.exec(line)?.[1];
+    if (role === undefined) {
+      continue;
+    }
+    const shown = visibleLine(line);
+    if (!TEXT_ROLES.has(role)) {
+      out.push(shown.length > 0 ? `${role} ${shown}` : role);
+    } else if (shown.length > 0) {
+      out.push(shown);
+    }
+  }
+  return out;
+}
