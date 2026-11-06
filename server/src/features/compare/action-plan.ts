@@ -26,6 +26,10 @@
  *   until they are filled) are planned first, so the cap does not starve them.
  *   Only this shows a build that takes the start time for the end time.
  *
+ * The plan explores screens, not paths. Many paths reach one screen, and each path costs a load on
+ * every build. A path of two or more steps that ends on a screen already reached is kept for at most
+ * `MAX_PATHS_PER_SCREEN` paths, and nothing is planned after it. A single action is always kept.
+ *
  * A control is targeted by its test id when it has one, else by its role and name. Controls with the
  * same target are numbered in page order, so "fill every field" fills eight fields, not one field
  * eight times. Every sequence starts from a fresh load of the start page.
@@ -88,6 +92,12 @@ export const MAX_TEXT_PROBES = 40;
 export const MAX_URL_ROOTS = 12;
 /** The most values of one url parameter opened as start pages. */
 export const MAX_VALUES_PER_PARAM = 8;
+/**
+ * The most paths of two or more steps kept to one screen. A path to a screen already reached is not
+ * explored further. A single action is always kept: it is a check on the candidate even when it
+ * changes nothing on the reference.
+ */
+export const MAX_PATHS_PER_SCREEN = 2;
 /** The wait after a click: a slideshow advances, a countdown ends, a delivery settles. */
 export const WAIT_AFTER_CLICK_MS = 4000;
 const MS_PER_S = 1000;
@@ -319,9 +329,16 @@ export type PlanDropped = {
   textProbes: number;
   /** Url parameter values not opened, past `MAX_VALUES_PER_PARAM` or `MAX_URL_ROOTS`. */
   urlRoots: number;
+  /** Paths of two or more steps to a screen that `MAX_PATHS_PER_SCREEN` paths already reached. */
+  sameScreenPaths: number;
 };
 
-export const NOTHING_DROPPED: PlanDropped = { sequences: 0, textProbes: 0, urlRoots: 0 };
+export const NOTHING_DROPPED: PlanDropped = {
+  sequences: 0,
+  textProbes: 0,
+  urlRoots: 0,
+  sameScreenPaths: 0,
+};
 
 export interface Plan {
   sequences: Sequence[];
@@ -396,6 +413,9 @@ export async function buildPlan(
   ];
   const plan: Sequence[] = [[]];
   const seen = new Set([sequenceKey([])]);
+  /** How many probed sequences reached each screen. */
+  const screens = new Map([[startScreen, 1]]);
+  let sameScreenPaths = 0;
   /** Sequences that end in a press after "fill every field": they may go on past `MAX_DEPTH`. */
   const chains = new Set<string>();
   while (queue.length > 0 && plan.length < MAX_SEQUENCES) {
@@ -414,6 +434,21 @@ export async function buildPlan(
     }
     if (probeKeys.has(key) && (probed === undefined || screenOf(probed.tree) === startScreen)) {
       continue;
+    }
+    // Explore screens, not paths: many paths reach one screen, and each costs a load on every build.
+    // A wait is a check of time on its path, so it is kept whatever screen it ends on.
+    if (probed !== undefined && !endsInWait(seq)) {
+      const screen = screenOf(probed.tree);
+      const visits = screens.get(screen) ?? 0;
+      screens.set(screen, visits + 1);
+      if (visits > 0 && seq.length > 1) {
+        if (visits >= MAX_PATHS_PER_SCREEN) {
+          sameScreenPaths += 1;
+        } else {
+          plan.push(seq);
+        }
+        continue;
+      }
     }
     plan.push(seq);
     if (probed === undefined || (depth >= MAX_DEPTH && !chains.has(key))) {
@@ -471,7 +506,12 @@ export async function buildPlan(
   const untried = new Set(queue.map(sequenceKey).filter((k) => !seen.has(k)));
   return {
     sequences: plan,
-    dropped: { sequences: untried.size, textProbes: probes.dropped, urlRoots: roots.dropped },
+    dropped: {
+      sequences: untried.size,
+      textProbes: probes.dropped,
+      urlRoots: roots.dropped,
+      sameScreenPaths,
+    },
   };
 }
 
