@@ -108,15 +108,21 @@ export function leasedPage(caller: ToolCaller, url: string, sessionId: string): 
     }
     return refusal === undefined ? { payload } : { payload, refusal };
   };
+  const navigate = async (to: string): Promise<boolean> => {
+    const { payload, refusal } = await run(
+      ReticleTool.NAVIGATE,
+      { url: to, timeout_ms: NAVIGATE_WAIT_MS },
+      NAVIGATE_WAIT_MS * 2,
+    );
+    id = asText(payload['sessionId']) ?? id;
+    return refusal === undefined && true === payload['ok'] && false !== payload['confirmed'];
+  };
   return {
-    async open() {
-      const { payload, refusal } = await run(
-        ReticleTool.NAVIGATE,
-        { url, timeout_ms: NAVIGATE_WAIT_MS },
-        NAVIGATE_WAIT_MS * 2,
-      );
-      id = asText(payload['sessionId']) ?? id;
-      return refusal === undefined && true === payload['ok'] && false !== payload['confirmed'];
+    open() {
+      return navigate(url);
+    },
+    goto(query) {
+      return navigate(new URL(query, url).href);
     },
     async read() {
       const { payload } = await run(ReticleTool.SNAPSHOT, { mode: SnapshotMode.FULL, ids: true });

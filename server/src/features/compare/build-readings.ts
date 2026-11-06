@@ -38,6 +38,11 @@ export interface TextAnchor {
 export interface PageDriver {
   /** Load the start page fresh. False when it did not load. */
   open(): Promise<boolean>;
+  /**
+   * Open the start page with `query` (`?scenario=deferred`) on the same tab. False when it did not
+   * load. A driver without it cannot do a step that opens a url parameter value.
+   */
+  goto?(query: string): Promise<boolean>;
   /** The whole page as an accessibility tree, with refs and test ids. */
   read(): Promise<string>;
   /**
@@ -162,6 +167,9 @@ async function perform(
   if ('wait' === step.action) {
     await sleep(step.ms);
     return { ok: true };
+  }
+  if ('goto' === step.action) {
+    return { ok: true === (await driver.goto?.(step.query)) };
   }
   const acts =
     'fillall' === step.action

@@ -7,6 +7,9 @@
  * know this never types the value, and the branch behind it (a conditional step, a special mode)
  * stays unseen. A field matches a name when its folded name equals the name, or ends with a name of
  * three or more characters.
+ *
+ * The same scripts give the url parameters the page reads and the values it compares each with
+ * (`urlParamValues`).
  */
 
 /** Values by folded name. */
@@ -134,18 +137,55 @@ function resolve(src: string, base: string): string {
   }
 }
 
+/** `.get("name")`: a read of a url parameter when the code before it names the url. */
+const PARAM_GET = /\.get\(\s*["']([A-Za-z_][\w-]{0,30})["']\s*\)/g;
+const NEAR_URL = /URLSearchParams|searchParams|location/;
+/** How far before a `.get(...)` the url must be named. */
+const URL_BEFORE_CHARS = 200;
+/** How far after a `.get(...)` the compared literals are read. Minified code renames the variable. */
+const PARAM_AFTER_CHARS = 3000;
+const PARAM_LITERAL =
+  /[!=]==?\s*["']([\w-]{1,30})["']|["']([\w-]{1,30})["']\s*[!=]==|case\s*["']([\w-]{1,30})["']\s*:/g;
+
+/**
+ * `[parameter, literal]` for each url parameter the page reads, such as
+ * `new URLSearchParams(location.search).get("scenario")`, with each literal compared in the code
+ * after that read. A state behind the url (`?scenario=deferred`) is then a start page of its own.
+ */
+export function urlParamValues(js: string): [string, string][] {
+  const out: [string, string][] = [];
+  for (const m of js.matchAll(PARAM_GET)) {
+    const before = js.slice(Math.max(0, m.index - URL_BEFORE_CHARS), m.index);
+    if (!NEAR_URL.test(before)) {
+      continue;
+    }
+    for (const v of js.slice(m.index, m.index + PARAM_AFTER_CHARS).matchAll(PARAM_LITERAL)) {
+      out.push([m[1] ?? '', v[1] ?? v[2] ?? v[3] ?? '']);
+    }
+  }
+  return out;
+}
+
+/** What the scripts of a page tell the plan. */
+export interface ScriptHints {
+  dictionary: ValueDictionary;
+  /** The values each url parameter is compared with, in source order, each value once. */
+  urlParams: ReadonlyMap<string, readonly string[]>;
+}
+
 /**
  * Fetch the page and its scripts, following script src and imported chunks, up to `MAX_SCRIPTS`
  * files. `fetchText` answers undefined for a file it could not get; that file adds nothing.
  */
-export async function harvestDictionary(
+export async function harvestScripts(
   pageUrl: string,
   fetchText: (url: string) => Promise<string | undefined>,
-): Promise<ValueDictionary> {
+): Promise<ScriptHints> {
   const html = (await fetchText(pageUrl)) ?? '';
   const queue = scriptSources(html).map((src) => resolve(src, pageUrl));
   const seen = new Set<string>();
   const pairs: [string, string][] = [];
+  const urlParams = new Map<string, string[]>();
   while (queue.length > 0 && seen.size < MAX_SCRIPTS) {
     const url = queue.shift() ?? '';
     if (seen.has(url)) {
@@ -155,6 +195,12 @@ export async function harvestDictionary(
     const js = (await fetchText(url)) ?? '';
     queue.push(...chunkImports(js).map((src) => resolve(src, url)));
     pairs.push(...comparedLiterals(js));
+    for (const [param, value] of urlParamValues(js)) {
+      const values = urlParams.get(param) ?? [];
+      if (!values.includes(value)) {
+        urlParams.set(param, [...values, value]);
+      }
+    }
   }
-  return buildDictionary(pairs);
+  return { dictionary: buildDictionary(pairs), urlParams };
 }

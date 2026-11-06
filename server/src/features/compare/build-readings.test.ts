@@ -127,6 +127,24 @@ describe('readBuild', () => {
     expect(readings.get(sequenceKey([probe]))?.actions).toEqual([START_STEP, 'click text "Count"']);
   });
 
+  it('opens a url parameter value on the same tab, and fails the step on a driver that cannot', async () => {
+    const page = counterPage();
+    const opened: string[] = [];
+    const root: PlanStep = { action: 'goto', query: '?view=grid' };
+    const withGoto = {
+      ...page,
+      goto: (query: string) => {
+        opened.push(query);
+        return Promise.resolve(true);
+      },
+    };
+    const readings = await readBuild(withGoto, [[], [root]], noSleep);
+    expect(opened).toEqual(['?view=grid']);
+    expect(readings.get(sequenceKey([root]))?.lines).toBeDefined();
+    const without = await readBuild(counterPage(), [[], [root]], noSleep);
+    expect(without.get(sequenceKey([root]))?.failedAt).toBe('open "?view=grid"');
+  });
+
   it('lets a lost driver end the run, so it is never read as a difference', async () => {
     const page = counterPage();
     page.act = () => Promise.reject(new DriverLostError('no connected session with id s1'));

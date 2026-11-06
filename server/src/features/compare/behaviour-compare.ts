@@ -2,8 +2,8 @@
  * `reticle compare`: drive two running builds of one app the same way, and report each difference
  * in what a person sees. The recipe has no settings:
  *
- * 1. Read the values the reference's scripts compare fields with (`value-dictionary.ts`), then make
- *    the action plan on the reference (`action-plan.ts`).
+ * 1. Read the values the reference's scripts compare fields and url parameters with
+ *    (`value-dictionary.ts`), then make the action plan on the reference (`action-plan.ts`).
  * 2. Drive the plan on the reference, the candidate, the base when given, and the reference again,
  *    in that order, each in a new browser tab (`build-readings.ts`). The two reference runs are on
  *    each side of the candidate, so a line that changes with time is seen as noise.
@@ -12,7 +12,7 @@
  * A lost browser session makes the run invalid, never a difference.
  */
 import { NOTHING_DROPPED, buildPlan, sequenceKey, type Plan } from './action-plan.js';
-import { harvestDictionary } from './outside/value-dictionary.js';
+import { harvestScripts } from './outside/value-dictionary.js';
 import { compareBehaviour, invalidComparison, type BehaviourComparison } from './behaviour-diff.js';
 import type { CompareTimings } from './behaviour-report.js';
 import {
@@ -63,9 +63,9 @@ async function planOn(input: CompareInput, page: OpenedPage): Promise<Plan> {
   if (!(await page.open())) {
     return { sequences: [[]], dropped: NOTHING_DROPPED };
   }
-  const dictionary = await harvestDictionary(input.reference, input.fetchText);
+  const hints = await harvestScripts(input.reference, input.fetchText);
   const start = (await settledRead(page, input.sleep)).tree;
-  return buildPlan(start, (seq) => probeSequence(page, seq, input.sleep), dictionary);
+  return buildPlan(start, (seq) => probeSequence(page, seq, input.sleep), hints);
 }
 
 export async function runCompare(

@@ -3,6 +3,9 @@
  *
  * The plan is made on the reference, breadth first, with no model and no settings:
  * - the start page, and a wait on the start page;
+ * - the start page with each value of each url parameter the app's scripts read
+ *   (`?scenario=deferred`), up to `MAX_URL_ROOTS`. Each is a start page of its own, with its own
+ *   wait, and opening it does not count toward the depth;
  * - every single action on every control: click each button, tab, checkbox and option; fill each
  *   text field with two values chosen by the shape of its value, one edge value of that shape, and
  *   the values the app's scripts compare the field's name with (`value-dictionary.ts`); select each
@@ -46,6 +49,8 @@ export type PlanStep =
   | { action: 'fill'; target: Target; value: string }
   | { action: 'select'; target: Target; value: string }
   | { action: 'wait'; ms: number }
+  /** Open the start page with this query, such as `?scenario=deferred`: a start page of its own. */
+  | { action: 'goto'; query: string }
   | { action: 'fillall'; fields: readonly { target: Target; value: string }[] };
 
 export type Sequence = readonly PlanStep[];
@@ -79,6 +84,10 @@ export const MAX_CHAIN = 8;
  * accordion header, a table row), so visible text is clicked too.
  */
 export const MAX_TEXT_PROBES = 40;
+/** The most start pages opened by a url parameter value, in one plan. */
+export const MAX_URL_ROOTS = 12;
+/** The most values of one url parameter opened as start pages. */
+export const MAX_VALUES_PER_PARAM = 8;
 /** The wait after a click: a slideshow advances, a countdown ends, a delivery settles. */
 export const WAIT_AFTER_CLICK_MS = 4000;
 const MS_PER_S = 1000;
@@ -267,6 +276,8 @@ export function stepLabel(step: PlanStep): string {
   switch (step.action) {
     case 'wait':
       return `wait ${String(step.ms / MS_PER_S)} s`;
+    case 'goto':
+      return `open "${step.query}"`;
     case 'fillall':
       return `fill every field (${step.fields.map((f) => `${targetLabel(f.target)}="${f.value}"`).join(', ')})`;
     case 'fill':
@@ -306,14 +317,49 @@ export type PlanDropped = {
   sequences: number;
   /** Visible texts not clicked, past `MAX_TEXT_PROBES`. */
   textProbes: number;
+  /** Url parameter values not opened, past `MAX_VALUES_PER_PARAM` or `MAX_URL_ROOTS`. */
+  urlRoots: number;
 };
 
-export const NOTHING_DROPPED: PlanDropped = { sequences: 0, textProbes: 0 };
+export const NOTHING_DROPPED: PlanDropped = { sequences: 0, textProbes: 0, urlRoots: 0 };
 
 export interface Plan {
   sequences: Sequence[];
   dropped: PlanDropped;
 }
+
+/** What the app's scripts tell the plan (`value-dictionary.ts`). Each part can be left out. */
+export interface PlanHints {
+  dictionary?: ValueDictionary;
+  /** The values each url parameter is compared with. */
+  urlParams?: ReadonlyMap<string, readonly string[]>;
+}
+
+/**
+ * A start page for each value of each url parameter, up to `MAX_VALUES_PER_PARAM` for one
+ * parameter and `MAX_URL_ROOTS` in all. `dropped` counts the values past the caps.
+ */
+export function urlRoots(params: ReadonlyMap<string, readonly string[]>): {
+  steps: PlanStep[];
+  dropped: number;
+} {
+  const all: PlanStep[] = [];
+  let dropped = 0;
+  for (const [param, values] of params) {
+    dropped += Math.max(0, values.length - MAX_VALUES_PER_PARAM);
+    for (const value of values.slice(0, MAX_VALUES_PER_PARAM)) {
+      all.push({
+        action: 'goto',
+        query: `?${encodeURIComponent(param)}=${encodeURIComponent(value)}`,
+      });
+    }
+  }
+  dropped += Math.max(0, all.length - MAX_URL_ROOTS);
+  return { steps: all.slice(0, MAX_URL_ROOTS), dropped };
+}
+
+/** The steps that count toward `MAX_DEPTH`: opening a start page by its url does not. */
+const depthOf = (seq: Sequence): number => seq.filter((s) => 'goto' !== s.action).length;
 
 /**
  * Make the plan on the reference. `probe` drives one sequence from a fresh load, or answers
@@ -322,11 +368,13 @@ export interface Plan {
 export async function buildPlan(
   startTree: string,
   probe: (seq: Sequence) => Promise<Probe | undefined>,
-  dictionary: ValueDictionary = EMPTY_DICTIONARY,
+  hints: PlanHints = {},
 ): Promise<Plan> {
+  const dictionary = hints.dictionary ?? EMPTY_DICTIONARY;
   const start = planControls(startTree);
   const startScreen = screenOf(startTree);
   const probes = textProbes(startTree);
+  const roots = urlRoots(hints.urlParams ?? new Map());
   /** A text probe stays in the plan only when it changes the screen on the reference. */
   const probeKeys = new Set(probes.steps.map((s) => sequenceKey([s])));
   const keysOf = (tree: string): Set<string> =>
@@ -339,6 +387,8 @@ export async function buildPlan(
   const wait: PlanStep = { action: 'wait', ms: WAIT_AFTER_CLICK_MS };
   const queue: Sequence[] = [
     [wait],
+    ...roots.steps.map((r) => [r]),
+    ...roots.steps.map((r) => [r, wait]),
     ...singles.map((s) => [s]),
     ...probes.steps.map((s) => [s]),
     ...singles.filter((s) => ControlKind.CLICK === s.action).map((s) => [s, wait]),
@@ -355,8 +405,8 @@ export async function buildPlan(
       continue;
     }
     seen.add(key);
-    const deeper =
-      seq.length < MAX_DEPTH || (chains.has(key) && seq.length < MAX_CHAIN) || endsInWait(seq);
+    const depth = depthOf(seq);
+    const deeper = depth < MAX_DEPTH || (chains.has(key) && depth < MAX_CHAIN) || endsInWait(seq);
     // A wait is probed before it is planned: it stays only where the reference showed activity.
     const probed = deeper ? await probe(seq) : undefined;
     if (endsInWait(seq) && true !== probed?.active) {
@@ -366,13 +416,14 @@ export async function buildPlan(
       continue;
     }
     plan.push(seq);
-    if (probed === undefined || (seq.length >= MAX_DEPTH && !chains.has(key))) {
+    if (probed === undefined || (depth >= MAX_DEPTH && !chains.has(key))) {
       continue;
     }
     before.set(key, keysOf(probed.tree));
     // The page before the last action: the nearest shorter sequence that was probed. A
-    // "fill every field" step on its own is not probed, and it adds no control anyway.
-    let parent: Set<string> | undefined;
+    // "fill every field" step on its own is not probed, and it adds no control anyway. After a
+    // start page opened by its url, every control is new.
+    let parent: Set<string> | undefined = 'goto' === seq.at(-1)?.action ? new Set() : undefined;
     for (let n = seq.length - 1; n >= 0 && parent === undefined; n -= 1) {
       parent = before.get(sequenceKey(seq.slice(0, n)));
     }
@@ -388,7 +439,7 @@ export async function buildPlan(
       ControlKind.CLICK === seq.at(-1)?.action &&
       fields.some((f) => parent?.has(targetKey(f.target)) !== true);
     // A form step adds two steps: the fill and the press.
-    if ((firstForm || nextForm) && seq.length + 2 <= MAX_CHAIN) {
+    if ((firstForm || nextForm) && depth + 2 <= MAX_CHAIN) {
       const fillall: PlanStep = {
         action: 'fillall',
         fields: fields.map((f, i) => ({ target: f.target, value: ownValue(f, i, dictionary) })),
@@ -418,7 +469,10 @@ export async function buildPlan(
     }
   }
   const untried = new Set(queue.map(sequenceKey).filter((k) => !seen.has(k)));
-  return { sequences: plan, dropped: { sequences: untried.size, textProbes: probes.dropped } };
+  return {
+    sequences: plan,
+    dropped: { sequences: untried.size, textProbes: probes.dropped, urlRoots: roots.dropped },
+  };
 }
 
 /**

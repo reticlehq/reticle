@@ -88,6 +88,20 @@ describe('leasedPage', () => {
     });
   });
 
+  it('opens a url parameter value against the build url, on the leased tab', async () => {
+    const calls: unknown[] = [];
+    const page = leasedPage(
+      caller({ [ReticleTool.NAVIGATE]: text({ ok: true }) }, calls),
+      'http://a/app/',
+      's1',
+    );
+    expect(await page.goto?.('?view=grid')).toBe(true);
+    expect((calls[0] as { args: Record<string, unknown> }).args).toMatchObject({
+      url: 'http://a/app/?view=grid',
+      sessionId: 's1',
+    });
+  });
+
   it('returns the cursor an action gives, for the effects of its sequence', async () => {
     const page = leasedPage(
       caller({ [ReticleTool.ACT]: text({ dispatched: true, since: 41 }) }),

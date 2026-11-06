@@ -5,6 +5,8 @@ import {
   MAX_CHAIN,
   MAX_SEQUENCES,
   MAX_TEXT_PROBES,
+  MAX_URL_ROOTS,
+  MAX_VALUES_PER_PARAM,
   WAIT_AFTER_CLICK_MS,
   actionsOf,
   buildPlan,
@@ -248,11 +250,9 @@ describe('buildPlan', () => {
 
   it('fills every field with the value the app compares it with first', async () => {
     const form = '- textbox "Route" (ref=e1)\n- textbox "Note" (ref=e2)';
-    const { sequences: plan } = await buildPlan(
-      form,
-      busy(form),
-      buildDictionary([['route', 'progress']]),
-    );
+    const { sequences: plan } = await buildPlan(form, busy(form), {
+      dictionary: buildDictionary([['route', 'progress']]),
+    });
     const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
     expect(
       labels.some((l) =>
@@ -269,6 +269,37 @@ describe('buildPlan', () => {
     const { sequences: plan, dropped } = await buildPlan(many, busy(many));
     expect(plan).toHaveLength(MAX_SEQUENCES);
     expect(dropped.sequences).toBeGreaterThan(0);
+  });
+
+  it('opens each url parameter value as a start page of its own, not counted in the depth', async () => {
+    const trees: Record<string, string> = {
+      'open "?scenario=deferred"': '- button "Go" (ref=e1)',
+      'open "?scenario=deferred",click button "Go"': '- button "Next" (ref=e2)',
+      'open "?scenario=deferred",click button "Go",click button "Next"': '- button "Last" (ref=e3)',
+    };
+    const urlParams = new Map([['scenario', ['deferred']]]);
+    const { sequences: plan } = await buildPlan(
+      '- heading "Home"',
+      (seq) => Promise.resolve({ tree: trees[seq.map(stepLabel).join()] ?? '', active: false }),
+      { urlParams },
+    );
+    const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
+    expect(labels).toContain('open "?scenario=deferred"');
+    expect(labels).toContain(
+      'open "?scenario=deferred" > click button "Go" > click button "Next" > click button "Last"',
+    );
+  });
+
+  it('opens at most 8 values of one parameter and 12 in all, and reports the rest', async () => {
+    const values = Array.from({ length: 10 }, (_, i) => `v${String(i)}`);
+    const urlParams = new Map(['a', 'b', 'c'].map((p) => [p, values]));
+    const { sequences: plan, dropped } = await buildPlan('', busy(''), { urlParams });
+    const opened = plan.filter((seq) => 1 === seq.length && 'goto' === seq[0]?.action);
+    expect(opened).toHaveLength(MAX_URL_ROOTS);
+    expect(opened.filter((seq) => seq.map(stepLabel).join().includes('?a='))).toHaveLength(
+      MAX_VALUES_PER_PARAM,
+    );
+    expect(dropped.urlRoots).toBe(30 - MAX_URL_ROOTS);
   });
 
   it('clicks visible text with no control role, and keeps it only when the screen changes', async () => {
