@@ -140,6 +140,8 @@ export const ReticleTool = {
   LEASE_ACQUIRE: 'reticle_lease_acquire',
   /** Release a previously leased context, freeing the pool slot. */
   LEASE_RELEASE: 'reticle_lease_release',
+  /** Start, or take, JS coverage on a leased page: which code ran. */
+  LEASE_COVERAGE: 'reticle_lease_coverage',
   /** Meta: discover tool definitions on demand instead of paying for all of them every turn. */
   TOOLS: 'reticle_tools',
   /** Meta: invoke any tool by name — the escape hatch that keeps a trimmed profile a trim, not a removal. */

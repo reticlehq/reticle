@@ -63,6 +63,7 @@ import {
 } from './lease-permissions.js';
 import { LEASE_EMULATE_ARG, leaseEmulationOf } from '@/portal/input/viewport-tools.js';
 import { LEASE_DETERMINISTIC_ARG, leaseDeterminismOf } from '@/portal/pool/determinism.js';
+import { LEASE_COVERAGE_TOOL, LEASE_JS_COVERAGE_ARG } from './lease-coverage-tools.js';
 export {
   sessionMutationPort,
   sessionPerturbationPort,
@@ -410,6 +411,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     permissions: LEASE_PERMISSIONS_ARG,
     emulate: LEASE_EMULATE_ARG,
     deterministic: LEASE_DETERMINISTIC_ARG,
+    jsCoverage: LEASE_JS_COVERAGE_ARG,
     production: production.PRODUCTION_LEASE_ARG,
     timeout_ms: timeoutMsSchema
       .optional()
@@ -538,6 +540,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
     const deterministic = leaseDeterminismOf(args['deterministic']);
     const emulated = leaseEmulationOf(args['emulate']);
     const emulate = deterministic === undefined ? emulated : { ...(emulated ?? {}), deterministic };
+    const jsCoverage = true === args['jsCoverage'];
     // The stub of the shell bindings, when the caller supplied one. Installed by the pool before
     // the first navigation, so it is already defined when the app's first module runs.
     const initScript = asString(args['initScript']);
@@ -618,6 +621,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
         (validatedSeed !== undefined ||
           certMismatch ||
           emulate !== undefined ||
+          jsCoverage ||
           activated !== undefined) &&
         existing !== undefined
       ) {
@@ -702,6 +706,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
           ...(permissions !== undefined ? { permissions } : {}),
           ...(true === args['ignoreHTTPSErrors'] ? { ignoreHTTPSErrors: true } : {}),
           ...(emulate === undefined ? {} : { emulate }),
+          ...(jsCoverage ? { jsCoverage } : {}),
         });
       } catch (err) {
         if (err instanceof PoolAtCapacityError) {
@@ -989,4 +994,4 @@ function tellWatchers(deps: ToolDeps, projectId: string | undefined, text: strin
   }
 }
 
-export const LEASE_TOOLS: ToolDef[] = [LEASE_ACQUIRE_TOOL, LEASE_RELEASE_TOOL];
+export const LEASE_TOOLS: ToolDef[] = [LEASE_ACQUIRE_TOOL, LEASE_RELEASE_TOOL, LEASE_COVERAGE_TOOL];

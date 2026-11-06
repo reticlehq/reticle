@@ -733,8 +733,12 @@ export const MERGE_PLANS: MergePlan[] = [
   {
     name: ReticleTool.LEASE,
     description:
-      'Isolated headless contexts from the shared pool: { action: "acquire" } leases one and navigates it to the app URL, "release" closes it and frees the slot.',
-    members: { acquire: ReticleTool.LEASE_ACQUIRE, release: ReticleTool.LEASE_RELEASE },
+      'Isolated headless contexts from the shared pool: { action: "acquire" } leases one and navigates it to the app URL, "release" closes it and frees the slot, "coverage" starts or takes JS coverage of the leased page (which code ran).',
+    members: {
+      acquire: ReticleTool.LEASE_ACQUIRE,
+      release: ReticleTool.LEASE_RELEASE,
+      coverage: ReticleTool.LEASE_COVERAGE,
+    },
   },
 ];
 

@@ -10,7 +10,7 @@
  * the thin Playwright adapter that satisfies these interfaces lives separately.
  */
 
-import { LEASE_CLOSE_TIMEOUT_MS, unreachableUrlIn, type SeedStorage } from '@reticlehq/core';
+import { LEASE_CLOSE_TIMEOUT_MS, unreachableUrlIn } from '@reticlehq/core';
 import { log } from '@/log.js';
 import { closeLeaseTab, LEASE_CLOSE_TIMED_OUT, settledWithin } from './bounded-close.js';
 import { seedStorageInto, targetOriginOf } from './storage-seed.js';
@@ -26,11 +26,12 @@ import type {
   Launcher,
   PooledBrowser,
   PooledContext,
+  PooledCoverage,
   PooledMockRule,
   ScreenshotOptions,
 } from './pool-contract.js';
 import type { RealInputArgs, RealInputResult } from '@/portal/input/real-input.js';
-import { readViewport, type LeaseEmulation, type LeaseMedia } from './lease-emulation.js';
+import { readViewport, type LeaseMedia } from './lease-emulation.js';
 import { injectReaderInto } from './zero-install.js';
 import { stepPage, type DeterminismStep } from './determinism.js';
 export type {
@@ -54,6 +55,7 @@ import {
   navStatusOf,
   pageLoading,
   PoolAtCapacityError,
+  type AcquireOptions,
   type ActiveLease,
   type BrowserPoolOptions,
   type BrowserSlot,
@@ -484,6 +486,12 @@ export class BrowserPool {
     return page === undefined ? Promise.resolve(undefined) : stepPage(page, frames);
   }
 
+  /** The JS coverage of a lease's page, or undefined when this is not a lease or cannot measure. */
+  coverageOf(sessionId: string): PooledCoverage | undefined {
+    this.touch(sessionId);
+    return this.#active.get(this.#leaseIdOf(sessionId))?.page.jsCoverage;
+  }
+
   /** Guard a leased page's requests, or false when this is not a lease or its page cannot. */
   async guardLease(
     sessionId: string,
@@ -588,34 +596,7 @@ export class BrowserPool {
    * waits FIFO until a slot frees (or until `signal` aborts, if provided), unless `whenFull` is
    * `'refuse'`: then it throws {@link PoolAtCapacityError} at once and claims nothing.
    */
-  async acquire(
-    url: string,
-    opts: {
-      signal?: AbortSignal;
-      /**
-       * `'wait'` (the default) queues behind the cap. `'refuse'` is for a caller that has a person
-       * or an agent waiting on the answer and no way to see a queue: it is told the pool is full.
-       */
-      whenFull?: 'wait' | 'refuse';
-      sessionId?: string;
-      seedStorage?: SeedStorage;
-      owner?: string;
-      /** In a browser with a window the person can watch. */
-      headed?: boolean;
-      /**
-       * JavaScript installed before any page script runs, for this lease only. A view built for a
-       * desktop shell calls bindings the shell injects (`window.go`, `window.runtime`, a preload
-       * object) on mount; a stub here is what lets it reach its data path in a leased tab.
-       */
-      initScript?: string;
-      /** Granted on the lease's origin before the first navigation, so the first render sees them. */
-      permissions?: readonly string[];
-      /** Accept a self-signed or local-CA dev certificate for this lease's context only (#1255). */
-      ignoreHTTPSErrors?: boolean;
-      /** Media and viewport set on the context, so the first paint already has them. */
-      emulate?: LeaseEmulation;
-    } = {},
-  ): Promise<Lease> {
+  async acquire(url: string, opts: AcquireOptions = {}): Promise<Lease> {
     if (this.#closed) {
       throw new Error('browser pool is shut down');
     }
@@ -642,6 +623,7 @@ export class BrowserPool {
       const browser = await this.#ensureBrowser(slot);
       const contextOpts = {
         ...(true === opts.ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
+        ...(true === opts.jsCoverage ? { jsCoverage: true } : {}),
         ...opts.emulate,
       };
       context = await browser.newContext(
