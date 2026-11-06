@@ -430,6 +430,41 @@ if (claimed !== undefined) {
   );
 }
 
+// An optimistic lock (#2174): the server bumps `lock_version`, so the echo never repeats the token
+// that was sent. The bump is the proof that the write applied, and must not give `no`. A title that
+// the server did not keep, under the same bump, must still give `no`.
+const lockUntil = (outcome) => ({
+  kind: 'net',
+  urlContains: `${API}/lock/${outcome}`,
+  method: 'PUT',
+  status: 200,
+});
+
+console.log('\n=== write-field-ignored: a PUT that bumps lock_version and keeps the title ===');
+const kept = await act('rule-pairs-lock-kept', lockUntil('kept'));
+if (kept !== undefined) {
+  chk('the bumped lock is verified yes', VERIFIED_YES === kept.verified, why(kept));
+  const body = await echoOf(kept.since, 'lock/kept');
+  chk(
+    'the echo bumped lock_version 3 to 4 and kept the title, otherwise this proves nothing',
+    body.includes('"lock_version":4') && body.includes('Q3 plan'),
+    body,
+  );
+}
+
+console.log('\n=== write-field-ignored: the same PUT whose echo keeps an old title ===');
+const lost = await act('rule-pairs-lock-lost', lockUntil('lost'));
+if (lost !== undefined) {
+  chk('the ignored title is verified no', VERIFIED_NO === lost.verified, why(lost));
+  chk('the ignored title is reported', kindsOf(lost).includes(WRITE_IGNORED), why(lost));
+  const body = await echoOf(lost.since, 'lock/lost');
+  chk(
+    'the echo bumped lock_version and returned the old title, otherwise this proves nothing',
+    body.includes('"lock_version":4') && body.includes('Old title'),
+    body,
+  );
+}
+
 await b.close();
 console.log(
   `\n${fail === 0 ? '✅ NARROWED RULES VERIFIED' : '❌ FAILED'} (${pass} passed, ${fail} failed)`,

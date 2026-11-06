@@ -20,6 +20,8 @@ import { emit, Sig } from '../lib/reticle-bridge.js';
  *    and a read of a job list that holds old failed jobs (silent).
  *  - a `net` miss over a `fetch` saved before connect(): `unknown`, not `no` (#1660), and the same
  *    ping through `window.fetch` passes.
+ *  - `write-field-ignored` beside an optimistic lock: a PUT whose echo bumps `lock_version` and keeps
+ *    the title (silent), and the same PUT whose echo returns an old title (report).
  *  - reach: a switch inside a closed `<details>`, a switch inside a `display: none` panel, and a
  *    button under a full-screen overlay (the spec adds the overlay). A person cannot click any of
  *    them, so a request they send must not give `yes`. A switch that a person can reach sends the
@@ -68,6 +70,17 @@ async function invite(): Promise<Response> {
   });
 }
 
+/** A compare-and-set update. The server answers with `lock_version` one higher. */
+const LOCKED_DOC = { id: 'doc-1', title: 'Q3 plan', lock_version: 3 };
+
+async function putLocked(outcome: string): Promise<void> {
+  await fetch(`${API}/lock/${outcome}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(LOCKED_DOC),
+  });
+}
+
 async function readPage(list: string): Promise<void> {
   await fetch(`${API}/${list}?page=1`);
 }
@@ -113,6 +126,19 @@ export function RulePairs(): React.ReactElement {
           }
         >
           Save price
+        </button>
+        <button
+          data-testid="rule-pairs-lock-kept"
+          onClick={() => void putLocked('kept').then(() => setSaved('Plan saved'))}
+        >
+          Save plan
+        </button>
+        {/* The defect, on purpose: the server keeps the old title and the app says saved. */}
+        <button
+          data-testid="rule-pairs-lock-lost"
+          onClick={() => void putLocked('lost').then(() => setSaved('Plan saved again'))}
+        >
+          Save plan again
         </button>
         <output data-testid="rule-pairs-saved">{saved}</output>
       </div>
