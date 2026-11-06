@@ -130,9 +130,25 @@ export function leasedPage(caller: ToolCaller, url: string, sessionId: string): 
     id = asText(payload['sessionId']) ?? id;
     return refusal === undefined && true === payload['ok'] && false !== payload['confirmed'];
   };
+  /** Faults stay on the tab until cleared, and each fresh sequence must see the real server. */
+  let mocked = false;
+  const mockRequests = async (args: Record<string, unknown>): Promise<boolean> => {
+    const { payload, refusal } = await run(ReticleTool.NETWORK_MOCK, args);
+    return refusal === undefined && true === payload['applied'];
+  };
   return {
-    open() {
+    async open() {
+      if (mocked) {
+        if (!(await mockRequests({ clear: true }))) {
+          return false;
+        }
+        mocked = false;
+      }
       return navigate(url);
+    },
+    mock(rules) {
+      mocked = true;
+      return mockRequests({ mocks: rules });
     },
     goto(query) {
       return navigate(new URL(query, url).href);

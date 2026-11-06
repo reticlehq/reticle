@@ -102,6 +102,33 @@ describe('leasedPage', () => {
     });
   });
 
+  it('sets a network fault on the leased tab, and clears it before the next fresh load', async () => {
+    const calls: { tool: string; args: Record<string, unknown> }[] = [];
+    const page = leasedPage(
+      caller(
+        {
+          [ReticleTool.NETWORK_MOCK]: text({ applied: true, count: 1 }),
+          [ReticleTool.NAVIGATE]: text({ ok: true }),
+        },
+        calls,
+      ),
+      'http://a/',
+      's1',
+    );
+    const rule = { urlContains: '/api/items', method: 'GET', abort: true };
+    expect(await page.mock?.([rule])).toBe(true);
+    expect(await page.open()).toBe(true);
+    expect(await page.open()).toBe(true);
+    expect(calls.map((c) => c.tool)).toEqual([
+      ReticleTool.NETWORK_MOCK,
+      ReticleTool.NETWORK_MOCK,
+      ReticleTool.NAVIGATE,
+      ReticleTool.NAVIGATE,
+    ]);
+    expect(calls[0]?.args).toEqual({ mocks: [rule], sessionId: 's1' });
+    expect(calls[1]?.args).toEqual({ clear: true, sessionId: 's1' });
+  });
+
   it('presses a key with the key name as the press text', async () => {
     const calls: unknown[] = [];
     await leasedPage(

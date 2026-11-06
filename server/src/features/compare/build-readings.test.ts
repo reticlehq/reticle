@@ -145,6 +145,35 @@ describe('readBuild', () => {
     expect(without.get(sequenceKey([root]))?.failedAt).toBe('open "?view=grid"');
   });
 
+  it('makes a request fail, then loads the start page again so its requests see the fault', async () => {
+    const page = counterPage();
+    const calls: unknown[] = [];
+    const faulted = {
+      ...page,
+      mock: (rules: readonly unknown[]) => {
+        calls.push(rules);
+        return Promise.resolve(true);
+      },
+      goto: (query: string) => {
+        calls.push(`goto ${query}`);
+        return Promise.resolve(true);
+      },
+    };
+    const fault: PlanStep = { action: 'fault', method: 'GET', path: '/api/items', fault: '500' };
+    const readings = await readBuild(faulted, [[], [fault, add]], noSleep);
+    expect(calls).toEqual([
+      [{ urlContains: '/api/items', method: 'GET', status: 500, body: '{"error":"fault"}' }],
+      'goto ',
+    ]);
+    expect(readings.get(sequenceKey([fault, add]))?.actions).toEqual([
+      START_STEP,
+      'fail GET /api/items (500)',
+      'click button "Add"',
+    ]);
+    const without = await readBuild(counterPage(), [[], [fault]], noSleep);
+    expect(without.get(sequenceKey([fault]))?.failedAt).toBe('fail GET /api/items (500)');
+  });
+
   it('presses a key on the first element of the page', async () => {
     const page = counterPage();
     const press: PlanStep = { action: 'press', key: 'Escape' };
@@ -186,6 +215,13 @@ describe('probeSequence', () => {
   it('returns the settled tree after the last step, or undefined when a step failed', async () => {
     expect((await probeSequence(counterPage(), [add], noSleep))?.tree).toContain('[text="1"]');
     expect(await probeSequence(counterPage({ refuse: 'e1' }), [add], noSleep)).toBeUndefined();
+  });
+
+  it('returns what the app did since the first action, so the plan can fail those requests', async () => {
+    const page = counterPage({ effects: () => ['net: POST /api/add 201'] });
+    expect((await probeSequence(page, [add], noSleep))?.effects).toEqual([
+      'net: POST /api/add 201',
+    ]);
   });
 
   it('calls a wait quiet when nothing changed during it and nothing was pending', async () => {

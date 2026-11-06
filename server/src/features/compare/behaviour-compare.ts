@@ -41,6 +41,8 @@ export interface CompareInput {
   fetchText: (url: string) => Promise<string | undefined>;
 }
 
+/** The event cursor before a tab's first event. */
+const FIRST_EVENT = 0;
 const MS_PER_TENTH = 100;
 const TENTHS = 10;
 const LOST_SESSION = 'The browser session was lost, so this run proves nothing. Run it again:';
@@ -65,7 +67,12 @@ async function planOn(input: CompareInput, page: OpenedPage): Promise<Plan> {
   }
   const hints = await harvestScripts(input.reference, input.fetchText);
   const start = (await settledRead(page, input.sleep)).tree;
-  return buildPlan(start, (seq) => probeSequence(page, seq, input.sleep), hints);
+  // The tab is new, so everything from its first event on is the start page's load.
+  const loadEffects = await page.effects(FIRST_EVENT);
+  return buildPlan(start, (seq) => probeSequence(page, seq, input.sleep), {
+    ...hints,
+    loadEffects,
+  });
 }
 
 export async function runCompare(

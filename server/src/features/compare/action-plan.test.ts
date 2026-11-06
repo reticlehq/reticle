@@ -4,6 +4,7 @@ import {
   DEFAULT_KEYS,
   EDGE_TEXT,
   MAX_CHAIN,
+  MAX_FAULT_REQUESTS,
   MAX_KEYS,
   MAX_SEQUENCES,
   MAX_TEXT_PROBES,
@@ -18,12 +19,15 @@ import {
   sequenceKey,
   stepLabel,
   valuesFor,
+  type PlanStep,
   type Probe,
   type Sequence,
 } from './action-plan.js';
 
 const busy = (tree: string | undefined) => () =>
   Promise.resolve(tree === undefined ? undefined : { tree, active: true });
+
+const wait4: PlanStep = { action: 'wait', ms: 4000 };
 
 type ProbeOf = (seq: Sequence) => Promise<Probe | undefined>;
 
@@ -360,6 +364,55 @@ describe('buildPlan', () => {
     expect(labels).toContain('click button "A" > click button "Next" > click button "Deep"');
     expect(labels).not.toContain('click button "B" > click button "Next" > click button "Deep"');
     expect(dropped.sameScreenPaths).toBeGreaterThan(0);
+  });
+
+  it('fails each request made on load three ways, and leaves out the files the page is built from', async () => {
+    const loadEffects = [
+      'net: GET /api/items 200',
+      'net: GET /assets/index-a1.js 200',
+      'net: GET / 200',
+      'console error: boom',
+    ];
+    const { sequences: plan } = await buildPlan(START, unique(busy(START)), { loadEffects });
+    const failed = plan
+      .filter((seq) => 'fault' === seq[0]?.action)
+      .map((seq) => seq.map(stepLabel).join(' > '));
+    expect(failed).toEqual([
+      'fail GET /api/items (500)',
+      'fail GET /api/items (abort)',
+      'fail GET /api/items (empty)',
+    ]);
+  });
+
+  it('fails each request an action made two ways, and replays the action', async () => {
+    // The failed request shows an error, so each fault reaches a screen of its own.
+    const { sequences: plan } = await buildPlan(
+      START,
+      unique((seq) =>
+        Promise.resolve({
+          tree: START,
+          active: false,
+          effects:
+            'click [testid=add]' === seq.map(stepLabel).join()
+              ? ['net: POST /api/cart?id= 201 {"qty":1}']
+              : [],
+        }),
+      ),
+    );
+    const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
+    expect(labels).toContain('fail POST /api/cart (500) > click [testid=add]');
+    expect(labels).toContain('fail POST /api/cart (abort) > click [testid=add]');
+    expect(labels).not.toContain('fail POST /api/cart (empty) > click [testid=add]');
+  });
+
+  it('fails at most MAX_FAULT_REQUESTS requests, and reports the rest', async () => {
+    const loadEffects = Array.from({ length: 10 }, (_, i) => `net: GET /api/r${String(i)} 200`);
+    const { sequences: plan, dropped } = await buildPlan('', busy(''), { loadEffects });
+    const paths = new Set(
+      plan.filter((seq) => 'fault' === seq[0]?.action).map((seq) => stepLabel(seq[0] ?? wait4)),
+    );
+    expect(paths.size).toBe(MAX_FAULT_REQUESTS * 3);
+    expect(dropped.faultRequests).toBe(10 - MAX_FAULT_REQUESTS);
   });
 
   it('presses each common key and each key the app compares, on the start page', async () => {

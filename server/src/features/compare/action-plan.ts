@@ -17,6 +17,10 @@
  *   event with or name in a shortcut, up to `MAX_KEYS`, each on the start page. A key goes to the
  *   first element of the page and bubbles to the document. Escape again after each sequence that
  *   made controls appear: what opened must close;
+ * - each request the app makes fails (`FaultKind`), up to `MAX_FAULT_REQUESTS` requests. A request
+ *   the start page makes on load fails three ways before the page loads. A request an action made
+ *   fails two ways (server, network), and the action's sequence is done again under the fault.
+ *   Files the page is built from are not requests the app makes;
  * - each click again, followed by a wait, so behaviour on a timer can show. Also each path of two or
  *   more steps that reached a new screen, followed by a wait. The wait stays in the plan only when
  *   the reference showed delayed activity there: a call still pending, a page that kept changing
@@ -62,9 +66,25 @@ export type PlanStep =
   | { action: 'goto'; query: string }
   /** Press a key on the first element of the page. It bubbles to the document's key listeners. */
   | { action: 'press'; key: string }
+  /** Make one request fail, then load the start page again. The steps after it see the fault. */
+  | { action: 'fault'; method: string; path: string; fault: FaultKind }
   | { action: 'fillall'; fields: readonly { target: Target; value: string }[] };
 
 export type Sequence = readonly PlanStep[];
+
+/**
+ * How a request fails. A failed answer is an input too: the error state, the retry button and the
+ * empty list exist only when a request fails.
+ */
+export const FaultKind = {
+  /** The server failed. */
+  SERVER: '500',
+  /** The network failed. */
+  ABORT: 'abort',
+  /** The server answered with nothing. */
+  EMPTY: 'empty',
+} as const;
+export type FaultKind = (typeof FaultKind)[keyof typeof FaultKind];
 
 export const ControlKind = { CLICK: 'click', FILL: 'fill', SELECT: 'select' } as const;
 export type ControlKind = (typeof ControlKind)[keyof typeof ControlKind];
@@ -123,6 +143,18 @@ export const DEFAULT_KEYS = [
 const ESCAPE = 'Escape';
 /** The most keys pressed on the start page, common keys first. */
 export const MAX_KEYS = 24;
+/** The most requests made to fail, in the order the plan first sees them. */
+export const MAX_FAULT_REQUESTS = 8;
+/** A request made on load fails before the page starts, in each of the three ways. */
+const LOAD_FAULTS: readonly FaultKind[] = [FaultKind.SERVER, FaultKind.ABORT, FaultKind.EMPTY];
+/** A request an action made fails under that action, as a server or a network failure. */
+const ACTION_FAULTS: readonly FaultKind[] = [FaultKind.SERVER, FaultKind.ABORT];
+/** A request in an effect line (`effect-lines.ts`): `net: GET /api/items 200`. */
+const NET_LINE = /^net: ([A-Z]+) (\S+)/;
+const QUERY_START = '?';
+/** A file the page is built from: not a request the app makes. */
+const STATIC_PATH =
+  /\.(m?js|jsx|tsx?|css|map|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|html?)$|^\/(@|node_modules\/|src\/|assets\/)|^\/?$/;
 /** The wait after a click: a slideshow advances, a countdown ends, a delivery settles. */
 export const WAIT_AFTER_CLICK_MS = 4000;
 const MS_PER_S = 1000;
@@ -318,6 +350,8 @@ export function stepLabel(step: PlanStep): string {
       return `open "${step.query}"`;
     case 'press':
       return `press ${step.key}`;
+    case 'fault':
+      return `fail ${step.method} ${step.path} (${step.fault})`;
     case 'fillall':
       return `fill every field (${step.fields.map((f) => `${targetLabel(f.target)}="${f.value}"`).join(', ')})`;
     case 'fill':
@@ -341,6 +375,8 @@ export interface Probe {
   tree: string;
   /** For a sequence that ends in a wait: whether the reference showed delayed activity there. */
   active: boolean;
+  /** What the app did since the first action, as effect lines: the requests the plan can fail. */
+  effects?: readonly string[];
 }
 
 const endsInWait = (seq: Sequence): boolean => 'wait' === seq.at(-1)?.action;
@@ -363,6 +399,8 @@ export type PlanDropped = {
   sameScreenPaths: number;
   /** Keys not pressed, past `MAX_KEYS`. */
   keys: number;
+  /** Requests not made to fail, past `MAX_FAULT_REQUESTS`. */
+  faultRequests: number;
 };
 
 export const NOTHING_DROPPED: PlanDropped = {
@@ -371,6 +409,7 @@ export const NOTHING_DROPPED: PlanDropped = {
   urlRoots: 0,
   sameScreenPaths: 0,
   keys: 0,
+  faultRequests: 0,
 };
 
 export interface Plan {
@@ -385,6 +424,21 @@ export interface PlanHints {
   urlParams?: ReadonlyMap<string, readonly string[]>;
   /** The keys the app listens for. */
   keys?: readonly string[];
+  /** The effect lines of the start page's load: the requests it makes on load. */
+  loadEffects?: readonly string[];
+}
+
+/** The requests the app made, from effect lines, without the files the page is built from. */
+export function requestsIn(lines: readonly string[]): { method: string; path: string }[] {
+  const out: { method: string; path: string }[] = [];
+  for (const line of lines) {
+    const m = NET_LINE.exec(line);
+    const path = (m?.[2] ?? '').split(QUERY_START)[0] ?? '';
+    if (null !== m && !STATIC_PATH.test(path)) {
+      out.push({ method: m[1] ?? '', path });
+    }
+  }
+  return out;
 }
 
 /**
@@ -424,8 +478,12 @@ export function keyPresses(appKeys: readonly string[]): { steps: PlanStep[]; dro
   };
 }
 
-/** The steps that count toward `MAX_DEPTH`: opening a start page by its url does not. */
-const depthOf = (seq: Sequence): number => seq.filter((s) => 'goto' !== s.action).length;
+/**
+ * The steps that count toward `MAX_DEPTH`. Opening a start page by its url and making a request
+ * fail do not: they set up the page the actions start on.
+ */
+const depthOf = (seq: Sequence): number =>
+  seq.filter((s) => 'goto' !== s.action && 'fault' !== s.action).length;
 
 /**
  * Make the plan on the reference. `probe` drives one sequence from a fresh load, or answers
@@ -442,6 +500,22 @@ export async function buildPlan(
   const probes = textProbes(startTree);
   const roots = urlRoots(hints.urlParams ?? new Map());
   const keys = keyPresses(hints.keys ?? []);
+  /** Requests made to fail, and requests past `MAX_FAULT_REQUESTS`, as "METHOD path". */
+  const faulted = new Set<string>();
+  const overFaultCap = new Set<string>();
+  const faultsFor = (lines: readonly string[], kinds: readonly FaultKind[]): PlanStep[] =>
+    requestsIn(lines).flatMap(({ method, path }) => {
+      const id = `${method} ${path}`;
+      if (faulted.has(id)) {
+        return [];
+      }
+      if (faulted.size >= MAX_FAULT_REQUESTS) {
+        overFaultCap.add(id);
+        return [];
+      }
+      faulted.add(id);
+      return kinds.map((fault): PlanStep => ({ action: 'fault', method, path, fault }));
+    });
   /** A text probe stays in the plan only when it changes the screen on the reference. */
   const probeKeys = new Set(probes.steps.map((s) => sequenceKey([s])));
   const keysOf = (tree: string): Set<string> =>
@@ -456,6 +530,7 @@ export async function buildPlan(
     [wait],
     ...roots.steps.map((r) => [r]),
     ...roots.steps.map((r) => [r, wait]),
+    ...faultsFor(hints.loadEffects ?? [], LOAD_FAULTS).map((f) => [f]),
     ...singles.map((s) => [s]),
     ...probes.steps.map((s) => [s]),
     ...keys.steps.map((s) => [s]),
@@ -480,6 +555,12 @@ export async function buildPlan(
     const deeper = depth < MAX_DEPTH || (chains.has(key) && depth < MAX_CHAIN) || endsInWait(seq);
     // A wait is probed before it is planned: it stays only where the reference showed activity.
     const probed = deeper ? await probe(seq) : undefined;
+    // A request this sequence made can fail: replay the sequence with that request failing.
+    if (probed !== undefined && 'fault' !== seq[0]?.action) {
+      for (const fault of faultsFor(probed.effects ?? [], ACTION_FAULTS)) {
+        queue.push([fault, ...seq]);
+      }
+    }
     if (endsInWait(seq) && true !== probed?.active) {
       continue;
     }
@@ -573,6 +654,7 @@ export async function buildPlan(
       urlRoots: roots.dropped,
       sameScreenPaths,
       keys: keys.dropped,
+      faultRequests: overFaultCap.size,
     },
   };
 }

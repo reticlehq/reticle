@@ -159,6 +159,50 @@ describe('runCompare', () => {
     expect(result.differences[0]?.removed).toEqual(['cell']);
   });
 
+  it('fails a request the start page makes, and reports a build that handles the failure differently', async () => {
+    const loader = (url: string): OpenedPage => {
+      let failing = false;
+      let armed = false;
+      return {
+        open: () => {
+          failing = false;
+          armed = false;
+          return Promise.resolve(true);
+        },
+        goto: () => {
+          failing = armed;
+          return Promise.resolve(true);
+        },
+        mock: (rules) => {
+          armed = rules.some((r) => 500 === r.status);
+          return Promise.resolve(true);
+        },
+        read: () => {
+          if (!failing) {
+            return Promise.resolve('- list "Items"');
+          }
+          return Promise.resolve(`- alert "${'cand' === url ? 'Oops' : 'Could not load'}"`);
+        },
+        act: () => Promise.resolve({ ok: true }),
+        effects: (since) => Promise.resolve(0 === since ? ['net: GET /api/items 200'] : []),
+        close: () => Promise.resolve(),
+      };
+    };
+    const { result } = await runCompare({
+      reference: 'ref',
+      candidate: 'cand',
+      open: (url) => Promise.resolve(loader(url)),
+      sleep,
+      now,
+      fetchText: noScripts,
+    });
+    expect(result.verdict).toBe(CompareVerdict.DIFFERENT);
+    expect(result.differences[0]?.actions).toEqual([
+      'open the start page',
+      'fail GET /api/items (500)',
+    ]);
+  });
+
   it('is invalid, not different, when the driver loses its session', async () => {
     const { result } = await runCompare({
       reference: 'ref',

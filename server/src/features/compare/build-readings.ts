@@ -19,6 +19,7 @@ import { ActionType } from '@reticlehq/core';
 import { isPendingLine } from './outside/effect-lines.js';
 import {
   ControlKind,
+  FaultKind,
   firstRef,
   longestRuns,
   refFor,
@@ -36,6 +37,23 @@ export interface TextAnchor {
   text: string;
 }
 
+/** One request fault, in the shape `reticle_network_mock` takes. */
+export interface FaultRule {
+  urlContains: string;
+  method: string;
+  status?: number;
+  body?: string;
+  abort?: boolean;
+}
+
+const FAULT_ANSWER: Record<FaultKind, Omit<FaultRule, 'urlContains' | 'method'>> = {
+  [FaultKind.SERVER]: { status: 500, body: '{"error":"fault"}' },
+  [FaultKind.ABORT]: { abort: true },
+  [FaultKind.EMPTY]: { status: 200, body: '[]' },
+};
+/** The start page again: an empty query keeps the url as it is. */
+const RELOAD = '';
+
 /** A browser tab on one build. */
 export interface PageDriver {
   /** Load the start page fresh. False when it did not load. */
@@ -45,6 +63,11 @@ export interface PageDriver {
    * load. A driver without it cannot do a step that opens a url parameter value.
    */
   goto?(query: string): Promise<boolean>;
+  /**
+   * Make requests fail on this tab, until the next `open`, which clears them. False when the faults
+   * were not set. A driver without it cannot do a step that makes a request fail.
+   */
+  mock?(rules: readonly FaultRule[]): Promise<boolean>;
   /** The whole page as an accessibility tree, with refs and test ids. */
   read(): Promise<string>;
   /**
@@ -173,6 +196,12 @@ async function perform(
   if ('goto' === step.action) {
     return { ok: true === (await driver.goto?.(step.query)) };
   }
+  if ('fault' === step.action) {
+    const rule = { urlContains: step.path, method: step.method, ...FAULT_ANSWER[step.fault] };
+    // Loaded again, so the requests the start page makes on load also see the fault.
+    const set = true === (await driver.mock?.([rule]));
+    return { ok: set && true === (await driver.goto?.(RELOAD)) };
+  }
   if ('press' === step.action) {
     const ref = firstRef(tree);
     return ref === undefined ? { ok: false } : driver.act(ref, ActionType.PRESS, step.key);
@@ -242,7 +271,8 @@ export async function probeSequence(
   }
   const after = await settledRead(driver, sleep);
   const changed = before !== undefined && !same(before, after.lines);
-  return { tree: after.tree, active: busy || changed };
+  const effects = await effectsSince(driver, since);
+  return { tree: after.tree, active: busy || changed, effects };
 }
 
 const labelsOf = (seq: Sequence): string[] => [START_STEP, ...seq.map(stepLabel)];
