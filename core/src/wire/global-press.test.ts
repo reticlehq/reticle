@@ -25,6 +25,16 @@ describe('which press is a document key', () => {
     expect(isGlobalPress({ text: 'Tab' })).toBe(true);
   });
 
+  it('an arrow key is global: a canvas game has no element to name, and its keys go to the page', () => {
+    // A Phaser game puts one unnamed canvas on the page. Every arrow press was refused with
+    // "pass a ref", so the game could not be played at all.
+    for (const key of ['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight']) {
+      expect(isGlobalPress({ text: key }), key).toBe(true);
+      expect(isGlobalPress({ keys: [key] }), `${key} via keys`).toBe(true);
+    }
+    expect(isGlobalPress({ text: 'arrowleft' }), 'agents send either casing').toBe(true);
+  });
+
   it('a modifier shortcut is global even when the key itself is not', () => {
     expect(isGlobalPress({ text: 'k', modifiers: ['Meta'] })).toBe(true);
     expect(isGlobalPress({ key: 'k', modifiers: ['Control', 'Shift'] })).toBe(true);

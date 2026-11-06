@@ -9,10 +9,18 @@ import { ActionType } from './constants/constants.js';
 export const DEFAULT_PRESS_KEY = 'Enter';
 
 /**
- * Keys a real user sends at the page, not at a control. Escape dismisses, Tab moves focus.
+ * Keys a real user sends at the page, not at a control. Escape dismisses, Tab moves focus, and an
+ * arrow key moves the player in a canvas game, which often has no element to name.
  * A press of one of these with no ref is valid; a press of Enter or a letter is not.
  */
-export const GLOBAL_PRESS_KEYS = ['Escape', 'Tab'] as const;
+export const GLOBAL_PRESS_KEYS = [
+  'Escape',
+  'Tab',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+] as const;
 
 const GLOBAL_PRESS_KEY_SET: ReadonlySet<string> = new Set(
   GLOBAL_PRESS_KEYS.map((k) => k.toLowerCase()),
