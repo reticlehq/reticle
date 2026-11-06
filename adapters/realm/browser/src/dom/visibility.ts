@@ -25,21 +25,16 @@ export const HTML_SUMMARY_TAG = 'summary';
  * `<details>` inside a closed one is still hidden — the ancestor walk in isVisible composes it.
  */
 function hiddenInsideClosedDetails(el: Element): boolean {
-  const parent = el.parentElement;
-  if (null === parent) {
+  const d = el.parentElement?.closest(HTML_DETAILS_TAG);
+  if (!d || d.hasAttribute(HTML_DETAILS_OPEN_ATTRIBUTE)) {
     return false;
   }
-  const details = parent.closest(HTML_DETAILS_TAG);
-  if (null === details || details.hasAttribute(HTML_DETAILS_OPEN_ATTRIBUTE)) {
-    return false;
+  for (const c of d.children) {
+    if (HTML_SUMMARY_TAG === c.localName) {
+      return !c.contains(el);
+    }
   }
-  // The first `<summary>` CHILD, read from `children` rather than `:scope > summary`: inside a
-  // shadow root some selector engines answer `:scope` with nothing, and every summary slotted
-  // content sits under then read as hidden.
-  const summary = Array.from(details.children).find(
-    (child) => HTML_SUMMARY_TAG === child.localName,
-  );
-  return summary === undefined || !summary.contains(el);
+  return true;
 }
 
 /**
@@ -49,10 +44,11 @@ function hiddenInsideClosedDetails(el: Element): boolean {
  * on the element; at rest, opacity 0 is hidden. `unreadableText` asks the same of opacity.
  */
 export function stalledFade(el: Element): boolean {
-  if (!el.ownerDocument.hidden || !('getAnimations' in el)) {
-    return false;
-  }
-  return el.getAnimations().some((a) => 'running' === a.playState || a.pending);
+  return (
+    el.ownerDocument.hidden &&
+    'getAnimations' in el &&
+    el.getAnimations().some((a) => 'running' === a.playState || a.pending)
+  );
 }
 
 /**
@@ -67,15 +63,12 @@ const OVERLAY_ARIA_HIDDEN = 'data-aria-hidden';
 const OPEN_LAYER =
   '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], dialog[open], [aria-modal="true"]';
 
-/** Tags whose text content is never rendered, however visible the element computes. */
-const NON_RENDERED_TAGS: readonly string[] = ['script', 'style', 'template', 'noscript'];
-
 export function isNonRendered(el: Element): boolean {
-  return NON_RENDERED_TAGS.includes(el.tagName.toLowerCase());
+  return /^(script|style|template|noscript)$/i.test(el.tagName);
 }
 
-/** Children of `<body>` that paint nothing, which a modal manager never hides. */
-const UNPAINTED_TAGS = new Set(['script', 'style', 'template', 'noscript', 'link', 'meta']);
+const isUnpaintedTag = (t: string): boolean =>
+  /^(script|style|template|noscript|link|meta)$/.test(t);
 
 function hiddenByAnOverlay(el: Element): boolean {
   if (el.hasAttribute(OVERLAY_ARIA_HIDDEN)) {
@@ -95,15 +88,20 @@ function hiddenByAModalManager(el: Element): boolean {
   if (el.parentElement !== body) {
     return false;
   }
-  const others = Array.from(body.children).filter(
-    (child) =>
+  let openLayer: Element | undefined;
+  let openCount = 0;
+  for (const child of body.children) {
+    if (
       child !== el &&
-      !UNPAINTED_TAGS.has(child.localName) &&
-      !child.matches(RETICLE_OVERLAY_SELECTOR),
-  );
-  const open = others.filter((child) => 'true' !== child.getAttribute('aria-hidden'));
-  const layer = open[0];
-  return 1 === open.length && layer !== undefined && holdsOpenLayer(layer);
+      !isUnpaintedTag(child.localName) &&
+      !child.matches(RETICLE_OVERLAY_SELECTOR) &&
+      'true' !== child.getAttribute('aria-hidden')
+    ) {
+      openCount += 1;
+      openLayer = child;
+    }
+  }
+  return 1 === openCount && openLayer !== undefined && holdsOpenLayer(openLayer);
 }
 
 /**
@@ -111,13 +109,15 @@ function hiddenByAModalManager(el: Element): boolean {
  * to `portal`: an ancestor walk would ask isVisible, which asks this again.
  */
 function holdsOpenLayer(portal: Element): boolean {
-  const layer = portal.matches(OPEN_LAYER) ? portal : portal.querySelector(OPEN_LAYER);
-  for (let node = layer; null !== node; node = node.parentElement) {
-    const style = node.ownerDocument.defaultView?.getComputedStyle(node) ?? null;
-    if (selfCssHidden(node, style)) {
+  for (
+    let n: Element | null = portal.matches(OPEN_LAYER) ? portal : portal.querySelector(OPEN_LAYER);
+    null !== n;
+    n = n.parentElement
+  ) {
+    if (selfCssHidden(n, n.ownerDocument.defaultView?.getComputedStyle(n) ?? null)) {
       return false;
     }
-    if (node === portal) {
+    if (n === portal) {
       return true;
     }
   }
@@ -140,18 +140,15 @@ function selfCssHidden(
   if (hiddenInsideClosedDetails(el)) {
     return true;
   }
-  if (style !== null) {
-    if ('none' === style.display || (includeVisibility && visibilityHidden(style))) {
-      return true;
-    }
-    if (0 === Number.parseFloat(style.opacity || '1') && !stalledFade(el)) {
-      return true;
-    }
-    if (clippedAway(style)) {
-      return true;
-    }
+  if (null === style) {
+    return false;
   }
-  return false;
+  return (
+    'none' === style.display ||
+    (includeVisibility && visibilityHidden(style)) ||
+    (0 === Number.parseFloat(style.opacity || '1') && !stalledFade(el)) ||
+    clippedAway(style)
+  );
 }
 
 /** CSS computes inherited visibility for each element, including a descendant override. */
@@ -167,11 +164,10 @@ function clippedAway(style: CSSStyleDeclaration): boolean {
   const rect = /^rect\((.*)\)$/.exec(style.getPropertyValue('clip').trim());
   if (null !== rect && ('absolute' === style.position || 'fixed' === style.position)) {
     const [top, right, bottom, left] = (rect[1] ?? '').split(/[\s,]+/).map(Number.parseFloat);
-    // `auto` edges parse as NaN and leave that side unclipped.
-    if (right !== undefined && left !== undefined && right <= left) {
-      return true;
-    }
-    if (bottom !== undefined && top !== undefined && bottom <= top) {
+    if (
+      (right !== undefined && left !== undefined && right <= left) ||
+      (bottom !== undefined && top !== undefined && bottom <= top)
+    ) {
       return true;
     }
   }
@@ -195,8 +191,12 @@ function clippedAway(style: CSSStyleDeclaration): boolean {
  * walk. The one ancestor reading is `hiddenInsideClosedDetails`, which consults only the nearest
  * `<details>` boundary; composing the chain is still isVisible's job.
  */
-function selfHidden(el: Element, style: CSSStyleDeclaration | null): boolean {
-  if ('true' === el.getAttribute('aria-hidden') && !hiddenByAnOverlay(el)) {
+function selfHidden(
+  el: Element,
+  style: CSSStyleDeclaration | null,
+  ignoreAriaHidden = false,
+): boolean {
+  if (!ignoreAriaHidden && 'true' === el.getAttribute('aria-hidden') && !hiddenByAnOverlay(el)) {
     return true;
   }
   return selfCssHidden(el, style, false);
@@ -210,20 +210,29 @@ function selfHidden(el: Element, style: CSSStyleDeclaration | null): boolean {
  * `[hidden]`, or sits inside a closed `<details>` — in those cases the element is invisible
  * regardless of `aria-hidden`, and blaming the attribute would mislead the caller (#1070).
  */
-export function isHiddenByAriaOnly(el: Element): boolean {
-  let foundAriaHidden = false;
-  let current: Element | null = el;
-  while (null !== current) {
-    if ('true' === current.getAttribute('aria-hidden')) {
-      foundAriaHidden = true;
+function isHiddenByAriaOrCss(el: Element, stopOnAria: boolean): boolean {
+  let found = false;
+  for (let c: Element | null = el; c !== null; c = parentAcrossShadowBoundary(c)) {
+    if ('true' === c.getAttribute('aria-hidden')) {
+      if (stopOnAria) {
+        return false;
+      }
+      found = true;
     }
-    const style = current.ownerDocument.defaultView?.getComputedStyle(current) ?? null;
-    if (selfCssHidden(current, style, current === el)) {
+    if (selfCssHidden(c, c.ownerDocument.defaultView?.getComputedStyle(c) ?? null, c === el)) {
       return false;
     }
-    current = parentAcrossShadowBoundary(current);
   }
-  return foundAriaHidden;
+  return stopOnAria || found;
+}
+
+/**
+ * Whether the element is hidden solely because of an `aria-hidden="true"` attribute on itself or an
+ * ancestor, and would otherwise be rendered on screen. If an ancestor is `display: none`, it is hidden
+ * regardless of `aria-hidden`, and blaming the attribute would mislead the caller (#1070).
+ */
+export function isHiddenByAriaOnly(el: Element): boolean {
+  return isHiddenByAriaOrCss(el, false);
 }
 
 /**
@@ -233,18 +242,7 @@ export function isHiddenByAriaOnly(el: Element): boolean {
  * element also carries the searched text (#1070).
  */
 export function isRenderedOutsideAriaHidden(el: Element): boolean {
-  let current: Element | null = el;
-  while (null !== current) {
-    if ('true' === current.getAttribute('aria-hidden')) {
-      return false;
-    }
-    const style = current.ownerDocument.defaultView?.getComputedStyle(current) ?? null;
-    if (selfCssHidden(current, style, current === el)) {
-      return false;
-    }
-    current = parentAcrossShadowBoundary(current);
-  }
-  return true;
+  return isHiddenByAriaOrCss(el, true);
 }
 
 const BACKFACE_VISIBILITY_HIDDEN = 'hidden';
@@ -259,23 +257,11 @@ function localTransform(style: CSSStyleDeclaration | null): DOMMatrix | null {
     return null;
   }
   try {
-    const transform = style?.transform;
-    return undefined === transform || '' === transform || 'none' === transform
-      ? new DOMMatrix()
-      : new DOMMatrix(transform);
+    const t = style?.transform ?? '';
+    return '' === t || 'none' === t ? new DOMMatrix() : new DOMMatrix(t);
   } catch {
     return null;
   }
-}
-
-/**
- * Whether the accumulated transform turns the element's front face away from the viewer. The local
- * +z normal maps to the matrix's third column, so a negative zz component is the back face. At
- * exactly zero the face is edge-on; only `< 0` keeps a face that is still edge-on from reading as
- * hidden on a floating-point rounding error.
- */
-function backFaceTowardViewer(matrix: DOMMatrix): boolean {
-  return Number.isFinite(matrix.m33) && 0 > matrix.m33;
 }
 
 /**
@@ -288,37 +274,27 @@ function backFaceTowardViewer(matrix: DOMMatrix): boolean {
 function backfaceHidden(el: Element, memo: Map<Element, VisibilityInfo>): boolean {
   const chain: Element[] = [];
   let declares = false;
-  for (
-    let current: Element | null = el;
-    null !== current;
-    current = parentAcrossShadowBoundary(current)
-  ) {
-    const style = ownVisibilityInfo(current, memo).style;
-    if (BACKFACE_VISIBILITY_HIDDEN === style?.backfaceVisibility) {
+  for (let c: Element | null = el; null !== c; c = parentAcrossShadowBoundary(c)) {
+    if (BACKFACE_VISIBILITY_HIDDEN === ownVisibilityInfo(c, memo).style?.backfaceVisibility) {
       declares = true;
     }
-    chain.push(current);
+    chain.unshift(c);
   }
   if (!declares) {
     return false;
   }
   let composed: DOMMatrix | null = null;
-  for (let index = chain.length - 1; index >= 0; index -= 1) {
-    const current = chain[index];
-    if (undefined === current) {
-      return false;
-    }
-    const style = ownVisibilityInfo(current, memo).style;
+  for (const c of chain) {
+    const style = ownVisibilityInfo(c, memo).style;
     const local = localTransform(style);
     if (null === local) {
-      // Fail open: a false `hidden` is the bug this check exists to fix, and a transform the
-      // browser's own matrix type cannot read is not a reason to hide a control.
       return false;
     }
     composed = null === composed ? local : composed.multiply(local);
     if (
       BACKFACE_VISIBILITY_HIDDEN === style?.backfaceVisibility &&
-      backFaceTowardViewer(composed)
+      Number.isFinite(composed.m33) &&
+      0 > composed.m33
     ) {
       return true;
     }
@@ -326,43 +302,19 @@ function backfaceHidden(el: Element, memo: Map<Element, VisibilityInfo>): boolea
   return false;
 }
 
-const CLIPPING_OVERFLOW = new Set(['hidden', 'clip']);
-/** A box a person can scroll: what it holds past its edge is below the fold, not hidden. */
-const SCROLLING_OVERFLOW = new Set(['auto', 'scroll']);
-const NON_CLIPPING_DISPLAY = new Set([
-  'contents',
-  'table-row',
-  'table-row-group',
-  'table-header-group',
-  'table-footer-group',
-  'table-column',
-  'table-column-group',
-]);
-const TRANSFORM_CONTAINING_BLOCK_PROPERTIES = new Set([
+const isNonClippingDisplay = (d: string): boolean =>
+  /^(contents|table-(row|row-group|header-group|footer-group|column|column-group))$/.test(d);
+const isReplacedTag = (t: string): boolean =>
+  /^(img|video|audio|canvas|iframe|embed|object|input|textarea|select)$/.test(t);
+const CONTAINING_BLOCK_PROPERTIES: readonly string[] = [
   'transform',
   'translate',
   'rotate',
   'scale',
   'perspective',
-]);
-const CONTAINING_BLOCK_PROPERTIES = new Set([
-  ...TRANSFORM_CONTAINING_BLOCK_PROPERTIES,
   'filter',
   'backdrop-filter',
-]);
-const CONTAINING_BLOCK_CONTAIN = new Set(['layout', 'paint', 'strict', 'content']);
-const REPLACED_INLINE_TAGS = new Set([
-  'img',
-  'video',
-  'audio',
-  'canvas',
-  'iframe',
-  'embed',
-  'object',
-  'input',
-  'textarea',
-  'select',
-]);
+];
 
 // Keyed by the caller's ONE synchronous pass, so shared style/box reads live exactly as long as
 // that pass. The boolean memo still stores only the result for the target itself: a parent's box
@@ -395,68 +347,61 @@ function underKnownHidden(el: Element, memo: Map<Element, VisibilityInfo>): bool
   return false;
 }
 
-function ownVisibilityInfo(el: Element, memo: Map<Element, VisibilityInfo>): VisibilityInfo {
+const hiddenInfo = (style: CSSStyleDeclaration | null = null): VisibilityInfo => ({
+  hidden: true,
+  style,
+  parent: null,
+  clipX: false,
+  clipY: false,
+  scrollX: false,
+  scrollY: false,
+  hasClipping: false,
+});
+
+function ownVisibilityInfo(
+  el: Element,
+  memo: Map<Element, VisibilityInfo>,
+  ignoreAriaHidden = false,
+): VisibilityInfo {
   let info = memo.get(el);
   if (info === undefined) {
-    // Subtree hiding composes down the tree. CSS visibility is checked on each target instead, so
-    // a visible descendant can override it. A page of hidden editors holds far more nodes than
-    // a page shows, and a text check over it must not pay one style resolution for each of them.
-    // Only what the memo already holds is read: this adds no style resolution and no walk of its own,
-    // so a lone hidden target still resolves its own style and nothing else.
     if (underKnownHidden(el, memo)) {
-      info = {
-        hidden: true,
-        style: null,
-        parent: null,
-        clipX: false,
-        clipY: false,
-        scrollX: false,
-        scrollY: false,
-        hasClipping: false,
-      };
+      info = hiddenInfo();
       memo.set(el, info);
       return info;
     }
     const style = el.ownerDocument.defaultView?.getComputedStyle(el) ?? null;
-    // Own hiding needs no ancestor metadata: preserve the early return for hidden targets,
-    // including deeply nested ones. This cached CSS result never stands for clipped geometry.
-    if (selfHidden(el, style)) {
-      info = {
-        hidden: true,
-        style,
-        parent: null,
-        clipX: false,
-        clipY: false,
-        scrollX: false,
-        scrollY: false,
-        hasClipping: false,
-      };
+    if (selfHidden(el, style, ignoreAriaHidden)) {
+      info = hiddenInfo(style);
       memo.set(el, info);
       return info;
     }
     const parent = parentAcrossShadowBoundary(el);
-    const inherited = null === parent ? undefined : ownVisibilityInfo(parent, memo);
+    const inherited =
+      null === parent ? undefined : ownVisibilityInfo(parent, memo, ignoreAriaHidden);
     const [overflowX, overflowY] = overflowAxes(style);
     const root = el.ownerDocument.documentElement;
     // Root/body overflow propagated to the viewport stays separate from element visibility.
     const viewportOverflow =
       el === root ||
       (el === el.ownerDocument.body &&
-        overflowAxes(ownVisibilityInfo(root, memo).style).every((axis) => 'visible' === axis));
+        overflowAxes(ownVisibilityInfo(root, memo, ignoreAriaHidden).style).every(
+          (axis) => 'visible' === axis,
+        ));
     const hasClipBox =
       !viewportOverflow &&
-      !NON_CLIPPING_DISPLAY.has(style?.display ?? '') &&
+      !isNonClippingDisplay(style?.display ?? '') &&
       !(isHtmlElement(el) && 'inline' === style?.display);
-    const clipX = hasClipBox && CLIPPING_OVERFLOW.has(overflowX);
-    const clipY = hasClipBox && CLIPPING_OVERFLOW.has(overflowY);
+    const clipX = hasClipBox && ('hidden' === overflowX || 'clip' === overflowX);
+    const clipY = hasClipBox && ('hidden' === overflowY || 'clip' === overflowY);
     info = {
       hidden: true === inherited?.hidden,
       style,
       parent,
       clipX,
       clipY,
-      scrollX: hasClipBox && SCROLLING_OVERFLOW.has(overflowX),
-      scrollY: hasClipBox && SCROLLING_OVERFLOW.has(overflowY),
+      scrollX: hasClipBox && ('auto' === overflowX || 'scroll' === overflowX),
+      scrollY: hasClipBox && ('auto' === overflowY || 'scroll' === overflowY),
       hasClipping: clipX || clipY || true === inherited?.hasClipping,
     };
     memo.set(el, info);
@@ -484,29 +429,23 @@ function positionedContainingBlock(
     // Transforms/containment do not apply to ordinary inline boxes. Filters still establish
     // containing blocks there; individual identity transforms do on transformable boxes.
     const transformable =
-      !(
-        'inline' === style.display &&
-        isHtmlElement(parent) &&
-        !REPLACED_INLINE_TAGS.has(parent.localName)
-      ) &&
+      !('inline' === style.display && isHtmlElement(parent) && !isReplacedTag(parent.localName)) &&
       'table-column' !== style.display &&
       'table-column-group' !== style.display;
-    const applies = (property: string): boolean =>
-      transformable || !TRANSFORM_CONTAINING_BLOCK_PROPERTIES.has(property);
+    const applies = (p: string): boolean =>
+      transformable || 'filter' === p || 'backdrop-filter' === p;
+    const hasProp = CONTAINING_BLOCK_PROPERTIES.some((property) => {
+      const value = style.getPropertyValue(property);
+      return applies(property) && '' !== value && 'none' !== value;
+    });
     if (
-      [...CONTAINING_BLOCK_PROPERTIES].some((property) => {
-        const value = style.getPropertyValue(property);
-        return applies(property) && '' !== value && 'none' !== value;
-      }) ||
+      hasProp ||
       style.willChange
         .split(',')
-        .some(
-          (property) =>
-            CONTAINING_BLOCK_PROPERTIES.has(property.trim()) && applies(property.trim()),
-        ) ||
+        .some((p) => CONTAINING_BLOCK_PROPERTIES.includes(p.trim()) && applies(p.trim())) ||
       (transformable &&
-        !NON_CLIPPING_DISPLAY.has(style.display) &&
-        (style.contain.split(/\s+/).some((value) => CONTAINING_BLOCK_CONTAIN.has(value)) ||
+        !isNonClippingDisplay(style.display) &&
+        (style.contain.split(/\s+/).some((v) => /^(layout|paint|strict|content)$/.test(v)) ||
           'auto' === style.contentVisibility))
     ) {
       return parent;
@@ -552,31 +491,26 @@ function visibleBounds(
     const style = info.style;
     // An app shell (`overflow: hidden`, full height) around a scrolling main read every row below
     // the fold as hidden: the row sat outside the shell's box though one scroll brings it in.
-    if (
-      throughScrollers &&
-      current !== el &&
-      undefined === clipFrom &&
-      (info.scrollX || info.scrollY)
-    ) {
-      bounds ??= el.getBoundingClientRect();
-      if (bounds.width > 0 && bounds.height > 0) {
-        bounds = scrolledInto(bounds, clippingBox(current, info), info.scrollX, info.scrollY);
-      }
-    }
-    if (current !== el && undefined === clipFrom && (info.clipX || info.clipY)) {
-      bounds ??= el.getBoundingClientRect();
-      // Preserve the existing visibility semantics for elements without an own layout box
-      // (including display:contents); inViewport still requires a positive-size box.
-      if (bounds.width > 0 && bounds.height > 0) {
-        const clip = clippingBox(current, info);
-        const left = info.clipX ? Math.max(bounds.left, clip.left) : bounds.left;
-        const right = info.clipX ? Math.min(bounds.right, clip.right) : bounds.right;
-        const top = info.clipY ? Math.max(bounds.top, clip.top) : bounds.top;
-        const bottom = info.clipY ? Math.min(bounds.bottom, clip.bottom) : bounds.bottom;
-        if (right <= left || bottom <= top) {
-          return null;
+    if (current !== el && undefined === clipFrom) {
+      if (throughScrollers && (info.scrollX || info.scrollY)) {
+        bounds ??= el.getBoundingClientRect();
+        if (bounds.width > 0 && bounds.height > 0) {
+          bounds = scrolledInto(bounds, clippingBox(current, info), info.scrollX, info.scrollY);
         }
-        bounds = { left, right, top, bottom, width: right - left, height: bottom - top };
+      }
+      if (info.clipX || info.clipY) {
+        bounds ??= el.getBoundingClientRect();
+        if (bounds.width > 0 && bounds.height > 0) {
+          const clip = clippingBox(current, info);
+          const left = info.clipX ? Math.max(bounds.left, clip.left) : bounds.left;
+          const right = info.clipX ? Math.min(bounds.right, clip.right) : bounds.right;
+          const top = info.clipY ? Math.max(bounds.top, clip.top) : bounds.top;
+          const bottom = info.clipY ? Math.min(bounds.bottom, clip.bottom) : bounds.bottom;
+          if (right <= left || bottom <= top) {
+            return null;
+          }
+          bounds = { left, right, top, bottom, width: right - left, height: bottom - top };
+        }
       }
     }
     // Positioned subtrees escape clips before their containing block. Find it in the composed
@@ -586,6 +520,22 @@ function visibleBounds(
     }
   }
   return bounds;
+}
+
+/** True when the element's box intersects the window. */
+export function intersectsViewport(el: Element, b?: VisibleBounds | DOMRect | null): boolean {
+  const v = el.ownerDocument.defaultView;
+  const r = b === undefined ? el.getBoundingClientRect() : b;
+  return (
+    null !== v &&
+    null !== r &&
+    r.width > 0 &&
+    r.height > 0 &&
+    r.bottom > 0 &&
+    r.right > 0 &&
+    r.top < v.innerHeight &&
+    r.left < v.innerWidth
+  );
 }
 
 /**
@@ -598,18 +548,10 @@ export function isInViewport(el: Element, memo?: Map<Element, boolean>): boolean
   if (!isVisible(el, memo)) {
     return false;
   }
-  const view = el.ownerDocument.defaultView;
-  if (null === view) {
-    return false;
-  }
-  const r = visibleBounds(el, visibilityInfoMemo(memo), el.getBoundingClientRect());
-  if (null === r || undefined === r) {
-    return false;
-  }
-  if (r.width <= 0 || r.height <= 0) {
-    return false;
-  }
-  return r.bottom > 0 && r.right > 0 && r.top < view.innerHeight && r.left < view.innerWidth;
+  return intersectsViewport(
+    el,
+    visibleBounds(el, visibilityInfoMemo(memo), el.getBoundingClientRect()),
+  );
 }
 
 /**
@@ -623,16 +565,20 @@ function collapsed(el: Element, memo: Map<Element, VisibilityInfo>): boolean {
   if (!own.clipX && !own.clipY) {
     return false;
   }
-  const rects = Array.from(el.getClientRects());
-  return (
-    rects.length > 0 &&
-    rects.every(
-      (r) =>
-        (own.clipX && 0 === r.width) ||
-        (own.clipY && 0 === r.height) ||
-        (own.clipX && own.clipY && r.width <= 1 && r.height <= 1),
-    )
-  );
+  const rects = el.getClientRects();
+  if (0 === rects.length) {
+    return false;
+  }
+  for (const r of rects) {
+    if (!(
+      (own.clipX && 0 === r.width) ||
+      (own.clipY && 0 === r.height) ||
+      (own.clipX && own.clipY && r.width <= 1 && r.height <= 1)
+    )) {
+      return false;
+    }
+  }
+  return true;
 }
 
 /**
@@ -641,6 +587,14 @@ function collapsed(el: Element, memo: Map<Element, VisibilityInfo>): boolean {
  */
 export function isHiddenSubtree(el: Element, memo?: Map<Element, boolean>): boolean {
   return ownVisibilityInfo(el, visibilityInfoMemo(memo)).hidden;
+}
+
+function geometryVisible(el: Element, info: Map<Element, VisibilityInfo>): boolean {
+  return (
+    null !== visibleBounds(el, info, undefined, true) &&
+    !collapsed(el, info) &&
+    !backfaceHidden(el, info)
+  );
 }
 
 /** Visibility combines inherited CSS/ARIA hiding with this target's surviving clipping region. */
@@ -653,13 +607,37 @@ export function isVisible(el: Element, memo?: Map<Element, boolean>): boolean {
     return cached;
   }
   const info = visibilityInfoMemo(memo);
-  const result =
-    !visibilityHidden(ownVisibilityInfo(el, info).style) &&
-    visibleBounds(el, info, undefined, true) !== null &&
-    !collapsed(el, info) &&
-    !backfaceHidden(el, info);
-  if (memo !== undefined) {
-    memo.set(el, result);
-  }
+  const result = !visibilityHidden(ownVisibilityInfo(el, info).style) && geometryVisible(el, info);
+  memo?.set(el, result);
   return result;
+}
+
+/**
+ * Whether the element is CSS-painted on screen, regardless of whether aria-hidden="true" excludes
+ * it from the accessibility tree. An element with aria-hidden="true" (like a decorative canvas,
+ * background illustration, or icon glyph) that is rendered and not CSS-hidden passes this check (#1648).
+ *
+ * Runs the same geometry checks as isVisible (visibleBounds, collapsed, backfaceHidden) and skips
+ * only the aria-hidden attribute check.
+ */
+export function isPainted(el: Element, memo?: Map<Element, boolean>): boolean {
+  if (!el.isConnected) {
+    return false;
+  }
+  if (isVisible(el, memo)) {
+    return true;
+  }
+  if (!isHiddenByAriaOnly(el)) {
+    return false;
+  }
+  if (isHtmlElement(el) && isReplacedTag(el.localName)) {
+    for (const r of el.getClientRects()) {
+      if (0 === r.width || 0 === r.height) {
+        return false;
+      }
+    }
+  }
+  const info = new Map<Element, VisibilityInfo>();
+  ownVisibilityInfo(el, info, true);
+  return geometryVisible(el, info);
 }

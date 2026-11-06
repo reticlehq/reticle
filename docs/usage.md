@@ -356,7 +356,8 @@ A **predicate** declares what should be true. `reticle_assert` / `reticle_assert
 // An element exists / is in a state
 { "kind": "element", "query": { "role": "dialog", "name": "Confirm" }, "state": "visible" }
 // query supports: role, name, text, label, placeholder, testid, alt, scope
-// state: visible | hidden | enabled | disabled | checked | expanded | pressed | focused | present | inViewport | receivesPointer
+// state: visible | hidden | enabled | disabled | checked | expanded | pressed | focused | present | inViewport | receivesPointer | painted
+// painted asserts the element is CSS-rendered on screen, regardless of aria-hidden="true" (use for decorative layers like a background canvas)
 // receivesPointer asserts that a tap at the element's centre reaches it: visible, in the viewport, and no app element on top
 // (a fixed header over a close button leaves it `visible` and untappable). Reticle's own UI never counts as a cover.
 // inViewport asserts the element is in the viewport NOW (not just in the DOM), so a scrollIntoView is gradeable
