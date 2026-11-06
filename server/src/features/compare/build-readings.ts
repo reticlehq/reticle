@@ -15,9 +15,11 @@
  * for that sequence and each longer one in the run. A driver that lost its browser session throws
  * `DriverLostError`: that says nothing about the build, so the caller makes the whole run invalid.
  */
+import { ActionType } from '@reticlehq/core';
 import { isPendingLine } from './outside/effect-lines.js';
 import {
   ControlKind,
+  firstRef,
   longestRuns,
   refFor,
   sequenceKey,
@@ -52,7 +54,7 @@ export interface PageDriver {
    */
   act(
     at: string | TextAnchor,
-    action: 'click' | 'fill' | 'select',
+    action: 'click' | 'fill' | 'select' | typeof ActionType.PRESS,
     value?: string,
   ): Promise<{ ok: boolean; since?: number }>;
   /** What the app did since the cursor, as comparable lines (`effect-lines.ts`). */
@@ -170,6 +172,10 @@ async function perform(
   }
   if ('goto' === step.action) {
     return { ok: true === (await driver.goto?.(step.query)) };
+  }
+  if ('press' === step.action) {
+    const ref = firstRef(tree);
+    return ref === undefined ? { ok: false } : driver.act(ref, ActionType.PRESS, step.key);
   }
   const acts =
     'fillall' === step.action

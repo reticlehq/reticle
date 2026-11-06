@@ -145,6 +145,17 @@ describe('readBuild', () => {
     expect(without.get(sequenceKey([root]))?.failedAt).toBe('open "?view=grid"');
   });
 
+  it('presses a key on the first element of the page', async () => {
+    const page = counterPage();
+    const press: PlanStep = { action: 'press', key: 'Escape' };
+    const readings = await readBuild(page, [[], [press]], noSleep);
+    expect(page.acts).toEqual(['press e1']);
+    expect(readings.get(sequenceKey([press]))?.actions).toEqual([START_STEP, 'press Escape']);
+    const empty = counterPage({ trees: ['- heading "Nothing"', '- heading "Nothing"'] });
+    const none = await readBuild(empty, [[press]], noSleep);
+    expect(none.get(sequenceKey([press]))?.failedAt).toBe('press Escape');
+  });
+
   it('lets a lost driver end the run, so it is never read as a difference', async () => {
     const page = counterPage();
     page.act = () => Promise.reject(new DriverLostError('no connected session with id s1'));

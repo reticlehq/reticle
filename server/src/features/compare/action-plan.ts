@@ -13,6 +13,10 @@
  * - a click on each distinct visible text that has no control role (`- text`, `- generic`), up to
  *   `MAX_TEXT_PROBES`. A text probe stays in the plan only when it changes the screen on the
  *   reference: much of the web is a clickable element with no role;
+ * - a press of each common key (`DEFAULT_KEYS`) and of each key the app's scripts compare a key
+ *   event with or name in a shortcut, up to `MAX_KEYS`, each on the start page. A key goes to the
+ *   first element of the page and bubbles to the document. Escape again after each sequence that
+ *   made controls appear: what opened must close;
  * - each click again, followed by a wait, so behaviour on a timer can show. The wait stays in the
  *   plan only when the reference showed delayed activity there: a call still pending, a page that
  *   kept changing while it settled, or a change during the wait;
@@ -55,6 +59,8 @@ export type PlanStep =
   | { action: 'wait'; ms: number }
   /** Open the start page with this query, such as `?scenario=deferred`: a start page of its own. */
   | { action: 'goto'; query: string }
+  /** Press a key on the first element of the page. It bubbles to the document's key listeners. */
+  | { action: 'press'; key: string }
   | { action: 'fillall'; fields: readonly { target: Target; value: string }[] };
 
 export type Sequence = readonly PlanStep[];
@@ -98,6 +104,24 @@ export const MAX_VALUES_PER_PARAM = 8;
  * changes nothing on the reference.
  */
 export const MAX_PATHS_PER_SCREEN = 2;
+/**
+ * The keys a person presses on any page: close, confirm, move focus, move in a list. Each is a check
+ * also where it changes nothing on the reference: a build that answers to the wrong key shows it.
+ */
+export const DEFAULT_KEYS = [
+  'Escape',
+  'Enter',
+  'Tab',
+  'ArrowDown',
+  'ArrowUp',
+  'ArrowLeft',
+  'ArrowRight',
+  'Home',
+  'End',
+] as const;
+const ESCAPE = 'Escape';
+/** The most keys pressed on the start page, common keys first. */
+export const MAX_KEYS = 24;
 /** The wait after a click: a slideshow advances, a countdown ends, a delivery settles. */
 export const WAIT_AFTER_CLICK_MS = 4000;
 const MS_PER_S = 1000;
@@ -211,6 +235,9 @@ export function textProbes(tree: string): { steps: PlanStep[]; dropped: number }
   return { steps, dropped: Math.max(0, texts.size - MAX_TEXT_PROBES) };
 }
 
+/** The ref of the first element of the page, where a key press goes. */
+export const firstRef = (tree: string): string | undefined => REF.exec(tree)?.[1];
+
 /** The ref of `target` on this tree, or undefined when the tree has no such control. */
 export function refFor(tree: string, target: Target): string | undefined {
   const key = targetKey(target);
@@ -288,6 +315,8 @@ export function stepLabel(step: PlanStep): string {
       return `wait ${String(step.ms / MS_PER_S)} s`;
     case 'goto':
       return `open "${step.query}"`;
+    case 'press':
+      return `press ${step.key}`;
     case 'fillall':
       return `fill every field (${step.fields.map((f) => `${targetLabel(f.target)}="${f.value}"`).join(', ')})`;
     case 'fill':
@@ -331,6 +360,8 @@ export type PlanDropped = {
   urlRoots: number;
   /** Paths of two or more steps to a screen that `MAX_PATHS_PER_SCREEN` paths already reached. */
   sameScreenPaths: number;
+  /** Keys not pressed, past `MAX_KEYS`. */
+  keys: number;
 };
 
 export const NOTHING_DROPPED: PlanDropped = {
@@ -338,6 +369,7 @@ export const NOTHING_DROPPED: PlanDropped = {
   textProbes: 0,
   urlRoots: 0,
   sameScreenPaths: 0,
+  keys: 0,
 };
 
 export interface Plan {
@@ -350,6 +382,8 @@ export interface PlanHints {
   dictionary?: ValueDictionary;
   /** The values each url parameter is compared with. */
   urlParams?: ReadonlyMap<string, readonly string[]>;
+  /** The keys the app listens for. */
+  keys?: readonly string[];
 }
 
 /**
@@ -375,6 +409,20 @@ export function urlRoots(params: ReadonlyMap<string, readonly string[]>): {
   return { steps: all.slice(0, MAX_URL_ROOTS), dropped };
 }
 
+const keyStep = (key: string): PlanStep => ({ action: 'press', key });
+
+/**
+ * A press of each common key, then of each key the app listens for, up to `MAX_KEYS`. `dropped`
+ * counts the keys past the cap.
+ */
+export function keyPresses(appKeys: readonly string[]): { steps: PlanStep[]; dropped: number } {
+  const all = [...new Set([...DEFAULT_KEYS, ...appKeys])];
+  return {
+    steps: all.slice(0, MAX_KEYS).map(keyStep),
+    dropped: Math.max(0, all.length - MAX_KEYS),
+  };
+}
+
 /** The steps that count toward `MAX_DEPTH`: opening a start page by its url does not. */
 const depthOf = (seq: Sequence): number => seq.filter((s) => 'goto' !== s.action).length;
 
@@ -392,6 +440,7 @@ export async function buildPlan(
   const startScreen = screenOf(startTree);
   const probes = textProbes(startTree);
   const roots = urlRoots(hints.urlParams ?? new Map());
+  const keys = keyPresses(hints.keys ?? []);
   /** A text probe stays in the plan only when it changes the screen on the reference. */
   const probeKeys = new Set(probes.steps.map((s) => sequenceKey([s])));
   const keysOf = (tree: string): Set<string> =>
@@ -408,6 +457,7 @@ export async function buildPlan(
     ...roots.steps.map((r) => [r, wait]),
     ...singles.map((s) => [s]),
     ...probes.steps.map((s) => [s]),
+    ...keys.steps.map((s) => [s]),
     ...singles.filter((s) => ControlKind.CLICK === s.action).map((s) => [s, wait]),
     ...modes.flatMap((m) => singles.filter((s) => targetOf(s) !== targetOf(m)).map((s) => [m, s])),
   ];
@@ -497,10 +547,15 @@ export async function buildPlan(
       queue.unshift([...seq, fillall], ...buttons.filter(own).map(pressOf));
       queue.push(...buttons.filter((b) => !own(b)).map(pressOf));
     }
-    for (const control of now.filter((c) => parent?.has(targetKey(c.target)) !== true)) {
+    const appeared = now.filter((c) => parent?.has(targetKey(c.target)) !== true);
+    for (const control of appeared) {
       for (const step of steps(control)) {
         queue.push([...seq, step]);
       }
+    }
+    // What opened (a dialog, a menu) must close on Escape.
+    if (appeared.length > 0 && 'press' !== seq.at(-1)?.action) {
+      queue.push([...seq, keyStep(ESCAPE)]);
     }
   }
   const untried = new Set(queue.map(sequenceKey).filter((k) => !seen.has(k)));
@@ -511,6 +566,7 @@ export async function buildPlan(
       textProbes: probes.dropped,
       urlRoots: roots.dropped,
       sameScreenPaths,
+      keys: keys.dropped,
     },
   };
 }

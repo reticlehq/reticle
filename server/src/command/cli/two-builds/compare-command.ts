@@ -8,6 +8,7 @@
  * MCP transport, with the same tool calls an agent makes.
  */
 import {
+  ActionType,
   isLocalhostSubdomain,
   isLoopbackHostname,
   ReticleTool,
@@ -79,6 +80,18 @@ function isDisposableBuild(url: string): boolean {
   }
 }
 
+/** The act tool's args: a press names its key as `text`, a fill or a select its `value`. */
+function actArgs(
+  action: string,
+  value: string | undefined,
+  guarded: Record<string, unknown>,
+): Record<string, unknown> {
+  if (value === undefined) {
+    return guarded;
+  }
+  return ActionType.PRESS === action ? { text: value, ...guarded } : { value, ...guarded };
+}
+
 /** One leased tab as the compare driver. Every call goes through `reticle_run` on that tab. */
 export function leasedPage(caller: ToolCaller, url: string, sessionId: string): OpenedPage {
   let id = sessionId;
@@ -132,7 +145,7 @@ export function leasedPage(caller: ToolCaller, url: string, sessionId: string): 
       const { payload, refusal } = await run(ReticleTool.ACT, {
         ...('string' === typeof at ? { ref: at } : { target: at }),
         action,
-        args: value === undefined ? guarded : { value, ...guarded },
+        args: actArgs(action, value, guarded),
       });
       const ok = refusal === undefined && false !== payload['dispatched'];
       const since = payload['since'];

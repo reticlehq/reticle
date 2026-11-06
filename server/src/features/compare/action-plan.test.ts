@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { buildDictionary } from './outside/value-dictionary.js';
 import {
+  DEFAULT_KEYS,
   EDGE_TEXT,
   MAX_CHAIN,
+  MAX_KEYS,
   MAX_SEQUENCES,
   MAX_TEXT_PROBES,
   MAX_URL_ROOTS,
@@ -339,6 +341,37 @@ describe('buildPlan', () => {
     expect(dropped.sameScreenPaths).toBeGreaterThan(0);
   });
 
+  it('presses each common key and each key the app compares, on the start page', async () => {
+    const { sequences: plan } = await buildPlan(START, busy(START), { keys: ['k', 'Escape'] });
+    const pressed = plan
+      .filter((seq) => 1 === seq.length && 'press' === seq[0]?.action)
+      .map((seq) => seq.map(stepLabel).join());
+    expect(pressed).toEqual([...DEFAULT_KEYS, 'k'].map((key) => `press ${key}`));
+  });
+
+  it('presses at most MAX_KEYS keys, and reports the rest', async () => {
+    const keys = Array.from({ length: 30 }, (_, i) => `F${String(i + 1)}`);
+    const { sequences: plan, dropped } = await buildPlan('', busy(''), { keys });
+    expect(plan.filter((seq) => 'press' === seq[0]?.action)).toHaveLength(MAX_KEYS);
+    expect(dropped.keys).toBe(DEFAULT_KEYS.length + keys.length - MAX_KEYS);
+  });
+
+  it('presses Escape after an action that made controls appear', async () => {
+    const dialog = `${START}\n- button "Close" (ref=e9)`;
+    const { sequences: plan } = await buildPlan(
+      START,
+      unique((seq) =>
+        Promise.resolve({
+          tree: 'click [testid=add]' === seq.map(stepLabel).join() ? dialog : START,
+          active: false,
+        }),
+      ),
+    );
+    const labels = plan.map((seq) => seq.map(stepLabel).join(' > '));
+    expect(labels).toContain('click [testid=add] > press Escape');
+    expect(labels).not.toContain('click button "Open" > press Escape');
+  });
+
   it('opens at most 8 values of one parameter and 12 in all, and reports the rest', async () => {
     const values = Array.from({ length: 10 }, (_, i) => `v${String(i)}`);
     const urlParams = new Map(['a', 'b', 'c'].map((p) => [p, values]));
@@ -378,7 +411,8 @@ describe('buildPlan', () => {
     const { sequences: plan, dropped } = await buildPlan(page, (seq) =>
       Promise.resolve({ tree: `${page}\n- text "${seq.map(stepLabel).join()}"`, active: false }),
     );
-    expect(plan.filter((seq) => 1 === seq.length)).toHaveLength(MAX_TEXT_PROBES);
+    const clicks = plan.filter((seq) => 1 === seq.length && 'click' === seq[0]?.action);
+    expect(clicks).toHaveLength(MAX_TEXT_PROBES);
     expect(dropped.textProbes).toBe(5);
   });
 

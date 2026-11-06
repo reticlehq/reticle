@@ -102,6 +102,20 @@ describe('leasedPage', () => {
     });
   });
 
+  it('presses a key with the key name as the press text', async () => {
+    const calls: unknown[] = [];
+    await leasedPage(
+      caller({ [ReticleTool.ACT]: text({ dispatched: true }) }, calls),
+      'https://pr-12.app.example.com/',
+      's1',
+    ).act('e1', 'press', 'Control+k');
+    expect((calls[0] as { args: Record<string, unknown> }).args).toMatchObject({
+      ref: 'e1',
+      action: 'press',
+      args: { text: 'Control+k' },
+    });
+  });
+
   it('returns the cursor an action gives, for the effects of its sequence', async () => {
     const page = leasedPage(
       caller({ [ReticleTool.ACT]: text({ dispatched: true, since: 41 }) }),

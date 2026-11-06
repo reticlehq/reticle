@@ -166,9 +166,66 @@ export function urlParamValues(js: string): [string, string][] {
   return out;
 }
 
+/** The names a key event's key is read by: `e.key === "k"`, `e.code === "Slash"`. */
+const KEY_NAMES: ReadonlySet<string> = new Set(['key', 'code']);
+/** A longer literal compared with a key is text, not a key name. */
+const MAX_KEY_CHARS = 12;
+/** A shortcut string in a hotkey table: "mod+k", "ctrl+shift+p". */
+const SHORTCUT =
+  /["']((?:(?:mod|ctrl|control|cmd|command|meta|alt|option|shift)\+){1,3}[A-Za-z0-9/?.,;=-])["']/gi;
+const SHORTCUT_JOIN = '+';
+/** "mod" is Meta on a Mac and Control elsewhere, so a "mod" shortcut is pressed both ways. */
+const MOD = 'mod';
+const MOD_KEYS = ['Meta', 'Control'] as const;
+const MODIFIER_KEY: Readonly<Record<string, string>> = {
+  ctrl: 'Control',
+  control: 'Control',
+  cmd: 'Meta',
+  command: 'Meta',
+  meta: 'Meta',
+  alt: 'Alt',
+  option: 'Alt',
+  shift: 'Shift',
+};
+
+/** The key names of one shortcut string, each modifier as the key a press names. */
+function shortcutPresses(shortcut: string): string[] {
+  const parts = shortcut.split(SHORTCUT_JOIN);
+  const last = parts.at(-1) ?? '';
+  const mods = parts.slice(0, -1).map((m) => m.toLowerCase());
+  const each: readonly (string | undefined)[] = mods.includes(MOD) ? MOD_KEYS : [undefined];
+  return each.map((mod) =>
+    [...mods.map((m) => (MOD === m ? (mod ?? '') : (MODIFIER_KEY[m] ?? m))), last].join(
+      SHORTCUT_JOIN,
+    ),
+  );
+}
+
+/**
+ * The keys the app listens for, in source order, each once: the literals its scripts compare a key
+ * event's `key` or `code` with, then its shortcut strings. A build that answers to the wrong key
+ * shows a difference only when that key is pressed.
+ */
+export function appKeys(js: string): string[] {
+  const out = new Set<string>();
+  for (const [name, value] of comparedLiterals(js)) {
+    if (KEY_NAMES.has(foldName(name)) && value.length <= MAX_KEY_CHARS) {
+      out.add(value);
+    }
+  }
+  for (const m of js.matchAll(SHORTCUT)) {
+    for (const press of shortcutPresses(m[1] ?? '')) {
+      out.add(press);
+    }
+  }
+  return [...out];
+}
+
 /** What the scripts of a page tell the plan. */
 export interface ScriptHints {
   dictionary: ValueDictionary;
+  /** The keys the app listens for (`appKeys`), each once. */
+  keys: readonly string[];
   /** The values each url parameter is compared with, in source order, each value once. */
   urlParams: ReadonlyMap<string, readonly string[]>;
 }
@@ -186,6 +243,7 @@ export async function harvestScripts(
   const seen = new Set<string>();
   const pairs: [string, string][] = [];
   const urlParams = new Map<string, string[]>();
+  const keys = new Set<string>();
   while (queue.length > 0 && seen.size < MAX_SCRIPTS) {
     const url = queue.shift() ?? '';
     if (seen.has(url)) {
@@ -195,6 +253,9 @@ export async function harvestScripts(
     const js = (await fetchText(url)) ?? '';
     queue.push(...chunkImports(js).map((src) => resolve(src, url)));
     pairs.push(...comparedLiterals(js));
+    for (const key of appKeys(js)) {
+      keys.add(key);
+    }
     for (const [param, value] of urlParamValues(js)) {
       const values = urlParams.get(param) ?? [];
       if (!values.includes(value)) {
@@ -202,5 +263,5 @@ export async function harvestScripts(
       }
     }
   }
-  return { dictionary: buildDictionary(pairs), urlParams };
+  return { dictionary: buildDictionary(pairs), keys: [...keys], urlParams };
 }

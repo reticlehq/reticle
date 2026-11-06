@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  appKeys,
   MAX_SCRIPTS,
   buildDictionary,
   chunkImports,
@@ -114,6 +115,32 @@ describe('value dictionary', () => {
   it('reads a url parameter only near URLSearchParams, searchParams or location', () => {
     expect(urlParamValues('const x=cache.get("mode");if(x==="a"){}')).toEqual([]);
     expect(urlParamValues('u.searchParams.get("tab")==="b"')).toEqual([['tab', 'b']]);
+  });
+
+  it('finds the keys the app compares a key event with, and its shortcut strings', () => {
+    const js =
+      'if(e.key==="k"){}if(e.code==="Slash"){}switch(e.key){case"Enter":break}' +
+      '["PageUp","PageDown"].includes(ev.key);if(e.key==="a very long key name"){}' +
+      'const t={"mod+k":open,"ctrl+shift+p":palette};';
+    expect(appKeys(js)).toEqual([
+      'k',
+      'Slash',
+      'Enter',
+      'PageUp',
+      'PageDown',
+      'Meta+k',
+      'Control+k',
+      'Control+Shift+p',
+    ]);
+  });
+
+  it('gives the keys of every script it reads', async () => {
+    const files: Record<string, string> = {
+      'http://app/': '<script src="/main.js"></script>',
+      'http://app/main.js': 'if(e.key==="?"){}',
+    };
+    const { keys } = await harvestScripts('http://app/', (url) => Promise.resolve(files[url]));
+    expect(keys).toEqual(['?']);
   });
 
   it('gives the url parameters of every script it reads', async () => {
