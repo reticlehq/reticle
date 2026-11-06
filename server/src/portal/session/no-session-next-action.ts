@@ -166,7 +166,12 @@ function reopenableUrl(raw: string | undefined): { url: string; port: number } |
   for (const param of Object.values(RETICLE_URL_PARAM)) {
     url.searchParams.delete(param);
   }
-  const port = '' === url.port ? ('https:' === url.protocol ? 443 : 80) : Number(url.port);
+  let port: number;
+  if ('' === url.port) {
+    port = 'https:' === url.protocol ? 443 : 80;
+  } else {
+    port = Number(url.port);
+  }
   return { url: url.toString(), port };
 }
 
@@ -254,6 +259,80 @@ function notThisProject(
   );
 }
 
+/**
+ * The port the dev script pins, when that port is up.
+ *
+ * Up means the scan heard a page there, or the port accepted a connection and has not answered
+ * yet. A slow listener is compiling, not gone. Absent when the script names no port, or the
+ * port it names is not up.
+ */
+function devPortUp(facts: NextActionFacts): number | undefined {
+  const port = facts.dev?.port;
+  if (undefined === port) {
+    return undefined;
+  }
+  if (facts.listening.includes(port)) {
+    return port;
+  }
+  if ((facts.slowListeners ?? []).includes(port)) {
+    return port;
+  }
+  return undefined;
+}
+
+/**
+ * The slow port that belongs to this project.
+ *
+ * A pinned port that is slow is this project's. With no pin, the first slow port is the one
+ * the wired branch already treated as the app. A pin that is not among the slow ports means
+ * that listener is somebody else's, and opening it is the wrong app (#1687).
+ */
+function compilingPort(facts: NextActionFacts): number | undefined {
+  const slow = facts.slowListeners ?? [];
+  const pinned = facts.dev?.port;
+  if (pinned !== undefined) {
+    return slow.includes(pinned) ? pinned : undefined;
+  }
+  return slow[0];
+}
+
+/** Open a dev server that accepted a connection and has not finished answering. */
+function openCompiling(port: number): NoSessionNextAction {
+  return {
+    action: NoSessionAction.OPEN_APP,
+    command: `${OPEN_COMMAND} ${LOCALHOST}:${String(port)}`,
+    port,
+    reason:
+      `port ${String(port)} accepted a connection but did not answer in time, which is a dev ` +
+      'server compiling its first route. The app IS running. Do not start a second dev server. ' +
+      'Wait for the compile to finish, then open it.',
+  };
+}
+
+/**
+ * The dev script names a port, and nothing is listening there (#1687).
+ *
+ * The command is the project's own script. It is never `open` on some other listener.
+ */
+function startPinnedDevServer(dev: DevCommand): NoSessionNextAction | undefined {
+  const port = dev.port;
+  if (undefined === port) {
+    return undefined;
+  }
+  const inApp = undefined === dev.directory ? '' : `cd ${dev.directory} && `;
+  const script = undefined === dev.script ? 'launcher' : `\`${dev.script}\` script`;
+  const folder = undefined === dev.directory ? '' : ` in \`${dev.directory}\``;
+  return {
+    action: NoSessionAction.START_DEV_SERVER,
+    command: `${inApp}${dev.command}`,
+    port,
+    reason:
+      `this project's ${script}${folder} uses :${String(port)}, and nothing listens there, so ` +
+      'the dev server is not running. Run it in the background, tell the human it is running, ' +
+      'then call reticle_session { action: "list" } again.',
+  };
+}
+
 export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
   // FIRST, above every other cause, because it is the only one supported by positive evidence about
   // a daemon rather than by an absence. This project's own connection record names a live daemon
@@ -293,32 +372,56 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
   // an empty scan: another project listening elsewhere says nothing about this one.
   const departedPortIsGone =
     facts.everConnected && true !== facts.authRefused && departedPortGone(facts);
-  if (facts.everConnected && true !== facts.authRefused && !departedPortIsGone) {
+  const knownReopen = reopenableUrl(facts.lastKnownUrl);
+  const pinned = facts.dev?.port;
+  const pinnedUp = devPortUp(facts);
+  // The script names this project's port, that port is down, and there is no url to reopen.
+  // A wired project must not be told to open the one other listener (#1687). The branch below
+  // starts the dev script instead.
+  const pinnedDownBesideOthers =
+    pinned !== undefined &&
+    undefined === pinnedUp &&
+    undefined === knownReopen &&
+    0 < facts.listening.length &&
+    (true === facts.initialized || true === facts.previouslyConnected);
+  if (
+    facts.everConnected &&
+    true !== facts.authRefused &&
+    !departedPortIsGone &&
+    !pinnedDownBesideOthers
+  ) {
     const listening = facts.listening;
     const only = 1 === listening.length ? listening[0] : undefined;
     // The departed session's own url first: it is where this project's app demonstrably was, while
-    // a lone port from the scan may belong to anybody.
-    const known = reopenableUrl(facts.lastKnownUrl);
-    const bound =
-      known !== undefined
-        ? ` It was last on ${known.url}; reopen that — do not start a second stack.`
-        : 0 === listening.length
-          ? ''
-          : only === undefined
-            ? ` Something is serving a page on ${listening.map((p) => `:${String(p)}`).join(', ')}; it may not be this app — open the URL the human names rather than starting a second stack.`
-            : ` Something is serving a page on :${String(only)}; it may not be this app — just open ${LOCALHOST}:${String(only)} rather than starting a second stack.`;
-    const target =
-      known !== undefined
-        ? { command: `${OPEN_COMMAND} ${known.url}`, port: known.port }
-        : only === undefined
-          ? {}
-          : { command: `${OPEN_COMMAND} ${LOCALHOST}:${String(only)}`, port: only };
+    // a lone port from the scan may belong to anybody. The dev script's port is next, when it is
+    // up. A pin that is down is not a reason to open some other listener (#1687).
+    const openPort = undefined === pinned ? only : pinnedUp;
+    let bound = '';
+    let target: { command: string; port: number } | undefined;
+    if (knownReopen !== undefined) {
+      bound = ` It was last on ${knownReopen.url}; reopen that — do not start a second stack.`;
+      target = { command: `${OPEN_COMMAND} ${knownReopen.url}`, port: knownReopen.port };
+    } else if (openPort !== undefined) {
+      bound =
+        ` Something is serving a page on :${String(openPort)}; it may not be this app — ` +
+        `just open ${LOCALHOST}:${String(openPort)} rather than starting a second stack.`;
+      target = { command: `${OPEN_COMMAND} ${LOCALHOST}:${String(openPort)}`, port: openPort };
+    } else if (0 < listening.length && pinned !== undefined) {
+      bound =
+        ` This project's dev script uses :${String(pinned)}, and nothing listens there, ` +
+        'so do not open another port.';
+    } else if (0 < listening.length) {
+      const names = listening.map((p) => `:${String(p)}`).join(', ');
+      bound =
+        ` Something is serving a page on ${names}; it may not be this app — open the URL ` +
+        'the human names rather than starting a second stack.';
+    }
     // Where the tab was seen heading, when the SDK reported it fresh — the next action must
     // tell the same story as the diagnosis (#1256).
     const departedTo = facts.departedTo;
     return {
       action: NoSessionAction.REOPEN_APP,
-      ...target,
+      ...(undefined === target ? {} : target),
       reason:
         'a session was connected to this daemon earlier, so the wiring is correct — ' +
         // Agrees with the diagnosis: when the SDK saw the page leave, "the tab was closed" is
@@ -410,19 +513,12 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
     };
   }
 
-  // A wired project whose only port accepted a connection and answered nothing yet: a dev server
-  // compiling its first route. It is up, so a start command would start a second one.
-  const compiling = facts.slowListeners?.[0];
+  // A wired project whose port accepted a connection and answered nothing yet: a dev server
+  // compiling its first route. It is up, so a start command would start a second one. When the
+  // dev script names a port, only that port counts — a slow listener on another port is not it.
+  const compiling = compilingPort(facts);
   if (true === facts.initialized && 0 === facts.listening.length && compiling !== undefined) {
-    return {
-      action: NoSessionAction.OPEN_APP,
-      command: `${OPEN_COMMAND} ${LOCALHOST}:${String(compiling)}`,
-      port: compiling,
-      reason:
-        `port ${String(compiling)} accepted a connection but did not answer in time, which is a dev ` +
-        'server compiling its first route. The app IS running. Do not start a second dev server. ' +
-        'Wait for the compile to finish, then open it.',
-    };
+    return openCompiling(compiling);
   }
 
   if (0 === facts.listening.length || departedPortIsGone) {
@@ -514,11 +610,11 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
     };
   }
 
-  // Something IS up. Whatever else is true, do NOT hand back a start command: a second dev server on
-  // a second port is the exact confusion the probe exists to prevent.
+  // Something is listening. Do not start a second dev server when that listener might be this
+  // app. The exception is a dev script that names a port, when that port is not up: the listener
+  // is another project, and the action is to start this script (#1687).
   if (!facts.initialized && true !== facts.previouslyConnected) {
     // The port the project's own dev script pins outranks a lone listener: the scan is machine-wide.
-    const pinned = facts.dev?.port;
     const target = pinned !== undefined && facts.listening.includes(pinned) ? pinned : only;
     return {
       action: NoSessionAction.RUN_INIT,
@@ -534,7 +630,17 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
     };
   }
 
-  if (only === undefined) {
+  // The dev script names a port that is not up. Do not open whatever else the scan found.
+  if (undefined === pinnedUp && facts.dev !== undefined) {
+    const stopped = startPinnedDevServer(facts.dev);
+    if (stopped !== undefined) {
+      return stopped;
+    }
+  }
+
+  // The pinned port, when it is up, outranks a lone listener and a pile of them (#1687).
+  const target = pinnedUp ?? only;
+  if (target === undefined) {
     return {
       action: NoSessionAction.OPEN_APP,
       reason:
@@ -542,6 +648,9 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
         'none of them can be attributed to this project, so open the one the human names: ' +
         `\`${OPEN_COMMAND} <url>\`.`,
     };
+  }
+  if (!facts.listening.includes(target)) {
+    return openCompiling(target);
   }
   // Two causes sit under this branch and only one of them is fixed by opening a page.
   //
@@ -555,17 +664,21 @@ export function nextActionFor(facts: NextActionFacts): NoSessionNextAction {
   // Named only while nothing has EVER connected. Once a session has been here the wiring is proven
   // and sending an agent to restart a working dev server is a wild goose chase.
   const neverConnected = true !== facts.previouslyConnected;
+  const attribution =
+    facts.dev?.port === target
+      ? "this project's dev script uses that port"
+      : 'something is listening on that port (it may not be this app)';
   return {
     action: NoSessionAction.OPEN_APP,
-    command: `${OPEN_COMMAND} ${LOCALHOST}:${String(only)}`,
-    port: only,
+    command: `${OPEN_COMMAND} ${LOCALHOST}:${String(target)}`,
+    port: target,
     reason: neverConnected
-      ? 'this project is wired and something is listening on that port (it may not be this app), but no app has ever connected to ' +
+      ? `this project is wired and ${attribution}, but no app has ever connected to ` +
         'this daemon — Reticle only ever sees a page a browser has LOADED, and nothing has loaded ' +
         'one. If opening it does not produce a session, the dev server is older than the Reticle ' +
         'plugin and its bundle carries no SDK: restart the dev server (do not rely on HMR) and ' +
         'load the page again.'
-      : 'this project is wired and something is listening on that port (it may not be this app) — Reticle only ever sees a page a ' +
+      : `this project is wired and ${attribution} — Reticle only ever sees a page a ` +
         'browser has LOADED, and nothing has loaded one.',
   };
 }
