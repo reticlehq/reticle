@@ -1,8 +1,12 @@
 import {
+  ACT_POINT_ARG,
   ActionType,
   ActionWarning,
+  actPointProblem,
+  boxFractionFromArgs,
   clampHoldMs,
   clickInputProblem,
+  DRAG_TO_POINT_ARG,
   DANGEROUS_ACTION_CONFIRM_ARG,
   ElementState,
   NATIVE_INPUT_ARG,
@@ -259,6 +263,7 @@ import {
   assertNotLeaving,
   scrollIntoViewNow,
   clickInputOf,
+  coordsIn,
 } from './actions-dom.js';
 import { scrollFrom } from './scroll.js';
 import { clickHitsNoControl } from './click-target.js';
@@ -324,6 +329,7 @@ async function dispatchFor(
       0 === hold ? undefined : { ms: hold, sleep, now: () => Date.now() },
       undefined,
       clickInputOf(args),
+      boxFractionFromArgs(args, ACT_POINT_ARG),
     );
   }
   if (ActionType.TAP === action) {
@@ -333,6 +339,7 @@ async function dispatchFor(
     return await fireTapSequence(
       el,
       0 === hold ? undefined : { ms: hold, sleep, now: () => Date.now() },
+      boxFractionFromArgs(args, ACT_POINT_ARG),
     );
   }
   return { prevented: await dispatchOther(el, action, args), heldMs: 0 };
@@ -369,8 +376,9 @@ async function dispatchOther(
   switch (action) {
     case ActionType.DBLCLICK: {
       const input = clickInputOf(args);
-      await fireClickSequence(el, undefined, 1, input);
-      await fireClickSequence(el, undefined, 2, input);
+      const point = boxFractionFromArgs(args, ACT_POINT_ARG);
+      await fireClickSequence(el, undefined, 1, input, point);
+      await fireClickSequence(el, undefined, 2, input, point);
       return !asSyntheticInput(() =>
         el.dispatchEvent(
           mouseEventFor(el, 'dblclick', {
@@ -378,22 +386,27 @@ async function dispatchOther(
             cancelable: true,
             detail: 2,
             ...input.modifiers,
+            ...coordsIn(el, point),
           }),
         ),
       );
     }
     case ActionType.HOVER: {
+      // With `at`, every event carries the point; without it, none carries coordinates, as before.
+      const coords = coordsIn(el, boxFractionFromArgs(args, ACT_POINT_ARG));
       // Leave what the last hover entered, and come FROM it, so enter/leave pairs match a real pointer.
       const from: EventTarget = leavePreviousHover(el);
       // Bubbling over/move with relatedTarget so React's delegated root can synthesize enter/leave.
-      firePointer(el, 'pointerover', from);
-      el.dispatchEvent(mouseEventFor(el, 'mouseover', { bubbles: true, relatedTarget: from }));
+      firePointer(el, 'pointerover', from, coords);
+      el.dispatchEvent(
+        mouseEventFor(el, 'mouseover', { bubbles: true, relatedTarget: from, ...coords }),
+      );
       // Non-bubbling enter pair (per spec) for direct enter/onMouseEnter listeners.
-      firePointerNonBubbling(el, 'pointerenter', from);
-      el.dispatchEvent(mouseEventFor(el, 'mouseenter', { relatedTarget: from }));
-      firePointer(el, 'pointermove', from);
+      firePointerNonBubbling(el, 'pointerenter', from, coords);
+      el.dispatchEvent(mouseEventFor(el, 'mouseenter', { relatedTarget: from, ...coords }));
+      firePointer(el, 'pointermove', from, coords);
       const moved = el.dispatchEvent(
-        mouseEventFor(el, 'mousemove', { bubbles: true, cancelable: true }),
+        mouseEventFor(el, 'mousemove', { bubbles: true, cancelable: true, ...coords }),
       );
       // hover-dwell: keep "hovering" for holdMs so timer-gated reveals can mount. Capped like
       // click's: unbounded, it is the same never-returns hazard.
@@ -687,8 +700,12 @@ async function dispatchOther(
       const toRef = dragTargetRef(args);
       // asString falls back to '' (never undefined), so the old `!== undefined` was always true and
       // handed '' to refs.resolve. A drag with NO target named is a free drag — resolve nothing.
+      const points = {
+        at: boxFractionFromArgs(args, ACT_POINT_ARG),
+        to: boxFractionFromArgs(args, DRAG_TO_POINT_ARG),
+      };
       if ('' === toRef) {
-        return await dragElement(el, null, args['data']);
+        return await dragElement(el, null, args['data'], points);
       }
       // A target WAS named and did not resolve. That is a malformed call, not a free drag: dragging
       // nowhere and reporting `ok: true` is a false green, and a guessed target name reads as "no
@@ -700,7 +717,7 @@ async function dispatchOther(
             'reticle_snapshot or reticle_query as args.toRef (alias: args.target)',
         );
       }
-      return await dragElement(el, resolved, args['data']);
+      return await dragElement(el, resolved, args['data'], points);
     }
     default:
       throw new Error(`unknown action '${action}'`);
@@ -728,6 +745,10 @@ export async function executeAction(
   args: Record<string, unknown> = {},
 ): Promise<ActionResult> {
   const named = 0 < ref.length;
+  const pointProblem = actPointProblem(action, args);
+  if (pointProblem !== undefined) {
+    throw new Error(`cannot ${action}: ${pointProblem}`);
+  }
   if (ActionType.CLICK === action || ActionType.DBLCLICK === action) {
     const problem = clickInputProblem(action, args);
     if (problem !== undefined) {
