@@ -8,6 +8,12 @@ import {
 const TRUNCATED_VALUE = '[TRUNCATED]';
 const UNSERIALIZABLE_VALUE = '[UNSERIALIZABLE]';
 const OMIT_VALUE = Symbol('omit');
+const PROMISE_SUMMARY = '[Promise]';
+const WINDOW_SUMMARY = '[Window]';
+const WINDOW_TAG = 'Window';
+const PROMISE_TAG = 'Promise';
+const PLAIN_OBJECT_TAG = 'Object';
+const OBJECT_TAG_PATTERN = /^\[object (\w+)\]$/;
 const MAX_KEY_LENGTH = 256;
 // UTF-8 encodes at most ~3 bytes per JS (UTF-16) code unit, so /4 is a provably-safe bound that never
 // exceeds the byte budget — /8 was ~1/8 of the real 1MiB wire budget and truncated legitimate state.
@@ -42,6 +48,42 @@ function boundedString(value: string, state: SanitizeState, max: number): string
   return truncated;
 }
 
+/**
+ * A short summary for a value that must not be walked, or undefined for an ordinary value.
+ *
+ * A DOM node leads to React internals and to the framework's own state. A Promise, or any thenable,
+ * can be a framework object that reports each key read: Next.js reports every read of `params` and
+ * `searchParams` as a console error in the app. Reading their keys is a side effect on the app, so
+ * the walk stops here and records only what the value is.
+ *
+ * The checks use the object's own tag and `nodeType`, not `instanceof`, so a node, a window or a
+ * promise from an iframe is found too. A getter that throws means the value is hostile: return
+ * undefined and let the guarded walk handle it.
+ */
+function opaqueSummary(value: object): string | undefined {
+  try {
+    const tag = OBJECT_TAG_PATTERN.exec(Object.prototype.toString.call(value))?.[1];
+    if (WINDOW_TAG === tag) {
+      return WINDOW_SUMMARY;
+    }
+    if (PROMISE_TAG === tag) {
+      return PROMISE_SUMMARY;
+    }
+    if (tag !== undefined && PLAIN_OBJECT_TAG !== tag) {
+      const node = value as { nodeType?: unknown; nodeName?: unknown };
+      if ('number' === typeof node.nodeType && 'string' === typeof node.nodeName) {
+        return `[${tag}]`;
+      }
+    }
+    if ('function' === typeof (value as { then?: unknown }).then) {
+      return PROMISE_SUMMARY;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+}
+
 function sanitize(value: unknown, state: SanitizeState, depth: number, key?: string): unknown {
   if (key !== undefined && isSensitiveKey(key)) return REDACTED_VALUE;
   if (depth > TRANSPORT_LIMITS.MAX_SERIALIZE_DEPTH || state.nodes >= MAX_TOTAL_NODES) {
@@ -65,6 +107,13 @@ function sanitize(value: unknown, state: SanitizeState, depth: number, key?: str
   if ('bigint' === typeof value) return value.toString();
   if ('undefined' === typeof value || 'function' === typeof value || 'symbol' === typeof value) {
     return OMIT_VALUE;
+  }
+  const opaque = opaqueSummary(value);
+  if (opaque !== undefined) {
+    // The summary replaces the value's fields, so a state or network read must declare it (AGENTS.md rule 11):
+    // a thenable can be ordinary app data, and without this count it would read as complete.
+    state.truncatedValues += 1;
+    return boundedString(opaque, state, MAX_KEY_LENGTH);
   }
   // An invalid Date (`new Date(NaN)` / `new Date(undefined)`, easy to land in app state) throws
   // RangeError on toISOString — and only safeStringify catches it, so a direct sanitize caller

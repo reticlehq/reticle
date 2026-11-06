@@ -418,3 +418,106 @@ describe('a secret in any text the page sends', () => {
     expect(sent).toContain(REDACTED_VALUE);
   });
 });
+
+describe('sanitizeForTransport — DOM nodes, windows, promises and thenables (#1661)', () => {
+  /** An own, enumerable property whose getter fails the test when anyone reads it. */
+  function trap(target: object, name: string, reads: string[]): void {
+    Object.defineProperty(target, name, {
+      enumerable: true,
+      configurable: true,
+      get() {
+        reads.push(name);
+        throw new Error(`key "${name}" was read`);
+      },
+    });
+  }
+
+  it('records a DOM element as its tag and reads none of its keys', () => {
+    const reads: string[] = [];
+    const input = document.createElement('input');
+    trap(input, '__reactFiber$abc', reads);
+    trap(input, '__reactProps$abc', reads);
+
+    expect(sanitizeForTransport({ ref: input, name: 'email' })).toEqual({
+      ref: '[HTMLInputElement]',
+      name: 'email',
+    });
+    expect(reads).toEqual([]);
+  });
+
+  it('records other nodes the same way', () => {
+    expect(sanitizeForTransport(document.createTextNode('hi'))).toBe('[Text]');
+    expect(
+      sanitizeForTransport(document.createElementNS('http://www.w3.org/2000/svg', 'svg')),
+    ).toBe('[SVGSVGElement]');
+  });
+
+  it('records a node from another realm (an iframe) as its tag', () => {
+    const frame = document.createElement('iframe');
+    document.body.appendChild(frame);
+    try {
+      const foreign = frame.contentDocument?.createElement('button');
+      expect(foreign).toBeDefined();
+      expect(foreign instanceof HTMLElement).toBe(false);
+      expect(sanitizeForTransport({ foreign })).toEqual({ foreign: '[HTMLButtonElement]' });
+    } finally {
+      frame.remove();
+    }
+  });
+
+  it('records a window without reading its keys', () => {
+    expect(sanitizeForTransport({ view: window })).toEqual({ view: '[Window]' });
+  });
+
+  it('records a Promise as [Promise] and reads none of its keys', () => {
+    const reads: string[] = [];
+    const promise = Promise.resolve(1);
+    trap(promise, 'slug', reads);
+
+    expect(sanitizeForTransport({ params: promise })).toEqual({ params: '[Promise]' });
+    expect(reads).toEqual([]);
+  });
+
+  it('records a thenable as [Promise] and reads none of its other keys', () => {
+    const reads: string[] = [];
+    const thenable = { then: () => undefined };
+    trap(thenable, 'secret', reads);
+
+    expect(sanitizeForTransport([thenable])).toEqual(['[Promise]']);
+    expect(reads).toEqual([]);
+  });
+
+  it('declares each summary in the truncation report, so a state read does not look complete', () => {
+    const { value, truncation } = sanitizeWithReport({
+      a: Promise.resolve(1),
+      b: { then: () => undefined },
+      c: document.createElement('input'),
+      d: 'plain',
+    });
+
+    expect(value).toEqual({ a: '[Promise]', b: '[Promise]', c: '[HTMLInputElement]', d: 'plain' });
+    expect(truncation?.truncatedValues).toBe(3);
+    expect(truncation?.note).toContain('3 value(s) truncated');
+  });
+
+  it('reports nothing for a value that holds no node, window or thenable', () => {
+    expect(sanitizeWithReport({ a: 1, b: ['x'] }).truncation).toBeUndefined();
+  });
+
+  it('keeps a plain object that only looks like a node', () => {
+    expect(sanitizeForTransport({ nodeType: 1, nodeName: 'DIV', id: 7 })).toEqual({
+      nodeType: 1,
+      nodeName: 'DIV',
+      id: 7,
+    });
+  });
+
+  it('serializes a form-errors object with an element ref to a short summary', () => {
+    const ref = document.createElement('input');
+    const errors = { email: { type: 'required', ref } };
+
+    expect(JSON.parse(safeStringify(errors))).toEqual({
+      email: { type: 'required', ref: '[HTMLInputElement]' },
+    });
+  });
+});
