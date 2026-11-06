@@ -46,6 +46,15 @@ describe('compare report', () => {
     expect([CompareExit.SAME, CompareExit.DIFFERENT, CompareExit.INVALID]).toEqual([0, 1, 2]);
   });
 
+  it('says what a plan cap left out, and nothing when it left out nothing', () => {
+    const capped = { ...result([]), planDropped: { sequences: 4, textProbes: 0 } };
+    expect(compareReportLines(urls, capped)).toContain(
+      'The plan left out 4 items at its caps. --json "planDropped" gives the count for each cap.',
+    );
+    const full = { ...result([]), planDropped: { sequences: 0, textProbes: 0 } };
+    expect(compareReportLines(urls, full).join('\n')).not.toContain('left out');
+  });
+
   it('starts with the verdict, then the counts and the time for each build', () => {
     const lines = compareReportLines(urls, result([]), timings);
     expect(lines[0]).toMatch(/^SAME: /);

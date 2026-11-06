@@ -7,6 +7,9 @@
  *   text field with two values chosen by the shape of its value, one edge value of that shape, and
  *   the values the app's scripts compare the field's name with (`value-dictionary.ts`); select each
  *   option of a combobox;
+ * - a click on each distinct visible text that has no control role (`- text`, `- generic`), up to
+ *   `MAX_TEXT_PROBES`. A text probe stays in the plan only when it changes the screen on the
+ *   reference: much of the web is a clickable element with no role;
  * - each click again, followed by a wait, so behaviour on a timer can show. The wait stays in the
  *   plan only when the reference showed delayed activity there: a call still pending, a page that
  *   kept changing while it settled, or a change during the wait;
@@ -26,12 +29,15 @@
  */
 
 import { magicValues, type ValueDictionary } from './outside/value-dictionary.js';
+import { structureLines } from './visible-content.js';
 
 /** A control on the page, by identity. `nth` counts the controls with the same identity before it. */
 export interface Target {
   testid?: string;
   role?: string;
   name?: string;
+  /** Visible text with no control role: a text probe, clicked by its text. */
+  text?: string;
   nth: number;
 }
 
@@ -68,6 +74,11 @@ const MAX_DEPTH = 3;
  * dialog's submit sit there.
  */
 export const MAX_CHAIN = 8;
+/**
+ * The most text probes in one plan. Much of the web is a clickable element with no role (an
+ * accordion header, a table row), so visible text is clicked too.
+ */
+export const MAX_TEXT_PROBES = 40;
 /** The wait after a click: a slideshow advances, a countdown ends, a delivery settles. */
 export const WAIT_AFTER_CLICK_MS = 4000;
 const MS_PER_S = 1000;
@@ -78,6 +89,9 @@ const TESTID = /\[testid=([^\]]+)\]/;
 const REF = /\(ref=(e\d+)\)/;
 const VALUE = /\[value="([^"]*)"\]/;
 const DISABLED = /\[(?:[a-z]+,)*disabled(?:,[a-z]+)*\]/;
+/** Visible text with no control role. */
+const TEXT_LINE = /^\s*- (?:text|generic) "([^"]{1,80})"/;
+const TEXT_ROLE = 'text';
 const COMBOBOX = 'combobox';
 const OPTION = 'option';
 const FIELD_ROLES: ReadonlySet<string> = new Set(['textbox', 'spinbutton']);
@@ -96,8 +110,12 @@ const FIELD_TEXT = 'Reticle';
 const HOURS_PER_DAY = 24;
 
 /** The identity of a target, without its number. */
-const identityOf = (t: Target): string =>
-  t.testid === undefined ? `${t.role ?? ''} "${t.name ?? ''}"` : `[testid=${t.testid}]`;
+function identityOf(t: Target): string {
+  if (t.text !== undefined) {
+    return `${TEXT_ROLE} "${t.text}"`;
+  }
+  return t.testid === undefined ? `${t.role ?? ''} "${t.name ?? ''}"` : `[testid=${t.testid}]`;
+}
 
 /** The identity of a target, with its number. */
 export const targetKey = (t: Target): string => `${identityOf(t)}#${String(t.nth)}`;
@@ -154,6 +172,24 @@ export function planControls(tree: string): PlanControl[] {
     }
   }
   return out;
+}
+
+/**
+ * A click on each distinct visible text that has no control role, in page order, up to
+ * `MAX_TEXT_PROBES`. `dropped` counts the texts past the cap.
+ */
+export function textProbes(tree: string): { steps: PlanStep[]; dropped: number } {
+  const texts = new Set<string>();
+  for (const line of tree.split('\n')) {
+    const text = TEXT_LINE.exec(line)?.[1];
+    if (text !== undefined) {
+      texts.add(text);
+    }
+  }
+  const steps: PlanStep[] = [...texts]
+    .slice(0, MAX_TEXT_PROBES)
+    .map((text) => ({ action: ControlKind.CLICK, target: { text, nth: 0 } }));
+  return { steps, dropped: Math.max(0, texts.size - MAX_TEXT_PROBES) };
 }
 
 /** The ref of `target` on this tree, or undefined when the tree has no such control. */
@@ -258,6 +294,27 @@ export interface Probe {
 
 const endsInWait = (seq: Sequence): boolean => 'wait' === seq.at(-1)?.action;
 
+/** The screen a tree shows, as one string: two trees with the same screen give the same string. */
+const screenOf = (tree: string): string => structureLines(tree).join('\n');
+
+/**
+ * What the plan left out because of a cap, so a caller can see that the plan is not every action.
+ * Each count is zero when nothing was left out.
+ */
+export type PlanDropped = {
+  /** Sequences not tried, because the plan reached `MAX_SEQUENCES`. */
+  sequences: number;
+  /** Visible texts not clicked, past `MAX_TEXT_PROBES`. */
+  textProbes: number;
+};
+
+export const NOTHING_DROPPED: PlanDropped = { sequences: 0, textProbes: 0 };
+
+export interface Plan {
+  sequences: Sequence[];
+  dropped: PlanDropped;
+}
+
 /**
  * Make the plan on the reference. `probe` drives one sequence from a fresh load, or answers
  * undefined when a step could not be done.
@@ -266,8 +323,12 @@ export async function buildPlan(
   startTree: string,
   probe: (seq: Sequence) => Promise<Probe | undefined>,
   dictionary: ValueDictionary = EMPTY_DICTIONARY,
-): Promise<Sequence[]> {
+): Promise<Plan> {
   const start = planControls(startTree);
+  const startScreen = screenOf(startTree);
+  const probes = textProbes(startTree);
+  /** A text probe stays in the plan only when it changes the screen on the reference. */
+  const probeKeys = new Set(probes.steps.map((s) => sequenceKey([s])));
   const keysOf = (tree: string): Set<string> =>
     new Set(planControls(tree).map((c) => targetKey(c.target)));
   /** The controls on the page after each probed sequence, to tell what its next action added. */
@@ -279,6 +340,7 @@ export async function buildPlan(
   const queue: Sequence[] = [
     [wait],
     ...singles.map((s) => [s]),
+    ...probes.steps.map((s) => [s]),
     ...singles.filter((s) => ControlKind.CLICK === s.action).map((s) => [s, wait]),
     ...modes.flatMap((m) => singles.filter((s) => targetOf(s) !== targetOf(m)).map((s) => [m, s])),
   ];
@@ -298,6 +360,9 @@ export async function buildPlan(
     // A wait is probed before it is planned: it stays only where the reference showed activity.
     const probed = deeper ? await probe(seq) : undefined;
     if (endsInWait(seq) && true !== probed?.active) {
+      continue;
+    }
+    if (probeKeys.has(key) && (probed === undefined || screenOf(probed.tree) === startScreen)) {
       continue;
     }
     plan.push(seq);
@@ -352,7 +417,8 @@ export async function buildPlan(
       }
     }
   }
-  return plan;
+  const untried = new Set(queue.map(sequenceKey).filter((k) => !seen.has(k)));
+  return { sequences: plan, dropped: { sequences: untried.size, textProbes: probes.dropped } };
 }
 
 /**

@@ -122,9 +122,9 @@ export function leasedPage(caller: ToolCaller, url: string, sessionId: string): 
       const { payload } = await run(ReticleTool.SNAPSHOT, { mode: SnapshotMode.FULL, ids: true });
       return asText(payload['tree']) ?? '';
     },
-    async act(ref, action, value) {
+    async act(at, action, value) {
       const { payload, refusal } = await run(ReticleTool.ACT, {
-        ref,
+        ...('string' === typeof at ? { ref: at } : { target: at }),
         action,
         args: value === undefined ? guarded : { value, ...guarded },
       });

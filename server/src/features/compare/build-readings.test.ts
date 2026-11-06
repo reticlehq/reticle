@@ -114,6 +114,19 @@ describe('readBuild', () => {
     expect(readings.get(sequenceKey([gone]))?.failedAt).toBe('click [testid=gone]');
   });
 
+  it('clicks a text probe by its text, because a text line has no ref', async () => {
+    const page = counterPage();
+    const probe: PlanStep = { action: 'click', target: { text: 'Count', nth: 0 } };
+    const at: unknown[] = [];
+    page.act = (ref: unknown) => {
+      at.push(ref);
+      return Promise.resolve({ ok: true });
+    };
+    const readings = await readBuild(page, [[], [probe]], noSleep);
+    expect(at).toEqual([{ text: 'Count' }]);
+    expect(readings.get(sequenceKey([probe]))?.actions).toEqual([START_STEP, 'click text "Count"']);
+  });
+
   it('lets a lost driver end the run, so it is never read as a difference', async () => {
     const page = counterPage();
     page.act = () => Promise.reject(new DriverLostError('no connected session with id s1'));

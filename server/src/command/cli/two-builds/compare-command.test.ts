@@ -73,6 +73,21 @@ describe('leasedPage', () => {
     expect((preview[0] as { args: { args: Record<string, unknown> } }).args.args).toEqual({});
   });
 
+  it('clicks a text probe by a text target, because a text line has no ref', async () => {
+    const calls: unknown[] = [];
+    await leasedPage(
+      caller({ [ReticleTool.ACT]: text({ dispatched: true }) }, calls),
+      'https://pr-12.app.example.com/',
+      's1',
+    ).act({ text: 'Details' }, 'click');
+    expect((calls[0] as { args: Record<string, unknown> }).args).toEqual({
+      target: { text: 'Details' },
+      action: 'click',
+      args: {},
+      sessionId: 's1',
+    });
+  });
+
   it('returns the cursor an action gives, for the effects of its sequence', async () => {
     const page = leasedPage(
       caller({ [ReticleTool.ACT]: text({ dispatched: true, since: 41 }) }),

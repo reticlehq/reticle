@@ -17,6 +17,7 @@
  */
 import { isPendingLine } from './outside/effect-lines.js';
 import {
+  ControlKind,
   longestRuns,
   refFor,
   sequenceKey,
@@ -28,6 +29,11 @@ import {
 } from './action-plan.js';
 import { structureLines } from './visible-content.js';
 
+/** Visible text with no ref: the act tool finds the element by its text. */
+export interface TextAnchor {
+  text: string;
+}
+
 /** A browser tab on one build. */
 export interface PageDriver {
   /** Load the start page fresh. False when it did not load. */
@@ -35,11 +41,12 @@ export interface PageDriver {
   /** The whole page as an accessibility tree, with refs and test ids. */
   read(): Promise<string>;
   /**
-   * Act on a control by ref. `ok` is false when the action was refused or did not land. `since` is
-   * the event cursor from before the action, when the driver gives one.
+   * Act on a control by ref, or click a text probe by its text. `ok` is false when the action was
+   * refused or did not land. `since` is the event cursor from before the action, when the driver
+   * gives one.
    */
   act(
-    ref: string,
+    at: string | TextAnchor,
     action: 'click' | 'fill' | 'select',
     value?: string,
   ): Promise<{ ok: boolean; since?: number }>;
@@ -163,6 +170,10 @@ async function perform(
   let now = tree;
   let since: number | undefined;
   for (const act of acts) {
+    // A text probe is one click, never part of "fill every field".
+    if (act.target.text !== undefined) {
+      return driver.act({ text: act.target.text }, ControlKind.CLICK);
+    }
     const found = await locate(driver, now, act.target, sleep);
     now = found.tree;
     if (found.ref === undefined) {

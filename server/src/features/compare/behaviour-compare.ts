@@ -11,7 +11,7 @@
  *
  * A lost browser session makes the run invalid, never a difference.
  */
-import { buildPlan, sequenceKey, type Sequence } from './action-plan.js';
+import { NOTHING_DROPPED, buildPlan, sequenceKey, type Plan } from './action-plan.js';
 import { harvestDictionary } from './outside/value-dictionary.js';
 import { compareBehaviour, invalidComparison, type BehaviourComparison } from './behaviour-diff.js';
 import type { CompareTimings } from './behaviour-report.js';
@@ -59,9 +59,9 @@ async function withPage<T>(
 }
 
 /** Make the plan on the reference. A start page that does not load gives the start page only. */
-async function planOn(input: CompareInput, page: OpenedPage): Promise<Sequence[]> {
+async function planOn(input: CompareInput, page: OpenedPage): Promise<Plan> {
   if (!(await page.open())) {
-    return [[]];
+    return { sequences: [[]], dropped: NOTHING_DROPPED };
   }
   const dictionary = await harvestDictionary(input.reference, input.fetchText);
   const start = (await settledRead(page, input.sleep)).tree;
@@ -78,7 +78,7 @@ export async function runCompare(
   };
   let sequences = 0;
   try {
-    const [plan, planS] = await timed(() =>
+    const [{ sequences: plan, dropped }, planS] = await timed(() =>
       withPage(input, input.reference, (page) => planOn(input, page)),
     );
     sequences = plan.length;
@@ -102,7 +102,7 @@ export async function runCompare(
       ...(based === undefined ? {} : { base: based[1] }),
       again: againS,
     };
-    return { result, timings };
+    return { result: { ...result, planDropped: dropped }, timings };
   } catch (error) {
     if (error instanceof DriverLostError) {
       return { result: invalidComparison(`${LOST_SESSION} ${error.message}`, sequences) };

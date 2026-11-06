@@ -7,6 +7,7 @@
  * and says how many it left out. `--json` gives everything.
  */
 import { Verified } from '@reticlehq/core';
+import { NOTHING_DROPPED } from './action-plan.js';
 import { DifferenceKind } from './compare-diff.js';
 import {
   CompareVerdict,
@@ -125,6 +126,13 @@ export function compareReportLines(
         `${String(result.unstable)} not compared (the reference did them on one of its two runs only), ` +
         `${String(result.referenceFailed)} the reference could not do, ` +
         `${String(result.ignored)} lines ignored as noise.`,
+    );
+  }
+  const dropped = Object.values<number>(result.planDropped ?? NOTHING_DROPPED);
+  const capped = dropped.reduce((sum, n) => sum + n, 0);
+  if (capped > 0) {
+    lines.push(
+      `The plan left out ${plural(capped, 'item', 'items')} at its caps. --json "planDropped" gives the count for each cap.`,
     );
   }
   const score = scoreLine(result);

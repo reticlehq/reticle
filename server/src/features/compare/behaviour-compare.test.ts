@@ -46,6 +46,8 @@ describe('runCompare', () => {
     });
     expect(result.verdict).toBe(CompareVerdict.SAME);
     expect(result.compared).toBe(result.sequences);
+    // The plan reports what each cap left out, also when it left out nothing.
+    expect(result.planDropped).toMatchObject({ sequences: 0, textProbes: 0 });
     // The plan, then the reference, the candidate, and the reference again.
     expect(opened).toEqual(['ref', 'ref', 'cand', 'ref']);
   });
