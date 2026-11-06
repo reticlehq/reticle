@@ -100,6 +100,93 @@ describe('aria-hidden decoration inside a label', () => {
   });
 });
 
+describe('embedded form controls contribute their value, not their option list (#1554)', () => {
+  /**
+   * AccName 1.2 step 2C: when computing a name from a label or aria-labelledby, an embedded form
+   * control contributes its value — a select's selected option text, an input or textarea's value.
+   * Not the option list, not the placeholder. Field report: `<label>Decision <select><option>Choose...
+   * </option><option>Approve</option><option>Reject</option></select></label>` was reported with a
+   * name that included every option, so `{ role: "combobox", name: "Decision" }` matched nothing.
+   */
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it('names a select from its label prefix and the selected option, not the option list', () => {
+    document.body.innerHTML =
+      '<label>Decision <select>' +
+      '<option>Choose...</option>' +
+      '<option selected>Approve</option>' +
+      '<option>Reject</option>' +
+      '</select></label>';
+    const select = document.body.querySelector('select');
+    expect(select).not.toBeNull();
+    expect(getAccessibleName(select as Element)).toBe('Decision Approve');
+  });
+
+  it('uses the first option when none is marked selected', () => {
+    document.body.innerHTML =
+      '<label>Decision <select>' +
+      '<option>Choose...</option>' +
+      '<option>Approve</option>' +
+      '</select></label>';
+    const select = document.body.querySelector('select');
+    expect(select).not.toBeNull();
+    expect(getAccessibleName(select as Element)).toBe('Decision Choose...');
+  });
+
+  it('the computed name can be queried with the usual fuzzy substring matching', () => {
+    document.body.innerHTML =
+      '<label>Decision <select>' +
+      '<option>Choose...</option>' +
+      '<option selected>Approve</option>' +
+      '</select></label>';
+    // Full name is "Decision Approve", substring "Decision" should match
+    const byPrefix = matchQuery({ by: 'label', value: 'Decision' });
+    expect(byPrefix.count).toBeGreaterThanOrEqual(1);
+    const byFull = matchQuery({ by: 'label', value: 'Decision Approve' });
+    expect(byFull.count).toBe(1);
+  });
+
+  it('names an input from its label and value, not the placeholder', () => {
+    document.body.innerHTML =
+      '<label>Email <input type="text" value="user@example.com" placeholder="you@example.com"></label>';
+    const input = document.body.querySelector('input');
+    expect(input).not.toBeNull();
+    expect(getAccessibleName(input as Element)).toBe('Email user@example.com');
+  });
+
+  it('names a textarea from its label and value', () => {
+    document.body.innerHTML = '<label>Notes <textarea>Draft content</textarea></label>';
+    const textarea = document.body.querySelector('textarea');
+    expect(textarea).not.toBeNull();
+    expect(getAccessibleName(textarea as Element)).toBe('Notes Draft content');
+  });
+
+  it('names via aria-labelledby with the same embedded-control rule', () => {
+    document.body.innerHTML =
+      '<label id="lbl">Status <select>' +
+      '<option>Pending</option>' +
+      '<option selected>Active</option>' +
+      '</select></label>' +
+      '<div role="combobox" aria-labelledby="lbl"></div>';
+    const div = document.body.querySelector('div[role="combobox"]');
+    expect(div).not.toBeNull();
+    expect(getAccessibleName(div as Element)).toBe('Status Active');
+  });
+
+  it('returns empty string for a select with no options', () => {
+    document.body.innerHTML = '<label>Empty <select></select></label>';
+    const select = document.body.querySelector('select');
+    expect(select).not.toBeNull();
+    expect(getAccessibleName(select as Element)).toBe('Empty');
+  });
+});
+
 describe('a closed native <details> hides what the summary does not contain', () => {
   /**
    * Reported from the field on more than one stack: a control inside a CLOSED `<details>` was
