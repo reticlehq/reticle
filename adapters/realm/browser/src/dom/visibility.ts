@@ -656,3 +656,22 @@ export function isVisible(el: Element, memo?: Map<Element, boolean>): boolean {
   }
   return result;
 }
+
+/**
+ * Whether the element is CSS-painted on screen, regardless of whether aria-hidden="true" excludes
+ * it from the accessibility tree. An element with aria-hidden="true" (like a decorative canvas,
+ * background illustration, or icon glyph) that is rendered and not CSS-hidden passes this check (#1648).
+ */
+export function isPainted(el: Element, memo?: Map<Element, boolean>): boolean {
+  if (!el.isConnected) {
+    return false;
+  }
+  if (isVisible(el, memo)) {
+    return true;
+  }
+  if (!isHiddenByAriaOnly(el)) {
+    return false;
+  }
+  const info = visibilityInfoMemo(memo);
+  return !collapsed(el, info);
+}

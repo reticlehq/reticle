@@ -81,6 +81,7 @@ function assertsElementContent(predicate: Predicate): boolean {
     (predicate.state !== undefined &&
       predicate.state !== ElementState.PRESENT &&
       predicate.state !== ElementState.VISIBLE &&
+      predicate.state !== ElementState.PAINTED &&
       predicate.state !== ElementState.HIDDEN)
   );
 }
