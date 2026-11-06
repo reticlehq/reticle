@@ -325,17 +325,17 @@ app.post('/api/rule-pairs/ping/:via', (req, res) => {
   res.json({ via: req.params.via });
 });
 
-// `toggle` answers 200 to every switch in the reach panel, so the request alone decides nothing.
-app.post('/api/rule-pairs/toggle', (_req, res) => {
-  res.json({ ok: true });
-});
-
 const RULE_PAIR_OPTION_DELAYS = { gender: 700, state: 90, all: 700, held: 90 };
 
 app.get('/api/rule-pairs/options', async (req, res) => {
   const kind = String(req.query.kind ?? req.query.status ?? '');
   await new Promise((resolve) => setTimeout(resolve, RULE_PAIR_OPTION_DELAYS[kind] ?? 0));
   res.json({ value: req.query.kind === undefined ? `${kind} shipments` : `${kind} options` });
+});
+
+// `toggle` answers 200 to every switch in the reach panel, so the request alone decides nothing.
+app.post('/api/rule-pairs/toggle', (_req, res) => {
+  res.json({ ok: true });
 });
 
 app.get('/api/rule-pairs/:list', (req, res) => {
