@@ -4,14 +4,41 @@
 //
 // Important: we bind the reference now. Resolving `setTimeout` at call time would pick up the
 // patched (frozen) timer once reticle_clock freezes the clock — which would hang the SDK.
+//
+// A deterministic lease replaces the page's timers BEFORE this module loads. It keeps the real ones
+// under DETERMINISM_GLOBAL_KEY, and they are taken from there first.
+import { DETERMINISM_GLOBAL_KEY } from '@reticlehq/core';
+
 const g: typeof globalThis = globalThis;
 
-const realSetTimeout = 'function' === typeof g.setTimeout ? g.setTimeout.bind(g) : null;
-const realClearTimeout = 'function' === typeof g.clearTimeout ? g.clearTimeout.bind(g) : null;
+/** A real function the deterministic lease kept, or undefined. */
+function kept<T>(name: string): T | undefined {
+  const holder: unknown = (g as unknown as Record<symbol, unknown>)[
+    Symbol.for(DETERMINISM_GLOBAL_KEY)
+  ];
+  if ('object' !== typeof holder || null === holder) {
+    return undefined;
+  }
+  const natives: unknown = (holder as { natives?: unknown }).natives;
+  if ('object' !== typeof natives || null === natives) {
+    return undefined;
+  }
+  const fn: unknown = (natives as Record<string, unknown>)[name];
+  return 'function' === typeof fn ? (fn as T) : undefined;
+}
+
+const realSetTimeout =
+  kept<typeof setTimeout>('setTimeout') ??
+  ('function' === typeof g.setTimeout ? g.setTimeout.bind(g) : null);
+const realClearTimeout =
+  kept<typeof clearTimeout>('clearTimeout') ??
+  ('function' === typeof g.clearTimeout ? g.clearTimeout.bind(g) : null);
 const realRaf =
-  'function' === typeof g.requestAnimationFrame ? g.requestAnimationFrame.bind(g) : null;
+  kept<typeof requestAnimationFrame>('requestAnimationFrame') ??
+  ('function' === typeof g.requestAnimationFrame ? g.requestAnimationFrame.bind(g) : null);
 const realPerfNow =
-  'function' === typeof g.performance?.now ? g.performance.now.bind(g.performance) : null;
+  kept<() => number>('performanceNow') ??
+  ('function' === typeof g.performance?.now ? g.performance.now.bind(g.performance) : null);
 
 /**
  * Monotonic "now" bound at load. clock.ts deliberately does NOT patch performance.now, so this

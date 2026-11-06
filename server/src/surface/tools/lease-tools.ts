@@ -62,6 +62,8 @@ import {
   refuseRegrant,
 } from './lease-permissions.js';
 import { LEASE_EMULATE_ARG, leaseEmulationOf } from '@/portal/input/viewport-tools.js';
+import { LEASE_DETERMINISTIC_ARG, leaseDeterminismOf } from '@/portal/pool/determinism.js';
+import { LEASE_COVERAGE_TOOL, LEASE_JS_COVERAGE_ARG } from './lease-coverage-tools.js';
 export {
   sessionMutationPort,
   sessionPerturbationPort,
@@ -135,6 +137,9 @@ const POOL_UNAVAILABLE =
   'browser pool unavailable — the lease tools need the daemon-managed pool (start Reticle via `reticle mcp`).';
 
 const ALREADY_HELD_LEASE = 'you already hold a lease on this origin';
+
+const DETERMINISTIC_NOTE =
+  'Time stands still on this tab. Step it with reticle_clock { stepFrames: N }, then read or capture.';
 
 function alreadyHeldHint(sessionId: string, origin: string): string {
   return (
@@ -405,6 +410,8 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       .describe('How the HUD starts on the page: shown (default), hidden, or removed.'),
     permissions: LEASE_PERMISSIONS_ARG,
     emulate: LEASE_EMULATE_ARG,
+    deterministic: LEASE_DETERMINISTIC_ARG,
+    jsCoverage: LEASE_JS_COVERAGE_ARG,
     production: production.PRODUCTION_LEASE_ARG,
     timeout_ms: timeoutMsSchema
       .optional()
@@ -431,6 +438,12 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       .optional()
       .describe(
         'Present when this app ships no Reticle SDK and the lease supplied one. Verdicts work on the DOM, network, console and routes; there is no framework adapter, so no component state and no source file:line. Install with `npx @reticlehq/server init` for those.',
+      ),
+    deterministic: z
+      .string()
+      .optional()
+      .describe(
+        'Present when this tab runs a seeded random source and a stepped clock. Its time moves only on reticle_clock { stepFrames }, so a wait for a timer or an animation never ends until you step.',
       ),
     hostStub: z
       .string()
@@ -523,7 +536,11 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
       parseLeasePermissions(args['permissions']),
       args['production'],
     );
-    const emulate = leaseEmulationOf(args['emulate']);
+    // Determinism is set on the context, like the emulation, so it travels with it.
+    const deterministic = leaseDeterminismOf(args['deterministic']);
+    const emulated = leaseEmulationOf(args['emulate']);
+    const emulate = deterministic === undefined ? emulated : { ...(emulated ?? {}), deterministic };
+    const jsCoverage = true === args['jsCoverage'];
     // The stub of the shell bindings, when the caller supplied one. Installed by the pool before
     // the first navigation, so it is already defined when the app's first module runs.
     const initScript = asString(args['initScript']);
@@ -604,6 +621,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
         (validatedSeed !== undefined ||
           certMismatch ||
           emulate !== undefined ||
+          jsCoverage ||
           activated !== undefined) &&
         existing !== undefined
       ) {
@@ -688,6 +706,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
           ...(permissions !== undefined ? { permissions } : {}),
           ...(true === args['ignoreHTTPSErrors'] ? { ignoreHTTPSErrors: true } : {}),
           ...(emulate === undefined ? {} : { emulate }),
+          ...(jsCoverage ? { jsCoverage } : {}),
         });
       } catch (err) {
         if (err instanceof PoolAtCapacityError) {
@@ -804,6 +823,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
         ...(versionSkew === undefined ? {} : { versionSkew }),
         ...production.summary(activated),
         ...(initScript === undefined ? {} : { hostStub: HOST_STUB_NOTE }),
+        ...(deterministic === undefined ? {} : { deterministic: DETERMINISTIC_NOTE }),
         ...cspWidenedOf(pool, lease.sessionId),
         ...hintOf(
           notReadyHint,
@@ -974,4 +994,4 @@ function tellWatchers(deps: ToolDeps, projectId: string | undefined, text: strin
   }
 }
 
-export const LEASE_TOOLS: ToolDef[] = [LEASE_ACQUIRE_TOOL, LEASE_RELEASE_TOOL];
+export const LEASE_TOOLS: ToolDef[] = [LEASE_ACQUIRE_TOOL, LEASE_RELEASE_TOOL, LEASE_COVERAGE_TOOL];

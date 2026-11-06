@@ -6,7 +6,8 @@
  * Headless by default — the pool exists for fault-tolerant headless multi-agent testing.
  */
 
-import type { Browser } from 'playwright';
+import type { Browser, Page } from 'playwright';
+import { startJsCoverage, takeJsCoverage } from '@/portal/input/js-coverage.js';
 import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
 import { ActionType, HIDE_RETICLE_CHROME_CSS, RETICLE_OVERLAY_SELECTOR } from '@reticlehq/core';
 import { launchChromium } from '@/launch-chromium.js';
@@ -28,6 +29,7 @@ import {
 } from '@/portal/input/real-input.js';
 import { widenDocumentCsp } from './csp-widen.js';
 import { contextEmulationOf } from './lease-emulation.js';
+import { determinismConfigOf, installDeterminism } from './determinism.js';
 
 /** A key addresses focus, not a point; the gesture driver takes a box for every action. */
 const NO_BOX: ElementBox = { x: 0, y: 0, width: 0, height: 0 };
@@ -138,15 +140,26 @@ function wrapBrowser(browser: Browser, headless: boolean): PooledBrowser {
     newContext: async (opts): Promise<PooledContext> => {
       // Media, viewport and pointer ride on the context, so the first paint of the first page has
       // them. `pointer` becomes `hasTouch` here — see contextEmulationOf.
-      const { ignoreHTTPSErrors, ...emulate } = opts ?? {};
+      const { ignoreHTTPSErrors, jsCoverage, ...emulate } = opts ?? {};
+      const covering = new WeakSet<Page>();
+      // A deterministic context needs a fixed viewport: a density is not set on a window's own size.
+      const deterministic = emulate.deterministic;
       const context = await browser.newContext({
         ...(true === ignoreHTTPSErrors ? { ignoreHTTPSErrors: true } : {}),
         ...contextEmulationOf(emulate),
-        ...pageViewportOptions(headless, emulate.viewport),
+        ...pageViewportOptions(headless || deterministic !== undefined, emulate.viewport),
       });
+      // On the context, so every page and frame of the lease gets it before its first script.
+      if (deterministic !== undefined) {
+        await context.addInitScript(installDeterminism, determinismConfigOf(deterministic));
+      }
       return {
         newPage: async (): Promise<PooledPage> => {
           const page = await context.newPage();
+          // Before the first navigation, so the code that runs while the page loads is counted.
+          if (true === jsCoverage) {
+            await startJsCoverage(page, covering);
+          }
           return {
             goto: (url, opts) => page.goto(url, gotoOptions(opts?.timeoutMs)),
             close: () => page.close(),
@@ -190,6 +203,11 @@ function wrapBrowser(browser: Browser, headless: boolean): PooledBrowser {
               });
             },
             setViewport: (size) => page.setViewportSize(size),
+            jsCoverage: {
+              start: () => startJsCoverage(page, covering),
+              take: () =>
+                covering.has(page) ? takeJsCoverage(page, covering) : Promise.resolve(undefined),
+            },
             bringToFront: () => page.bringToFront(),
             onCrash: (handler) => page.on('crash', handler),
             onConsole: (handler) => page.on('console', (msg) => handler(msg.text())),

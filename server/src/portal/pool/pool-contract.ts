@@ -8,6 +8,15 @@
 
 import type { RealInputArgs, RealInputResult } from '@/portal/input/real-input.js';
 import type { LeaseEmulation, LeaseMedia } from './lease-emulation.js';
+import type { ScriptCoverage } from '@/portal/input/js-coverage.js';
+
+/** JS coverage on one page: start it, and take what ran since the previous take. */
+export interface PooledCoverage {
+  /** False when the page cannot measure coverage. */
+  start(): Promise<boolean>;
+  /** Undefined when coverage was not running; the first take does not start it. */
+  take(): Promise<ScriptCoverage[] | undefined>;
+}
 
 /** The minimal page surface the pool drives. Real Playwright `Page` satisfies this. */
 export interface PooledPage {
@@ -92,6 +101,11 @@ export interface PooledPage {
    * hidden, and a hidden tab throttles timers and rAF so nothing on it verifies (#1351).
    */
   bringToFront?(): Promise<void>;
+  /**
+   * JS coverage of this page. OPTIONAL, like `installMocks`: a page without it makes the
+   * coverage tool refuse rather than report that no code ran.
+   */
+  jsCoverage?: PooledCoverage;
 }
 
 /** A native dialog the page opened, handed to the pool so it can be dismissed instead of left blocking. */
@@ -164,8 +178,13 @@ export interface PooledContext {
 /** The launched browser. Real Playwright `Browser` satisfies this. */
 export interface PooledBrowser {
   isConnected(): boolean;
-  /** `ignoreHTTPSErrors` accepts a self-signed or local-CA certificate for this context only. */
-  newContext(opts?: { ignoreHTTPSErrors?: boolean } & LeaseEmulation): Promise<PooledContext>;
+  /**
+   * `ignoreHTTPSErrors` accepts a self-signed or local-CA certificate for this context only.
+   * `jsCoverage` starts JS coverage on each page before its first script runs.
+   */
+  newContext(
+    opts?: { ignoreHTTPSErrors?: boolean; jsCoverage?: boolean } & LeaseEmulation,
+  ): Promise<PooledContext>;
   close(): Promise<void>;
   /** Fires when the browser process dies/crashes so the pool can relaunch on the next acquire. */
   onDisconnected(handler: () => void): void;

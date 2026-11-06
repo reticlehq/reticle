@@ -14,6 +14,10 @@ import {
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { advanceMsSchema, depthSchema } from './args/numeric-bounds.js';
+import { StepFramesSchema } from '@/portal/pool/determinism.js';
+
+const NOT_DETERMINISTIC =
+  'stepFrames needs a deterministic lease. Acquire one with reticle_lease { action: "acquire", url, deterministic: {} }, then pass its sessionId.';
 import { aliasParam, aliasUsed } from './args/alias-args.js';
 
 /** `name` for `recordingName`: the spelling every other naming argument uses. */
@@ -383,7 +387,7 @@ export const READ_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.CLOCK,
     description:
-      'Control a fake clock: { freeze:true } to freeze time, { advanceMs:N } to fast-forward timers (toasts, debounces, auto-dismiss), { reset:true } to restore. Lets you test time-gated UI deterministically.',
+      'Control a fake clock: { freeze:true } to freeze time, { advanceMs:N } to fast-forward timers (toasts, debounces, auto-dismiss), { reset:true } to restore. Lets you test time-gated UI deterministically. On a lease acquired with `deterministic`, { stepFrames:N } moves its clock N frames of 16.67 ms: due timers run, then the requestAnimationFrame callbacks, once each frame.',
     inputSchema: {
       freeze: z
         .boolean()
@@ -395,6 +399,9 @@ export const READ_TOOLS: ToolDef[] = [
           'Fast-forward time by this many milliseconds — triggers debounces, toasts, auto-dismiss timers.',
         ),
       reset: z.boolean().optional().describe('Restore the real clock.'),
+      stepFrames: StepFramesSchema.optional().describe(
+        'Step a deterministic lease by this many frames (60 each second). Only for a lease acquired with `deterministic`.',
+      ),
       ...sessionIdShape,
     },
     // The command returns `{ frozen }`. It used to declare `{ ok, elapsed }` — neither of which any
@@ -402,13 +409,31 @@ export const READ_TOOLS: ToolDef[] = [
     // successful freeze and a failed one both validated to `{}` and became indistinguishable.
     outputSchema: {
       frozen: z.boolean().optional(),
+      frame: z
+        .number()
+        .optional()
+        .describe('After stepFrames: the frames stepped since the page loaded.'),
+      nowMs: z
+        .number()
+        .optional()
+        .describe("After stepFrames: the page's performance.now(), in virtual milliseconds."),
     },
-    handler: (deps, args) =>
-      commandOrThrow(deps, asString(args['sessionId']), ReticleCommand.CLOCK, {
+    handler: async (deps, args) => {
+      if (args['stepFrames'] !== undefined) {
+        const session = deps.sessions.resolve(asString(args['sessionId']));
+        const frames = StepFramesSchema.parse(args['stepFrames']);
+        const stepped = await deps.pool?.stepLease(session.id, frames);
+        if (stepped === undefined) {
+          throw new Error(NOT_DETERMINISTIC);
+        }
+        return { frozen: true, ...stepped };
+      }
+      return commandOrThrow(deps, asString(args['sessionId']), ReticleCommand.CLOCK, {
         freeze: args['freeze'],
         advanceMs: args['advanceMs'],
         reset: args['reset'],
-      }),
+      });
+    },
   },
   {
     name: ReticleTool.STATE,

@@ -193,7 +193,15 @@ describe('tool allowlists are complete', () => {
      * `verificationOf` counts a finished compare and skips a `running` poll. On no surface list: it
      * is reached as an action of `reticle_verify`.
      */
-    const PINNED_RAW_TOOL_COUNT = 67;
+    /*
+     * 68 since `reticle_lease { action: "coverage" }` (`reticle_lease_coverage`): JS coverage of
+     * a leased page. Classified like `reticle_network_mock`, which reaches the same Playwright page:
+     * CDP_TOOLS yes, because it fails the same way under version skew. The SESSION sets name only
+     * facades, and the `reticle_lease` facade is already exempt. Every other set no: it
+     * drives nothing (ACTION), mints no ref, and gives no verdict (VERDICT: counting a read would
+     * inflate the headline metric). On no surface list: it is reached as an action of `reticle_lease`.
+     */
+    const PINNED_RAW_TOOL_COUNT = 68;
 
     expect(
       RAW_TOOLS.length,
