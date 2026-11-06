@@ -4,6 +4,10 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+### Added
+
+- **`@reticlehq/engine`: element predicates can assert on measured geometry.** A query can ask that a matched element is fully in the viewport, that its text is not clipped, or that it overlaps another element; the page measures and the engine grades, naming the measured box when an ask fails. The grading lives in a new published subpath, `question/predicate/predicate-geometry.ts`, split from `predicate-element.ts` at its line cap. Follows [#1539](https://github.com/reticlehq/reticle/issues/1539).
+
 ## [3.9.0] — 2026-10-29
 
 ### Added

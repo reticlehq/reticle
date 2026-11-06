@@ -173,7 +173,16 @@ const MAX_FILES_IMPORTING_CORE = 45;
  * engine/core boundary. They join the import `blind-spots.ts` already has, so the file count is
  * unmoved.
  */
-const MAX_DISTINCT_SYMBOLS = 71;
+/*
+ * 71 -> 72 for the geometry MATCH arguments (#1539).
+ *
+ * The geometry asks need two MATCH arguments, `geometry` and `overlapsQuery`, and both cross the
+ * wire, so both live in core as one borrowed symbol, `MatchArg`. Inlining the two strings in
+ * `matchOnce` would keep this number flat by breaking the rule the number exists to protect
+ * (rule 3: never write a wire string inline outside core). It joins the import
+ * `predicate-element.ts` already has, so the file count is unmoved.
+ */
+const MAX_DISTINCT_SYMBOLS = 72;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.
@@ -207,14 +216,20 @@ function couplingToCore(): Coupling {
   for (const rel of shippedSources()) {
     const text = readFileSync(join(PACKAGE_ROOT, rel), 'utf8');
     const statements = text.match(/import[^;]*from '@reticlehq\/core'/g) ?? [];
-    if (0 === statements.length) continue;
+    if (0 === statements.length) {
+      continue;
+    }
     files += 1;
     for (const statement of statements) {
       const braced = /\{([^}]*)\}/.exec(statement);
-      if (null === braced) continue;
+      if (null === braced) {
+        continue;
+      }
       for (const raw of (braced[1] ?? '').split(',')) {
         const name = raw.replace(/\btype\b/, '').trim();
-        if ('' !== name) symbols.add(name);
+        if ('' !== name) {
+          symbols.add(name);
+        }
       }
     }
   }

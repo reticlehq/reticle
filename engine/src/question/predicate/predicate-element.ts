@@ -31,6 +31,12 @@ import {
 // evaluator that defines it.
 import type { PredicateSession } from './predicate-session.js';
 import { clipBody, sdkPredates } from './predicate-eval-kit.js';
+import { checkGeometry, type ElementGeometryAsks } from './predicate-geometry.js';
+
+export type { ElementGeometryAsks };
+// Re-exported so `predicate-geometry.ts` can take its core types from here (type-only, erased
+// at compile time) instead of becoming one more engine file importing @reticlehq/core.
+export type { ElementDescriptor, ElementQuery };
 import { describeTestidMiss } from './testid-near-miss.js';
 import { describeCaseMiss, describeSplitTextMiss } from './split-text-miss.js';
 import { satisfiesProperty, type Baseline, type PropertyAssertion } from './property.js';
@@ -216,6 +222,7 @@ export async function matchOnce(
   state: ElementState | undefined,
   diagnose?: boolean,
   fullText = false,
+  geometry?: ElementGeometryAsks,
 ): Promise<MatchResult> {
   // A page that declared its commands and left match out can never answer (#1990): the session
   // refuses the send, and that refusal used to be read as "zero matches". Refuse before the trip.
@@ -227,6 +234,14 @@ export async function matchOnce(
     state,
     ...(true === diagnose ? { diagnose: true } : {}),
     ...(fullText ? { [MatchArg.FULL_TEXT]: true } : {}),
+    ...(geometry === undefined
+      ? {}
+      : {
+          [MatchArg.GEOMETRY]: true,
+          ...(geometry.overlaps === undefined
+            ? {}
+            : { [MatchArg.OVERLAPS_QUERY]: geometry.overlaps }),
+        }),
   });
   // A reply with an error never looked at the page. Read as zero matches, a query the page's schema
   // refused or a matcher that threw became a false `no`. Thrown, the verdict reads it as unknown.
@@ -367,7 +382,22 @@ export async function evalElement(
   fullText = false,
   /** For an absence: only an element whose text satisfies this fails it. See `absentUnlessSatisfied`. */
   unlessText?: PropertyAssertion,
+  geometry?: ElementGeometryAsks,
 ): Promise<EvalResult> {
+  // Geometry asks grade a match the locator found; with `absent: true` there is no match to
+  // grade and the absent branch returns before `checkGeometry`, so the asks would be silently
+  // ignored. Refuse the combination instead of answering a question nobody asked (#1539).
+  if (absent && geometry !== undefined) {
+    const reason =
+      'geometry asks (fullyInViewport, textClipped, overlaps) cannot be graded with absent: true: ' +
+      'there is no element to measure. Drop the geometry fields or assert on a present element';
+    return {
+      pass: false,
+      failureReason: reason,
+      inconclusive: reason,
+      assertion: 'element.geometry',
+    };
+  }
   const tooOld = stateTheSdkPredates(session.sdkVersion, state);
   if (tooOld !== undefined) {
     const reason =
@@ -397,6 +427,7 @@ export async function evalElement(
     state,
     diagnose,
     fullText,
+    geometry,
   );
   const subject = JSON.stringify(query);
   // Full text was asked for to JUDGE it, so a reading that is not the full text is not graded.
@@ -485,6 +516,38 @@ export async function evalElement(
       assertion: 'element.present',
       evidence: { scopeMissing: true },
     };
+  }
+  // Geometry asks with no match are inconclusive, not a plain miss. The asks name a measurement
+  // of an element, and a locator that matched nothing measured nothing. A plain miss under
+  // `not` becomes a pass, so `not { element: { testid: "typo" }, overlaps: ... }` would pass
+  // on an element that was never there (#1539).
+  if (geometry !== undefined && !match.matched) {
+    const reason =
+      `no element matched ${subject}, so the geometry asks could not be checked: ` +
+      'a missing element has no box to measure. Fix the locator, or drop the geometry ' +
+      'fields (fullyInViewport, textClipped, overlaps) to assert a plain miss';
+    return {
+      pass: false,
+      failureReason: reason,
+      inconclusive: reason,
+      assertion: 'element.geometry',
+    };
+  }
+  // Geometry asks grade the match the locator found: one element must satisfy all of them, the
+  // way one element carries a state. Splitting the asks across two elements would pass a page
+  // where no single element is both fully on screen and unclipped.
+  if (geometry !== undefined && match.matched) {
+    // `count` is every match while `elements` is only the described prefix: grading the
+    // prefix under `not` could pass while an undescribed element satisfies the ask. Refuse
+    // like the residual checks do above instead of grading a truncated set (#1539).
+    if (match.count > match.elements.length) {
+      const reason = `${String(match.count)} elements matched ${subject} and only ${String(match.elements.length)} were described, so the geometry asks could not be checked against all of them. Narrow the locator`;
+      return { pass: false, failureReason: reason, inconclusive: reason };
+    }
+    const verdict = checkGeometry(match.elements, geometry, subject);
+    if (verdict !== undefined) {
+      return verdict;
+    }
   }
   const announced = substantiveMatches(query, match.elements);
   if (match.matched && (announced.length > 0 || 0 === match.elements.length)) {

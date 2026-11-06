@@ -57,6 +57,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   'adapters/build/vite/src': 14,
   // 13 with `render-page.ts`, the in-page step screenshot. It has to be its own module: the command
   // registry imports it lazily, so a page downloads the renderer only when a picture is first drawn.
+  'adapters/realm/browser/src/actions': 11,
   // +1: stable-selector.ts, split out of query.ts when that file crossed the 1000-line cap (#1147).
   // +1: text-match.ts, the text rules split out of query.ts at the 1000-line cap (#1782).
   // +1: layout-audit.ts, the snapshot's opt-in audit. Not `dom/audit/`: it reads dom's a11y and refs
@@ -65,8 +66,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // +1: query-finders.ts, the finder for each query field, split out of query.ts at the 1000-line cap (#1662).
   // +1: scope-roots.ts, scope resolution split out of query.ts at the 1000-line cap, when a scope
   // started to resolve to every element it matches (#1663).
-  'adapters/realm/browser/src/actions': 11,
-  'adapters/realm/browser/src/dom': 19,
+  // +1: geometry.ts, the geometry predicates' own module (#1539).
+  'adapters/realm/browser/src/dom': 20,
   // +1: error-repeats.ts, the limiter every uncaught-error path in console.ts goes through (#986).
   'adapters/realm/browser/src/observers': 27,
   // 17 since the HUD's position primitives left `presenter-drag.ts` for their own leaf: the drag
@@ -208,7 +209,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // page's SDK version (#2031), split from `predicate-eval.ts` at its line cap for the same reason.
   // 25 with `predicate-animation.ts`, split from `predicate.ts` so the live-animation snapshot
   // fallback can stay beside the other predicate evaluators without growing the dispatcher.
-  'engine/src/question/predicate': 25,
+  // +1: predicate-geometry.ts, the geometry grading split out of predicate-element.ts at the
+  // 1000-line cap (#1539).
+  'engine/src/question/predicate': 26,
   /*
    * Crossed ten when the fast-drive budget and a portable byte counter landed. The guard asks for
    * grouping rather than recording at this moment, and grouping is the wrong move HERE specifically:
