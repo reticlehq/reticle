@@ -18,6 +18,7 @@
 import { EventType } from '@reticlehq/core';
 import { observeSafely, type Emit, type Teardown } from './types.js';
 import { isSyntheticInput } from '@/actions/synthetic/synthetic-input.js';
+import { takeDialogConsent } from '@/actions/synthetic/dialog-consent.js';
 
 /**
  * What Reticle answers, per dialog.
@@ -27,9 +28,9 @@ import { isSyntheticInput } from '@/actions/synthetic/synthetic-input.js';
  * nobody approved — and `confirmDangerous` exists precisely so that decision is the caller's,
  * stated up front, rather than something the SDK does on their behalf inside a click.
  *
- * An accept path is deliberately absent for now: a caller who genuinely means "yes" has no way to
- * say so through a native dialog yet. That is a smaller gap than a permanently wedged tab, and it
- * wants its own design — most likely carrying the action's own `confirmDangerous` down to here.
+ * The accept path is that decision (#2167). An action with `confirmDangerous: true` gets yes for ONE
+ * `confirm` of its own dispatch, and nothing else changes: `prompt` still gets no value, and every
+ * other `confirm` still gets no. `takeDialogConsent` holds the rules for when the yes applies.
  */
 const DECLINED = { alert: undefined, confirm: false, prompt: null } as const;
 
@@ -62,7 +63,7 @@ export function installDialogs(emit: Emit): Teardown {
     const wrapper = (...args: unknown[]): unknown => {
       // Not ours: the person opened it, and it behaves exactly as it always did.
       if (!isSyntheticInput()) return callOriginal(...args);
-      const answered = DECLINED[kind];
+      const answered = 'confirm' === kind && takeDialogConsent() ? true : DECLINED[kind];
       const message = args[0];
       // The answer is what the app is waiting on, so observation cannot be allowed to replace it with
       // a throw: the dialog is being answered whether or not the event lands.

@@ -802,6 +802,29 @@ describe('keyboard on a lease', () => {
     expect(state.actCalls).toBe(0);
   });
 
+  it('gives the lease the yes to a confirm() only when the press carries confirmDangerous (#2167)', async () => {
+    // Enter on a lease is a trusted key, so the SDK never sees the confirm() it opens: the pool
+    // answers it, and the pool can only say yes when the press hands it the caller's yes.
+    const accepted: unknown[] = [];
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [], focusableRef: 'e1' };
+    const deps = fakeDeps(undefined, state);
+    deps.pool = {
+      hasKeyboard: () => true,
+      pressLease: (_id: string, _args: Record<string, unknown>, acceptConfirm: unknown) => {
+        accepted.push(acceptConfirm);
+        return Promise.resolve({ performed: true, inputMode: InputMode.REAL });
+      },
+    } as unknown as BrowserPool;
+    await runAct(deps, { ref: 'e1', action: 'press', args: { text: 'Enter' } });
+    await runAct(deps, {
+      ref: 'e1',
+      action: 'press',
+      args: { text: 'Enter', confirmDangerous: true },
+    });
+
+    expect(accepted).toEqual([false, true]);
+  });
+
   it('focuses the named control first, then presses Enter on it with the real keyboard', async () => {
     const pressed: Record<string, unknown>[] = [];
     const state: FakeSessionState = {
