@@ -46,7 +46,9 @@ describe('Session journal attribution (begin/pushEvent/finish)', () => {
   it('mints sequential action ids, attributes events, and records the action', async () => {
     const session = new Session(hello(), noopSocket, () => 0);
     const sink = fakeSink();
-    session.setJournal(new JournalRecorder(sink, { now: () => session.elapsed(), identity: TEST_IDENTITY }));
+    session.setJournal(
+      new JournalRecorder(sink, { now: () => session.elapsed(), identity: TEST_IDENTITY }),
+    );
 
     const first = session.beginAction('reticle_act', { ref: 'e7' });
     const second = ((): string => {
@@ -73,7 +75,9 @@ describe('Session journal attribution (begin/pushEvent/finish)', () => {
   it('leaves events unattributed when no action is open', async () => {
     const session = new Session(hello(), noopSocket, () => 0);
     const sink = fakeSink();
-    session.setJournal(new JournalRecorder(sink, { now: () => session.elapsed(), identity: TEST_IDENTITY }));
+    session.setJournal(
+      new JournalRecorder(sink, { now: () => session.elapsed(), identity: TEST_IDENTITY }),
+    );
     session.pushEvent({ t: 0, seq: 0, type: EventType.DOM_ADDED, sessionId: 'demo', data: {} });
     await session.flushJournal();
     expect(sink.events[0]?.actionId).toBeUndefined();

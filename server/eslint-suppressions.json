@@ -1284,7 +1284,7 @@
   },
   "src/judgement/runs/verification-sync.ts": {
     "curly": {
-      "count": 5
+      "count": 4
     }
   },
   "src/judgement/runs/verify-daemon.test.ts": {

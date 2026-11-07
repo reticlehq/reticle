@@ -78,16 +78,9 @@ import { VACUOUS_BECAUSE } from '@reticlehq/engine/evidence/verified.js';
 import type { ToolCall, ToolDef, ToolDeps } from './tool-kit.js';
 import { NEXT_STEP_FIELD } from './empty-session-list.js';
 
-/**
- * Emit `verification_completed` when a verification tool produced a verdict.
- *
- * Read off the RESULT here rather than emitted from `decideVerified`, which is where the verdict is
- * actually decided: that function is pure, and the repo's rules keep clocks, IO and side effects out
- * of pure logic for good reason. Reading the result also means all the verification tools are covered
- * by one site instead of N handler edits, and the next one is covered the moment it joins the set.
- *
- * The RULE itself lives in verification-of.ts, because getting it wrong fails silently.
- */
+// Emit verification telemetry at the shared result-adjudication boundary.
+// This covers every verification tool without edits in each handler.
+// The verification rule lives in verificationOf, so result rules stay separate from side effects.
 function recordVerification(
   toolName: string,
   result: Record<string, unknown>,
@@ -112,29 +105,14 @@ function recordVerification(
     actor: TelemetryActor.AGENT,
     verification,
   });
-  // The public half of the same moment. Nothing before this marks a user's own app actually being
-  // verified: `init_completed` fires when files are written, minutes earlier.
-  //
-  // Emitted from the site that already decided a verdict happened, so the two can never disagree —
-  // a second listener deciding for itself is a second thing that can stop firing.
-  //
-  // Idempotency is deliberately NOT applied: the step is per verdict, and a session that proves ten
-  // things is a different shape from one that proves one.
+  // Emit the verdict hook at the same decision site as the verdict metric.
   emitVerdictHook(toolName, result, verification.verified, sessionId);
-  // The ONBOARD half of the same moment: the first verdict of this run, once.
   noteFirstVerdict();
-  // The FIRST_RUN rung: once per machine + project, not once per verdict.
   noteVerdictProduced(durationMs);
   return true;
 }
 
-/**
- * Emit one `bug_found` per defect in a tool result, and count it into the session.
- *
- * The outcome metric: everything else measures whether Reticle is used, this measures whether it
- * works. Discrete events rather than only a counter, because the KIND distribution is the argument —
- * "we found 4,000 bugs" is a claim, "1,200 were greens that lied" is evidence.
- */
+// Report each defect separately and count it in the current session.
 function reportBugsFound(
   toolName: string,
   result: Record<string, unknown>,
@@ -147,9 +125,7 @@ function reportBugsFound(
   const metrics = getSessionMetrics();
   const route = routeOf(result);
   for (const bug of bugs) {
-    // `recordBug` answers whether this kind is new to the session, which is the only thing that
-    // separates "another defect" from "the same defect again". Counting instances as defects is how
-    // a published number inflates itself.
+    // Count whether this defect is new without collapsing separate occurrences.
     const first = metrics.recordBug(bug.kind);
     const identity =
       route !== undefined
@@ -173,20 +149,8 @@ function reportBugsFound(
   }
 }
 
-/**
- * Report a refused call, at the one place both dispatch paths cross.
- *
- * A refusal arrives two ways and they are the same event: the handler THROWS (the common case — no
- * session, a stale ref, a schema rejection), or it RETURNS `{ error }`, which is this codebase's
- * refusal convention and just as much a refusal. Both are classified by the same table the agent's
- * recovery advice comes from, so the reason we record and the advice it got cannot describe
- * different things.
- *
- * `reticle_run` is skipped for the same reason `bugsInResult` skips it: it is a WRAPPER whose
- * handler calls `runTool` on the real tool, which already reported that refusal under the real
- * tool's name, and then hands the same failure back out to be reported a second time as
- * `reticle_run`. A count that doubles because of HOW a tool was reached is not a measurement.
- */
+// Treat thrown errors and returned error objects as the same refusal.
+// The reticle_run wrapper must not report the same refusal twice.
 function reportRefusal(
   toolName: string,
   args: Record<string, unknown>,
@@ -200,19 +164,7 @@ function reportRefusal(
   reportToolRefused(toolName, reason, args, detail);
 }
 
-/**
- * Which friction this result represents, counting the invitation if there is one.
- *
- * Feedback is the highest-yield channel this product has, and `feedbackPrompted` is the denominator
- * that says whether inviting mid-task works or is decoration. It read as near-empty because the
- * count sat behind the session-bound early return, so a session-EXEMPT tool never invited and a tool
- * that THREW never got there — and a throw is the commonest refusal there is.
- *
- * `reticle_run` is skipped for the same reason it is skipped for refusals and defects: the wrapper's
- * handler calls `runTool` on the real tool, which already invited under the real tool's name, and
- * the failure is then handed back out to be counted a second time. A doubled denominator makes the
- * feedback rate read half.
- */
+// Decide whether a result represents actionable user friction.
 function frictionInviteFor(toolName: string, raw: unknown): FrictionKind | undefined {
   if (!isPlainObject(raw) || toolName === ReticleTool.RUN) {
     return undefined;
@@ -233,23 +185,12 @@ function frictionInviteFor(toolName: string, raw: unknown): FrictionKind | undef
   }
   return friction;
 }
-
-/**
- * The single entry point both the MCP server and the programmatic invoker call instead of
- * `tool.handler` directly. Runs the handler, then — for a live-session tool returning a plain
- * object that did not already include `session` — splices the health envelope on. Idempotent
- * (handlers that already add health are left untouched) and never alters non-object results.
- */
-/**
- * The name of the first argument whose string value exceeds the transport bound, if any.
- *
- * One level of nesting is searched because that is where callers put payloads — `reticle_act`'s
- * `args.value`, and the fuzz's own `huge-string` shape. Deeper recursion would cost more than it
- * buys: the failure is a single huge string, not a deeply nested structure of small ones.
- */
+// Keep this check at the shared dispatch boundary so every tool is protected,
+// including tools added later. Refuse oversized arguments before handler deserialization.
 function firstOversizedArg(args: Record<string, unknown>): string | undefined {
   const tooLong = (value: unknown): boolean =>
     'string' === typeof value && value.length > TRANSPORT_LIMITS.MAX_STRING_LENGTH;
+  // Check direct and one-level nested argument values before dispatch.
   for (const [key, value] of Object.entries(args)) {
     if (tooLong(value)) {
       return key;
@@ -265,34 +206,15 @@ function firstOversizedArg(args: Record<string, unknown>): string | undefined {
   return undefined;
 }
 
-/**
- * The args the handler is dispatched with, pinned to the session THIS call resolved.
- *
- * `runTool` resolves the session once and then attributes the whole call to it: the pool lease it
- * refreshes, the health envelope it splices, the tab a ref is recorded as minted in, the project
- * ledger the call lands in, the session a verdict is reported under. The handler was then handed
- * the caller's args untouched, so a call that named no `sessionId` resolved a SECOND time — and a
- * tab that connects in between can win auto-selection on its fresher heartbeat. The action goes to
- * one tab and the answer describes another, which is a verdict about a page that was never driven
- * and reads exactly like a correct one (#983).
- *
- * The wrong-tab ref guard is the sharpest case: it is asked whether the ref belongs to the tab
- * resolution picked, so its permission is only sound if that is also the tab the handler drives.
- *
- * A COPY, never a write into the caller's object. `reticle_run`, the merged families and the
- * programmatic invoker all pass the same record on, and a dispatch decision leaking back into it
- * would outlive this call.
- *
- * Only a GUESSED session is pinned. An explicit id — including one lifted off a sequence step — is
- * passed through exactly as written, so whether a stale id refuses or rebinds stays the resolver's
- * decision; and a tool no session was resolved for (disk-only tools, or nothing connected) is left
- * unscoped, so it answers as it always did.
- */
+// Pin a guessed session to the one resolved by runTool.
+// Without this, a newly connected tab could win auto-selection between
+// resolution and dispatch, causing the action and result to refer to different tabs.
 function pinnedArgs(
   args: Record<string, unknown>,
   explicitSessionId: string | undefined,
   session: Session | undefined,
 ): Record<string, unknown> {
+  // Pin only a guessed session to the session resolved for this call.
   if (explicitSessionId !== undefined || session === undefined) {
     return args;
   }
@@ -305,8 +227,7 @@ export async function runTool<Ext>(
   given: Record<string, unknown>,
   call?: ToolCall,
 ): Promise<unknown> {
-  // A replay's secrets leave the arguments here, before the tool log,
-  // the journal or telemetry can see them.
+  // Remove replay secrets before arguments reach logs, journals, or telemetry.
   const { secrets, rest: args } = takeCallSecrets(given);
 
   return trackVerdict(
@@ -326,15 +247,12 @@ export async function runTool<Ext>(
 
       let identity: RunIdentity | undefined;
 
-      // dispatchTool resolves sessions for these tools itself.
+      // Session-bound tools resolve the identity inside dispatchTool.
       const dispatchResolvesSession =
         SESSION_BOUND_TOOLS.has(tool.name) || CDP_TOOLS.has(tool.name);
 
-      // Session-exempt tools retain the existing resolution behavior.
       if (!dispatchResolvesSession) {
-        const runSession = safeRoot(() =>
-          deps.sessions.resolve(sessionIdFromArgs(args)),
-        );
+        const runSession = safeRoot(() => deps.sessions.resolve(sessionIdFromArgs(args)));
 
         if (runSession !== undefined) {
           identity = {
@@ -350,13 +268,15 @@ export async function runTool<Ext>(
         notesBefore = readAppNotes(identity.root);
       }
 
-      // Start the run before the handler executes.
+      // Ledger updates use the exact session and artifact root resolved for this call.
+      // Begin the run before the handler executes.
       if (agentCall && !ends && identity !== undefined) {
         runLedger.begin(deps.now(), identity);
       }
-
-      // For session-bound/CDP tools, use the exact session chosen by dispatchTool.
+      // For session-bound/CDP tools, use the exact session selected by dispatchTool.
+      // All subsequent ledger operations must use this same session and artifact root.
       const onSessionResolved = (session: Session): void => {
+        // Use the session chosen by dispatch for every later ledger operation.
         identity = {
           sessionId: session.id,
           root: session.artifactRoot ?? deps.reticleRoot,
@@ -371,8 +291,7 @@ export async function runTool<Ext>(
         }
       };
 
-      const owner =
-        currentDrivenBy() === undefined && ReticleTool.RUN !== tool.name;
+      const owner = currentDrivenBy() === undefined && ReticleTool.RUN !== tool.name;
 
       const { raw, hint } = await inRepeatStreak(
         owner ? deps.attachId : undefined,
@@ -381,8 +300,7 @@ export async function runTool<Ext>(
         () => loggedTool(tool, deps, args, call, onSessionResolved),
       );
 
-      const attach =
-        currentDrivenBy() === undefined ? deps.attachId : undefined;
+      const attach = currentDrivenBy() === undefined ? deps.attachId : undefined;
 
       const answer = withHintOn(
         forTheAgent({
@@ -401,6 +319,7 @@ export async function runTool<Ext>(
       }
 
       if (identity !== undefined) {
+        // Attribute tool result and memory updates to the same run identity.
         runLedger.after(deps.now(), identity);
         noteToolResult(runLedger, tool.name, args, raw, identity);
 
@@ -414,24 +333,13 @@ export async function runTool<Ext>(
         runLedger.memoryRead(notesBefore, identity);
       }
 
-      if (
-        !ends ||
-        null === answer ||
-        'object' !== typeof answer ||
-        identity === undefined
-      ) {
+      if (!ends || null === answer || 'object' !== typeof answer || identity === undefined) {
         return answer;
       }
 
       return {
         ...answer,
-        ...runReportField(
-          runLedger,
-          identity.root,
-          process.env,
-          deps.now(),
-          identity,
-        ),
+        ...runReportField(runLedger, identity.root, process.env, deps.now(), identity),
       };
     }),
   );
@@ -476,6 +384,7 @@ async function loggedTool<Ext>(
 
   const episode = (outcome: { result: unknown } | { error: string }): void => {
     // A record that cannot be built never fails the call it describes.
+    // Episode lookup can fail after session changes. Preserve the tool result either way.
     safeRoot(() => {
       const from = seen.from;
       const effect =
@@ -487,23 +396,18 @@ async function loggedTool<Ext>(
       const agent = agentNameOf(deps.attachId);
       const agentSession = agentSessionOf(deps.attachId);
 
-      recordEpisodeCall(
-        seen.session?.artifactRoot ?? deps.reticleRoot,
-        deps.attachId,
-        Date.now,
-        {
-          tool: tool.name,
-          args,
-          startedAt: at,
-          endedAt: Date.now(),
-          ...outcome,
-          ...(seen.session === undefined ? {} : { sessionId: seen.session.id }),
-          ...(agent === undefined ? {} : { agent }),
-          ...(agentSession === undefined ? {} : { agentSession }),
-          ...(drivenBy === undefined ? {} : { drivenBy }),
-          ...(effect === undefined ? {} : { effect }),
-        },
-      );
+      recordEpisodeCall(seen.session?.artifactRoot ?? deps.reticleRoot, deps.attachId, Date.now, {
+        tool: tool.name,
+        args,
+        startedAt: at,
+        endedAt: Date.now(),
+        ...outcome,
+        ...(seen.session === undefined ? {} : { sessionId: seen.session.id }),
+        ...(agent === undefined ? {} : { agent }),
+        ...(agentSession === undefined ? {} : { agentSession }),
+        ...(drivenBy === undefined ? {} : { drivenBy }),
+        ...(effect === undefined ? {} : { effect }),
+      });
     });
   };
 
@@ -545,7 +449,6 @@ interface DispatchSeen {
   session?: Session;
   from?: number | undefined;
   onSessionResolved?: (session: Session) => void;
-
 }
 
 async function dispatchTool<Ext>(
@@ -589,8 +492,6 @@ async function dispatchTool<Ext>(
       `argument '${oversized}' is larger than ${String(TRANSPORT_LIMITS.MAX_STRING_LENGTH)} ` +
       'characters, which is the most Reticle moves in one call. Nothing ran. Send a smaller ' +
       'value — a selector or an id rather than a document, or a slice of the text you need.';
-    // Refused before the handler was ever entered, and still a refusal the agent has to recover
-    // from. Reported here rather than at the return below, which this branch never reaches.
     reportRefusal(tool.name, args, error);
     return { error };
   }
@@ -941,29 +842,21 @@ async function dispatchTool<Ext>(
   if (!bound || !isPlainObject(result)) {
     return result;
   }
-  // Reuse the session resolved above so the health envelope describes the SAME session the handler
-  // drove; only re-resolve if the up-front attempt failed but the handler somehow succeeded.
-  // A handler that answered with no tab to resolve (a Harness drive polled by runId after a daemon
-  // restart reads its record from disk) keeps its answer: there is no session health to describe.
+  // Keep health scoped to the session that the handler actually drove.
   let driven = session;
   try {
     driven ??= deps.sessions.resolve(rawSessionId);
   } catch {
     return result;
   }
-  // ...unless the call replaced that document. A full navigation or reload registers a NEW Session
-  // under the same id (or under the id the result reports it arrived at), and the object resolved
-  // before the call is the page that unloaded: it reported itself hidden on the way out, so every
-  // response after a navigation said "throttled" about a tab that was fine. Describe what is there
-  // now. Optional-called because a test double is a partial SessionManager.
+  // Navigation may replace the page under the same session id or return a new id.
+  // Resolve the arrived session so health and stub metadata describe the current page,
+  // not the page that existed before navigation.
   const arrivedId = 'string' === typeof result['sessionId'] ? result['sessionId'] : driven.id;
   const resolved = deps.sessions.get?.(arrivedId) ?? driven;
   const envelope: Record<string, unknown> = {};
-  // A leased tab opened with `initScript` runs a STUB of the bindings a desktop shell injects. Said
-  // on every session-bound result, not only on verdicts, for the same reason health is: a green from
-  // that tab proves the app's view logic, and nothing else in the result would say so.
-  // Optional-called: a partial pool in a test double has no lookup, and absence must read as "no
-  // stub", never as a crash on the whole tool surface.
+  // Navigation can replace the page under the same session id.
+  // Resolve the arrived id so health describes the current page.
   if (true === deps.pool?.stubInstalled?.(resolved.id)) {
     envelope[EnvelopeKey.HOST_STUB] = HOST_STUB_NOTE;
   }
@@ -971,17 +864,12 @@ async function dispatchTool<Ext>(
   if (behind !== undefined && 'verified' in result) {
     envelope[EnvelopeKey.SDK_BEHIND] = behind;
   }
-  // The health block is idempotent: add it only when the handler didn't already include a `session`.
+  // Add health only if the handler did not include its own session block.
   if (!('session' in result)) {
     Object.assign(envelope, healthEnvelope(resolved));
   }
-  // Lease + age-warning are INDEPENDENT of the health block. Previously the `'session' in result`
-  // early-return skipped them whenever a handler returned its own health (which a throttled tab always
-  // does) — so a long-running backgrounded session, the case most likely to leak, never got the
-  // one-time pool-lease reminder or the age cleanup nudge. Splice them regardless.
+  // Lease and age warnings remain independent of the health block.
   const lease = resolved.takeSessionLease();
-  // In CI there is no panel and no human to hand it back to: the reminder was noise in every
-  // pipeline log. Still taken, so the once-per-session cadence is unchanged.
   if (lease !== undefined && process.env['CI'] === undefined) {
     envelope[EnvelopeKey.SESSION_LEASE] = lease;
   }
@@ -1009,10 +897,6 @@ async function dispatchTool<Ext>(
   // one-shot cadence is identical) and only the envelope key is withheld.
   const suppressBaton = '1' === process.env[SUPPRESS_VERIFY_NEXT_ENV];
   const unverified = getSessionMetrics().takeUnverifiedNudge();
-  // Carry the CALL, not just the sentence. The prose has to be translated back into arguments, and
-  // that translation is where agents were already going wrong — `until` omitted, action arguments
-  // flat instead of nested under `args`. `ref` and `action` come from the act that actually
-  // dispatched, so the suggestion is about the element the agent touched. See verify-next-baton.
   if (unverified !== undefined && !suppressBaton)
   // `lastAct` read defensively: this envelope is built on EVERY tool call, so a session shape
   // without it would turn a missing field into a crash on the whole surface rather than a missing
@@ -1026,11 +910,7 @@ async function dispatchTool<Ext>(
   return Object.keys(envelope).length > 0 ? { ...result, ...envelope } : result;
 }
 
-/**
- * A picture of the page the moment this call's outcome was decided, named on the result. Only on
- * an answer that touched the page: a refusal or a paused call drove nothing worth a picture. A
- * navigation can land the page under a new id, so the id the result reports wins.
- */
+// Take a step screenshot only when the outcome touched the page.
 async function withStepShot<Ext>(
   name: string,
   deps: ToolDeps<Ext>,
@@ -1054,7 +934,7 @@ async function withStepShot<Ext>(
   return { ...raw, [EnvelopeKey.SCREENSHOT]: await takeStepShot(deps, tab, name, { verdict }) };
 }
 
-/** A root, or undefined when none can be resolved: a missing root is never a reason to throw. */
+// Return no root instead of throwing when project resolution fails.
 function safeRoot<T>(get: () => T): T | undefined {
   try {
     return get();
@@ -1063,10 +943,6 @@ function safeRoot<T>(get: () => T): T | undefined {
   }
 }
 
-/**
- * Where this session's evidence goes when no project claims it (`~/.reticle/unmatched/<id>`), with
- * the folders that compete for its id; undefined when it lands in a project. Never throws.
- */
 function unmatchedRootOf(
   deps: ToolDeps,
   sessionId: string | undefined,

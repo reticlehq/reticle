@@ -152,13 +152,9 @@ describe('the end-of-run report', () => {
       IDENTITY_B,
     );
 
-    const sessionAReport = runReportField(
-      ledger,
-      project(true),
-      {},
-      1_000,
-      IDENTITY_A,
-    )[RUN_REPORT_FIELD];
+    const sessionAReport = runReportField(ledger, project(true), {}, 1_000, IDENTITY_A)[
+      RUN_REPORT_FIELD
+    ];
     expect(sessionAReport?.report.claims).toEqual([
       expect.objectContaining({ claim: 'claim from session A', verified: Verified.YES }),
     ]);
@@ -212,14 +208,56 @@ describe('the end-of-run report', () => {
     const ledger = new RunLedger();
     ledger.begin(0, IDENTITY_A);
     noteToolResult(ledger, ReticleTool.FLOW_SAVE, {}, { name: 'invite', stepCount: 1 }, IDENTITY_A);
-    noteToolResult(ledger, ReticleTool.FLOW_SAVE, {}, { error: 'no recording named "x"' }, IDENTITY_A);
-    noteToolResult(ledger, ReticleTool.MEMORY, { action: 'add' }, { error: 'not linked' }, IDENTITY_A);
-    noteToolResult(ledger, ReticleTool.MEMORY, { action: 'add' }, { added: { id: 's1' } }, IDENTITY_A);
-    noteToolResult(ledger, ReticleTool.MEMORY, {}, { known: [{ id: 's1' }, { id: 's2' }] }, IDENTITY_A);
+    noteToolResult(
+      ledger,
+      ReticleTool.FLOW_SAVE,
+      {},
+      { error: 'no recording named "x"' },
+      IDENTITY_A,
+    );
+    noteToolResult(
+      ledger,
+      ReticleTool.MEMORY,
+      { action: 'add' },
+      { error: 'not linked' },
+      IDENTITY_A,
+    );
+    noteToolResult(
+      ledger,
+      ReticleTool.MEMORY,
+      { action: 'add' },
+      { added: { id: 's1' } },
+      IDENTITY_A,
+    );
+    noteToolResult(
+      ledger,
+      ReticleTool.MEMORY,
+      {},
+      { known: [{ id: 's1' }, { id: 's2' }] },
+      IDENTITY_A,
+    );
     // The proof run wrote three notes to the intent ledger and its report said "0 notes written".
-    noteToolResult(ledger, ReticleTool.INTENT, { action: 'record', id: 'seats' }, { recorded: 1 }, IDENTITY_A);
-    noteToolResult(ledger, ReticleTool.INTENT, { action: 'record' }, { error: 'needs `id`' }, IDENTITY_A);
-    noteToolResult(ledger, ReticleTool.INTENT, { action: 'subject', subject: 'x' }, { known: [] }, IDENTITY_A);
+    noteToolResult(
+      ledger,
+      ReticleTool.INTENT,
+      { action: 'record', id: 'seats' },
+      { recorded: 1 },
+      IDENTITY_A,
+    );
+    noteToolResult(
+      ledger,
+      ReticleTool.INTENT,
+      { action: 'record' },
+      { error: 'needs `id`' },
+      IDENTITY_A,
+    );
+    noteToolResult(
+      ledger,
+      ReticleTool.INTENT,
+      { action: 'subject', subject: 'x' },
+      { known: [] },
+      IDENTITY_A,
+    );
     const report = ledger.take(1, IDENTITY_A);
     expect(report.flows.saved).toEqual(['invite']);
     expect(report.memory).toEqual({ written: 2, read: 3 });

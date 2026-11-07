@@ -1,10 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { JOURNAL_FILE_VERSION, Verified, type JournalAction } from '@reticlehq/core';
-import {
-  RUN_IDLE_LIMIT_MS,
-  RunLedger,
-  type RunIdentity,
-} from './run-ledger.js';
+import { RUN_IDLE_LIMIT_MS, RunLedger, type RunIdentity } from './run-ledger.js';
 
 const IDENTITY_A: RunIdentity = { sessionId: 'session-a', root: '/repo/worktree-a' };
 const IDENTITY_B: RunIdentity = { sessionId: 'session-b', root: '/repo/worktree-a' };
@@ -170,63 +166,61 @@ describe('the run ledger', () => {
     });
   });
   it('counts a failed replay as a flow, not as a journaled claim', () => {
-  const ledger = new RunLedger();
+    const ledger = new RunLedger();
 
-  ledger.begin(0, IDENTITY_A);
-  ledger.verdict(
-    {
-      ...verdict('the flow "invite" replays', Verified.UNKNOWN),
-      tool: 'reticle_flow_replay',
-    },
-    IDENTITY_A,
-  );
-  ledger.replayed('invite', Verified.NO, IDENTITY_A);
+    ledger.begin(0, IDENTITY_A);
+    ledger.verdict(
+      {
+        ...verdict('the flow "invite" replays', Verified.UNKNOWN),
+        tool: 'reticle_flow_replay',
+      },
+      IDENTITY_A,
+    );
+    ledger.replayed('invite', Verified.NO, IDENTITY_A);
 
-  const report = ledger.take(10, IDENTITY_A);
+    const report = ledger.take(10, IDENTITY_A);
 
-  expect(report.verified).toBe(Verified.NO);
-  expect(report.claims).toEqual([]);
-  expect(report.flows.replayed).toEqual([
-    { name: 'invite', verified: Verified.NO },
-  ]);
-  expect(report.caught).toContain('flow invite');
-});
-
-it('includes replay verdicts when calculating firstVerdictMs', () => {
-  const ledger = new RunLedger();
-
-  ledger.begin(100, IDENTITY_A);
-  ledger.after(300, IDENTITY_A);
-  ledger.replayed('invite', Verified.YES, IDENTITY_A);
-  ledger.after(900, IDENTITY_A);
-
-  const report = ledger.take(1000, IDENTITY_A);
-
-  expect(report.firstVerdictMs).toBe(800);
-});
-
-it('ignores records written without an open run', () => {
-  const ledger = new RunLedger();
-
-  ledger.replayed('invite', Verified.NO, IDENTITY_A);
-  ledger.verdict(verdict('some claim', Verified.YES), IDENTITY_A);
-
-  ledger.begin(100, IDENTITY_A);
-
-  const report = ledger.take(200, IDENTITY_A);
-
-  expect(report.flows.replayed).toEqual([]);
-  expect(report.claims).toEqual([]);
+    expect(report.verified).toBe(Verified.NO);
+    expect(report.claims).toEqual([]);
+    expect(report.flows.replayed).toEqual([{ name: 'invite', verified: Verified.NO }]);
+    expect(report.caught).toContain('flow invite');
   });
 
-it('returns UNKNOWN when a run has no checked claims or replayed flows', () => {
-  const ledger = new RunLedger();
+  it('includes replay verdicts when calculating firstVerdictMs', () => {
+    const ledger = new RunLedger();
 
-  ledger.begin(100, IDENTITY_A);
-  ledger.flowSaved('invite', IDENTITY_A);
+    ledger.begin(100, IDENTITY_A);
+    ledger.after(300, IDENTITY_A);
+    ledger.replayed('invite', Verified.YES, IDENTITY_A);
+    ledger.after(900, IDENTITY_A);
 
-  const report = ledger.take(200, IDENTITY_A);
+    const report = ledger.take(1000, IDENTITY_A);
 
-  expect(report.verified).toBe(Verified.UNKNOWN);
-});
+    expect(report.firstVerdictMs).toBe(800);
+  });
+
+  it('ignores records written without an open run', () => {
+    const ledger = new RunLedger();
+
+    ledger.replayed('invite', Verified.NO, IDENTITY_A);
+    ledger.verdict(verdict('some claim', Verified.YES), IDENTITY_A);
+
+    ledger.begin(100, IDENTITY_A);
+
+    const report = ledger.take(200, IDENTITY_A);
+
+    expect(report.flows.replayed).toEqual([]);
+    expect(report.claims).toEqual([]);
+  });
+
+  it('returns UNKNOWN when a run has no checked claims or replayed flows', () => {
+    const ledger = new RunLedger();
+
+    ledger.begin(100, IDENTITY_A);
+    ledger.flowSaved('invite', IDENTITY_A);
+
+    const report = ledger.take(200, IDENTITY_A);
+
+    expect(report.verified).toBe(Verified.UNKNOWN);
+  });
 });

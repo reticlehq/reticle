@@ -89,7 +89,6 @@ const INVALID_FLOW_NAME_PATH = '(invalid flow name — not a usable path)';
 
 /**
  * How a save reports that nobody said what the flow is for.
- *
  * Declared once and shared by every save tool: an undeclared field is stripped from
  * `structuredContent` by a schema-strict MCP client, so a save path that forgot this line would
  * report the nudge to the unit tests and to nobody else.
@@ -182,7 +181,6 @@ export const FLOW_TOOLS: ToolDef[] = [
       if (program === undefined) {
         /*
          * Name what DOES exist.
-         *
          * `flowName` here is the RECORDING's name, while every other flow tool reads it as the name
          * to save AS — so recording `default` and saving as `sign-in` looks obviously right and
          * answers "no compiled recording by that name". The old message then said "record one
@@ -207,7 +205,6 @@ export const FLOW_TOOLS: ToolDef[] = [
         });
       }
       // The name to save AS, which is not the name looked up above.
-      //
       // `flowName` selects the recording; a recording is named at `record{start}`, often `default`
       // or whatever the drive began as. Every other flow tool reads a flow name as the thing you
       // load and replay, so a caller naming their flow at save time had no way to do it and had to
@@ -493,7 +490,6 @@ export const FLOW_TOOLS: ToolDef[] = [
       // A field the handler sets and the schema omits arrives as nothing, silently.
       /*
        * What this flow has learned, and the two answers that are the whole point of learning.
-       *
        * Declared because an undeclared field is STRIPPED from a validating profile's response — the
        * comment a few lines above records the same defect happening to `name`, which made a replay
        * result arrive anonymous. Omitting these meant a guarded defect could come back, the flow
@@ -683,11 +679,15 @@ export const FLOW_TOOLS: ToolDef[] = [
         if (server !== null) {
           return server;
         }
+        const replaySessionId = deps.sessions.resolve(sessionId).id;
+        const identity = {
+          sessionId: replaySessionId,
+          root: rootForTarget(deps, target),
+        };
         // PARALLEL: flows race the DOM only when they share ONE tab. Given the lease pool, each
         // flow gets its own isolated context, so a large suite finishes in interactive time. Opt-in via
         // `parallel`; a missing prerequisite (no pool, unknown app URL) falls back to the sequential path
         // rather than failing — a suite must always be runnable.
-        //
         // NOTE: this applies even to a ONE-flow suite. Skipping leases for a single flow looked harmless
         // (no speedup to win) but silently downgraded an explicit `parallel` request to a shared-tab run,
         // so the flow inherited whatever state the previous run left behind — isolation is the point here,
@@ -764,8 +764,6 @@ export const FLOW_TOOLS: ToolDef[] = [
             durationMs: o.ok && o.value !== undefined ? o.value.durationMs : 0,
           }));
           const flaky = await recordSuiteFlakes(deps.fs, rootForTarget(deps, target), parallelRuns);
-          const replaySessionId = deps.sessions.resolve(sessionId).id;
-          const identity = { sessionId: replaySessionId, root: rootForTarget(deps, target) };
           const runId = await persistAndSyncVerificationRun(deps, timed, target, identity);
           const verdict = buildSuiteVerdict(
             parallelRuns,
@@ -821,8 +819,6 @@ export const FLOW_TOOLS: ToolDef[] = [
         // one an agent uses was the blind half.
         const flaky = await recordSuiteFlakes(deps.fs, rootForTarget(deps, target), runs);
         // Emit the consolidated run artifact (Runs tab) + best-effort cloud push. Never blocks the verdict.
-        const replaySessionId = deps.sessions.resolve(sessionId).id;
-        const identity = { sessionId: replaySessionId, root: rootForTarget(deps, target) };
         const runId = await persistAndSyncVerificationRun(deps, timed, target, identity);
         const verdict = Bounded.withStop(
           buildSuiteVerdict(runs, selected.knownRoutes, SuiteIsolation.SHARED_SESSION),
@@ -963,10 +959,8 @@ export const FLOW_TOOLS: ToolDef[] = [
 
 /**
  * Every flow reachable from this one by `invoke`, loaded once.
- *
  * Breadth-first with a `seen` set so a cycle terminates: typecheck refuses those at rest, and this
  * runs at SAVE, which is exactly where a bad composite arrives before anything has checked it.
- *
  * A sub-flow that fails to load is simply absent from the map. The classifier then declines to
  * credit it, which is the conservative direction — a composite graded on a flow nobody could read
  * would be graded on a promise.

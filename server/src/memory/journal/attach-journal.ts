@@ -54,12 +54,9 @@ export function makeJournalAttach(deps: JournalAttachDeps): (session: JournalTar
       root: artifactRoot,
     };
 
-    const journal = new SessionJournal(
-      deps.fs,
-      artifactRoot,
-      session.id,
-      { now: () => session.elapsed() },
-    );
+    const journal = new SessionJournal(deps.fs, artifactRoot, session.id, {
+      now: () => session.elapsed(),
+    });
 
     // Same SessionJournal is both the write sink and the read fall-through for queries after eviction.
 

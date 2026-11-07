@@ -160,7 +160,10 @@ export function noteToolResult(
   }
   const known = result['known'];
   if (Array.isArray(known)) {
-    ledger.memoryRead(known.map((entry) => JSON.stringify(entry)), identity);
+    ledger.memoryRead(
+      known.map((entry) => JSON.stringify(entry)),
+      identity,
+    );
   }
 }
 
@@ -170,11 +173,10 @@ export function runReportField(
   root: string | undefined,
   env: Record<string, string | undefined>,
   now: number,
-  identity: RunIdentity
+  identity: RunIdentity,
 ): Partial<
   Record<typeof RUN_REPORT_FIELD, { report: RunReport; markdown: string; instruction: string }>
 > {
-
   if (ledger.isEmpty(identity)) {
     return {};
   }

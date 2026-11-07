@@ -77,9 +77,14 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
   it('writes the run artifact to disk even when not logged in (no phone-home)', async () => {
     const { calls } = stubFetch('ok');
 
-    const runId = await persistAndSyncVerificationRun(deps, [timed('checkout', ReplayStatus.OK)], {
-      projectId: asProjectId('shop'),
-    }, TEST_IDENTITY);
+    const runId = await persistAndSyncVerificationRun(
+      deps,
+      [timed('checkout', ReplayStatus.OK)],
+      {
+        projectId: asProjectId('shop'),
+      },
+      TEST_IDENTITY,
+    );
 
     expect(runId).toBeDefined();
     expect(calls).toHaveLength(0); // no creds → nothing leaves the machine
@@ -122,9 +127,14 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
     process.env[KEY_ENV] = 'rk_live_abc';
     stubFetch('throw');
 
-    const runId = await persistAndSyncVerificationRun(deps, [timed('checkout', ReplayStatus.OK)], {
-      projectId: asProjectId('shop'),
-    }, TEST_IDENTITY);
+    const runId = await persistAndSyncVerificationRun(
+      deps,
+      [timed('checkout', ReplayStatus.OK)],
+      {
+        projectId: asProjectId('shop'),
+      },
+      TEST_IDENTITY,
+    );
     expect(runId).toBeDefined(); // swallowed; local artifact still written
   });
 
@@ -137,11 +147,21 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
     forgetAgents();
     noteAgentAttached('a1', 'claude-code');
     setMcpClientIdentityHook(() => ({ name: 'claude-code', version: '1' }));
-    const asked = await persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], {
-      projectId: undefined,
-    }, TEST_IDENTITY);
+    const asked = await persistAndSyncVerificationRun(
+      deps,
+      [timed('c', ReplayStatus.OK)],
+      {
+        projectId: undefined,
+      },
+      TEST_IDENTITY,
+    );
     const byAgent = await runAsAgent('a1', () =>
-      persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], { projectId: undefined }, TEST_IDENTITY),
+      persistAndSyncVerificationRun(
+        deps,
+        [timed('c', ReplayStatus.OK)],
+        { projectId: undefined },
+        TEST_IDENTITY,
+      ),
     );
     forgetAgents();
     clearMcpClientIdentityHook();
@@ -181,7 +201,12 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
     forgetAgents();
     noteAgentAttached('ci', CLI_CLIENT_NAME);
     const id = await runAsAgent('ci', () =>
-      persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], { projectId: undefined }, TEST_IDENTITY),
+      persistAndSyncVerificationRun(
+        deps,
+        [timed('c', ReplayStatus.OK)],
+        { projectId: undefined },
+        TEST_IDENTITY,
+      ),
     );
     forgetAgents();
     const read = await new RunStore(fs, root).read(id as RunId);
@@ -203,7 +228,12 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
     forgetAgents();
     noteAgentAttached('laptop', CLI_CLIENT_NAME);
     const id = await runAsAgent('laptop', () =>
-      persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], { projectId: undefined }, TEST_IDENTITY),
+      persistAndSyncVerificationRun(
+        deps,
+        [timed('c', ReplayStatus.OK)],
+        { projectId: undefined },
+        TEST_IDENTITY,
+      ),
     );
     forgetAgents();
     const read = await new RunStore(fs, root).read(id as RunId);
@@ -218,7 +248,12 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
    */
   it('writes no separate run for a replay the Harness made inside its own drive', async () => {
     const id = await runDrivenBy({ harness: 'h1', driver: 'server' }, () =>
-      persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], { projectId: undefined }, TEST_IDENTITY),
+      persistAndSyncVerificationRun(
+        deps,
+        [timed('c', ReplayStatus.OK)],
+        { projectId: undefined },
+        TEST_IDENTITY,
+      ),
     );
     expect(id).toBeUndefined();
   });
@@ -229,9 +264,14 @@ describe('persistAndSyncVerificationRun — MCP verification → Runs-tab artifa
       join(root, 'cloud.json'),
       JSON.stringify({ url: 'https://cloud.test', projectId: 'bench-checkout' }),
     );
-    const runId = await persistAndSyncVerificationRun(deps, [timed('c', ReplayStatus.OK)], {
-      projectId: undefined,
-    }, TEST_IDENTITY);
+    const runId = await persistAndSyncVerificationRun(
+      deps,
+      [timed('c', ReplayStatus.OK)],
+      {
+        projectId: undefined,
+      },
+      TEST_IDENTITY,
+    );
     const stored = await new RunStore(fs, root).read(runId as RunId);
     expect(stored.ok && stored.run.project.name).toBe('bench-checkout');
   });
