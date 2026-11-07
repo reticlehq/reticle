@@ -867,15 +867,21 @@ describe('reticle_lease_acquire', () => {
   });
 
   it('releases a dead lease on this origin and mints a fresh one', async () => {
-    const { pool, acquired } = fakePool();
+    // The tab is gone: the person closed it, or its context died. Its page will not go anywhere
+    // and cannot be asked anything, so there is nothing to load again and nothing worth keeping.
+    const fake = fakePool();
+    const { acquired, released } = fake;
+    const pool = {
+      ...fake.pool,
+      gotoLease: () => Promise.resolve(false),
+      viewportOfLease: () => Promise.resolve(undefined),
+    } as unknown as BrowserPool;
     const first = (await tool(ReticleTool.LEASE_ACQUIRE)(
       { ...baseDeps, pool },
       { url: 'http://localhost:3000/' },
     )) as { sessionId: string };
     const sessions = {
       get: (id: string) => (id === first.sessionId ? undefined : { id }),
-      // Genuinely dead: no session anywhere is driving that leased tab. `all` is present because
-      // the real sessions registry always has it, and resolving the lease now consults it.
       all: () => [],
     };
 
@@ -884,10 +890,171 @@ describe('reticle_lease_acquire', () => {
       { url: 'http://localhost:3000/' },
     )) as { sessionId: string; reused?: boolean };
 
+    expect(released).toEqual([first.sessionId]);
     expect(second.sessionId).not.toBe(first.sessionId);
     expect(second.reused).toBeUndefined();
     expect(acquired).toHaveLength(2);
     expect(pool.activeCount()).toBe(1);
+  });
+
+  // A tab that never registered is the first acquire's `ready: false`. Its context can hold a
+  // sign-in, and a new context has no cookies, so a retry used to come back signed out (#1924).
+  it('keeps a held lease that loads again but does not connect, and mints no signed-out context', async () => {
+    const fake = fakePool();
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool: fake.pool },
+      { url: 'http://localhost:3000/' },
+    )) as { sessionId: string };
+    const gone: string[] = [];
+    const pool = {
+      ...fake.pool,
+      gotoLease: (_id: string, to: string) => {
+        gone.push(to);
+        return Promise.resolve(true);
+      },
+    } as unknown as BrowserPool;
+    const sessions = {
+      get: (id: string) => (id === first.sessionId ? undefined : { id }),
+      all: () => [],
+      lastClosure: () => undefined,
+    };
+
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, sessions } as unknown as ToolDeps,
+      { url: 'http://localhost:3000/', timeout_ms: 0 },
+    )) as {
+      sessionId: string;
+      ready: boolean;
+      notReadyReason?: string;
+      reused?: boolean;
+      hint?: string;
+    };
+
+    expect(gone).toHaveLength(1);
+    expect(fake.released).toEqual([]);
+    expect(fake.acquired).toHaveLength(1);
+    expect(pool.activeCount()).toBe(1);
+    expect(second).toMatchObject({
+      sessionId: first.sessionId,
+      ready: false,
+      notReadyReason: LeaseNotReadyReason.SDK_NEVER_DIALLED,
+      reused: true,
+    });
+    expect(second.hint).toContain('sign-in are kept');
+    expect(second.hint).toContain('seedStorage');
+  });
+
+  // A dev server that restarts during the retry refuses the navigation, but the tab and its
+  // context are still open. Releasing it then threw the sign-in away, and the mint failed too.
+  it('keeps a held lease whose page is open but did not load, and says the app did not answer', async () => {
+    const fake = fakePool();
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool: fake.pool },
+      { url: 'http://localhost:3000/' },
+    )) as { sessionId: string };
+    const pool = {
+      ...fake.pool,
+      gotoLease: () => Promise.resolve(false),
+      viewportOfLease: () => Promise.resolve({ width: 1440, height: 900 }),
+    } as unknown as BrowserPool;
+    const sessions = {
+      get: (id: string) => (id === first.sessionId ? undefined : { id }),
+      all: () => [],
+    };
+    const probed: number[] = [];
+    const portAccepts = (port: number): Promise<boolean> => {
+      probed.push(port);
+      return Promise.resolve(false);
+    };
+
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, sessions, portAccepts } as unknown as ToolDeps,
+      { url: 'http://localhost:3000/' },
+    )) as { sessionId: string; ready: boolean; reused?: boolean; hint?: string };
+
+    expect(fake.released).toEqual([]);
+    expect(fake.acquired).toHaveLength(1);
+    expect(second).toMatchObject({ sessionId: first.sessionId, ready: false, reused: true });
+    expect(probed).toEqual([3000]);
+    expect(second.hint).toContain('could not load http://localhost:3000/');
+    expect(second.hint).toContain('nothing accepts connections on port 3000');
+    expect(second.hint).toContain('sign-in are kept');
+  });
+
+  // A frozen page (a script in an endless loop) answers neither the navigation nor any question.
+  // Without bounds the second acquire waited on it with no limit; it must answer, and the
+  // unresponsive tab is treated as gone, as before this change.
+  it('answers when the held page never settles, and treats the frozen tab as gone', async () => {
+    const fake = fakePool();
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool: fake.pool },
+      { url: 'http://localhost:3000/' },
+    )) as { sessionId: string };
+    const never = (): Promise<never> => new Promise<never>(() => undefined);
+    const gotoBudgets: (number | undefined)[] = [];
+    const pool = {
+      ...fake.pool,
+      gotoLease: (_id: string, _to: string, timeoutMs?: number) => {
+        gotoBudgets.push(timeoutMs);
+        return never();
+      },
+      viewportOfLease: never,
+      leaseLoading: never,
+    } as unknown as BrowserPool;
+    const sessions = {
+      get: (id: string) => (id === first.sessionId ? undefined : { id }),
+      all: () => [],
+    };
+    const clock = 0;
+
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, sessions, now: () => clock } as unknown as ToolDeps,
+      { url: 'http://localhost:3000/', timeout_ms: 500 },
+    )) as { sessionId: string; reused?: boolean };
+
+    // The navigation was given the acquire's own budget, not Playwright's default.
+    expect(gotoBudgets).toEqual([500]);
+    expect(fake.released).toEqual([first.sessionId]);
+    expect(second.sessionId).not.toBe(first.sessionId);
+    expect(second.reused).toBeUndefined();
+  }, 10_000);
+
+  it('loads a held lease that never connected again in its own context, and answers ready', async () => {
+    const fake = fakePool();
+    const first = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool: fake.pool },
+      { url: 'http://localhost:3000/' },
+    )) as { sessionId: string };
+    const gone: string[] = [];
+    let registered = false;
+    const pool = {
+      ...fake.pool,
+      leaseUrl: () => `http://localhost:3000/?${RETICLE_URL_PARAM.SESSION}=${first.sessionId}`,
+      // The page loads again in the same context, and its SDK dials in on the new document.
+      gotoLease: (_id: string, to: string) => {
+        gone.push(to);
+        registered = true;
+        return Promise.resolve(true);
+      },
+    } as unknown as BrowserPool;
+    const sessions = {
+      get: (id: string) => (registered && id === first.sessionId ? { id } : undefined),
+      all: () => [],
+    };
+
+    const second = (await tool(ReticleTool.LEASE_ACQUIRE)(
+      { ...baseDeps, pool, sessions } as unknown as ToolDeps,
+      { url: 'http://localhost:3000/dashboard' },
+    )) as { sessionId: string; ready: boolean; reused?: boolean };
+
+    expect(fake.released).toEqual([]);
+    expect(fake.acquired).toHaveLength(1);
+    expect(second).toMatchObject({ sessionId: first.sessionId, ready: true, reused: true });
+    // To the page asked for, still carrying the lease's own id.
+    expect(gone).toHaveLength(1);
+    const to = new URL(gone[0] ?? '');
+    expect(to.pathname).toBe('/dashboard');
+    expect(to.searchParams.get(RETICLE_URL_PARAM.SESSION)).toBe(first.sessionId);
   });
 
   it('reuses a live lease whose app registered under its own name', async () => {

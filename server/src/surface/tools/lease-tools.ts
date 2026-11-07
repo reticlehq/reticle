@@ -13,6 +13,8 @@
 import * as production from '@/portal/production/production-activation.js';
 import { z } from 'zod';
 import {
+  keptLeaseAnswer,
+  notLoadedCause,
   leaseNotConnectedHint,
   leaseReaderFailedHint,
   leaseStillLoadingHint,
@@ -26,6 +28,8 @@ import {
   moveReusedLease,
   notReadyReason,
   probeLeaseAlive,
+  reconnectHeldLease,
+  HeldLeaseReload,
 } from './lease-readiness.js';
 import { probeSdkMarker } from './gaps/sdk-marker-probe.js';
 import { observeWebDocument } from '@/portal/session/dev-server/served-document.js';
@@ -367,7 +371,7 @@ export function hasOriginLock(origin: string): boolean {
 export const LEASE_ACQUIRE_TOOL: ToolDef = {
   name: ReticleTool.LEASE_ACQUIRE,
   description:
-    'Lease a fresh isolated browser context from the shared pool (shown or hidden as the daemon was started; `headed: true` forces a window) and navigate it to the app URL (the app must already be running; one with no Reticle SDK gets one supplied, reported as zeroInstall). If this origin is already leased and still connected, this returns THAT session rather than minting a second tab — a second acquire on the same origin poisons default session resolution. Returns the sessionId the leased tab registers — pass it to other tools. The pool keeps all leases in ONE browser and caps concurrency; if every slot is taken this is refused at once, naming the cap, rather than queued. Release with reticle_lease{action:"release"} when the flow is done. PREFER AN ALREADY-OPEN TAB: if reticle_sessions lists a non-leased session for this app, drive THAT instead — a lease is invisible to the person watching the app, whose HUD lives in their own tab, and a tab flagged hidden/throttled is often still driveable. Lease for isolation you actually need (a second identity, a clean context, parallel flows) or when driving the open tab has failed — this call answers with `preferExisting` when a live tab was available.',
+    'Lease a fresh isolated browser context from the shared pool (shown or hidden as the daemon was started; `headed: true` forces a window) and navigate it to the app URL (the app must already be running; one with no Reticle SDK gets one supplied, reported as zeroInstall). If this origin is already leased, this returns THAT session rather than minting a second tab (a tab that has not connected is loaded again in its own context, so its cookies and sign-in are kept) — a second acquire on the same origin poisons default session resolution. Returns the sessionId the leased tab registers — pass it to other tools. The pool keeps all leases in ONE browser and caps concurrency; if every slot is taken this is refused at once, naming the cap, rather than queued. Release with reticle_lease{action:"release"} when the flow is done. PREFER AN ALREADY-OPEN TAB: if reticle_sessions lists a non-leased session for this app, drive THAT instead — a lease is invisible to the person watching the app, whose HUD lives in their own tab, and a tab flagged hidden/throttled is often still driveable. Lease for isolation you actually need (a second identity, a clean context, parallel flows) or when driving the open tab has failed — this call answers with `preferExisting` when a live tab was available.',
   inputSchema: {
     url: z
       .string()
@@ -636,6 +640,16 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
         // context — the tab-poisoning this branch exists to prevent, reached through the branch
         // itself. It bites when the first acquire returned `ready: false`, since the mint path only
         // aliases once its wait has resolved, so nothing recorded the app's own name (#692).
+        // A tab that never registered is loaded again in its OWN context, and kept while it is open:
+        // releasing it and minting threw away the cookies, so a signed-in tab came back signed out (#1924).
+        const reload = await reconnectHeldLease(
+          (ms) => pool.gotoLease(existing, carryReticleIdentity(pool.leaseUrl(existing), url), ms),
+          async () => (await pool.viewportOfLease(existing)) !== undefined,
+          () => pool.leaseLoading(existing),
+          () => resolveLeasedSessionId(deps.sessions, existing) !== undefined,
+          deps.now() + (asNumber(args['timeout_ms']) ?? LEASE_READY_TIMEOUT_MS),
+          deps.now,
+        );
         const resolved = resolveLeasedSessionId(deps.sessions, existing);
         if (resolved !== undefined) {
           // The other name this lease answers to, told to the pool exactly as the mint path tells it.
@@ -681,9 +695,15 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
               : { preferExisting: { sessionId: alreadyOpen, note: PREFER_EXISTING_NOTE } }),
           };
         }
-        // The lease is still held but the tab has gone — a reload dropped the session, and no session
-        // anywhere is driving it. Free the slot and mint, rather than handing back a dead id or
-        // leaving both contexts occupied.
+        if (reload === HeldLeaseReload.RELOADED || reload === HeldLeaseReload.NOT_LOADED) {
+          const cause =
+            reload === HeldLeaseReload.RELOADED
+              ? await notConnectedHint(deps, url, pool.dialFailureUrl?.(existing))
+              : await notLoadedCause(url, deps.portAccepts);
+          return keptLeaseAnswer({ sessionId: existing, origin, url, reload }, pool, cause);
+        }
+        // The tab is gone: its page or its context was closed. Free the slot and mint, rather than
+        // handing back a dead id or leaving both contexts occupied.
         await pool.release(existing);
       }
       const sessionId = newLeaseId();
