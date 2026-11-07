@@ -43,3 +43,4 @@ bench/TOOL-PROFILE.md
 apps/next-smoke/next-env.d.ts
 apps/next-smoke/AGENTS.md
 apps/next-smoke/CLAUDE.md
+bench/high-rate-stream/results/

@@ -1,0 +1,22 @@
+{
+  "name": "@reticlehq/trading-stream",
+  "private": true,
+  "version": "3.9.0",
+  "type": "module",
+  "description": "Vite + React trading page on a high-rate WebSocket. The target of bench/high-rate-stream.",
+  "scripts": {
+    "dev": "vite"
+  },
+  "dependencies": {
+    "@reticlehq/browser": "workspace:*",
+    "@reticlehq/react": "workspace:*",
+    "@reticlehq/vite-plugin": "workspace:*",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.2",
+    "vite": "^8.2.1",
+    "ws": "^8.22.0"
+  }
+}

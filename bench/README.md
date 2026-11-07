@@ -38,6 +38,7 @@ So they were all run. **Every script below passes.** The two defects that surfac
 | **Diagnostics** | `probe` | bench fixtures | ✅ |
 | **Reticle-only studies** | `clock-timetravel`, `source-localize`, `render-storm-bench`, `state-desync-bench`, `leak-stress`, `multi-agent-throughput`, `schema-tax` | bench fixtures (api `:8787` + bench-app `:4312`) | ✅ |
 | **Not run yet** | `parallel-agents` (`pnpm bench:parallel`): two agents on one daemon replay one flow at once; grade in `parallel-agents-cell` | bench fixtures (api `:8787` + bench-app `:4312`) | not run yet |
+| **High-rate WebSocket study** | `high-rate-stream/measure.mjs` | boots its own daemon (`:14460`) and `apps/trading-stream` (`:14462`); see its README | new |
 | **Needs another fixture** | `stress-tiers`, `measure-large-dom` | `apps/large-dom-bench` on **`:4313`** — without it they fail in a way that reads like rot | ✅ `stress-tiers` |
 | **Needs a prior run** | `compiled-suite-vs-replay` | run `suite-rre.mjs` first (it consumes the saved flows) | ✅ |
 | **Needs competitor MCPs + network** | `visual-bug-bench` | downloads `@playwright/mcp` + `chrome-devtools-mcp` via npx | ✅ parity 6/6/6 |
