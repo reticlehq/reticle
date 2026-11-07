@@ -9,9 +9,11 @@ import {
 } from '@reticlehq/core';
 import { describeSuperseded } from '@/question/predicate/observed-in-window.js';
 import {
+  answersWrites,
   declareFailureHint,
   describe,
   didNothing,
+  movesUi,
   RETICLE_SIGNAL_NAMESPACE,
   groupByIdentity,
   identityOf,
@@ -66,15 +68,7 @@ export type {
  */
 
 function uiAdvanced(events: readonly ReticleEvent[]): boolean {
-  return events.some(
-    (e) =>
-      e.type === EventType.DOM_ADDED ||
-      e.type === EventType.DOM_REMOVED ||
-      e.type === EventType.DOM_ATTR ||
-      e.type === EventType.DOM_TEXT ||
-      e.type === EventType.STATE_CHANGE ||
-      e.type === EventType.ROUTE_CHANGE,
-  );
+  return events.some(movesUi);
 }
 
 /**
@@ -592,9 +586,9 @@ function findWindowContradictions(
   // ── A write succeeded and nothing on the client moved ───────────────────────────────────────
   // Writes only: a GET that changes nothing is a prefetch; a POST that changes nothing is a lost
   // write, a response parsed into the void, or a render that never happened.
-  if (false === advanced) {
-    const ignoredWrites = settled.filter((c) => true === c.ok && isMutating(c));
-    if (ignoredWrites.length > 0) {
+  const ignoredWrites = settled.filter((c) => true === c.ok && isMutating(c));
+  if (advanced !== undefined && ignoredWrites.length > 0) {
+    if (!answersWrites(events, ignoredWrites, options.ref)) {
       // ...unless THIS document handed the consequence to another browsing context. An OAuth sign-in
       // posts, succeeds, and continues in a popup the in-page SDK cannot follow (#508): the original
       // tab legitimately never changes, and response-ignored would accuse it of ignoring a response
