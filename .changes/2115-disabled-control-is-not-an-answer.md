@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine` — `response-ignored` missed an app that ignored its response when the clicked button changed `disabled` or `aria-busy` before the response arrived.** The change counted as the client answering the write, so a 2xx that changed nothing else on screen gave `verified: clean`. Such a change to the acted control, made before the write is answered, no longer counts as an answer. Every other change still counts, so an optimistic update is not accused. Two limits: a button that is enabled again after the response still counts as an answer (a settings form can answer only that way), and so does a label such as "Saving…". Closes [#2115](https://github.com/reticlehq/reticle/issues/2115).
