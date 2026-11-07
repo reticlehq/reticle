@@ -34,11 +34,6 @@
       "count": 3
     }
   },
-  "src/actions/actions.interactions.test.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
   "src/actions/actions.press-escape-dialog.test.ts": {
     "curly": {
       "count": 1

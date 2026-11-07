@@ -23,7 +23,9 @@ import {
   assertEditable,
   assertNotEditorTextArea,
   assertNotRichText,
+  insertTextInto,
   isAutofillSafeTarget,
+  isRichText,
   setNativeValue,
 } from './value-input.js';
 import { getRole, getStates } from '@/dom/a11y.js';
@@ -89,6 +91,7 @@ const FILL_LIKE = new Set<string>([
   ActionType.TYPE,
   ActionType.CLEAR,
   ActionType.SELECT,
+  ActionType.INSERT_TEXT,
 ]);
 const isFillLike = (action: string): boolean => FILL_LIKE.has(action);
 
@@ -268,10 +271,15 @@ function enabledOf(el: Element): boolean {
   return !getStates(el).includes(ElementState.DISABLED);
 }
 
-/** Current value for inputs/textareas/selects, else undefined. */
+/** Current value for inputs/textareas/selects and rich-text surfaces, else undefined. */
 function valueOf(el: Element): string | undefined {
   if (isInput(el) || isTextArea(el) || isSelect(el)) {
     return el.value;
+  }
+  // A rich-text surface has no `.value`: its text is the DOM. Read it so `insertText` reports
+  // valueChanged — the one signal an agent has that the editor model actually took the text.
+  if (isRichText(el)) {
+    return el.textContent ?? '';
   }
   return undefined;
 }
@@ -475,6 +483,20 @@ async function dispatchOther(
       // Consistent with TYPE/SELECT/CHECK: clearing a non-field is not a silent success. Throwing
       // surfaces the mismatch instead of reporting ok:true for an action that did nothing.
       throw new Error(`cannot clear a <${el.tagName.toLowerCase()}>`);
+    case ActionType.INSERT_TEXT: {
+      if (typeof args['text'] !== 'string') {
+        throw new Error(
+          "insertText requires a string `text` — pass it nested, as args: { text: '…' }.",
+        );
+      }
+      if (!isRichText(el)) {
+        throw new Error(
+          `cannot insertText into a <${el.tagName.toLowerCase()}> — insertText needs a rich-text editor (Tiptap, ProseMirror, Monaco), not this surface`,
+        );
+      }
+      // isRichText already confirmed el is a rich-text surface (contenteditable / EditContext).
+      return insertTextInto(el, args['text']);
+    }
     case ActionType.SELECT:
       if (isSelect(el)) {
         // A MISSING value assigned '' to the <select>. No option carries that, so the browser sets
