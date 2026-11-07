@@ -494,6 +494,50 @@ describe('reticle_act real-input routing', () => {
     expect(provider.calls[0]?.center).toEqual(boxCenter(SOURCE_BOX));
   });
 
+  it('forwards a point inside the target to the driver, for a click, a hover and a drag', async () => {
+    const provider = makeProvider(true);
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const at = { x: 0.25, y: 0.75 };
+    await runAct(fakeDeps(provider, state), {
+      ref: 'e1',
+      action: 'click',
+      args: { native: true, at },
+    });
+    await runAct(fakeDeps(provider, state), { ref: 'e1', action: 'hover', args: { at } });
+    await runAct(fakeDeps(provider, state), {
+      ref: 'e1',
+      action: 'drag',
+      args: { toRef: 'eTarget', at, to: { x: 1, y: 0 } },
+    });
+    expect(provider.calls.map((c) => c.args['at'])).toEqual([at, at, at]);
+    expect(provider.calls[2]?.args['to']).toEqual({ x: 1, y: 0 });
+  });
+
+  it('drives a real drag inside the source box when it names only an end point', async () => {
+    const provider = makeProvider(true);
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    const res = await runAct(fakeDeps(provider, state), {
+      ref: 'e1',
+      action: 'drag',
+      args: { at: { x: 0, y: 0 }, to: { x: 1, y: 1 } },
+    });
+    expect(res.inputMode).toBe(InputMode.REAL);
+    expect(provider.calls[0]?.toBox).toEqual(SOURCE_BOX);
+  });
+
+  it('refuses a point that is not two numbers, before any gesture', async () => {
+    const provider = makeProvider(true);
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [] };
+    await expect(
+      runAct(fakeDeps(provider, state), {
+        ref: 'e1',
+        action: 'hover',
+        args: { at: { x: 'left', y: 0 } },
+      }),
+    ).rejects.toThrow('`at`');
+    expect(provider.calls).toHaveLength(0);
+  });
+
   it('falls back to synthetic when the ref is stale (no box)', async () => {
     const provider = makeProvider(true);
     const state: FakeSessionState = { actCalls: 0, inspectRefs: [], staleRef: 'e1' };

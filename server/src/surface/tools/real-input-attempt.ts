@@ -20,8 +20,12 @@
  * frame.
  */
 import {
+  ACT_POINT_ARG,
   ActionType,
+  actPointProblem,
+  boxFractionFromArgs,
   clickInputProblem,
+  DRAG_TO_POINT_ARG,
   DriveErrorCode,
   ElementState,
   INSPECT_IN_VIEWPORT_FIELD,
@@ -34,7 +38,7 @@ import {
 import type { Session } from '@/portal/session/session.js';
 import type { ElementBox, RealInputArgs } from '@/portal/input/real-input.js';
 import {
-  boxCenter,
+  boxPoint,
   DriveError,
   isRealInputAction,
   unspellablePressReason,
@@ -348,6 +352,15 @@ function performArgsOf(inner: Record<string, unknown>): RealInputArgs {
   if (holdMs !== undefined) {
     performArgs.holdMs = holdMs;
   }
+  // A point inside the target: a canvas has no child elements, so its centre is not enough.
+  const at = boxFractionFromArgs(inner, ACT_POINT_ARG);
+  if (at !== undefined) {
+    performArgs.at = at;
+  }
+  const to = boxFractionFromArgs(inner, DRAG_TO_POINT_ARG);
+  if (to !== undefined) {
+    performArgs.to = to;
+  }
   // `keys` and `code` are read but not forwarded: both are routed away by the caller — a multi-key
   // sequence and an explicit physical code have no driver spelling — so carrying them into the
   // provider would only invite it to guess at a gesture the caller did not ask for.
@@ -543,20 +556,26 @@ async function hoverForReal(
     throw new Error(HOVER_OFF_VIEWPORT_MSG);
   }
 
+  const at = boxFractionFromArgs(inner, ACT_POINT_ARG);
   if (providerReady && provider !== undefined) {
     try {
-      const performed = await provider.perform(session.url, ActionType.HOVER, box, {});
+      const performed = await provider.perform(
+        session.url,
+        ActionType.HOVER,
+        box,
+        at === undefined ? {} : { at },
+      );
       // Hover always has a resolved box, so there is always a center to report: the provider's own
       // reading, or the box's if it reported none. Both are the same point, not a fabricated one.
       if (performed.performed) {
-        return hoverSucceeded(performed.center ?? boxCenter(box), scrolled);
+        return hoverSucceeded(performed.center ?? boxPoint(box, at), scrolled);
       }
     } catch {
       // A provider error used to fall back to synthetic dispatch. For hover that is a lie.
     }
   }
 
-  const { cx, cy } = boxCenter(box);
+  const { cx, cy } = boxPoint(box, at);
   if (true === (await deps.pool?.hoverLease(session.id, cx, cy))) {
     return hoverSucceeded({ cx, cy }, scrolled);
   }
@@ -584,6 +603,11 @@ export async function tryRealInput(
   const provider = deps.realInput;
   const inner = asRecord(args['args']);
   const askedForNative = true === inner[NATIVE_INPUT_ARG];
+  // The page refuses the same point on the synthetic path, with the same sentence.
+  const pointProblem = actPointProblem(action, inner);
+  if (pointProblem !== undefined) {
+    throw new Error(`cannot ${action}: ${pointProblem}`);
+  }
   if (action === ActionType.HOVER) {
     return hoverForReal(deps, session, ref, inner, provider);
   }
@@ -719,8 +743,11 @@ export async function tryRealInput(
   }
 
   let toBox: ElementBox | undefined;
-  if (action === ActionType.DRAG) {
-    const toRef = asString(inner['toRef']);
+  const toRef = asString(inner['toRef']);
+  // A drag that names only its end point moves inside the source, such as a stroke on one canvas.
+  if (action === ActionType.DRAG && toRef === undefined && performArgs.to !== undefined) {
+    toBox = box;
+  } else if (action === ActionType.DRAG) {
     if (toRef === undefined) {
       return synthetic(InputModeReason.DRAG_TARGET_UNRESOLVED);
     }

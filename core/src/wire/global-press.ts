@@ -9,10 +9,25 @@ import { ActionType } from './constants/constants.js';
 export const DEFAULT_PRESS_KEY = 'Enter';
 
 /**
- * Keys a real user sends at the page, not at a control. Escape dismisses, Tab moves focus.
+ * Keys a real user sends at the page, not at a control. Escape dismisses, Tab moves focus, and an
+ * arrow key moves the player in a canvas game, which often has no element to name.
  * A press of one of these with no ref is valid; a press of Enter or a letter is not.
  */
-export const GLOBAL_PRESS_KEYS = ['Escape', 'Tab'] as const;
+/**
+ * The press arg that sends ANY key to the document: `{ text: 'w', document: true }`. A canvas game
+ * reads WASD, Space and Enter from the page and has no element to name. Only the boolean `true`
+ * counts, and it is never the default, so a forgotten ref on Enter is still refused.
+ */
+export const PRESS_DOCUMENT_ARG = 'document';
+
+export const GLOBAL_PRESS_KEYS = [
+  'Escape',
+  'Tab',
+  'ArrowUp',
+  'ArrowDown',
+  'ArrowLeft',
+  'ArrowRight',
+] as const;
 
 const GLOBAL_PRESS_KEY_SET: ReadonlySet<string> = new Set(
   GLOBAL_PRESS_KEYS.map((k) => k.toLowerCase()),
@@ -27,9 +42,13 @@ const GLOBAL_PRESS_KEY_SET: ReadonlySet<string> = new Set(
  */
 export function pressKeyFromArgs(args: Record<string, unknown>): string {
   const text = args['text'];
-  if ('string' === typeof text && 0 < text.length) return text;
+  if ('string' === typeof text && 0 < text.length) {
+    return text;
+  }
   const key = args['key'];
-  if ('string' === typeof key && 0 < key.length) return key;
+  if ('string' === typeof key && 0 < key.length) {
+    return key;
+  }
   return DEFAULT_PRESS_KEY;
 }
 
@@ -43,10 +62,14 @@ export function pressKeyFromArgs(args: Record<string, unknown>): string {
  */
 export function pressKeysFromArgs(args: Record<string, unknown>): string[] {
   const raw = args['keys'];
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   const keys: string[] = [];
   for (const item of raw) {
-    if ('string' === typeof item && 0 < item.length) keys.push(item);
+    if ('string' === typeof item && 0 < item.length) {
+      keys.push(item);
+    }
   }
   return keys;
 }
@@ -85,12 +108,18 @@ const MODIFIER_ALIASES: Readonly<Record<string, PressModifier>> = {
  */
 export function pressModifiersFromArgs(args: Record<string, unknown>): PressModifier[] {
   const raw = args['modifiers'];
-  if (!Array.isArray(raw)) return [];
+  if (!Array.isArray(raw)) {
+    return [];
+  }
   const named = new Set<PressModifier>();
   for (const item of raw) {
-    if ('string' !== typeof item) continue;
+    if ('string' !== typeof item) {
+      continue;
+    }
     const canonical = MODIFIER_ALIASES[item.toLowerCase()];
-    if (canonical !== undefined) named.add(canonical);
+    if (canonical !== undefined) {
+      named.add(canonical);
+    }
   }
   return PRESS_MODIFIERS.filter((modifier) => named.has(modifier));
 }
@@ -121,10 +150,17 @@ function hasModifiers(args: Record<string, unknown>): boolean {
  * pass where `{ key: "Enter" }` is refused.
  */
 export function isGlobalPress(args: Record<string, unknown>): boolean {
-  if (hasModifiers(args)) return true;
+  if (true === args[PRESS_DOCUMENT_ARG]) {
+    return true;
+  }
+  if (hasModifiers(args)) {
+    return true;
+  }
   const keys = pressKeysFromArgs(args);
   // SEVERAL keys held together is a sequence at the page, never aimed at one control.
-  if (1 < keys.length) return true;
+  if (1 < keys.length) {
+    return true;
+  }
   // ONE key in `keys` is the same press as naming it in `key`/`text`, so it must answer the same
   // question. Reading the list by LENGTH alone let `{ keys: ["Enter"] }` omit a ref, which the
   // one-key spelling refuses on purpose: Enter lands on whatever holds focus, and on a focused field
@@ -140,7 +176,9 @@ export function isGlobalPress(args: Record<string, unknown>): boolean {
  * The tool/step shape `{ action, args }` — a press of a document key, so no locator is required.
  */
 export function isGlobalPressCall(args: Record<string, unknown>): boolean {
-  if (ActionType.PRESS !== args['action']) return false;
+  if (ActionType.PRESS !== args['action']) {
+    return false;
+  }
   const inner = args['args'];
   const pressArgs =
     'object' === typeof inner && null !== inner ? (inner as Record<string, unknown>) : {};
