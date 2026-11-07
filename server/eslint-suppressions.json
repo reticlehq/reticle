@@ -2592,11 +2592,6 @@
       "count": 1
     }
   },
-  "src/portal/session/no-session-next-action.ts": {
-    "no-nested-ternary": {
-      "count": 4
-    }
-  },
   "src/portal/session/no-session-watch.test.ts": {
     "curly": {
       "count": 2

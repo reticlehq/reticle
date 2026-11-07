@@ -665,3 +665,167 @@ describe('every offer of init asks the user first', () => {
     expect(next.reason).toContain(ASK);
   });
 });
+
+/**
+ * The dev script names this project's port. One other listener from the machine-wide scan is not
+ * this app (#1687).
+ *
+ * Reported: `next dev -p 3001` was not running, :8080 was, and the answer was
+ * `reticle open localhost:8080`. The agent opened the other project.
+ */
+describe('a dev script pins a port the scan did not hear (#1687)', () => {
+  const PINNED = { command: 'npm run dev', script: 'dev', port: 3001 } as const;
+  const OPEN_8080 = 'npx @reticlehq/server open http://localhost:8080';
+
+  it('does not open the unrelated listener, and says the pinned port is not listening', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: [8080],
+      dev: PINNED,
+    });
+    expect(next.action).toBe(NoSessionAction.START_DEV_SERVER);
+    expect(next.command).toBe('npm run dev');
+    expect(next.port).toBe(3001);
+    expect(next.command).not.toBe(OPEN_8080);
+    expect(next.command ?? '').not.toContain('8080');
+    expect(next.reason).toContain(':3001');
+    expect(next.reason).toMatch(/nothing listens/i);
+    expect(next.reason).toMatch(/not running/i);
+    expect(next.reason).not.toContain('8080');
+  });
+
+  it('does the same when several unrelated ports are listening', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: [5173, 8080],
+      dev: PINNED,
+    });
+    expect(next.action).toBe(NoSessionAction.START_DEV_SERVER);
+    expect(next.command).toBe('npm run dev');
+    expect(next.port).toBe(3001);
+    expect(next.reason).not.toContain('5173');
+    expect(next.reason).not.toContain('8080');
+  });
+
+  it('starts the dev script from its own directory', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: [8080],
+      dev: { ...PINNED, directory: 'frontend' },
+    });
+    expect(next.action).toBe(NoSessionAction.START_DEV_SERVER);
+    expect(next.command).toBe('cd frontend && npm run dev');
+    expect(next.port).toBe(3001);
+    expect(next.reason).toContain('frontend');
+    expect(next.reason).not.toContain('8080');
+  });
+
+  it('opens the pinned port when that port is the listener', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: [3001],
+      dev: PINNED,
+    });
+    expect(next.action).toBe(NoSessionAction.OPEN_APP);
+    expect(next.command).toBe('npx @reticlehq/server open http://localhost:3001');
+    expect(next.port).toBe(3001);
+  });
+
+  it('opens the pinned port when other ports are listening too', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: [3001, 8080],
+      dev: PINNED,
+    });
+    expect(next.action).toBe(NoSessionAction.OPEN_APP);
+    expect(next.command).toBe('npx @reticlehq/server open http://localhost:3001');
+    expect(next.port).toBe(3001);
+    expect(next.command).not.toContain('8080');
+  });
+
+  it('after a session, does not reopen an unrelated listener when the pinned port is down', () => {
+    const next = nextActionFor({
+      everConnected: true,
+      initialized: true,
+      listening: [8080],
+      dev: PINNED,
+    });
+    expect(next.action).toBe(NoSessionAction.START_DEV_SERVER);
+    expect(next.command).toBe('npm run dev');
+    expect(next.port).toBe(3001);
+    expect(next.command).not.toBe(OPEN_8080);
+    expect(next.reason).not.toContain('8080');
+  });
+
+  it('after a session, reopens the departed url even when the dev script names another port', () => {
+    const next = nextActionFor({
+      everConnected: true,
+      initialized: true,
+      listening: [5173, 5190],
+      dev: PINNED,
+      lastKnownUrl: 'http://localhost:5190/counter',
+    });
+    expect(next.action).toBe(NoSessionAction.REOPEN_APP);
+    expect(next.command).toBe('npx @reticlehq/server open http://localhost:5190/counter');
+    expect(next.port).toBe(5190);
+  });
+
+  it('after a session, opens the pinned port when it is up among others', () => {
+    const next = nextActionFor({
+      everConnected: true,
+      initialized: true,
+      listening: [3001, 8080],
+      dev: PINNED,
+    });
+    expect(next.action).toBe(NoSessionAction.REOPEN_APP);
+    expect(next.command).toBe('npx @reticlehq/server open http://localhost:3001');
+    expect(next.port).toBe(3001);
+    expect(next.command ?? '').not.toContain('8080');
+  });
+
+  it('does not open a slow listener on some other port', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: [],
+      slowListeners: [8080],
+      dev: PINNED,
+    });
+    expect(next.action).toBe(NoSessionAction.START_DEV_SERVER);
+    expect(next.port).toBe(3001);
+    expect(next.command ?? '').not.toContain('8080');
+  });
+
+  it('opens the pinned port when that port is slow and another port is serving', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: [8080],
+      slowListeners: [3001],
+      dev: PINNED,
+    });
+    expect(next.action).toBe(NoSessionAction.OPEN_APP);
+    expect(next.port).toBe(3001);
+    expect(next.command).toBe('npx @reticlehq/server open http://localhost:3001');
+    expect(next.command).not.toContain('8080');
+    expect(next.reason).toMatch(/do not start a second/i);
+  });
+
+  it('opens the pinned port when it is the slow one and nothing else is serving', () => {
+    const next = nextActionFor({
+      everConnected: false,
+      initialized: true,
+      listening: [],
+      slowListeners: [8080, 3001],
+      dev: PINNED,
+    });
+    expect(next.action).toBe(NoSessionAction.OPEN_APP);
+    expect(next.port).toBe(3001);
+    expect(next.command).toBe('npx @reticlehq/server open http://localhost:3001');
+  });
+});
