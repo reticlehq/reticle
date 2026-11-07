@@ -520,6 +520,68 @@ describe('runInit', () => {
     expect(io.written['docs/vite.config.ts']).toBeUndefined();
   });
 
+  /**
+   * Vite+ (#2134). The package and the script are what `vp create vite -- --template react-ts`
+   * writes (vite-plus 1.5.0), less the `vite` alias, which a pnpm app may leave out. The config has a
+   * `lint.plugins` key BEFORE its own `plugins`, and init used to write `reticle()` into the lint
+   * list and report the step done.
+   */
+  it('patches a Vite+ config inside lazyPlugins and names the `vp dev` script', () => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({
+        dependencies: { react: '^19' },
+        devDependencies: { 'vite-plus': '1.5.0', '@vitejs/plugin-react': '^6' },
+        scripts: { dev: 'vp dev', build: 'tsc -b && vp build' },
+      }),
+      'vite.config.ts':
+        `import react from "@vitejs/plugin-react";\n` +
+        `import { defineConfig, lazyPlugins } from "vite-plus";\n\n` +
+        `export default defineConfig({\n` +
+        `  lint: { plugins: ["react", "typescript", "oxc"] },\n` +
+        `  plugins: lazyPlugins(() => [react()]),\n` +
+        `});\n`,
+    });
+
+    const r = runInit(OPTS, io);
+
+    expect(r.ok).toBe(true);
+    expect(io.written['vite.config.ts']).toContain('lazyPlugins(() => [reticle(), react()])');
+    expect(io.written['vite.config.ts']).toContain(
+      'lint: { plugins: ["react", "typescript", "oxc"] }',
+    );
+    expect(r.context?.pendingViteConfig).toBeUndefined();
+    expect(r.context?.devCommand).toContain('dev');
+  });
+
+  it('patches the config that `vp dev --config` selects in a Vite+ app', () => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({
+        devDependencies: { 'vite-plus': '1.5.0' },
+        scripts: { dev: 'vp dev --config build/vite.config.mjs' },
+      }),
+      'build/vite.config.mjs': `export default { plugins: [] };\n`,
+    });
+
+    runInit(OPTS, io);
+
+    expect(io.written['build/vite.config.mjs']).toContain('reticle(');
+    expect(io.written['vite.config.mjs']).toBeUndefined();
+  });
+
+  it('creates a config that imports from vite-plus for a Vite+ app with none', () => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({
+        devDependencies: { 'vite-plus': '1.5.0' },
+        scripts: { dev: 'vp dev' },
+      }),
+    });
+
+    runInit(OPTS, io);
+
+    expect(io.written['vite.config.mjs']).toContain("import { defineConfig } from 'vite-plus';");
+    expect(io.written['vite.config.mjs']).toContain('reticle(');
+  });
+
   it('still creates a root config when plain vite uses its default config lookup', () => {
     const io = memoryIo({
       'package.json': JSON.stringify({

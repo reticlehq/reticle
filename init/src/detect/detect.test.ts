@@ -70,6 +70,12 @@ describe('detect framework', () => {
       ).framework,
     ).toBe(Framework.NEXT);
   });
+  // Vite+ under pnpm may declare only `vite-plus`, with no `vite` and no config file yet (#2134).
+  it('detects a Vite+ app that declares only vite-plus as Vite', () => {
+    expect(detect(input({ pkg: { devDependencies: { 'vite-plus': '1.5.0' } } })).framework).toBe(
+      Framework.VITE,
+    );
+  });
   it('detects SvelteKit from the @sveltejs/kit dep (even though it ships vite)', () => {
     expect(
       detect(input({ pkg: { devDependencies: { '@sveltejs/kit': '^2', vite: '^5' } } })).framework,

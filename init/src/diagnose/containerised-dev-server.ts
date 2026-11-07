@@ -72,7 +72,7 @@ const DEVCONTAINER = '.devcontainer/devcontainer.json';
 const SEP = `["',\\s]+`;
 const DEV_SERVER_COMMANDS: readonly RegExp[] = [
   new RegExp(`\\b(?:npm|pnpm|yarn|bun)${SEP}(?:run${SEP})?dev\\b`),
-  new RegExp(`\\b(?:next|nuxt|nuxi|astro|react-router|remix|vinxi)${SEP}dev\\b`),
+  new RegExp(`\\b(?:next|nuxt|nuxi|astro|react-router|remix|vinxi|vp)${SEP}dev\\b`),
   new RegExp(`\\bng${SEP}serve\\b`),
   new RegExp(`\\breact-scripts${SEP}start\\b`),
   new RegExp(`\\bwebpack${SEP}serve\\b|\\bwebpack-dev-server\\b`),

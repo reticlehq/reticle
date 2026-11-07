@@ -5,6 +5,7 @@
  * documented manual step).
  */
 
+import { matchingBraceEnd } from './brace-scan.js';
 import { PatchKind, type SourcePatch } from './patch-kind.js';
 
 export const VITE_IMPORT = "import { reticle } from '@reticlehq/vite-plugin';";
@@ -66,14 +67,23 @@ interface PluginCallOptions {
    */
   sourceMapping: boolean;
 }
-/** Matches the start of a `plugins: [` array literal. */
-const PLUGINS_ARRAY = /plugins\s*:\s*\[/;
+/** A `plugins:` key, up to the start of its value. */
+const PLUGINS_KEY_COLON = /\bplugins\s*:\s*/g;
 /**
- * A `plugins` key in any shape: `plugins: <expr>`, or the shorthand `{ plugins }`. When this holds
- * and PLUGINS_ARRAY does not, the key is there but not as an array literal, so adding our own key
- * would make a second one. The later key wins, and one of the two lists is lost.
+ * The start of a plugin list we can extend, read at the start of the key's value: a plain array
+ * literal, or the same array returned by Vite+'s `lazyPlugins(() => [...])`.
+ *
+ * `vp migrate` and `vp create` wrap the app's plugins in `lazyPlugins`, so Vite+ can read the lint
+ * and format blocks without loading every plugin. The list inside is still the app's plugin list,
+ * and Vite loads it for `vp dev`. Without this form, init left a migrated Laravel app as a manual
+ * step (#2134).
  */
-const PLUGINS_KEY = /\bplugins\s*[:,}]/;
+const PLUGIN_LIST_START = /^(?:lazyPlugins\s*\(\s*(?:async\s*)?\(\s*\)\s*=>\s*)?\[/;
+/**
+ * The shorthand `{ plugins }` key. When it holds, the key is there but not as an array literal, so
+ * adding our own key would make a second one. The later key wins, and one of the two lists is lost.
+ */
+const PLUGINS_SHORTHAND = /\bplugins\s*[,}]/;
 /** Matches an ES import statement (used to place our import after the last one). */
 const IMPORT_LINE = /^import\s.+from\s+['"][^'"]+['"];?\s*$/gm;
 /**
@@ -86,6 +96,8 @@ const IMPORT_LINE = /^import\s.+from\s+['"][^'"]+['"];?\s*$/gm;
  * bails — the rule stays "only edit a shape we can see whole".
  */
 const CONFIG_OBJECT = /(export\s+default\s+(?:defineConfig\s*\(\s*)?)\{/;
+/** Where the default export starts, for a config that is not an object literal. */
+const EXPORT_DEFAULT = /\bexport\s+default\b/;
 
 /** Alias kept so existing call sites read in Vite terms; the vocabulary is shared (see patch-kind). */
 export const VitePatchKind = PatchKind;
@@ -93,6 +105,9 @@ export type VitePatchKind = PatchKind;
 
 type VitePatch = SourcePatch;
 
+const UNREADABLE_REASON =
+  'init could not read this config safely (a string, comment or regex that it could not follow), ' +
+  'so it did not change it. Add `reticle()` to the `plugins` list of the exported config.';
 const NO_PLUGINS_REASON = "couldn't find a `plugins: [...]` array to extend";
 const PLUGINS_NOT_ARRAY_REASON =
   'the `plugins` key is not an array literal, so init did not change it. Add `reticle()` to the ' +
@@ -115,15 +130,217 @@ function insertImport(source: string): string {
  * what a formatter rewrites, turning a one-line install into a diff against the user's own style. A
  * single-line array needs the space, or the result reads `[reticle(),react()]`.
  */
-function insertPlugin(source: string, call: string): string {
-  // `(match, offset, source)` — PLUGINS_ARRAY has no capture group. Reading the second argument as
-  // one put the whole source string in `offset`, so the index below was `undefined` and the
-  // separator was empty every single time.
-  return source.replace(PLUGINS_ARRAY, (match: string, offset: number) => {
-    const next = source[offset + match.length] ?? '';
-    const separator = '' === next || /\s/.test(next) ? '' : ' ';
-    return `${match}${call},${separator}`;
-  });
+function insertPlugin(source: string, call: string, at: number): string {
+  const next = source[at] ?? '';
+  const separator = '' === next || /\s/.test(next) ? '' : ' ';
+  return `${source.slice(0, at)}${call},${separator}${source.slice(at)}`;
+}
+
+/**
+ * The source with every string literal, regex literal and comment blanked to spaces, newlines kept,
+ * so each index still points at the same place in the real source. Null when the scan does not end
+ * cleanly: a string, comment or regex that never closes, or braces that do not balance.
+ *
+ * The key search below counts braces. A `{` inside a string, or a `plugins: [` in a comment, used to
+ * move that count, and init then added a second `plugins` key whose list Vite never reads. A source
+ * this scan cannot read is a manual step, never a guess.
+ */
+function maskStringsAndComments(source: string): string | null {
+  const out = source.split('');
+  const blank = (from: number, to: number): void => {
+    for (let k = from; k < to && k < out.length; k += 1) {
+      if ('\n' !== out[k]) {
+        out[k] = ' ';
+      }
+    }
+  };
+  /** The last character before `at` that is not whitespace, in the masked output so far. */
+  const previousToken = (at: number): string => {
+    for (let k = at - 1; k >= 0; k -= 1) {
+      const c = out[k] ?? '';
+      if (!/\s/.test(c)) {
+        return c;
+      }
+    }
+    return '';
+  };
+  let i = 0;
+  while (i < source.length) {
+    const ch = source[i] ?? '';
+    const next = source[i + 1];
+    let stop: number | null = i + 1;
+    if ('/' === ch && '/' === next) {
+      const end = source.indexOf('\n', i);
+      stop = -1 === end ? source.length : end;
+    } else if ('/' === ch && '*' === next) {
+      const end = source.indexOf('*/', i + 2);
+      stop = -1 === end ? null : end + 2;
+    } else if ("'" === ch || '"' === ch || '`' === ch) {
+      stop = closingQuote(source, i, ch);
+    } else if ('/' === ch && REGEX_MAY_FOLLOW.includes(previousToken(i))) {
+      stop = closingRegex(source, i);
+    } else {
+      i += 1;
+      continue;
+    }
+    if (null === stop) {
+      return null;
+    }
+    blank(i, stop);
+    i = stop;
+  }
+  const masked = out.join('');
+  return 0 === braceDepth(masked, masked.length) ? masked : null;
+}
+
+/** Where a `/` starts a regex literal rather than a division: after one of these, or at the start. */
+const REGEX_MAY_FOLLOW = ['', '(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';'];
+
+/** The index just past the quote that closes the string opened at `at`, or null. */
+function closingQuote(source: string, at: number, quote: string): number | null {
+  let j = at + 1;
+  while (j < source.length) {
+    const c = source[j];
+    if ('\\' === c) {
+      j += 2;
+    } else if (quote === c) {
+      return j + 1;
+    } else if ('\n' === c && '`' !== quote) {
+      return null;
+    } else {
+      j += 1;
+    }
+  }
+  return null;
+}
+
+/** The index just past the flags of the regex literal opened at `at`, or null. */
+function closingRegex(source: string, at: number): number | null {
+  let j = at + 1;
+  let inClass = false;
+  while (j < source.length) {
+    const c = source[j];
+    if ('\\' === c) {
+      j += 2;
+      continue;
+    }
+    if ('\n' === c) {
+      return null;
+    }
+    if ('[' === c) {
+      inClass = true;
+    } else if (']' === c) {
+      inClass = false;
+    } else if ('/' === c && !inClass) {
+      j += 1;
+      while (j < source.length && /[a-z]/i.test(source[j] ?? '')) {
+        j += 1;
+      }
+      return j;
+    }
+    j += 1;
+  }
+  return null;
+}
+
+/** How many `{` are open at `index`. A count, not a parser: see brace-scan.ts for its limits. */
+function braceDepth(source: string, index: number): number {
+  let depth = 0;
+  for (let i = 0; i < index; i += 1) {
+    if ('{' === source[i]) {
+      depth += 1;
+    } else if ('}' === source[i]) {
+      depth -= 1;
+    }
+  }
+  return depth;
+}
+
+/**
+ * Where the value of the config's OWN `plugins` key starts, or undefined when the config has none.
+ *
+ * Other blocks can hold a `plugins` key too: Vite+'s `lint.plugins` names oxlint plugins, and
+ * `worker.plugins` and `build.rollupOptions.plugins` are other bundlers' lists. The first match in
+ * the file used to win. On a `vp create` React app that is `lint.plugins`, so init wrote
+ * `reticle()` into the lint settings, reported the step done, and the app never connected (#2134).
+ *
+ * So when the exported object is a literal we can see, only a key at that literal's own level, inside
+ * it, is its key. Without a literal (a config written as a function), the key with the fewest open
+ * braces wins.
+ */
+function vitePluginsValueAt(source: string): number | undefined {
+  const literal = exportedLiteralStart(source);
+  if (literal !== undefined) {
+    // The literal is in view, so only its own keys count. A key outside it is another object's: a
+    // hoisted `const lint = { plugins: [...] }` that the config names by shorthand.
+    const end = matchingBraceEnd(source, literal) ?? source.length;
+    const depth = braceDepth(source, literal);
+    for (const match of source.matchAll(PLUGINS_KEY_COLON)) {
+      if (match.index > literal && match.index < end && depth === braceDepth(source, match.index)) {
+        return match.index + match[0].length;
+      }
+    }
+    return undefined;
+  }
+  // A config built by a function. Only a key in the exported expression can be its own: a const
+  // declared above it (`const lint = { plugins: [...] }`) is another object, whatever its depth.
+  const { from, to } = exportedRegion(source);
+  let best: { depth: number; valueAt: number } | undefined;
+  for (const match of source.matchAll(PLUGINS_KEY_COLON)) {
+    if (match.index < from || match.index >= to) {
+      continue;
+    }
+    const depth = braceDepth(source, match.index);
+    if (best === undefined || depth < best.depth) {
+      best = { depth, valueAt: match.index + match[0].length };
+    }
+  }
+  return best?.valueAt;
+}
+
+/** The name a default export refers to: `export default config` or `export default defineConfig(config)`. */
+const EXPORTED_NAME =
+  /\bexport\s+default\s+(?:defineConfig\s*\(\s*)?([A-Za-z_$][\w$]*)\s*(?:[;)]|$)/m;
+
+/** Where `const|let|var <name> =` declares the name the default export refers to, if it does. */
+function exportedDeclaration(source: string): RegExpExecArray | null {
+  const name = EXPORTED_NAME.exec(source)?.[1];
+  if (name === undefined) {
+    return null;
+  }
+  const escaped = name.replace(/\$/g, '\\$');
+  return new RegExp(
+    `\\b(?:const|let|var)\\s+${escaped}\\s*(?::[^=;]*)?=\\s*(?:defineConfig\\s*\\(\\s*)?`,
+  ).exec(source);
+}
+
+/**
+ * The index just past the `{` of the exported config object literal: written in the export itself,
+ * or in the declaration of the name it exports (`const config = defineConfig({...})`).
+ */
+function exportedLiteralStart(source: string): number | undefined {
+  const inline = CONFIG_OBJECT.exec(source);
+  if (null !== inline) {
+    return inline.index + inline[0].length;
+  }
+  const declared = exportedDeclaration(source);
+  if (null !== declared && '{' === source[declared.index + declared[0].length]) {
+    return declared.index + declared[0].length + 1;
+  }
+  return undefined;
+}
+
+/**
+ * The part of the file that holds the exported config: from the declaration of the name it exports
+ * up to the export, or from the export to the end of the file.
+ */
+function exportedRegion(source: string): { from: number; to: number } {
+  const exported = EXPORT_DEFAULT.exec(source)?.index;
+  const declared = exportedDeclaration(source)?.index;
+  if (declared !== undefined && exported !== undefined && declared < exported) {
+    return { from: declared, to: exported };
+  }
+  return { from: exported ?? 0, to: source.length };
 }
 
 /**
@@ -141,6 +358,18 @@ function insertPluginsKey(source: string, call: string): string {
 }
 
 /**
+ * The package a new config imports `defineConfig` from.
+ *
+ * A Vite+ app imports it from `vite-plus`. Under pnpm it may not declare `vite` at all, so an
+ * import from `vite` would not resolve, and Vite+'s own lint rule refuses it.
+ */
+export const DefineConfigSource = {
+  VITE: 'vite',
+  VITE_PLUS: 'vite-plus',
+} as const;
+export type DefineConfigSource = (typeof DefineConfigSource)[keyof typeof DefineConfigSource];
+
+/**
  * A whole config for a plain Vite app that has none: Vite's defaults plus the plugin. Written out
  * rather than patched from an empty one, because it is a file the person will open and read.
  */
@@ -149,9 +378,10 @@ export function newViteConfig(
   captureBodies = false,
   inject = true,
   sourceMapping = true,
+  defineConfigFrom: DefineConfigSource = DefineConfigSource.VITE,
 ): string {
   const call = reticlePluginCall({ port, captureBodies, inject, sourceMapping });
-  return `import { defineConfig } from 'vite';\n${VITE_IMPORT}\n\nexport default defineConfig({\n  plugins: [${call}],\n});\n`;
+  return `import { defineConfig } from '${defineConfigFrom}';\n${VITE_IMPORT}\n\nexport default defineConfig({\n  plugins: [${call}],\n});\n`;
 }
 
 export function patchViteConfig(
@@ -165,10 +395,20 @@ export function patchViteConfig(
     return { kind: VitePatchKind.ALREADY };
   }
   const call = reticlePluginCall({ port, captureBodies, inject, sourceMapping });
-  if (PLUGINS_ARRAY.test(source)) {
-    return { kind: VitePatchKind.APPLY, code: insertImport(insertPlugin(source, call)) };
+  const masked = maskStringsAndComments(source);
+  if (null === masked) {
+    return { kind: VitePatchKind.MANUAL, reason: UNREADABLE_REASON };
   }
-  if (PLUGINS_KEY.test(source)) {
+  const valueAt = vitePluginsValueAt(masked);
+  if (valueAt !== undefined) {
+    const list = PLUGIN_LIST_START.exec(source.slice(valueAt));
+    if (null === list) {
+      return { kind: VitePatchKind.MANUAL, reason: PLUGINS_NOT_ARRAY_REASON };
+    }
+    const code = insertPlugin(source, call, valueAt + list[0].length);
+    return { kind: VitePatchKind.APPLY, code: insertImport(code) };
+  }
+  if (PLUGINS_SHORTHAND.test(masked)) {
     return { kind: VitePatchKind.MANUAL, reason: PLUGINS_NOT_ARRAY_REASON };
   }
   if (CONFIG_OBJECT.test(source)) {
