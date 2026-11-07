@@ -310,6 +310,7 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
       daemonsServingProjectElsewhere(projectId, options.port, stateDir, isAlive, (port) =>
         hasProjectConnectedBefore(stateDir, port, projectId),
       ),
+      { projectId, home: stateDir },
     );
   };
 

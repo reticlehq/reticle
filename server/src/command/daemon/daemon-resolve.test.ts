@@ -357,6 +357,58 @@ describe('splitBrainNote', () => {
   it('does not send the reader back to init', () => {
     expect(splitBrainNote(51234, [4400])).not.toContain('init');
   });
+
+  it('keeps the RETICLE_PORT advice when the daemon the app is on is this project’s or nobody’s', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'reticle-split-'));
+    try {
+      writeFileSync(
+        join(dir, 'daemon-4400.json'),
+        JSON.stringify({ port: 4400, pid: 1, cwd: '/b', startedAt: 1, projectId: 'shop' }),
+      );
+      expect(splitBrainNote(51234, [4400], { projectId: 'shop', home: dir })).toContain(
+        'RETICLE_PORT=4400',
+      );
+      expect(splitBrainNote(51234, [4401], { projectId: 'shop', home: dir })).toContain(
+        'RETICLE_PORT=4401',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * #1652: two projects on one default port. Project B's app connected to project A's daemon on
+   * :4400. Following "set RETICLE_PORT=4400" cannot work, because `resolveMcpPort` never adopts
+   * another project's daemon and relocates again. The advice and the resolver must agree.
+   */
+  it('does not offer RETICLE_PORT for a daemon registered to another project', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'reticle-split-'));
+    try {
+      writeFileSync(
+        join(dir, 'daemon-4400.json'),
+        JSON.stringify({ port: 4400, pid: 1, cwd: '/a', startedAt: 1, projectId: 'blog' }),
+      );
+      // What the agent would get after following RETICLE_PORT=4400: relocated off :4400 again.
+      await expect(
+        resolveMcpPort(4400, 'shop', dir, {
+          alive: live,
+          daemonPresent: () => Promise.resolve(true),
+          pickPort: () => Promise.resolve(51234),
+        }),
+      ).resolves.toBe(51234);
+
+      const note = splitBrainNote(51234, [4400], { projectId: 'shop', home: dir }) ?? '';
+      expect(note).toContain(':4400');
+      expect(note).toContain(':51234');
+      expect(note).toContain('"blog"');
+      expect(note).not.toContain('RETICLE_PORT');
+      expect(note).toContain('.reticle.json');
+      expect(note).toContain('restart the dev server');
+      expect(note).not.toContain('init');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 /*

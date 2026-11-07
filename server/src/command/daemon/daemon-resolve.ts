@@ -184,10 +184,31 @@ export function projectlessNote(
  * record naming a daemon that is not the one being asked. The wording says which side is empty,
  * since the failure is invisible precisely because both sides look healthy from where they stand.
  */
-export function splitBrainNote(myPort: number, elsewhere: readonly number[]): string | undefined {
+export function splitBrainNote(
+  myPort: number,
+  elsewhere: readonly number[],
+  /** This project and the registry home, to tell whether the app's daemon belongs to another project. */
+  owner?: { projectId: string | undefined; home: string },
+): string | undefined {
   if (0 === elsewhere.length) return undefined;
   const listed = elsewhere.map((port) => `:${String(port)}`).join(', ');
   const first = elsewhere[0] ?? myPort;
+  // The app landed on ANOTHER project's daemon (#1652): two projects share a port. `resolveMcpPort`
+  // never adopts a daemon registered to a different project, so RETICLE_PORT would only relocate the
+  // agent again. The step that works is giving this project its own port, so its app comes here.
+  const holder = owner === undefined ? undefined : daemonProjectAt(first, owner.home);
+  if (owner !== undefined && holder !== undefined && !adoptable(holder, owner.projectId)) {
+    return (
+      `this project's app is connected to the Reticle daemon on :${String(first)}, which is ` +
+      `registered to another project, "${holder}", while this project's daemon is on ` +
+      `:${String(myPort)} — the two projects share a port, and the agent is attached to the empty ` +
+      `half. Pointing the agent at :${String(first)} will not help: an MCP server never attaches to ` +
+      "another project's daemon. Give this project its own port instead: set `port` in its " +
+      `.reticle.json to one no other project uses (for example ${String(myPort)}), then restart the ` +
+      `dev server so the app connects to this project's daemon, and restart the agent session. ` +
+      `Leave :${String(first)} running; it serves "${holder}".`
+    );
+  }
   // The agent moves, not the app (#1546). The daemon the app is on is a working session this agent
   // did not start, and it may be a person's, another agent's or another project's. Stopping it was
   // the first thing this used to say. It comes last now, with what it costs.

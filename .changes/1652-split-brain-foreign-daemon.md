@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — the `daemon_split` advice told the agent to set `RETICLE_PORT` to a daemon it can never attach to.** When two projects share a port and this project's app connected to the other project's daemon, following the advice only made the MCP server relocate again, because it never adopts another project's daemon. The note (in the no-session answer, `reticle status` and `reticle doctor`) now names the project that owns that daemon and says to give this project its own `port` in `.reticle.json` and restart the dev server. Closes [#1652](https://github.com/reticlehq/reticle/issues/1652).

@@ -69,6 +69,7 @@ export function splitBrainFields(
     daemonsServingProjectElsewhere(projectId, port, home, isAlive, (other: number) =>
       hasProjectConnectedBefore(home, other, projectId),
     ),
+    { projectId, home },
   );
   const note =
     elsewhere ?? wrongDaemonNote(port, resolveDaemonForProject(projectId, home, isAlive));
