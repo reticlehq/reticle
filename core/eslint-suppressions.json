@@ -217,11 +217,6 @@
       "count": 1
     }
   },
-  "src/wire/global-press.ts": {
-    "curly": {
-      "count": 10
-    }
-  },
   "src/wire/hold.ts": {
     "curly": {
       "count": 1

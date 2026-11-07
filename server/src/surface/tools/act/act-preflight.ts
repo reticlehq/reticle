@@ -188,7 +188,7 @@ export function assertSequenceSteps(steps: readonly unknown[]): void {
       `step ${String(i)} has no \`ref\` or \`target\`. ` +
         'Sequence steps take `ref` (from reticle_query/reticle_snapshot) or `target` ' +
         '(e.g. { testid } or { label }), the same locator reticle_act accepts. ' +
-        'A press of Escape, Tab, or a modifier shortcut is a document key and needs neither. ' +
+        'A press of Escape, Tab, an arrow key or a modifier shortcut, or any press with `document: true`, is a document key and needs neither. ' +
         'Nothing was acted on — the whole sequence is refused so a bad step cannot leave the earlier ones half-applied.',
     );
   });

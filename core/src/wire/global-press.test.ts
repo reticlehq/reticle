@@ -35,6 +35,20 @@ describe('which press is a document key', () => {
     expect(isGlobalPress({ text: 'arrowleft' }), 'agents send either casing').toBe(true);
   });
 
+  it('any key is global when the caller says `document: true`', () => {
+    // A game reads WASD, Space and Enter from the page and has no element to name. Without a ref
+    // these were refused. The flag is the caller saying "the document", so a forgotten ref on
+    // Enter is still refused: the flag is never the default.
+    for (const key of ['w', 'a', ' ', 'Enter', 'Home']) {
+      expect(isGlobalPress({ text: key, document: true }), key).toBe(true);
+      expect(isGlobalPress({ text: key }), `${key} without the flag`).toBe(isGlobalPress({ key }));
+    }
+    expect(isGlobalPress({ text: 'Enter' }), 'Enter alone still needs a ref').toBe(false);
+    expect(isGlobalPress({ text: 'w', document: 'yes' }), 'only the boolean true counts').toBe(
+      false,
+    );
+  });
+
   it('a modifier shortcut is global even when the key itself is not', () => {
     expect(isGlobalPress({ text: 'k', modifiers: ['Meta'] })).toBe(true);
     expect(isGlobalPress({ key: 'k', modifiers: ['Control', 'Shift'] })).toBe(true);
