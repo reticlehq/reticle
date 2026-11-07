@@ -8,13 +8,17 @@ import { RETICLE_EARLY_CAPTURE } from '@reticlehq/core';
 import { afterEach, describe, expect, it } from 'vitest';
 import { queueEarlyConsole } from './lease-page-error.js';
 
+type Listener = (event: unknown) => void;
+
 interface FakeWindow {
   console: Record<'error' | 'warn', (...args: unknown[]) => void>;
-  listeners: Map<string, (event: unknown) => void>;
-  addEventListener(type: string, listener: (event: unknown) => void): void;
+  listeners: Map<string, Listener[]>;
+  addEventListener(type: string, listener: Listener): void;
+  removeEventListener(type: string, listener: Listener): void;
   dispatchEvent(event: unknown): boolean;
   setInterval(fn: () => void, ms: number): number;
   clearInterval(id: number): void;
+  Event: new (type: string) => unknown;
   ErrorEvent: new (type: string, init: Record<string, unknown>) => unknown;
   PromiseRejectionEvent: new (type: string, init: Record<string, unknown>) => unknown;
   [key: string]: unknown;
@@ -22,10 +26,19 @@ interface FakeWindow {
 
 /** A copy of an event, as the page's own constructors would make one. */
 class Copied {
+  stopped = false;
   constructor(
     readonly type: string,
-    readonly init: Record<string, unknown>,
+    readonly init: Record<string, unknown> = {},
   ) {}
+  stopPropagation(): void {
+    this.stopped = true;
+  }
+}
+
+/** The first `error` listener on the window: the one the init script installs. */
+function keptListener(win: FakeWindow): Listener | undefined {
+  return win.listeners.get('error')?.[0];
 }
 
 function fakeWindow(): {
@@ -36,12 +49,20 @@ function fakeWindow(): {
 } {
   const printed: unknown[][] = [];
   const dispatched: unknown[] = [];
-  const listeners = new Map<string, (event: unknown) => void>();
+  const listeners = new Map<string, Listener[]>();
   let timer: (() => void) | undefined;
   const win: FakeWindow = {
     console: { error: (...args) => printed.push(args), warn: (...args) => printed.push(args) },
     listeners,
-    addEventListener: (type, listener) => listeners.set(type, listener),
+    addEventListener: (type, listener) => {
+      listeners.set(type, [...(listeners.get(type) ?? []), listener]);
+    },
+    removeEventListener: (type, listener) => {
+      listeners.set(
+        type,
+        (listeners.get(type) ?? []).filter((l) => l !== listener),
+      );
+    },
     dispatchEvent: (event) => {
       dispatched.push(event);
       return true;
@@ -53,6 +74,7 @@ function fakeWindow(): {
     clearInterval: () => {
       timer = undefined;
     },
+    Event: Copied,
     ErrorEvent: Copied,
     PromiseRejectionEvent: Copied,
   };
@@ -82,7 +104,7 @@ describe('queueEarlyConsole', () => {
     const { win } = fakeWindow();
     queueEarlyConsole(ARG);
     const event = { type: 'error' };
-    win.listeners.get('error')?.(event);
+    keptListener(win)?.(event);
     expect(win[RETICLE_EARLY_CAPTURE]).toEqual({ queue: [{ event }], dropped: 0 });
   });
 
@@ -133,7 +155,7 @@ describe('queueEarlyConsole hands the queue to the SDK', () => {
     const { win, dispatched, tick } = fakeWindow();
     queueEarlyConsole(ARG);
     win.console.error('htmx:syntax:error', 7);
-    win.listeners.get('error')?.({ message: 'early throw', filename: 'app.js', lineno: 3 });
+    keptListener(win)?.({ message: 'early throw', filename: 'app.js', lineno: 3 });
     tick();
     expect(win[RETICLE_EARLY_CAPTURE]).not.toBeNull();
     const seen = installSdk(win);
@@ -168,5 +190,81 @@ describe('queueEarlyConsole hands the queue to the SDK', () => {
     }
     expect(win[RETICLE_EARLY_CAPTURE]).toBeNull();
     expect(printed).toEqual([['lonely']]);
+  });
+});
+
+/*
+ * A `<script>` or `<img>` that fails to load dispatches a plain `Event` on its element, and the
+ * element is the only thing that names the URL. The replay copied it into an empty `ErrorEvent` on
+ * `window`, so `verify` reported `{ message: "", source: "", line: 0 }` and lost the URL (#2220).
+ */
+describe('queueEarlyConsole replays a failed resource load from its element', () => {
+  afterEach(() => {
+    delete (globalThis as { window?: unknown }).window;
+  });
+
+  /**
+   * An element in the page. Its dispatch runs the window's capture listeners first, then its own
+   * handler, unless a window listener stopped the event.
+   */
+  const fakeElement = (win: FakeWindow, connected: boolean) => {
+    const ownHandler: unknown[] = [];
+    const element = {
+      tagName: 'SCRIPT',
+      isConnected: connected,
+      getAttribute: (name: string) => ('src' === name ? '/src/missing-entry.ts' : null),
+      dispatchEvent: (event: Copied) => {
+        for (const listener of win.listeners.get('error') ?? []) {
+          listener(Object.assign(event, { target: element }));
+        }
+        if (!event.stopped) {
+          ownHandler.push(event);
+        }
+        return true;
+      },
+    };
+    return { element, ownHandler };
+  };
+
+  /** What the SDK does when it installs: wrap the console, and listen for errors on `window`. */
+  const installSdk = (win: FakeWindow): unknown[] => {
+    const seen: unknown[] = [];
+    win.console.error = () => undefined;
+    win.addEventListener('error', (event) => seen.push(event));
+    return seen;
+  };
+
+  it('sends the event again from the element, so the SDK can read the tag and the URL', () => {
+    const { win, dispatched, tick } = fakeWindow();
+    queueEarlyConsole(ARG);
+    const { element } = fakeElement(win, true);
+    keptListener(win)?.({ type: 'error', target: element });
+    const seen = installSdk(win);
+    tick();
+    expect(dispatched).toEqual([]);
+    expect(seen).toHaveLength(1);
+    expect(seen[0]).toMatchObject({ type: 'error', init: {}, target: element });
+  });
+
+  it('does not run the page own handler on the element a second time', () => {
+    const { win, tick } = fakeWindow();
+    queueEarlyConsole(ARG);
+    const { element, ownHandler } = fakeElement(win, true);
+    keptListener(win)?.({ type: 'error', target: element });
+    installSdk(win);
+    tick();
+    expect(ownHandler).toEqual([]);
+    win.console.error('later');
+    expect(win.listeners.get('error')).toHaveLength(2);
+  });
+
+  it('copies the event to window when the element left the page', () => {
+    const { win, dispatched, tick } = fakeWindow();
+    queueEarlyConsole(ARG);
+    const { element } = fakeElement(win, false);
+    keptListener(win)?.({ type: 'error', target: element });
+    installSdk(win);
+    tick();
+    expect(dispatched).toEqual([new Copied('error', {})]);
   });
 });

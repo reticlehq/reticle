@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — on a page Reticle drives, a script that failed to load before the SDK attached was reported as a blank error.** `reticle verify` counted the error, but its evidence was `{ message: "", source: "", line: 0 }`, so the agent had to find the broken script by hand. The early capture now sends a failed `<script>`, `<img>` or `<link>` load again from its element, and the error reads `<script> failed to load: /src/missing-entry.ts` with `source` set, as it does when the SDK is attached. The page's own `onerror` handlers do not run a second time. Closes [#2220](https://github.com/reticlehq/reticle/issues/2220).
