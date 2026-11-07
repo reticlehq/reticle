@@ -390,6 +390,7 @@ export default defineConfig({
     'const config = { plugins: [react()] };\nexport default defineConfig(config);',
     'const config = defineConfig(({ mode }) => ({ plugins: [react()] }));\nexport default config;',
     'const config: UserConfig = { plugins: [react()] };\nexport default config;',
+    'const $config = { plugins: [react()] };\nexport default $config;',
   ])('patches a config declared under a name and exported by it: %s', (body) => {
     const r = patchViteConfig(
       `import { defineConfig } from 'vite';\nconst lint = { plugins: ['oxc'] };\n${body}\n`,

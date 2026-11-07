@@ -168,7 +168,7 @@ function maskStringsAndComments(source: string): string | null {
   while (i < source.length) {
     const ch = source[i] ?? '';
     const next = source[i + 1];
-    let stop: number | null = i + 1;
+    let stop: number | null;
     if ('/' === ch && '/' === next) {
       const end = source.indexOf('\n', i);
       stop = -1 === end ? source.length : end;
@@ -308,7 +308,7 @@ function exportedDeclaration(source: string): RegExpExecArray | null {
   if (name === undefined) {
     return null;
   }
-  const escaped = name.replace(/\$/g, '\\$');
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   return new RegExp(
     `\\b(?:const|let|var)\\s+${escaped}\\s*(?::[^=;]*)?=\\s*(?:defineConfig\\s*\\(\\s*)?`,
   ).exec(source);
