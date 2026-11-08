@@ -28,7 +28,7 @@ Every action Reticle can perform takes the same shape: an element, an `action` n
 | `tap` | `{ holdMs? }` | A touch tap: pointer and touch events, then `click`. `holdMs` makes it a long press |
 | `zoom` | none | Page zoom. Refused inside the page, because CSS zoom changes how a page looks without changing its layout, and a passing check on it would be false |
 | `upload` | `{ content?, name?, type?, path? }` | Sets a file on `<input type="file">`. Inline bytes default to `"reticle test file"` / `"file.txt"` / `"text/plain"`. `path` reads a file from disk, scoped to the project root plus any opt-in directories listed in `.reticle.json` as `"uploadRoots": ["~/Downloads", "/Volumes/fixtures"]`. A refusal names every allowed root. |
-| `drag` | `{ toRef }` | Pointer-based drag (dnd-kit, react-beautiful-dnd) plus HTML5 DnD. `target` is an alias |
+| `drag` | `{ toRef, at?, to?, modifiers? }` | Pointer-based drag (dnd-kit, react-beautiful-dnd) plus HTML5 DnD. `target` is an alias. `modifiers` (for example `["Shift"]`) are held for the whole drag, so a canvas editor sees `shiftKey` on every pointer event |
 
 ### Arguments that are not actions
 

@@ -705,7 +705,7 @@ async function dispatchOther(
         to: boxFractionFromArgs(args, DRAG_TO_POINT_ARG),
       };
       if ('' === toRef) {
-        return await dragElement(el, null, args['data'], points);
+        return await dragElement(el, null, args['data'], points, clickInputOf(args));
       }
       // A target WAS named and did not resolve. That is a malformed call, not a free drag: dragging
       // nowhere and reporting `ok: true` is a false green, and a guessed target name reads as "no
@@ -717,7 +717,7 @@ async function dispatchOther(
             'reticle_snapshot or reticle_query as args.toRef (alias: args.target)',
         );
       }
-      return await dragElement(el, resolved, args['data'], points);
+      return await dragElement(el, resolved, args['data'], points, clickInputOf(args));
     }
     default:
       throw new Error(`unknown action '${action}'`);

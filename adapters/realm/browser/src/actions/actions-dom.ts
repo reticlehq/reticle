@@ -437,6 +437,8 @@ export async function dragElement(
   data: unknown,
   /** Where the drag starts in the source, and where it ends in the target (or in the source). */
   points: { at?: BoxFraction | undefined; to?: BoxFraction | undefined } = {},
+  /** Modifiers held for the whole drag (a canvas editor reads shiftKey to snap a line). */
+  input: ClickInput = PLAIN_CLICK,
 ): Promise<boolean> {
   const dest = target ?? source;
   const from = pointOf(source, points.at);
@@ -447,8 +449,8 @@ export async function dragElement(
   const crosses = (rect: DOMRect, p: Point): boolean =>
     p.x >= rect.left && p.x <= rect.right && p.y >= rect.top && p.y <= rect.bottom;
 
-  fireAt(source, 'pointerdown', from, BUTTON_HELD);
-  fireAt(source, 'mousedown', from, BUTTON_HELD);
+  fireAt(source, 'pointerdown', from, BUTTON_HELD, undefined, 0, input);
+  fireAt(source, 'mousedown', from, BUTTON_HELD, undefined, 0, input);
   await nativeFrame();
   // A path, not a jump. `activationConstraint: { distance: N }` is the standard way to keep a
   // draggable card clickable, and a sensor only starts a drag once it has SEEN the pointer travel
@@ -466,32 +468,32 @@ export async function dragElement(
       leftSource = true;
       // relatedTarget is the element the pointer crossed TO/FROM; React's enter/leave synthesis
       // reads it off the delegated over/out pair to know which boundary was crossed.
-      fireAt(source, 'pointerout', at, BUTTON_HELD, dest);
-      fireAt(source, 'mouseout', at, BUTTON_HELD, dest);
-      fireAt(source, 'pointerleave', at, BUTTON_HELD, dest);
-      fireAt(source, 'mouseleave', at, BUTTON_HELD, dest);
+      fireAt(source, 'pointerout', at, BUTTON_HELD, dest, 0, input);
+      fireAt(source, 'mouseout', at, BUTTON_HELD, dest, 0, input);
+      fireAt(source, 'pointerleave', at, BUTTON_HELD, dest, 0, input);
+      fireAt(source, 'mouseleave', at, BUTTON_HELD, dest, 0, input);
     }
     if (leftSource && !enteredDest && destRect !== null && crosses(destRect, at)) {
       enteredDest = true;
-      fireAt(dest, 'pointerover', at, BUTTON_HELD, source);
-      fireAt(dest, 'mouseover', at, BUTTON_HELD, source);
-      fireAt(dest, 'pointerenter', at, BUTTON_HELD, source);
-      fireAt(dest, 'mouseenter', at, BUTTON_HELD, source);
+      fireAt(dest, 'pointerover', at, BUTTON_HELD, source, 0, input);
+      fireAt(dest, 'mouseover', at, BUTTON_HELD, source, 0, input);
+      fireAt(dest, 'pointerenter', at, BUTTON_HELD, source, 0, input);
+      fireAt(dest, 'mouseenter', at, BUTTON_HELD, source, 0, input);
     }
-    fireAt(dest, 'pointermove', at, BUTTON_HELD);
-    fireAt(dest, 'mousemove', at, BUTTON_HELD);
+    fireAt(dest, 'pointermove', at, BUTTON_HELD, undefined, 0, input);
+    fireAt(dest, 'mousemove', at, BUTTON_HELD, undefined, 0, input);
     await nativeFrame();
   }
   // A short hop whose sampled steps never land inside the destination box still crossed into it;
   // announce the arrival rather than silently skipping the pair.
   if (!enteredDest && destRect !== null) {
-    fireAt(dest, 'pointerover', to, BUTTON_HELD, source);
-    fireAt(dest, 'mouseover', to, BUTTON_HELD, source);
-    fireAt(dest, 'pointerenter', to, BUTTON_HELD, source);
-    fireAt(dest, 'mouseenter', to, BUTTON_HELD, source);
+    fireAt(dest, 'pointerover', to, BUTTON_HELD, source, 0, input);
+    fireAt(dest, 'mouseover', to, BUTTON_HELD, source, 0, input);
+    fireAt(dest, 'pointerenter', to, BUTTON_HELD, source, 0, input);
+    fireAt(dest, 'mouseenter', to, BUTTON_HELD, source, 0, input);
   }
-  fireAt(dest, 'pointerup', to, BUTTON_RELEASED);
-  fireAt(dest, 'mouseup', to, BUTTON_RELEASED);
+  fireAt(dest, 'pointerup', to, BUTTON_RELEASED, undefined, 0, input);
+  fireAt(dest, 'mouseup', to, BUTTON_RELEASED, undefined, 0, input);
 
   let dropPrevented = false;
   if ('function' === typeof DragEvent) {

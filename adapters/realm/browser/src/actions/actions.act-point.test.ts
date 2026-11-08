@@ -72,6 +72,32 @@ describe('a pointer action at a point inside the target', () => {
     expect(up).toMatchObject({ x: 300, y: 50 });
   });
 
+  it('holds the named modifiers through a whole drag, and none without them', async () => {
+    // A canvas editor reads shiftKey on each pointer event to snap a line or make a square. A drag
+    // always sent shiftKey false, so "Shift-drag" could not be driven at all.
+    const shift: boolean[] = [];
+    for (const type of [
+      'pointerdown',
+      'pointermove',
+      'pointerup',
+      'mousedown',
+      'mousemove',
+      'mouseup',
+    ]) {
+      canvas.addEventListener(type, (event) => shift.push((event as MouseEvent).shiftKey));
+    }
+    await executeAction(refs.refFor(canvas), ActionType.DRAG, {
+      at,
+      to: { x: 1, y: 0 },
+      modifiers: ['Shift'],
+    });
+    expect(shift.length).toBeGreaterThan(0);
+    expect(shift.every(Boolean)).toBe(true);
+    shift.length = 0;
+    await executeAction(refs.refFor(canvas), ActionType.DRAG, { at, to: { x: 1, y: 0 } });
+    expect(shift.some(Boolean)).toBe(false);
+  });
+
   it('clamps a point outside the box to its edge', async () => {
     await executeAction(refs.refFor(canvas), ActionType.CLICK, { at: { x: 2, y: -1 } });
     expect(seen.find((e) => 'click' === e.type)).toMatchObject({ x: 300, y: 50 });
