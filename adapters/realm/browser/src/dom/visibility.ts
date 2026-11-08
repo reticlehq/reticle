@@ -67,6 +67,13 @@ const OVERLAY_ARIA_HIDDEN = 'data-aria-hidden';
 const OPEN_LAYER =
   '[role="dialog"], [role="alertdialog"], [role="menu"], [role="listbox"], dialog[open], [aria-modal="true"]';
 
+/** Tags whose text content is never rendered, however visible the element computes. */
+const NON_RENDERED_TAGS: readonly string[] = ['script', 'style', 'template', 'noscript'];
+
+export function isNonRendered(el: Element): boolean {
+  return NON_RENDERED_TAGS.includes(el.tagName.toLowerCase());
+}
+
 /** Children of `<body>` that paint nothing, which a modal manager never hides. */
 const UNPAINTED_TAGS = new Set(['script', 'style', 'template', 'noscript', 'link', 'meta']);
 
