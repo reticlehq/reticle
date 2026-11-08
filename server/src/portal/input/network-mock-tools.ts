@@ -32,6 +32,13 @@ const ruleShape = z.object({
     .boolean()
     .optional()
     .describe('Simulate a network failure (offline) instead of a response.'),
+  forwardTo: z
+    .string()
+    .url()
+    .optional()
+    .describe(
+      'Send the matching request on to this origin, e.g. "http://127.0.0.1:15500"; the path and query stay and the real server answers.',
+    ),
 });
 
 /**
@@ -52,7 +59,9 @@ const ruleShape = z.object({
  * to parse.
  */
 export function toRules(value: unknown): MockRule[] {
-  if (value === undefined) return [];
+  if (value === undefined) {
+    return [];
+  }
   const parsed = z.array(ruleShape).safeParse(value);
   if (!parsed.success) {
     const problem = parsed.error.issues
@@ -61,18 +70,33 @@ export function toRules(value: unknown): MockRule[] {
     throw new Error(
       `reticle_network_mock could not read \`mocks\` (${problem}). Nothing was applied and mocking ` +
         'was left unchanged — an unreadable rule is NOT treated as a request to clear. A rule is ' +
-        '{ urlContains, method?, status?, body?, contentType?, delayMs?, abort? }; pass `clear: true` ' +
+        '{ urlContains, method?, status?, body?, contentType?, delayMs?, abort?, forwardTo? }; pass `clear: true` ' +
         'or an empty array if you meant to turn mocking off.',
     );
   }
   return parsed.data.map((r) => {
     const rule: MockRule = { urlContains: r.urlContains };
-    if (r.method !== undefined) rule.method = r.method;
-    if (r.status !== undefined) rule.status = r.status;
-    if (r.body !== undefined) rule.body = r.body;
-    if (r.contentType !== undefined) rule.contentType = r.contentType;
-    if (r.delayMs !== undefined) rule.delayMs = r.delayMs;
-    if (r.abort !== undefined) rule.abort = r.abort;
+    if (r.method !== undefined) {
+      rule.method = r.method;
+    }
+    if (r.status !== undefined) {
+      rule.status = r.status;
+    }
+    if (r.body !== undefined) {
+      rule.body = r.body;
+    }
+    if (r.contentType !== undefined) {
+      rule.contentType = r.contentType;
+    }
+    if (r.delayMs !== undefined) {
+      rule.delayMs = r.delayMs;
+    }
+    if (r.abort !== undefined) {
+      rule.abort = r.abort;
+    }
+    if (r.forwardTo !== undefined) {
+      rule.forwardTo = r.forwardTo;
+    }
     return rule;
   });
 }
@@ -109,7 +133,7 @@ export const NETWORK_MOCK_TOOLS: ToolDef[] = [
         .array(ruleShape)
         .optional()
         .describe(
-          'Interception rules, first match wins: { urlContains, method?, status?, body?, contentType?, delayMs?, abort? }. Omit or pass [] to clear.',
+          'Interception rules, first match wins: { urlContains, method?, status?, body?, contentType?, delayMs?, abort?, forwardTo? }. Omit or pass [] to clear.',
         ),
       clear: z.boolean().optional().describe('Clear all active mocks (same as mocks: []).'),
       ...sessionIdShape,
@@ -127,13 +151,17 @@ export const NETWORK_MOCK_TOOLS: ToolDef[] = [
       const provider = mockProvider(deps);
       if (provider !== undefined) {
         const applied = await provider.setMocks(session.url, rules);
-        if (applied) return mocksApplied(deps, session.id, rules.length);
+        if (applied) {
+          return mocksApplied(deps, session.id, rules.length);
+        }
       }
       // A lease is a Playwright-owned page — CDP intercept was always there, this tool just had no
       // route to it. Tried after the driven provider: when both exist, drive is the page the caller
       // means, and a lease is the fallback rather than a competitor.
       const leased = await deps.pool?.setMocksLease(session.id, rules);
-      if (true === leased) return mocksApplied(deps, session.id, rules.length);
+      if (true === leased) {
+        return mocksApplied(deps, session.id, rules.length);
+      }
       return {
         applied: false,
         count: 0,

@@ -28,6 +28,12 @@ export interface MockRule {
   delayMs?: number;
   /** Simulate a network failure (offline / connection refused) instead of a response. */
   abort?: boolean;
+  /**
+   * Send the request on to this origin (protocol, host and port; the path and query stay). An app that
+   * calls a fixed address (`http://localhost:5000`) can then reach its API on any port, for example when
+   * the host already uses that port. The real server answers.
+   */
+  forwardTo?: string;
 }
 
 /** What to do with a request after matching: fulfill a canned response, abort it, or let it through. */
@@ -37,6 +43,8 @@ interface MockOutcome {
   body?: string;
   contentType?: string;
   delayMs?: number;
+  /** For `continue`: the url the request goes on with (a `forwardTo` rule). */
+  url?: string;
 }
 
 const DEFAULT_STATUS = 200;
@@ -48,10 +56,26 @@ const DEFAULT_CONTENT_TYPE = 'application/json';
  */
 export function matchMock(rules: MockRule[], req: { url: string; method: string }): MockOutcome {
   for (const rule of rules) {
-    if (!req.url.includes(rule.urlContains)) continue;
-    if (rule.method !== undefined && rule.method.toUpperCase() !== req.method.toUpperCase())
+    if (!req.url.includes(rule.urlContains)) {
       continue;
-    if (true === rule.abort) return { kind: 'abort' };
+    }
+    if (rule.method !== undefined && rule.method.toUpperCase() !== req.method.toUpperCase()) {
+      continue;
+    }
+    if (true === rule.abort) {
+      return { kind: 'abort' };
+    }
+    if (rule.forwardTo !== undefined) {
+      const to = new URL(rule.forwardTo);
+      const next = new URL(req.url);
+      next.protocol = to.protocol;
+      next.host = to.host;
+      const outcome: MockOutcome = { kind: 'continue', url: next.toString() };
+      if (rule.delayMs !== undefined) {
+        outcome.delayMs = rule.delayMs;
+      }
+      return outcome;
+    }
     /*
      * A rule that says only WHEN says nothing about WHAT.
      *
@@ -77,8 +101,12 @@ export function matchMock(rules: MockRule[], req: { url: string; method: string 
       status: rule.status ?? DEFAULT_STATUS,
       contentType: rule.contentType ?? DEFAULT_CONTENT_TYPE,
     };
-    if (rule.body !== undefined) outcome.body = rule.body;
-    if (rule.delayMs !== undefined) outcome.delayMs = rule.delayMs;
+    if (rule.body !== undefined) {
+      outcome.body = rule.body;
+    }
+    if (rule.delayMs !== undefined) {
+      outcome.delayMs = rule.delayMs;
+    }
     return outcome;
   }
   return { kind: 'continue' };
@@ -94,15 +122,19 @@ export async function applyOutcome(
     // Sleep FIRST, then let it through: the delay is the whole perturbation, and the response that
     // comes back is the server's own. Fallback, not continue: a lease's context route (the CSP
     // widening, #2016) must still see the request.
-    if (outcome.delayMs !== undefined && outcome.delayMs > 0) await sleep(outcome.delayMs);
-    await route.fallback();
+    if (outcome.delayMs !== undefined && outcome.delayMs > 0) {
+      await sleep(outcome.delayMs);
+    }
+    await (outcome.url === undefined ? route.fallback() : route.fallback({ url: outcome.url }));
     return;
   }
   if ('abort' === outcome.kind) {
     await route.abort('failed');
     return;
   }
-  if (outcome.delayMs !== undefined && outcome.delayMs > 0) await sleep(outcome.delayMs);
+  if (outcome.delayMs !== undefined && outcome.delayMs > 0) {
+    await sleep(outcome.delayMs);
+  }
   await route.fulfill({
     status: outcome.status ?? DEFAULT_STATUS,
     contentType: outcome.contentType ?? DEFAULT_CONTENT_TYPE,
@@ -123,7 +155,9 @@ export async function installNetworkMocks(
   sleep: (ms: number) => Promise<void> = realSleep,
 ): Promise<void> {
   await page.unroute('**/*').catch(() => undefined);
-  if (0 === rules.length) return;
+  if (0 === rules.length) {
+    return;
+  }
   await page.route('**/*', (route) => {
     const req = route.request();
     const outcome = matchMock(rules, { url: req.url(), method: req.method() });

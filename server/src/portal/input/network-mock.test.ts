@@ -32,6 +32,16 @@ describe('matchMock — pure rule resolution', () => {
     });
   });
 
+  it('forwards a request to another origin and keeps its path and query', () => {
+    // An app that calls a fixed address (http://localhost:5000) can reach its API on any port: the
+    // browser cannot bind that port when the host already uses it (macOS AirPlay holds 5000).
+    const rules = [{ urlContains: 'localhost:5000', forwardTo: 'http://127.0.0.1:15500' }];
+    expect(matchMock(rules, { url: 'http://localhost:5000/contacts?q=a', method: 'GET' })).toEqual({
+      kind: 'continue',
+      url: 'http://127.0.0.1:15500/contacts?q=a',
+    });
+  });
+
   it('first matching rule wins over a later one', () => {
     const rules: MockRule[] = [
       { urlContains: '/api', status: 503 },
@@ -65,8 +75,8 @@ function recordingRoute(
       calls.push({ fn: 'continue' });
       return Promise.resolve();
     },
-    fallback: () => {
-      calls.push({ fn: 'fallback' });
+    fallback: (arg?: unknown) => {
+      calls.push(arg === undefined ? { fn: 'fallback' } : { fn: 'fallback', arg });
       return Promise.resolve();
     },
     abort: (arg: string) => {
@@ -111,6 +121,14 @@ describe('applyOutcome — drives a Route from an outcome', () => {
     const { route, calls } = recordingRoute('/x', 'GET');
     await applyOutcome(route, { kind: 'continue' }, () => Promise.resolve());
     expect(calls).toEqual([{ fn: 'fallback' }]);
+  });
+
+  it('a forwarded request goes on with its new url, and the real server answers', async () => {
+    const { route, calls } = recordingRoute('http://localhost:5000/contacts', 'GET');
+    await applyOutcome(route, { kind: 'continue', url: 'http://127.0.0.1:15500/contacts' }, () =>
+      Promise.resolve(),
+    );
+    expect(calls).toEqual([{ fn: 'fallback', arg: { url: 'http://127.0.0.1:15500/contacts' } }]);
   });
 });
 
