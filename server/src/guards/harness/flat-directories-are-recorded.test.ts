@@ -66,7 +66,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // +1: scope-roots.ts, scope resolution split out of query.ts at the 1000-line cap, when a scope
   // started to resolve to every element it matches (#1663).
   'adapters/realm/browser/src/actions': 11,
-  'adapters/realm/browser/src/dom': 19,
+  'adapters/realm/browser/src/dom': 20,
   // +1: error-repeats.ts, the limiter every uncaught-error path in console.ts goes through (#986).
   'adapters/realm/browser/src/observers': 27,
   // 17 since the HUD's position primitives left `presenter-drag.ts` for their own leaf: the drag

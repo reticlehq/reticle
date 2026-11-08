@@ -439,6 +439,8 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
       ids: true === args['ids'],
       // And a harness looking for what a person would see broken asks for the layout audit.
       audit: true === args['audit'],
+      // And a grader comparing two builds of a chart asks for each chart's plotted shapes.
+      charts: true === args['charts'],
     }),
   );
   reg.set(ReticleCommand.QUERY, (args) => {

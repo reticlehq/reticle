@@ -7,6 +7,7 @@ import { refs } from './addressing/refs.js';
 import { readTestId } from './addressing/testid-attr.js';
 import { identifyComponent } from '@/registry/stores/adapters.js';
 import { auditLayout, type LayoutFinding } from './layout-audit.js';
+import { readCharts, type ChartReading } from './chart-geometry.js';
 import { pageRoute } from '@/security/page-location.js';
 import { isIgnored, isReticleOverlay } from './dom-ignore.js';
 
@@ -144,6 +145,8 @@ interface SnapshotResult {
   scopeMissing?: boolean;
   /** Visible layout defects under the scope, when `audit` asked for them. */
   audit?: LayoutFinding[];
+  /** Each SVG chart's plotted shapes as relative geometry, when `charts` asked for them. */
+  charts?: ChartReading[];
   /**
    * How many MEANINGFUL nodes the lean walk passed over, present only in a lean mode and only when
    * non-zero. This is what stops an empty `interactive` tree reading as an empty page — the mode is
@@ -217,6 +220,8 @@ interface SnapshotOptions {
   ids?: boolean | undefined;
   /** Also measure the page for visible layout defects (`layout-audit.ts`). Off by default: it forces layout. */
   audit?: boolean | undefined;
+  /** Also read each SVG chart's plotted shapes (`chart-geometry.ts`). Off by default: it forces layout. */
+  charts?: boolean | undefined;
 }
 
 /**
@@ -717,5 +722,6 @@ export function buildSnapshot(options: SnapshotOptions = {}): SnapshotResult {
     ...(ctx.unread.length > 0 ? { unread: ctx.unread } : {}),
     ...(ctx.unreadOverflow ? { unreadOverflow: true as const } : {}),
     ...(true === options.audit ? { audit: auditLayout(root) } : {}),
+    ...(true === options.charts ? { charts: readCharts(root) } : {}),
   };
 }
