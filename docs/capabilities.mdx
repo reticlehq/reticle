@@ -105,6 +105,62 @@ The reliable pattern is:
 3. Advance by the required interval.
 4. Assert the consequence.
 
+### Deterministic lease: the same pixels on every run
+
+A canvas game or an animation draws something different on each run, because time and randomness differ. Acquire a lease with `deterministic` to make two runs the same:
+
+```json
+{ "tool": "reticle_lease", "args": { "action": "acquire", "url": "http://localhost:5173", "deterministic": { "seed": 7, "platform": "Linux x86_64" } } }
+{ "tool": "reticle_clock", "args": { "stepFrames": 30 } }
+```
+
+```json
+{ "frozen": true, "frame": 30, "nowMs": 500 }
+```
+
+Before any page script runs, the lease installs these in the tab:
+
+- `Math.random`, `crypto.getRandomValues` and `crypto.randomUUID` take values from a generator with the given `seed` (default 1).
+- `Date`, `performance.now`, `setTimeout`, `setInterval` and `requestAnimationFrame` use a virtual clock. It starts at 2026-01-01T00:00:00Z and moves only on `stepFrames`.
+- `devicePixelRatio` is 1. `platform` sets `navigator.platform`, the platform in `navigator.userAgent` and `navigator.userAgentData.platform`.
+
+Each step frame is 16.67 ms. In each frame, the due timers run in time order, then each `requestAnimationFrame` callback runs once. Then capture or read the page.
+
+<Warning>
+  Time stands still on this tab until you step it. A wait for a timer or an animation does not end
+  on its own. These still run on real time: CSS animations and transitions, workers, WebAssembly
+  threads, media playback and network responses. Mock the network with `reticle_network_mock` if the
+  page draws what it fetches. GPU drawing can differ between machines; compare runs on the same
+  machine.
+</Warning>
+### JS coverage of a leased tab: which code ran
+
+The JS engine counts each block of code that runs. On a leased tab, Reticle reads those counts from outside the app, with no change to it:
+
+```json
+{ "tool": "reticle_lease", "args": { "action": "acquire", "url": "http://localhost:5173", "jsCoverage": true } }
+{ "tool": "reticle_lease", "args": { "action": "coverage", "mode": "take", "urlContains": "/src/" } }
+```
+
+```json
+{
+  "running": true,
+  "scriptCount": 1,
+  "rangeCount": 3,
+  "scripts": [
+    {
+      "url": "http://localhost:5173/src/app.js",
+      "ranges": [
+        { "startOffset": 0, "endOffset": 412, "count": 1 },
+        { "startOffset": 120, "endOffset": 188, "count": 0 }
+      ]
+    }
+  ]
+}
+```
+
+A take returns what ran since the previous take. A range with `count: 0` is code that did not run. `jsCoverage: true` on acquire starts coverage before the page's first script, so the code that runs while the page loads is counted. `{ "mode": "start" }` starts it later, and misses that code. A take stops at `maxRanges` (default 20000) and names what it dropped in `truncated`; `filteredOut` counts the scripts that `urlContains` left out. Chromium only.
+
 ### Crawl: click everything, report anomalies
 
 ```json
@@ -147,7 +203,7 @@ Controls Reticle judges destructive are blocked unless you pass `confirmDangerou
 
 `{ "action": "crawl", "exhaustive": true }` goes past one page. It walks every state reachable from where you start, reaching each one by replaying the path that found it from a fresh load, so it never depends on "back" working. It fills text fields before it tries a form's buttons (from `RETICLE_SECRET_<FIELD>` when set, so it gets past a login, and only on the origin the crawl started on), and treats controls that differ only by a number, like table rows, as one. A control with the same name on a different screen is tried again there. Every write it finds is then driven again with the request failing. A write counts as **branched** only when the request was actually sent and broken. With the write failing, the app must not end up where it goes when the write succeeds; if it does, you get `failure-unhandled`. That part needs a browser Reticle drives (`reticle drive`).
 
-The run folds into the app-wide coverage ledger, which `reticle_verify { action: "coverage", app: true }` also reports. It has six levels, each with what is missing: routes **reached**, controls **touched**, controls **proved** (an `act_and_wait` came back `yes`), journeys **completed**, writes **branched** (failure path driven), and app functions **executed** (V8 coverage, driven browser only, collected from the first coverage request or exhaustive crawl onward, so an ordinary drive pays nothing for it). `frontier` is the number of states found and not yet explored. Zero means every state the explorer could tell apart was explored, not that every reachable state was: a state is its route plus the names of its controls, so two screens that differ only in field values, in how many of a control they show, or in what the same controls do count as one, and the second is never visited. `reticle gate` blocks when a level falls below the best it has reached, and when a changed file never ran. A changed file whose coverage was taken before the edit is reported as `coverageStale` instead, because its counts describe the old code. When a drop was intended, `reticle gate --accept-coverage` records today's levels as the new best.
+The run folds into the app-wide coverage ledger, which `reticle_verify { action: "coverage", app: true }` also reports. It has six levels, each with what is missing: routes **reached**, controls **touched**, controls **proved** (an `act_and_wait` came back `yes`), journeys **completed**, writes **branched** (failure path driven), and app functions **executed** (JS coverage, driven browser only, collected from the first coverage request or exhaustive crawl onward, so an ordinary drive pays nothing for it). `frontier` is the number of states found and not yet explored. Zero means every state the explorer could tell apart was explored, not that every reachable state was: a state is its route plus the names of its controls, so two screens that differ only in field values, in how many of a control they show, or in what the same controls do count as one, and the second is never visited. `reticle gate` blocks when a level falls below the best it has reached, and when a changed file never ran. A changed file whose coverage was taken before the edit is reported as `coverageStale` instead, because its counts describe the old code. When a drop was intended, `reticle gate --accept-coverage` records today's levels as the new best.
 
 The same report has a `holes` block. It names what was never reached, by kind: `routes`, `controls`, `edges` (controls whose edge-case inputs and interactions were never driven), `writes` (failure path never driven), `functions` and `components`. A kind that nothing could measure has `measured: false` and a `note` that tells you why. A list past its cap has `overflow`, the count of the items it does not name. The `findings` block lists the behaviour faults in the ledger: `undo-not-restored`, `repeat-changed-state`, `lost-after-reload`, `shown-differs-from-sent`, `intermittent-result` and `failure-unhandled`. Each finding has the steps that show it, and the `file:line` of the element when the app gives source attribution.
 

@@ -143,7 +143,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 12 with `animation-command.ts`: the `reticle_animations` target argument lives outside
   // `constants.ts`, because that file is already the monorepo's broad wire vocabulary. The split is
   // deliberate even though it makes this shallow directory cross the line.
-  'core/src/wire/constants': 12,
+  // 13 with `determinism.ts`: the names a deterministic lease shares with the SDK in its page.
+  'core/src/wire/constants': 13,
   // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
   // things on the Node side read back, and its parser was living beside the MCP tool handlers — so
   // every other reader imported from the tool surface to parse a string the tool surface does not
@@ -296,7 +297,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // the 1000-line cap.
   // 57: `compare-tools.ts`, the `reticle_verify { action: "compare" }` member. Every tool
   // definition lives here beside its siblings (`explore-tools.ts`, `crawl-tools.ts`).
-  'server/src/surface/tools': 57,
+  // 58: `lease-coverage-tools.ts`, the `reticle_lease { action: "coverage" }` member, beside
+  // `lease-tools.ts`, which is near the 1000-line cap.
+  'server/src/surface/tools': 58,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it
@@ -341,7 +344,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // time to see, buffered per lease and journaled into the session that connects for it.
   // 13 with `lease-page-error.ts` (#1966): the lease's listener install + release report, split out
   // of browser-pool.ts at the 1000-line cap, beside its test.
-  'server/src/portal/pool': 14,
+  // 15 with `determinism.ts`: the page script and step of a deterministic lease, set on its context.
+  'server/src/portal/pool': 15,
   // 22 since `session-verdict-facts.ts` was extracted (the count is source files, not tests): both
   // verdict-producing tools were threading the same session facts into `decideVerified` with the
   // same conditional-spread idiom, and a third fact would have been a third copy. Raised on

@@ -11,6 +11,37 @@ import type {
   PooledPage,
   PooledPageError,
 } from './pool-contract.js';
+import type { SeedStorage } from '@reticlehq/core';
+import type { LeaseEmulation } from './lease-emulation.js';
+
+/** What one `BrowserPool#acquire` asks for. Every field is optional. */
+export interface AcquireOptions {
+  signal?: AbortSignal;
+  /**
+   * `'wait'` (the default) queues behind the cap. `'refuse'` is for a caller that has a person
+   * or an agent waiting on the answer and no way to see a queue: it is told the pool is full.
+   */
+  whenFull?: 'wait' | 'refuse';
+  sessionId?: string;
+  seedStorage?: SeedStorage;
+  owner?: string;
+  /** In a browser with a window the person can watch. */
+  headed?: boolean;
+  /**
+   * JavaScript installed before any page script runs, for this lease only. A view built for a
+   * desktop shell calls bindings the shell injects (`window.go`, `window.runtime`, a preload
+   * object) on mount; a stub here is what lets it reach its data path in a leased tab.
+   */
+  initScript?: string;
+  /** Granted on the lease's origin before the first navigation, so the first render sees them. */
+  permissions?: readonly string[];
+  /** Accept a self-signed or local-CA dev certificate for this lease's context only (#1255). */
+  ignoreHTTPSErrors?: boolean;
+  /** Media and viewport set on the context, so the first paint already has them. */
+  emulate?: LeaseEmulation;
+  /** Start JS coverage before the page's first script, so load-time code is counted. */
+  jsCoverage?: boolean;
+}
 
 /** A leased context+page for one flow. `release` frees the slot and closes the context. */
 export interface Lease {

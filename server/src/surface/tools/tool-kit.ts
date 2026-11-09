@@ -401,6 +401,8 @@ export const CDP_TOOLS: ReadonlySet<string> = new Set([
   // Breaks a request through the same Playwright route `reticle_network_mock` uses, so it fails the
   // same way under version skew and must be refused with the same sentence.
   ReticleTool.FLOW_MUTATE,
+  // Reads JS coverage through the lease's Playwright page, the way `reticle_network_mock` reaches it.
+  ReticleTool.LEASE_COVERAGE,
 ]);
 
 /**
