@@ -7,7 +7,7 @@ icon: code-compare
 `reticle compare` answers one question: does the candidate build show what the reference build shows? Use it to compare main with a pull request preview, or a known-good build with a changed build. The app needs nothing installed: no SDK, no plugin and no `reticle init`. Any URL works.
 
 ```bash
-npx @reticlehq/server compare <reference-url> <candidate-url> [--base <url>] [--json]
+npx @reticlehq/server compare <reference-url> <candidate-url> [--base <url>] [--json] [--report <file>]
 ```
 
 | Argument | Type | Default | What it does |
@@ -16,6 +16,7 @@ npx @reticlehq/server compare <reference-url> <candidate-url> [--base <url>] [--
 | `<candidate-url>` | string | required | The build to check, for example a pull request preview |
 | `--base <url>` | string | unset | The build before the change. Each difference gets a tag, and the command prints a score |
 | `--json` | boolean | off | Print one JSON object instead of text |
+| `--report <file>` | string | unset | Also write the result as one HTML page: the verdict, the counts, and each difference with its steps and the lines on each side. Open it in a browser, share it, or keep it as a CI artifact. It needs no network and runs no script |
 
 ## What it does
 

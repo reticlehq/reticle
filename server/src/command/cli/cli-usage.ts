@@ -137,7 +137,7 @@ const COMMANDS: readonly CommandDoc[] = [
   },
   {
     name: 'compare',
-    synopsis: 'compare <reference-url> <candidate-url> [--base <url>] [--json]',
+    synopsis: 'compare <reference-url> <candidate-url> [--base <url>] [--json] [--report <file>]',
     summary: 'Drive two builds the same way and list what users would see change',
     group: HelpGroup.CHECK,
     detail: COMPARE_DETAIL,
