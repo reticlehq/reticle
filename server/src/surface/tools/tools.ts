@@ -236,6 +236,12 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
         .describe(
           'Also measure the page for what a person would see broken: text cut off with no ellipsis, controls drawn over each other, text under WCAG contrast. Returns `audit: [{ kind, ref, what, detail }]`. Off by default; it forces layout.',
         ),
+      charts: z
+        .boolean()
+        .optional()
+        .describe(
+          'Also read each SVG chart as geometry: every bar, dot, line and slice as its box in percent of the chart box, with no colour. A wrong value moves a shape; a chart drawn larger or in other colours reads the same. Returns `charts: [{ label, shapes, cut? }]`. Off by default; it forces layout.',
+        ),
       ...sessionIdShape,
     },
     outputSchema: {
@@ -328,6 +334,7 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
         mode,
         ...(true === args['ids'] ? { ids: true } : {}),
         ...(true === args['audit'] ? { audit: true } : {}),
+        ...(true === args['charts'] ? { charts: true } : {}),
       }).then((raw) =>
         withSizeCost(
           noteUnmountedRoot(
