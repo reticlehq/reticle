@@ -9,16 +9,16 @@
     "typecheck": "react-router typegen && tsc --noEmit"
   },
   "dependencies": {
-    "@react-router/node": "^8.5.0",
-    "@react-router/serve": "^8.5.0",
+    "@react-router/node": "^8.5.1",
+    "@react-router/serve": "^8.5.1",
     "@reticlehq/react": "workspace:*",
     "isbot": "^5.2.2",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
-    "react-router": "^8.5.0"
+    "react-router": "^8.5.1"
   },
   "devDependencies": {
-    "@react-router/dev": "^8.5.0",
+    "@react-router/dev": "^8.5.1",
     "@reticlehq/vite-plugin": "workspace:*",
     "@types/node": "^26",
     "@types/react": "^19.3.0",

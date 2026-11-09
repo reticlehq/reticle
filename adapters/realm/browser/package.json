@@ -35,15 +35,15 @@
   "devDependencies": {
     "@iconify-json/heroicons-outline": "^1.2.1",
     "@iconify-json/heroicons-solid": "^1.2.1",
-    "@tanstack/query-core": "^5.105.0",
+    "@tanstack/query-core": "^5.105.2",
     "esbuild": "^0.28.2",
     "jotai": "^3.0.1",
     "jsdom": "^30.0.1",
-    "mobx": "^7.1.1",
+    "mobx": "^7.1.4",
     "pinia": "^4.1.0",
     "react": "^19.3.1",
     "recoil": "^0.7.7",
-    "svelte": "^5.57.2",
+    "svelte": "^5.57.3",
     "valtio": "^2.3.2",
     "vue": "^3.5.44",
     "xstate": "^5.33.3"

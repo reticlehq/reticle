@@ -36,7 +36,7 @@
     "@reticlehq/engine": "workspace:*",
     "@reticlehq/init": "workspace:*",
     "open-verification": "workspace:*",
-    "ws": "^8.22.0",
+    "ws": "^8.22.1",
     "zod": "^4.6.6"
   },
   "devDependencies": {
