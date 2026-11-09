@@ -47,6 +47,26 @@ describe('zeroInstallScript — the reader a page with no SDK is given', () => {
     });
   });
 
+  // Playwright runs an init script in EVERY frame. A rich-text editor's editing area is an iframe whose
+  // <body> IS the document being edited: the SDK mounted its HUD there, and saving the form stored 8 KB of
+  // HUD markup in a Dolibarr product description (2 of 7 no-change saves). The top frame already reads
+  // same-origin iframes, so a child frame gets nothing.
+  it('does nothing in a child frame: the top frame reads it, and an editor frame must stay untouched', () => {
+    const page: Record<string, unknown> = { top: { other: 'window' } };
+    page['self'] = page;
+    page['globalThis'] = page;
+    runInNewContext(zeroInstallScript(FAKE_BUNDLE, OPTS), page);
+    expect(page['__reticleInstance']).toBeUndefined();
+    expect(page['__connectedWith']).toBeUndefined();
+  });
+
+  it('still installs in the top frame, where top is the window itself', () => {
+    const page: Record<string, unknown> = {};
+    page['self'] = page;
+    page['top'] = page;
+    expect(run(page)['__connectedWith']).toMatchObject({ lease: true, token: 'tok' });
+  });
+
   // #1701 reports `Cannot read properties of null (reading 'appendChild')` on an `.svg` URL.
   it('does nothing on a document that is not HTML, and returns the not-HTML answer', () => {
     const page: Record<string, unknown> = {
