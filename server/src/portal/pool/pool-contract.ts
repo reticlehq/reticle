@@ -152,6 +152,8 @@ export interface PooledMockRule {
   contentType?: string;
   delayMs?: number;
   abort?: boolean;
+  /** Send the request on to this origin; the path and query stay (see network-mock.ts). */
+  forwardTo?: string;
 }
 
 /** An isolated browsing context (cookies/storage). Real Playwright `BrowserContext` satisfies this. */
