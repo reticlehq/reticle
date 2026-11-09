@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { consoleLines, isPendingLine, networkLines } from './effect-lines.js';
+import { consoleLines, isLoadedRead, isPendingLine, networkLines } from './effect-lines.js';
 
 describe('networkLines', () => {
   it('keeps method, path with query keys, status, and the start of the request body', () => {
@@ -40,25 +40,18 @@ describe('networkLines', () => {
     ]);
   });
 
-  it('leaves out a font, image or style sheet that loaded, and keeps one that failed', () => {
-    // A restyle that loads another font was reported as a different build: the only difference was
-    // `net: GET /fonts/gerbil.otf 200` (dashboard restyle i91, 2026-11-09). How a page looks is not what it does.
-    expect(
-      networkLines({
-        calls: [
-          { method: 'GET', url: '/fonts/gerbil.otf', status: 200 },
-          { method: 'GET', url: 'https://cdn.example.com/a/logo.PNG?v=3', status: 304 },
-          { method: 'GET', url: '/assets/index-3f2a.css', status: 200 },
-          { method: 'GET', url: '/img/hero.webp', status: 404 },
-          { method: 'GET', url: '/api/fonts', status: 200 },
-          { method: 'POST', url: '/upload/photo.png', status: 201 },
-        ],
-      }),
-    ).toEqual([
-      'net: GET /img/hero.webp 404',
-      'net: GET /api/fonts 200',
-      'net: POST /upload/photo.png 201',
-    ]);
+  it('names a read that loaded, and not a read that failed or a write', () => {
+    // A restyle that loads another font was reported as a different build (dashboard restyle i91, 2026-11-09).
+    const lines = networkLines({
+      calls: [
+        { method: 'GET', url: '/fonts/gerbil.otf', status: 200 },
+        { method: 'GET', url: '/api/items?page=2', status: 304 },
+        { method: 'GET', url: '/img/hero.webp', status: 404 },
+        { method: 'GET', url: '/slow', status: 'pending' },
+        { method: 'POST', url: '/upload/photo.png', status: 201 },
+      ],
+    });
+    expect(lines.map(isLoadedRead)).toEqual([true, true, false, false, false]);
   });
 
   it('cuts a long request body', () => {

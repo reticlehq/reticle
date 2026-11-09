@@ -10,9 +10,6 @@
  * in behaviour, and a read changes nothing on the server. A repeated write is kept: a double submit
  * is a defect.
  *
- * A read of a font, image or style sheet that loaded is left out: it is how the page looks, and a
- * restyle loads other ones. One that failed is kept, because a missing image is a defect.
- *
  * A read that failed is written as an `effects failed` line, never dropped: an empty list must mean
  * that nothing happened.
  */
@@ -57,19 +54,6 @@ function listOf(result: unknown, key: string): { items: unknown[] } | { failed: 
 const pathOf = (url: string): string => url.replace(HOST, '').replace(QUERY_VALUE, '=');
 
 const READ_METHOD = 'GET';
-/** The file types of how a page looks: fonts, images and style sheets. */
-const LOOK_FILE = /\.(?:woff2?|otf|ttf|eot|png|jpe?g|gif|svg|webp|avif|ico|bmp|css)$/i;
-const LOADED_MAX = 399;
-
-/** A read of a font, image or style sheet that loaded. */
-function isLookLoad(item: unknown): boolean {
-  const call = record(item) ?? {};
-  const method = asText(call['method']) ?? READ_METHOD;
-  const status = Number(call['status']);
-  const path = pathOf(asText(call['url']) ?? '').split(/[?#]/)[0] ?? '';
-  return method === READ_METHOD && status > 0 && status <= LOADED_MAX && LOOK_FILE.test(path);
-}
-
 /** The lines of a `reticle_observe { action: "network" }` result. */
 export function networkLines(result: unknown): string[] {
   const list = listOf(result, 'calls');
@@ -78,9 +62,6 @@ export function networkLines(result: unknown): string[] {
   }
   const reads = new Set<string>();
   return list.items.flatMap((item) => {
-    if (isLookLoad(item)) {
-      return [];
-    }
     const line = callLine(item);
     if (line.startsWith(`${NET} ${READ_METHOD} `)) {
       if (reads.has(line)) {
@@ -125,6 +106,14 @@ export function consoleLines(result: unknown): string[] {
   }
   return out;
 }
+
+const LOADED_READ = /^net: GET \S+ [1-3]\d\d$/;
+
+/**
+ * A read that loaded. Compare does not count it as a difference: what it loaded shows on the page, and when a
+ * read runs (a font, a refetch) changes from run to run. A read that failed, and every write, still count.
+ */
+export const isLoadedRead = (line: string): boolean => LOADED_READ.test(line);
 
 /** A network line for a call that was still in flight when it was read. */
 export const isPendingLine = (line: string): boolean =>

@@ -33,6 +33,34 @@ describe('compareBehaviour', () => {
     expect(result.differences[0]).toMatchObject({ removed: ['total 4'], added: ['total 5'] });
   });
 
+  it('ignores a read that loaded, and still reports a read that failed and every write', () => {
+    // A correct build was reported as different: its only difference was `net: GET /transactions.json 200`, a load
+    // that one run made and the other did not (dashboard mutant m03, 2026-11-09). What a read loaded shows on the page.
+    const ref = build({ a: read(['shop']) });
+    const same = compareBehaviour({
+      order: ['a'],
+      reference: ref,
+      again: ref,
+      candidate: build({
+        a: read(['shop', 'net: GET /transactions.json 200', 'net: GET /f.otf 304']),
+      }),
+    });
+    expect(same.verdict).toBe(CompareVerdict.SAME);
+    expect(same.ignored).toBe(2);
+    const different = compareBehaviour({
+      order: ['a'],
+      reference: ref,
+      again: ref,
+      candidate: build({
+        a: read(['shop', 'net: GET /api/items 500', 'net: POST /api/items 201 {}']),
+      }),
+    });
+    expect(different.differences[0]?.added).toEqual([
+      'net: GET /api/items 500',
+      'net: POST /api/items 201 {}',
+    ]);
+  });
+
   it('reports a changed line once, with the steps that first reached it', () => {
     const ref = build({
       a: read(['total 4'], ['open the start page', 'click button "Add"']),

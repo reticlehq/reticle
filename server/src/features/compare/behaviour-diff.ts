@@ -17,6 +17,7 @@
 import { DifferenceKind, differenceId, lineDiff, maskedDiff } from './compare-diff.js';
 import type { BuildReadings, Reading } from './build-readings.js';
 import type { PlanDropped } from './action-plan.js';
+import { isLoadedRead } from './outside/effect-lines.js';
 
 export const CompareVerdict = {
   SAME: 'same',
@@ -120,7 +121,8 @@ const runNoise = (ours: Reading | undefined, repeat: Reading | undefined): strin
 };
 
 /**
- * The shapes of the noise lines that hold a number, over every sequence. A live counter read the
+ * What is noise in every sequence: a read that loaded (`isLoadedRead`), and the shapes of the noise lines that
+ * hold a number, over every sequence. A live counter read the
  * same on both reference runs in one sequence by chance, and was then a difference there. When the
  * reference runs showed it changing in any sequence, it is noise in all of them.
  */
@@ -133,7 +135,7 @@ function counterShapes(input: Input): IsNoise {
       }
     }
   }
-  return (line) => shapes.has(shapeOf(line));
+  return (line) => shapes.has(shapeOf(line)) || isLoadedRead(line);
 }
 
 /** The noise of one sequence: what its reference runs disagree on, and every counter shape. */
