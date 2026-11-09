@@ -1,0 +1,5 @@
+### Fixed
+
+- **`@reticlehq/core` — an arrow-key `press` with no `ref` was refused.** A canvas game, such as one built with Phaser, often puts one unnamed canvas on the page, so there is no element to name. Every arrow press then failed with "pass a ref", and the game could not be driven. Arrow keys are now document keys, like Escape and Tab: with no `ref`, the key goes to the focused element or the document. Enter and letters still need a `ref`.
+- **`@reticlehq/core` — a game key other than an arrow could not be pressed without a `ref`.** WASD, Space and Enter were refused on a page with no element to name. A `press` with `document: true` now sends any key to the focused element or the document. The flag is never the default, so a forgotten `ref` on Enter is still refused.
+- **`@reticlehq/browser` — a drag could not hold a modifier key.** Every pointer and mouse event of a drag reported `shiftKey: false`, so a canvas editor's Shift-drag (snap a line, draw a square) could not be driven. A drag now takes `modifiers` (for example `["Shift"]`) and holds them for the whole gesture.

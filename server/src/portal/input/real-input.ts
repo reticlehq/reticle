@@ -27,9 +27,11 @@ import {
   ClickButton,
   clickButtonFromArgs,
   InputMode,
+  pointInBox,
   pressModifiersFromArgs,
   RETICLE_CHROME_PASS_THROUGH_SCRIPT,
   RETICLE_CHROME_RESTORE_POINTER_SCRIPT,
+  type BoxFraction,
 } from '@reticlehq/core';
 import { installNetworkMocks, type MockRule } from './network-mock.js';
 import { attachNetworkDetail, type NetworkDetail } from './network-detail.js';
@@ -72,8 +74,12 @@ export type RealInputArgs = {
    * for exactly as long as one driven in the page.
    */
   holdMs?: number;
-  /** For drag: the resolved box of the drop-target ref (toRef). */
+  /** For drag: the resolved box of the drop-target ref (toRef), or the source box for `to` alone. */
   toBox?: ElementBox;
+  /** For a pointer action: the point inside the box, as fractions of it. Absent means the centre. */
+  at?: BoxFraction;
+  /** For drag: the end point inside `toBox`, as fractions of it. Absent means its centre. */
+  to?: BoxFraction;
   steps?: number;
 };
 
@@ -188,6 +194,15 @@ export function boxCenter(box: ElementBox): { cx: number; cy: number } {
   return { cx: box.x + box.width / 2, cy: box.y + box.height / 2 };
 }
 
+/** The point `at` names inside a box, or its centre when `at` is absent. */
+export function boxPoint(box: ElementBox, at: BoxFraction | undefined): { cx: number; cy: number } {
+  if (at === undefined) {
+    return boxCenter(box);
+  }
+  const p = pointInBox(box, at);
+  return { cx: p.x, cy: p.y };
+}
+
 /**
  * Which actions are driven by a native pointer. `press` is excluded on purpose — a key has no
  * pointer, and widening this would change what every existing caller of it means.
@@ -293,7 +308,7 @@ async function pointerGesture(
   args: RealInputArgs,
   sleep: SleepFn,
 ): Promise<RealInputResult> {
-  const center = boxCenter(box);
+  const center = boxPoint(box, args.at);
   const { cx, cy } = center;
   const real = (performed: boolean): RealInputResult => ({
     performed,
@@ -332,7 +347,7 @@ async function pointerGesture(
     if (args.toBox === undefined) {
       return real(false);
     }
-    const dst = boxCenter(args.toBox);
+    const dst = boxPoint(args.toBox, args.to);
     const steps = args.steps ?? DEFAULT_DRAG_STEPS;
     await page.mouse.move(cx, cy);
     await page.mouse.down();

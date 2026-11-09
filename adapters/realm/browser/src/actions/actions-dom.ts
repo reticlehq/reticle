@@ -5,7 +5,7 @@ import { hitTestOccluder } from '@/dom/occlusion.js';
 import { nativeFrame } from '@/timers/native/native-timers.js';
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
 import type { ActionTarget } from '@/dom/realm.js';
-import { ClickButton, clickButtonFromArgs } from '@reticlehq/core';
+import { ClickButton, clickButtonFromArgs, pointInBox, type BoxFraction } from '@reticlehq/core';
 import { type ModifierFlags, pressModifiers } from './actions-press.js';
 
 interface ClickGeometry {
@@ -137,13 +137,14 @@ export async function fireClickSequence(
   hold?: { ms: number; sleep: (ms: number) => Promise<void>; now: () => number },
   detail?: number,
   input: ClickInput = PLAIN_CLICK,
+  point?: BoxFraction,
 ): Promise<{ prevented: boolean; heldMs: number }> {
   const doc = el.ownerDocument;
   const from: EventTarget = doc.activeElement ?? doc.body;
   // Where a real mouse would be, and which button is down. A canvas or SVG app hit-tests its own
   // shapes from clientX/Y and ignores a pointer with no id; a click at (0,0) with no pointerId landed
   // on nothing, and one path passed anyway (#1003). Drag already sent all of this.
-  const at = centreOf(el);
+  const at = pointOf(el, point);
   const d = detail ?? 0;
   const held = BUTTON_CODES[input.button].bit;
   const isLeft = ClickButton.LEFT === input.button;
@@ -297,9 +298,12 @@ export function firePointer(
   el: Element,
   type: string,
   relatedTarget: EventTarget | null = null,
+  coords: MouseEventInit = {},
 ): void {
   asSyntheticInput(() =>
-    el.dispatchEvent(pointerEventFor(el, type, { bubbles: true, cancelable: true, relatedTarget })),
+    el.dispatchEvent(
+      pointerEventFor(el, type, { bubbles: true, cancelable: true, relatedTarget, ...coords }),
+    ),
   );
 }
 
@@ -343,10 +347,11 @@ export function firePointerNonBubbling(
   el: Element,
   type: string,
   relatedTarget: EventTarget | null = null,
+  coords: MouseEventInit = {},
 ): void {
   asSyntheticInput(() =>
     el.dispatchEvent(
-      pointerEventFor(el, type, { bubbles: false, cancelable: true, relatedTarget }),
+      pointerEventFor(el, type, { bubbles: false, cancelable: true, relatedTarget, ...coords }),
     ),
   );
 }
@@ -388,6 +393,31 @@ function centreOf(el: ActionTarget): Point {
   return { x: box.left + box.width / 2, y: box.top + box.height / 2 };
 }
 
+/**
+ * The point `at` names inside an element, in client coordinates, or its centre when `at` is absent.
+ * A canvas has no child elements, so a point inside its box is the only way to hit a shape on it.
+ */
+function pointOf(el: ActionTarget, at: BoxFraction | undefined): Point {
+  if (at === undefined) {
+    return centreOf(el);
+  }
+  const box = el.getBoundingClientRect();
+  return pointInBox({ x: box.left, y: box.top, width: box.width, height: box.height }, at);
+}
+
+/** The coordinates of a mouse event at `p`. */
+export function coordsAt(p: Point): MouseEventInit {
+  return { clientX: p.x, clientY: p.y, screenX: p.x, screenY: p.y };
+}
+
+/**
+ * The coordinates of a pointer event at `at` inside `el`, or none when `at` is absent. None keeps
+ * the events as they were before a point could be named.
+ */
+export function coordsIn(el: ActionTarget, at: BoxFraction | undefined): MouseEventInit {
+  return at === undefined ? {} : coordsAt(pointOf(el, at));
+}
+
 /** A point `t` of the way from `a` to `b`, rounded — pointer coordinates are integers in practice. */
 function lerp(a: Point, b: Point, t: number): Point {
   return { x: Math.round(a.x + (b.x - a.x) * t), y: Math.round(a.y + (b.y - a.y) * t) };
@@ -405,18 +435,22 @@ export async function dragElement(
   source: ActionTarget,
   target: ActionTarget | null,
   data: unknown,
+  /** Where the drag starts in the source, and where it ends in the target (or in the source). */
+  points: { at?: BoxFraction | undefined; to?: BoxFraction | undefined } = {},
+  /** Modifiers held for the whole drag (a canvas editor reads shiftKey to snap a line). */
+  input: ClickInput = PLAIN_CLICK,
 ): Promise<boolean> {
   const dest = target ?? source;
-  const from = centreOf(source);
-  const to = centreOf(dest);
+  const from = pointOf(source, points.at);
+  const to = pointOf(dest, points.to);
   /** Is this path point inside an element's box? Rects are cached; jsdom reports zeros otherwise. */
   const sourceRect = source.getBoundingClientRect();
   const destRect = target !== null ? dest.getBoundingClientRect() : null;
   const crosses = (rect: DOMRect, p: Point): boolean =>
     p.x >= rect.left && p.x <= rect.right && p.y >= rect.top && p.y <= rect.bottom;
 
-  fireAt(source, 'pointerdown', from, BUTTON_HELD);
-  fireAt(source, 'mousedown', from, BUTTON_HELD);
+  fireAt(source, 'pointerdown', from, BUTTON_HELD, undefined, 0, input);
+  fireAt(source, 'mousedown', from, BUTTON_HELD, undefined, 0, input);
   await nativeFrame();
   // A path, not a jump. `activationConstraint: { distance: N }` is the standard way to keep a
   // draggable card clickable, and a sensor only starts a drag once it has SEEN the pointer travel
@@ -434,32 +468,32 @@ export async function dragElement(
       leftSource = true;
       // relatedTarget is the element the pointer crossed TO/FROM; React's enter/leave synthesis
       // reads it off the delegated over/out pair to know which boundary was crossed.
-      fireAt(source, 'pointerout', at, BUTTON_HELD, dest);
-      fireAt(source, 'mouseout', at, BUTTON_HELD, dest);
-      fireAt(source, 'pointerleave', at, BUTTON_HELD, dest);
-      fireAt(source, 'mouseleave', at, BUTTON_HELD, dest);
+      fireAt(source, 'pointerout', at, BUTTON_HELD, dest, 0, input);
+      fireAt(source, 'mouseout', at, BUTTON_HELD, dest, 0, input);
+      fireAt(source, 'pointerleave', at, BUTTON_HELD, dest, 0, input);
+      fireAt(source, 'mouseleave', at, BUTTON_HELD, dest, 0, input);
     }
     if (leftSource && !enteredDest && destRect !== null && crosses(destRect, at)) {
       enteredDest = true;
-      fireAt(dest, 'pointerover', at, BUTTON_HELD, source);
-      fireAt(dest, 'mouseover', at, BUTTON_HELD, source);
-      fireAt(dest, 'pointerenter', at, BUTTON_HELD, source);
-      fireAt(dest, 'mouseenter', at, BUTTON_HELD, source);
+      fireAt(dest, 'pointerover', at, BUTTON_HELD, source, 0, input);
+      fireAt(dest, 'mouseover', at, BUTTON_HELD, source, 0, input);
+      fireAt(dest, 'pointerenter', at, BUTTON_HELD, source, 0, input);
+      fireAt(dest, 'mouseenter', at, BUTTON_HELD, source, 0, input);
     }
-    fireAt(dest, 'pointermove', at, BUTTON_HELD);
-    fireAt(dest, 'mousemove', at, BUTTON_HELD);
+    fireAt(dest, 'pointermove', at, BUTTON_HELD, undefined, 0, input);
+    fireAt(dest, 'mousemove', at, BUTTON_HELD, undefined, 0, input);
     await nativeFrame();
   }
   // A short hop whose sampled steps never land inside the destination box still crossed into it;
   // announce the arrival rather than silently skipping the pair.
   if (!enteredDest && destRect !== null) {
-    fireAt(dest, 'pointerover', to, BUTTON_HELD, source);
-    fireAt(dest, 'mouseover', to, BUTTON_HELD, source);
-    fireAt(dest, 'pointerenter', to, BUTTON_HELD, source);
-    fireAt(dest, 'mouseenter', to, BUTTON_HELD, source);
+    fireAt(dest, 'pointerover', to, BUTTON_HELD, source, 0, input);
+    fireAt(dest, 'mouseover', to, BUTTON_HELD, source, 0, input);
+    fireAt(dest, 'pointerenter', to, BUTTON_HELD, source, 0, input);
+    fireAt(dest, 'mouseenter', to, BUTTON_HELD, source, 0, input);
   }
-  fireAt(dest, 'pointerup', to, BUTTON_RELEASED);
-  fireAt(dest, 'mouseup', to, BUTTON_RELEASED);
+  fireAt(dest, 'pointerup', to, BUTTON_RELEASED, undefined, 0, input);
+  fireAt(dest, 'mouseup', to, BUTTON_RELEASED, undefined, 0, input);
 
   let dropPrevented = false;
   if ('function' === typeof DragEvent) {
@@ -498,9 +532,11 @@ export async function dragElement(
 export async function fireTapSequence(
   el: ActionTarget,
   hold: { ms: number; sleep: (ms: number) => Promise<void>; now: () => number } | undefined,
+  point?: BoxFraction,
 ): Promise<{ prevented: boolean; heldMs: number }> {
-  const touches = touchListFor(el);
-  firePointerTouch(el, 'pointerdown');
+  const touches = touchListFor(el, point);
+  const coords = coordsIn(el, point);
+  firePointerTouch(el, 'pointerdown', coords);
   asSyntheticInput(() => el.dispatchEvent(makeTouchEvent('touchstart', touches)));
   if (el.tabIndex >= 0 && 'function' === typeof el.focus) {
     el.focus();
@@ -512,15 +548,15 @@ export async function fireTapSequence(
     heldMs = hold.now() - started;
   }
   asSyntheticInput(() => el.dispatchEvent(makeTouchEvent('touchend', [])));
-  firePointerTouch(el, 'pointerup');
+  firePointerTouch(el, 'pointerup', coords);
   const clicked = asSyntheticInput(() =>
-    el.dispatchEvent(mouseEventFor(el, 'click', { bubbles: true, cancelable: true })),
+    el.dispatchEvent(mouseEventFor(el, 'click', { bubbles: true, cancelable: true, ...coords })),
   );
   return { prevented: !clicked, heldMs };
 }
 
 /** A pointer event that says it came from a FINGER — the discriminator a touch handler reads. */
-function firePointerTouch(el: Element, type: string): void {
+function firePointerTouch(el: Element, type: string, coords: MouseEventInit): void {
   asSyntheticInput(() =>
     el.dispatchEvent(
       pointerEventFor(el, type, {
@@ -530,33 +566,28 @@ function firePointerTouch(el: Element, type: string): void {
         isPrimary: true,
         width: 23,
         height: 23,
+        ...coords,
       }),
     ),
   );
 }
 
 /**
- * One `Touch` at the element's centre, when the environment has the constructors.
+ * One `Touch` at the point inside the element, or at its centre, when the environment has the
+ * constructors.
  *
  * jsdom has `TouchEvent` but not always `Touch`, and a browser that lacks both still gets the
  * pointer half above. Degrading to an empty list is correct rather than lazy: `touches` is
  * documented as possibly empty (it IS empty on `touchend`), so a handler that reads it defensively
  * behaves the same, and one that does not would have thrown on a real touchend too.
  */
-function touchListFor(el: ActionTarget): Touch[] {
+function touchListFor(el: ActionTarget, point: BoxFraction | undefined): Touch[] {
   if ('function' !== typeof Touch || 'function' !== typeof el.getBoundingClientRect) {
     return [];
   }
-  const rect = el.getBoundingClientRect();
+  const at = pointOf(el, point);
   try {
-    return [
-      new Touch({
-        identifier: 0,
-        target: el,
-        clientX: rect.left + rect.width / 2,
-        clientY: rect.top + rect.height / 2,
-      }),
-    ];
+    return [new Touch({ identifier: 0, target: el, clientX: at.x, clientY: at.y })];
   } catch {
     return [];
   }
