@@ -16,6 +16,7 @@
  */
 import { DifferenceKind, differenceId, lineDiff, maskedDiff } from './compare-diff.js';
 import type { BuildReadings, Reading } from './build-readings.js';
+import type { PlanDropped } from './action-plan.js';
 
 export const CompareVerdict = {
   SAME: 'same',
@@ -73,6 +74,8 @@ export interface BehaviourComparison {
   ignored: number;
   differences: BehaviourDifference[];
   score?: BehaviourScore;
+  /** What the plan left out because of a cap. Absent when no plan was made. */
+  planDropped?: PlanDropped;
   /** Why the run is invalid. */
   reason?: string;
 }

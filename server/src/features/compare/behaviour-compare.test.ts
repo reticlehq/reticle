@@ -46,6 +46,8 @@ describe('runCompare', () => {
     });
     expect(result.verdict).toBe(CompareVerdict.SAME);
     expect(result.compared).toBe(result.sequences);
+    // The plan reports what each cap left out, also when it left out nothing.
+    expect(result.planDropped).toMatchObject({ sequences: 0, textProbes: 0 });
     // The plan, then the reference, the candidate, and the reference again.
     expect(opened).toEqual(['ref', 'ref', 'cand', 'ref']);
   });
@@ -132,6 +134,73 @@ describe('runCompare', () => {
     });
     expect(result.verdict).toBe(CompareVerdict.DIFFERENT);
     expect(result.differences[0]?.actions).toContain('fill textbox "Route" with "progress"');
+  });
+
+  it('reports a removed empty table cell, which the text alone cannot show', async () => {
+    const table = (url: string): OpenedPage => ({
+      open: () => Promise.resolve(true),
+      read: () =>
+        Promise.resolve(
+          'cand' === url ? '- row "Ada"\n  - cell "Ada"' : '- row "Ada"\n  - cell\n  - cell "Ada"',
+        ),
+      act: () => Promise.resolve({ ok: true }),
+      effects: () => Promise.resolve([]),
+      close: () => Promise.resolve(),
+    });
+    const { result } = await runCompare({
+      reference: 'ref',
+      candidate: 'cand',
+      open: (url) => Promise.resolve(table(url)),
+      sleep,
+      now,
+      fetchText: noScripts,
+    });
+    expect(result.verdict).toBe(CompareVerdict.DIFFERENT);
+    expect(result.differences[0]?.removed).toEqual(['cell']);
+  });
+
+  it('fails a request the start page makes, and reports a build that handles the failure differently', async () => {
+    const loader = (url: string): OpenedPage => {
+      let failing = false;
+      let armed = false;
+      return {
+        open: () => {
+          failing = false;
+          armed = false;
+          return Promise.resolve(true);
+        },
+        goto: () => {
+          failing = armed;
+          return Promise.resolve(true);
+        },
+        mock: (rules) => {
+          armed = rules.some((r) => 500 === r.status);
+          return Promise.resolve(true);
+        },
+        read: () => {
+          if (!failing) {
+            return Promise.resolve('- list "Items"');
+          }
+          return Promise.resolve(`- alert "${'cand' === url ? 'Oops' : 'Could not load'}"`);
+        },
+        act: () => Promise.resolve({ ok: true }),
+        effects: (since) => Promise.resolve(0 === since ? ['net: GET /api/items 200'] : []),
+        close: () => Promise.resolve(),
+      };
+    };
+    const { result } = await runCompare({
+      reference: 'ref',
+      candidate: 'cand',
+      open: (url) => Promise.resolve(loader(url)),
+      sleep,
+      now,
+      fetchText: noScripts,
+    });
+    expect(result.verdict).toBe(CompareVerdict.DIFFERENT);
+    expect(result.differences[0]?.actions).toEqual([
+      'open the start page',
+      'fail GET /api/items (500)',
+    ]);
   });
 
   it('is invalid, not different, when the driver loses its session', async () => {

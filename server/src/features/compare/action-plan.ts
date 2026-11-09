@@ -3,13 +3,28 @@
  *
  * The plan is made on the reference, breadth first, with no model and no settings:
  * - the start page, and a wait on the start page;
+ * - the start page with each value of each url parameter the app's scripts read
+ *   (`?scenario=deferred`), up to `MAX_URL_ROOTS`. Each is a start page of its own, with its own
+ *   wait, and opening it does not count toward the depth;
  * - every single action on every control: click each button, tab, checkbox and option; fill each
  *   text field with two values chosen by the shape of its value, one edge value of that shape, and
  *   the values the app's scripts compare the field's name with (`value-dictionary.ts`); select each
  *   option of a combobox;
- * - each click again, followed by a wait, so behaviour on a timer can show. The wait stays in the
- *   plan only when the reference showed delayed activity there: a call still pending, a page that
- *   kept changing while it settled, or a change during the wait;
+ * - a click on each distinct visible text that has no control role (`- text`, `- generic`), up to
+ *   `MAX_TEXT_PROBES`. A text probe stays in the plan only when it changes the screen on the
+ *   reference: much of the web is a clickable element with no role;
+ * - a press of each common key (`DEFAULT_KEYS`) and of each key the app's scripts compare a key
+ *   event with or name in a shortcut, up to `MAX_KEYS`, each on the start page. A key goes to the
+ *   first element of the page and bubbles to the document. Escape again after each sequence that
+ *   made controls appear: what opened must close;
+ * - each request the app makes fails (`FaultKind`), up to `MAX_FAULT_REQUESTS` requests. A request
+ *   the start page makes on load fails three ways before the page loads. A request an action made
+ *   fails two ways (server, network), and the action's sequence is done again under the fault.
+ *   Files the page is built from are not requests the app makes;
+ * - each click again, followed by a wait, so behaviour on a timer can show. Also each path of two or
+ *   more steps that reached a new screen, followed by a wait. The wait stays in the plan only when
+ *   the reference showed delayed activity there: a call still pending, a page that kept changing
+ *   while it settled, or a change during the wait;
  * - each single action again under each option of each combobox (a mode, a variant);
  * - after each sequence, one level deeper into the controls its last action made appear (a menu, a
  *   dialog): controls that were not on the page before that action;
@@ -20,18 +35,25 @@
  *   until they are filled) are planned first, so the cap does not starve them.
  *   Only this shows a build that takes the start time for the end time.
  *
+ * The plan explores screens, not paths. Many paths reach one screen, and each path costs a load on
+ * every build. A path of two or more steps that ends on a screen already reached is kept for at most
+ * `MAX_PATHS_PER_SCREEN` paths, and nothing is planned after it. A single action is always kept.
+ *
  * A control is targeted by its test id when it has one, else by its role and name. Controls with the
  * same target are numbered in page order, so "fill every field" fills eight fields, not one field
  * eight times. Every sequence starts from a fresh load of the start page.
  */
 
 import { magicValues, type ValueDictionary } from './outside/value-dictionary.js';
+import { structureLines } from './visible-content.js';
 
 /** A control on the page, by identity. `nth` counts the controls with the same identity before it. */
 export interface Target {
   testid?: string;
   role?: string;
   name?: string;
+  /** Visible text with no control role: a text probe, clicked by its text. */
+  text?: string;
   nth: number;
 }
 
@@ -40,9 +62,29 @@ export type PlanStep =
   | { action: 'fill'; target: Target; value: string }
   | { action: 'select'; target: Target; value: string }
   | { action: 'wait'; ms: number }
+  /** Open the start page with this query, such as `?scenario=deferred`: a start page of its own. */
+  | { action: 'goto'; query: string }
+  /** Press a key on the first element of the page. It bubbles to the document's key listeners. */
+  | { action: 'press'; key: string }
+  /** Make one request fail, then load the start page again. The steps after it see the fault. */
+  | { action: 'fault'; method: string; path: string; fault: FaultKind }
   | { action: 'fillall'; fields: readonly { target: Target; value: string }[] };
 
 export type Sequence = readonly PlanStep[];
+
+/**
+ * How a request fails. A failed answer is an input too: the error state, the retry button and the
+ * empty list exist only when a request fails.
+ */
+export const FaultKind = {
+  /** The server failed. */
+  SERVER: '500',
+  /** The network failed. */
+  ABORT: 'abort',
+  /** The server answered with nothing. */
+  EMPTY: 'empty',
+} as const;
+export type FaultKind = (typeof FaultKind)[keyof typeof FaultKind];
 
 export const ControlKind = { CLICK: 'click', FILL: 'fill', SELECT: 'select' } as const;
 export type ControlKind = (typeof ControlKind)[keyof typeof ControlKind];
@@ -68,6 +110,51 @@ const MAX_DEPTH = 3;
  * dialog's submit sit there.
  */
 export const MAX_CHAIN = 8;
+/**
+ * The most text probes in one plan. Much of the web is a clickable element with no role (an
+ * accordion header, a table row), so visible text is clicked too.
+ */
+export const MAX_TEXT_PROBES = 40;
+/** The most start pages opened by a url parameter value, in one plan. */
+export const MAX_URL_ROOTS = 12;
+/** The most values of one url parameter opened as start pages. */
+export const MAX_VALUES_PER_PARAM = 8;
+/**
+ * The most paths of two or more steps kept to one screen. A path to a screen already reached is not
+ * explored further. A single action is always kept: it is a check on the candidate even when it
+ * changes nothing on the reference.
+ */
+export const MAX_PATHS_PER_SCREEN = 2;
+/**
+ * The keys a person presses on any page: close, confirm, move focus, move in a list. Each is a check
+ * also where it changes nothing on the reference: a build that answers to the wrong key shows it.
+ */
+export const DEFAULT_KEYS = [
+  'Escape',
+  'Enter',
+  'Tab',
+  'ArrowDown',
+  'ArrowUp',
+  'ArrowLeft',
+  'ArrowRight',
+  'Home',
+  'End',
+] as const;
+const ESCAPE = 'Escape';
+/** The most keys pressed on the start page, common keys first. */
+export const MAX_KEYS = 24;
+/** The most requests made to fail, in the order the plan first sees them. */
+export const MAX_FAULT_REQUESTS = 8;
+/** A request made on load fails before the page starts, in each of the three ways. */
+const LOAD_FAULTS: readonly FaultKind[] = [FaultKind.SERVER, FaultKind.ABORT, FaultKind.EMPTY];
+/** A request an action made fails under that action, as a server or a network failure. */
+const ACTION_FAULTS: readonly FaultKind[] = [FaultKind.SERVER, FaultKind.ABORT];
+/** A request in an effect line (`effect-lines.ts`): `net: GET /api/items 200`. */
+const NET_LINE = /^net: ([A-Z]+) (\S+)/;
+const QUERY_START = '?';
+/** A file the page is built from: not a request the app makes. */
+const STATIC_PATH =
+  /\.(m?js|jsx|tsx?|css|map|svg|png|jpe?g|gif|webp|avif|ico|woff2?|ttf|otf|html?)$|^\/(@|node_modules\/|src\/|assets\/)|^\/?$/;
 /** The wait after a click: a slideshow advances, a countdown ends, a delivery settles. */
 export const WAIT_AFTER_CLICK_MS = 4000;
 const MS_PER_S = 1000;
@@ -78,6 +165,9 @@ const TESTID = /\[testid=([^\]]+)\]/;
 const REF = /\(ref=(e\d+)\)/;
 const VALUE = /\[value="([^"]*)"\]/;
 const DISABLED = /\[(?:[a-z]+,)*disabled(?:,[a-z]+)*\]/;
+/** Visible text with no control role. */
+const TEXT_LINE = /^\s*- (?:text|generic) "([^"]{1,80})"/;
+const TEXT_ROLE = 'text';
 const COMBOBOX = 'combobox';
 const OPTION = 'option';
 const FIELD_ROLES: ReadonlySet<string> = new Set(['textbox', 'spinbutton']);
@@ -96,8 +186,12 @@ const FIELD_TEXT = 'Reticle';
 const HOURS_PER_DAY = 24;
 
 /** The identity of a target, without its number. */
-const identityOf = (t: Target): string =>
-  t.testid === undefined ? `${t.role ?? ''} "${t.name ?? ''}"` : `[testid=${t.testid}]`;
+function identityOf(t: Target): string {
+  if (t.text !== undefined) {
+    return `${TEXT_ROLE} "${t.text}"`;
+  }
+  return t.testid === undefined ? `${t.role ?? ''} "${t.name ?? ''}"` : `[testid=${t.testid}]`;
+}
 
 /** The identity of a target, with its number. */
 export const targetKey = (t: Target): string => `${identityOf(t)}#${String(t.nth)}`;
@@ -155,6 +249,27 @@ export function planControls(tree: string): PlanControl[] {
   }
   return out;
 }
+
+/**
+ * A click on each distinct visible text that has no control role, in page order, up to
+ * `MAX_TEXT_PROBES`. `dropped` counts the texts past the cap.
+ */
+export function textProbes(tree: string): { steps: PlanStep[]; dropped: number } {
+  const texts = new Set<string>();
+  for (const line of tree.split('\n')) {
+    const text = TEXT_LINE.exec(line)?.[1];
+    if (text !== undefined) {
+      texts.add(text);
+    }
+  }
+  const steps: PlanStep[] = [...texts]
+    .slice(0, MAX_TEXT_PROBES)
+    .map((text) => ({ action: ControlKind.CLICK, target: { text, nth: 0 } }));
+  return { steps, dropped: Math.max(0, texts.size - MAX_TEXT_PROBES) };
+}
+
+/** The ref of the first element of the page, where a key press goes. */
+export const firstRef = (tree: string): string | undefined => REF.exec(tree)?.[1];
 
 /** The ref of `target` on this tree, or undefined when the tree has no such control. */
 export function refFor(tree: string, target: Target): string | undefined {
@@ -231,6 +346,12 @@ export function stepLabel(step: PlanStep): string {
   switch (step.action) {
     case 'wait':
       return `wait ${String(step.ms / MS_PER_S)} s`;
+    case 'goto':
+      return `open "${step.query}"`;
+    case 'press':
+      return `press ${step.key}`;
+    case 'fault':
+      return `fail ${step.method} ${step.path} (${step.fault})`;
     case 'fillall':
       return `fill every field (${step.fields.map((f) => `${targetLabel(f.target)}="${f.value}"`).join(', ')})`;
     case 'fill':
@@ -254,9 +375,115 @@ export interface Probe {
   tree: string;
   /** For a sequence that ends in a wait: whether the reference showed delayed activity there. */
   active: boolean;
+  /** What the app did since the first action, as effect lines: the requests the plan can fail. */
+  effects?: readonly string[];
 }
 
 const endsInWait = (seq: Sequence): boolean => 'wait' === seq.at(-1)?.action;
+
+/** The screen a tree shows, as one string: two trees with the same screen give the same string. */
+const screenOf = (tree: string): string => structureLines(tree).join('\n');
+
+/**
+ * What the plan left out because of a cap, so a caller can see that the plan is not every action.
+ * Each count is zero when nothing was left out.
+ */
+export type PlanDropped = {
+  /** Sequences not tried, because the plan reached `MAX_SEQUENCES`. */
+  sequences: number;
+  /** Visible texts not clicked, past `MAX_TEXT_PROBES`. */
+  textProbes: number;
+  /** Url parameter values not opened, past `MAX_VALUES_PER_PARAM` or `MAX_URL_ROOTS`. */
+  urlRoots: number;
+  /** Paths of two or more steps to a screen that `MAX_PATHS_PER_SCREEN` paths already reached. */
+  sameScreenPaths: number;
+  /** Keys not pressed, past `MAX_KEYS`. */
+  keys: number;
+  /** Requests not made to fail, past `MAX_FAULT_REQUESTS`. */
+  faultRequests: number;
+};
+
+export const NOTHING_DROPPED: PlanDropped = {
+  sequences: 0,
+  textProbes: 0,
+  urlRoots: 0,
+  sameScreenPaths: 0,
+  keys: 0,
+  faultRequests: 0,
+};
+
+export interface Plan {
+  sequences: Sequence[];
+  dropped: PlanDropped;
+}
+
+/** What the app's scripts tell the plan (`value-dictionary.ts`). Each part can be left out. */
+export interface PlanHints {
+  dictionary?: ValueDictionary;
+  /** The values each url parameter is compared with. */
+  urlParams?: ReadonlyMap<string, readonly string[]>;
+  /** The keys the app listens for. */
+  keys?: readonly string[];
+  /** The effect lines of the start page's load: the requests it makes on load. */
+  loadEffects?: readonly string[];
+}
+
+/** The requests the app made, from effect lines, without the files the page is built from. */
+export function requestsIn(lines: readonly string[]): { method: string; path: string }[] {
+  const out: { method: string; path: string }[] = [];
+  for (const line of lines) {
+    const m = NET_LINE.exec(line);
+    const path = (m?.[2] ?? '').split(QUERY_START)[0] ?? '';
+    if (null !== m && !STATIC_PATH.test(path)) {
+      out.push({ method: m[1] ?? '', path });
+    }
+  }
+  return out;
+}
+
+/**
+ * A start page for each value of each url parameter, up to `MAX_VALUES_PER_PARAM` for one
+ * parameter and `MAX_URL_ROOTS` in all. `dropped` counts the values past the caps.
+ */
+export function urlRoots(params: ReadonlyMap<string, readonly string[]>): {
+  steps: PlanStep[];
+  dropped: number;
+} {
+  const all: PlanStep[] = [];
+  let dropped = 0;
+  for (const [param, values] of params) {
+    dropped += Math.max(0, values.length - MAX_VALUES_PER_PARAM);
+    for (const value of values.slice(0, MAX_VALUES_PER_PARAM)) {
+      all.push({
+        action: 'goto',
+        query: `?${encodeURIComponent(param)}=${encodeURIComponent(value)}`,
+      });
+    }
+  }
+  dropped += Math.max(0, all.length - MAX_URL_ROOTS);
+  return { steps: all.slice(0, MAX_URL_ROOTS), dropped };
+}
+
+const keyStep = (key: string): PlanStep => ({ action: 'press', key });
+
+/**
+ * A press of each common key, then of each key the app listens for, up to `MAX_KEYS`. `dropped`
+ * counts the keys past the cap.
+ */
+export function keyPresses(appKeys: readonly string[]): { steps: PlanStep[]; dropped: number } {
+  const all = [...new Set([...DEFAULT_KEYS, ...appKeys])];
+  return {
+    steps: all.slice(0, MAX_KEYS).map(keyStep),
+    dropped: Math.max(0, all.length - MAX_KEYS),
+  };
+}
+
+/**
+ * The steps that count toward `MAX_DEPTH`. Opening a start page by its url and making a request
+ * fail do not: they set up the page the actions start on.
+ */
+const depthOf = (seq: Sequence): number =>
+  seq.filter((s) => 'goto' !== s.action && 'fault' !== s.action).length;
 
 /**
  * Make the plan on the reference. `probe` drives one sequence from a fresh load, or answers
@@ -265,9 +492,32 @@ const endsInWait = (seq: Sequence): boolean => 'wait' === seq.at(-1)?.action;
 export async function buildPlan(
   startTree: string,
   probe: (seq: Sequence) => Promise<Probe | undefined>,
-  dictionary: ValueDictionary = EMPTY_DICTIONARY,
-): Promise<Sequence[]> {
+  hints: PlanHints = {},
+): Promise<Plan> {
+  const dictionary = hints.dictionary ?? EMPTY_DICTIONARY;
   const start = planControls(startTree);
+  const startScreen = screenOf(startTree);
+  const probes = textProbes(startTree);
+  const roots = urlRoots(hints.urlParams ?? new Map());
+  const keys = keyPresses(hints.keys ?? []);
+  /** Requests made to fail, and requests past `MAX_FAULT_REQUESTS`, as "METHOD path". */
+  const faulted = new Set<string>();
+  const overFaultCap = new Set<string>();
+  const faultsFor = (lines: readonly string[], kinds: readonly FaultKind[]): PlanStep[] =>
+    requestsIn(lines).flatMap(({ method, path }) => {
+      const id = `${method} ${path}`;
+      if (faulted.has(id)) {
+        return [];
+      }
+      if (faulted.size >= MAX_FAULT_REQUESTS) {
+        overFaultCap.add(id);
+        return [];
+      }
+      faulted.add(id);
+      return kinds.map((fault): PlanStep => ({ action: 'fault', method, path, fault }));
+    });
+  /** A text probe stays in the plan only when it changes the screen on the reference. */
+  const probeKeys = new Set(probes.steps.map((s) => sequenceKey([s])));
   const keysOf = (tree: string): Set<string> =>
     new Set(planControls(tree).map((c) => targetKey(c.target)));
   /** The controls on the page after each probed sequence, to tell what its next action added. */
@@ -278,12 +528,20 @@ export async function buildPlan(
   const wait: PlanStep = { action: 'wait', ms: WAIT_AFTER_CLICK_MS };
   const queue: Sequence[] = [
     [wait],
+    ...roots.steps.map((r) => [r]),
+    ...roots.steps.map((r) => [r, wait]),
+    ...faultsFor(hints.loadEffects ?? [], LOAD_FAULTS).map((f) => [f]),
     ...singles.map((s) => [s]),
+    ...probes.steps.map((s) => [s]),
+    ...keys.steps.map((s) => [s]),
     ...singles.filter((s) => ControlKind.CLICK === s.action).map((s) => [s, wait]),
     ...modes.flatMap((m) => singles.filter((s) => targetOf(s) !== targetOf(m)).map((s) => [m, s])),
   ];
   const plan: Sequence[] = [[]];
   const seen = new Set([sequenceKey([])]);
+  /** How many probed sequences reached each screen. */
+  const screens = new Map([[startScreen, 1]]);
+  let sameScreenPaths = 0;
   /** Sequences that end in a press after "fill every field": they may go on past `MAX_DEPTH`. */
   const chains = new Set<string>();
   while (queue.length > 0 && plan.length < MAX_SEQUENCES) {
@@ -293,21 +551,51 @@ export async function buildPlan(
       continue;
     }
     seen.add(key);
-    const deeper =
-      seq.length < MAX_DEPTH || (chains.has(key) && seq.length < MAX_CHAIN) || endsInWait(seq);
+    const depth = depthOf(seq);
+    const deeper = depth < MAX_DEPTH || (chains.has(key) && depth < MAX_CHAIN) || endsInWait(seq);
     // A wait is probed before it is planned: it stays only where the reference showed activity.
     const probed = deeper ? await probe(seq) : undefined;
+    // A request this sequence made can fail: replay the sequence with that request failing.
+    if (probed !== undefined && 'fault' !== seq[0]?.action) {
+      for (const fault of faultsFor(probed.effects ?? [], ACTION_FAULTS)) {
+        queue.push([fault, ...seq]);
+      }
+    }
     if (endsInWait(seq) && true !== probed?.active) {
       continue;
     }
+    if (probeKeys.has(key) && (probed === undefined || screenOf(probed.tree) === startScreen)) {
+      continue;
+    }
+    // Explore screens, not paths: many paths reach one screen, and each costs a load on every build.
+    // A wait is a check of time on its path, so it is kept whatever screen it ends on.
+    if (probed !== undefined && !endsInWait(seq)) {
+      const screen = screenOf(probed.tree);
+      const visits = screens.get(screen) ?? 0;
+      screens.set(screen, visits + 1);
+      if (visits > 0 && seq.length > 1) {
+        if (visits >= MAX_PATHS_PER_SCREEN) {
+          sameScreenPaths += 1;
+        } else {
+          plan.push(seq);
+        }
+        continue;
+      }
+    }
     plan.push(seq);
-    if (probed === undefined || (seq.length >= MAX_DEPTH && !chains.has(key))) {
+    if (probed === undefined || (depth >= MAX_DEPTH && !chains.has(key))) {
       continue;
     }
     before.set(key, keysOf(probed.tree));
+    // A new screen reached by two or more steps can change by itself: a toast goes, a countdown
+    // ends. The wait is probed like any wait, and it stays only where the screen did not hold still.
+    if (seq.length > 1 && !endsInWait(seq)) {
+      queue.push([...seq, wait]);
+    }
     // The page before the last action: the nearest shorter sequence that was probed. A
-    // "fill every field" step on its own is not probed, and it adds no control anyway.
-    let parent: Set<string> | undefined;
+    // "fill every field" step on its own is not probed, and it adds no control anyway. After a
+    // start page opened by its url, every control is new.
+    let parent: Set<string> | undefined = 'goto' === seq.at(-1)?.action ? new Set() : undefined;
     for (let n = seq.length - 1; n >= 0 && parent === undefined; n -= 1) {
       parent = before.get(sequenceKey(seq.slice(0, n)));
     }
@@ -323,7 +611,7 @@ export async function buildPlan(
       ControlKind.CLICK === seq.at(-1)?.action &&
       fields.some((f) => parent?.has(targetKey(f.target)) !== true);
     // A form step adds two steps: the fill and the press.
-    if ((firstForm || nextForm) && seq.length + 2 <= MAX_CHAIN) {
+    if ((firstForm || nextForm) && depth + 2 <= MAX_CHAIN) {
       const fillall: PlanStep = {
         action: 'fillall',
         fields: fields.map((f, i) => ({ target: f.target, value: ownValue(f, i, dictionary) })),
@@ -346,13 +634,29 @@ export async function buildPlan(
       queue.unshift([...seq, fillall], ...buttons.filter(own).map(pressOf));
       queue.push(...buttons.filter((b) => !own(b)).map(pressOf));
     }
-    for (const control of now.filter((c) => parent?.has(targetKey(c.target)) !== true)) {
+    const appeared = now.filter((c) => parent?.has(targetKey(c.target)) !== true);
+    for (const control of appeared) {
       for (const step of steps(control)) {
         queue.push([...seq, step]);
       }
     }
+    // What opened (a dialog, a menu) must close on Escape.
+    if (appeared.length > 0 && 'press' !== seq.at(-1)?.action) {
+      queue.push([...seq, keyStep(ESCAPE)]);
+    }
   }
-  return plan;
+  const untried = new Set(queue.map(sequenceKey).filter((k) => !seen.has(k)));
+  return {
+    sequences: plan,
+    dropped: {
+      sequences: untried.size,
+      textProbes: probes.dropped,
+      urlRoots: roots.dropped,
+      sameScreenPaths,
+      keys: keys.dropped,
+      faultRequests: overFaultCap.size,
+    },
+  };
 }
 
 /**

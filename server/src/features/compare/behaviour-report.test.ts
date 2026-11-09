@@ -15,6 +15,7 @@ import {
   compareReportJson,
   compareReportLines,
 } from './behaviour-report.js';
+import { NOTHING_DROPPED } from './action-plan.js';
 
 const urls = { reference: 'http://ref/', candidate: 'http://cand/' };
 const timings = { plan: 12.3, reference: 20, candidate: 21.6, again: 19.9 };
@@ -44,6 +45,15 @@ describe('compare report', () => {
     expect(compareExitCode(result([difference(1)]))).toBe(CompareExit.DIFFERENT);
     expect(compareExitCode(invalidComparison('session ended', 3))).toBe(CompareExit.INVALID);
     expect([CompareExit.SAME, CompareExit.DIFFERENT, CompareExit.INVALID]).toEqual([0, 1, 2]);
+  });
+
+  it('says what a plan cap left out, and nothing when it left out nothing', () => {
+    const capped = { ...result([]), planDropped: { ...NOTHING_DROPPED, sequences: 4 } };
+    expect(compareReportLines(urls, capped)).toContain(
+      'The plan left out 4 items at its caps. --json "planDropped" gives the count for each cap.',
+    );
+    const full = { ...result([]), planDropped: NOTHING_DROPPED };
+    expect(compareReportLines(urls, full).join('\n')).not.toContain('left out');
   });
 
   it('starts with the verdict, then the counts and the time for each build', () => {

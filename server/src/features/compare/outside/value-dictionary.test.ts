@@ -1,12 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import {
+  appKeys,
   MAX_SCRIPTS,
   buildDictionary,
   chunkImports,
   comparedLiterals,
-  harvestDictionary,
+  harvestScripts,
   magicValues,
   scriptSources,
+  urlParamValues,
 } from './value-dictionary.js';
 
 describe('value dictionary', () => {
@@ -98,6 +100,58 @@ describe('value dictionary', () => {
     expect(magicValues(dict, 'mode')).toEqual(['a', 'b', 'c', 'd']);
   });
 
+  it('finds the url parameters the page reads, with the literals compared after each read', () => {
+    const js =
+      'const s=new URLSearchParams(location.search).get("scenario");' +
+      'if(s==="deferred"){}switch(s){case"empty":break}if("full"!==s){}' +
+      'const m=new Map();m.get("other");';
+    expect(urlParamValues(js)).toEqual([
+      ['scenario', 'deferred'],
+      ['scenario', 'empty'],
+      ['scenario', 'full'],
+    ]);
+  });
+
+  it('reads a url parameter only near URLSearchParams, searchParams or location', () => {
+    expect(urlParamValues('const x=cache.get("mode");if(x==="a"){}')).toEqual([]);
+    expect(urlParamValues('u.searchParams.get("tab")==="b"')).toEqual([['tab', 'b']]);
+  });
+
+  it('finds the keys the app compares a key event with, and its shortcut strings', () => {
+    const js =
+      'if(e.key==="k"){}if(e.code==="Slash"){}switch(e.key){case"Enter":break}' +
+      '["PageUp","PageDown"].includes(ev.key);if(e.key==="a very long key name"){}' +
+      'const t={"mod+k":open,"ctrl+shift+p":palette};';
+    expect(appKeys(js)).toEqual([
+      'k',
+      'Slash',
+      'Enter',
+      'PageUp',
+      'PageDown',
+      'Meta+k',
+      'Control+k',
+      'Control+Shift+p',
+    ]);
+  });
+
+  it('gives the keys of every script it reads', async () => {
+    const files: Record<string, string> = {
+      'http://app/': '<script src="/main.js"></script>',
+      'http://app/main.js': 'if(e.key==="?"){}',
+    };
+    const { keys } = await harvestScripts('http://app/', (url) => Promise.resolve(files[url]));
+    expect(keys).toEqual(['?']);
+  });
+
+  it('gives the url parameters of every script it reads', async () => {
+    const files: Record<string, string> = {
+      'http://app/': '<script src="/main.js"></script>',
+      'http://app/main.js': 'const v=new URLSearchParams(location.search).get("view");v==="grid";',
+    };
+    const { urlParams } = await harvestScripts('http://app/', (url) => Promise.resolve(files[url]));
+    expect(urlParams.get('view')).toEqual(['grid']);
+  });
+
   it('fetches the page and follows its scripts like a browser, up to a cap', async () => {
     const files: Record<string, string> = {
       'http://app/': '<script src="/main.js"></script>',
@@ -105,7 +159,7 @@ describe('value dictionary', () => {
       'http://app/step.js': 'if(v.plan==="pro"){}',
     };
     const fetched: string[] = [];
-    const dict = await harvestDictionary('http://app/', (url) => {
+    const { dictionary: dict } = await harvestScripts('http://app/', (url) => {
       fetched.push(url);
       return Promise.resolve(files[url]);
     });

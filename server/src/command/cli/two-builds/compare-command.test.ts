@@ -73,6 +73,76 @@ describe('leasedPage', () => {
     expect((preview[0] as { args: { args: Record<string, unknown> } }).args.args).toEqual({});
   });
 
+  it('clicks a text probe by a text target, because a text line has no ref', async () => {
+    const calls: unknown[] = [];
+    await leasedPage(
+      caller({ [ReticleTool.ACT]: text({ dispatched: true }) }, calls),
+      'https://pr-12.app.example.com/',
+      's1',
+    ).act({ text: 'Details' }, 'click');
+    expect((calls[0] as { args: Record<string, unknown> }).args).toEqual({
+      target: { text: 'Details' },
+      action: 'click',
+      args: {},
+      sessionId: 's1',
+    });
+  });
+
+  it('opens a url parameter value against the build url, on the leased tab', async () => {
+    const calls: unknown[] = [];
+    const page = leasedPage(
+      caller({ [ReticleTool.NAVIGATE]: text({ ok: true }) }, calls),
+      'http://a/app/',
+      's1',
+    );
+    expect(await page.goto?.('?view=grid')).toBe(true);
+    expect((calls[0] as { args: Record<string, unknown> }).args).toMatchObject({
+      url: 'http://a/app/?view=grid',
+      sessionId: 's1',
+    });
+  });
+
+  it('sets a network fault on the leased tab, and clears it before the next fresh load', async () => {
+    const calls: { tool: string; args: Record<string, unknown> }[] = [];
+    const page = leasedPage(
+      caller(
+        {
+          [ReticleTool.NETWORK_MOCK]: text({ applied: true, count: 1 }),
+          [ReticleTool.NAVIGATE]: text({ ok: true }),
+        },
+        calls,
+      ),
+      'http://a/',
+      's1',
+    );
+    const rule = { urlContains: '/api/items', method: 'GET', abort: true };
+    expect(await page.mock?.([rule])).toBe(true);
+    expect(await page.open()).toBe(true);
+    expect(await page.open()).toBe(true);
+    expect(calls.map((c) => c.tool)).toEqual([
+      ReticleTool.NETWORK_MOCK,
+      ReticleTool.NETWORK_MOCK,
+      ReticleTool.NAVIGATE,
+      ReticleTool.NAVIGATE,
+    ]);
+    expect(calls[0]?.args).toEqual({ mocks: [rule], sessionId: 's1' });
+    expect(calls[1]?.args).toEqual({ clear: true, sessionId: 's1' });
+  });
+
+  it('presses a key with the key name as the press text', async () => {
+    const calls: unknown[] = [];
+    await leasedPage(
+      caller({ [ReticleTool.ACT]: text({ dispatched: true }) }, calls),
+      'https://pr-12.app.example.com/',
+      's1',
+    ).act('e1', 'press', 'Control+k');
+    expect((calls[0] as { args: Record<string, unknown> }).args).toMatchObject({
+      ref: 'e1',
+      action: 'press',
+      args: { text: 'Control+k' },
+    });
+  });
+
   it('returns the cursor an action gives, for the effects of its sequence', async () => {
     const page = leasedPage(
       caller({ [ReticleTool.ACT]: text({ dispatched: true, since: 41 }) }),

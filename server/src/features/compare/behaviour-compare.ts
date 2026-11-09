@@ -2,8 +2,8 @@
  * `reticle compare`: drive two running builds of one app the same way, and report each difference
  * in what a person sees. The recipe has no settings:
  *
- * 1. Read the values the reference's scripts compare fields with (`value-dictionary.ts`), then make
- *    the action plan on the reference (`action-plan.ts`).
+ * 1. Read the values the reference's scripts compare fields and url parameters with
+ *    (`value-dictionary.ts`), then make the action plan on the reference (`action-plan.ts`).
  * 2. Drive the plan on the reference, the candidate, the base when given, and the reference again,
  *    in that order, each in a new browser tab (`build-readings.ts`). The two reference runs are on
  *    each side of the candidate, so a line that changes with time is seen as noise.
@@ -11,8 +11,8 @@
  *
  * A lost browser session makes the run invalid, never a difference.
  */
-import { buildPlan, sequenceKey, type Sequence } from './action-plan.js';
-import { harvestDictionary } from './outside/value-dictionary.js';
+import { NOTHING_DROPPED, buildPlan, sequenceKey, type Plan } from './action-plan.js';
+import { harvestScripts } from './outside/value-dictionary.js';
 import { compareBehaviour, invalidComparison, type BehaviourComparison } from './behaviour-diff.js';
 import type { CompareTimings } from './behaviour-report.js';
 import {
@@ -41,6 +41,8 @@ export interface CompareInput {
   fetchText: (url: string) => Promise<string | undefined>;
 }
 
+/** The event cursor before a tab's first event. */
+const FIRST_EVENT = 0;
 const MS_PER_TENTH = 100;
 const TENTHS = 10;
 const LOST_SESSION = 'The browser session was lost, so this run proves nothing. Run it again:';
@@ -59,13 +61,18 @@ async function withPage<T>(
 }
 
 /** Make the plan on the reference. A start page that does not load gives the start page only. */
-async function planOn(input: CompareInput, page: OpenedPage): Promise<Sequence[]> {
+async function planOn(input: CompareInput, page: OpenedPage): Promise<Plan> {
   if (!(await page.open())) {
-    return [[]];
+    return { sequences: [[]], dropped: NOTHING_DROPPED };
   }
-  const dictionary = await harvestDictionary(input.reference, input.fetchText);
+  const hints = await harvestScripts(input.reference, input.fetchText);
   const start = (await settledRead(page, input.sleep)).tree;
-  return buildPlan(start, (seq) => probeSequence(page, seq, input.sleep), dictionary);
+  // The tab is new, so everything from its first event on is the start page's load.
+  const loadEffects = await page.effects(FIRST_EVENT);
+  return buildPlan(start, (seq) => probeSequence(page, seq, input.sleep), {
+    ...hints,
+    loadEffects,
+  });
 }
 
 export async function runCompare(
@@ -78,7 +85,7 @@ export async function runCompare(
   };
   let sequences = 0;
   try {
-    const [plan, planS] = await timed(() =>
+    const [{ sequences: plan, dropped }, planS] = await timed(() =>
       withPage(input, input.reference, (page) => planOn(input, page)),
     );
     sequences = plan.length;
@@ -102,7 +109,7 @@ export async function runCompare(
       ...(based === undefined ? {} : { base: based[1] }),
       again: againS,
     };
-    return { result, timings };
+    return { result: { ...result, planDropped: dropped }, timings };
   } catch (error) {
     if (error instanceof DriverLostError) {
       return { result: invalidComparison(`${LOST_SESSION} ${error.message}`, sequences) };

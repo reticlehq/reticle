@@ -15,8 +15,12 @@
  * for that sequence and each longer one in the run. A driver that lost its browser session throws
  * `DriverLostError`: that says nothing about the build, so the caller makes the whole run invalid.
  */
+import { ActionType } from '@reticlehq/core';
 import { isPendingLine } from './outside/effect-lines.js';
 import {
+  ControlKind,
+  FaultKind,
+  firstRef,
   longestRuns,
   refFor,
   sequenceKey,
@@ -26,21 +30,54 @@ import {
   type Sequence,
   type Target,
 } from './action-plan.js';
-import { visibleLines } from './visible-content.js';
+import { structureLines } from './visible-content.js';
+
+/** Visible text with no ref: the act tool finds the element by its text. */
+export interface TextAnchor {
+  text: string;
+}
+
+/** One request fault, in the shape `reticle_network_mock` takes. */
+export interface FaultRule {
+  urlContains: string;
+  method: string;
+  status?: number;
+  body?: string;
+  abort?: boolean;
+}
+
+const FAULT_ANSWER: Record<FaultKind, Omit<FaultRule, 'urlContains' | 'method'>> = {
+  [FaultKind.SERVER]: { status: 500, body: '{"error":"fault"}' },
+  [FaultKind.ABORT]: { abort: true },
+  [FaultKind.EMPTY]: { status: 200, body: '[]' },
+};
+/** The start page again: an empty query keeps the url as it is. */
+const RELOAD = '';
 
 /** A browser tab on one build. */
 export interface PageDriver {
   /** Load the start page fresh. False when it did not load. */
   open(): Promise<boolean>;
+  /**
+   * Open the start page with `query` (`?scenario=deferred`) on the same tab. False when it did not
+   * load. A driver without it cannot do a step that opens a url parameter value.
+   */
+  goto?(query: string): Promise<boolean>;
+  /**
+   * Make requests fail on this tab, until the next `open`, which clears them. False when the faults
+   * were not set. A driver without it cannot do a step that makes a request fail.
+   */
+  mock?(rules: readonly FaultRule[]): Promise<boolean>;
   /** The whole page as an accessibility tree, with refs and test ids. */
   read(): Promise<string>;
   /**
-   * Act on a control by ref. `ok` is false when the action was refused or did not land. `since` is
-   * the event cursor from before the action, when the driver gives one.
+   * Act on a control by ref, or click a text probe by its text. `ok` is false when the action was
+   * refused or did not land. `since` is the event cursor from before the action, when the driver
+   * gives one.
    */
   act(
-    ref: string,
-    action: 'click' | 'fill' | 'select',
+    at: string | TextAnchor,
+    action: 'click' | 'fill' | 'select' | typeof ActionType.PRESS,
     value?: string,
   ): Promise<{ ok: boolean; since?: number }>;
   /** What the app did since the cursor, as comparable lines (`effect-lines.ts`). */
@@ -85,9 +122,12 @@ const roundTimes = (line: string): string =>
     .replace(ELAPSED_MS, (_, n: string) => `${String(Math.round(Number(n) / MS_PER_S))}s`)
     .replace(ELAPSED, (_, n: string) => `${String(Math.round(Number(n)))}s`);
 
-/** What a person sees on the page, one line for each element, with sub-second times rounded. */
+/**
+ * What a person sees on the page, one line for each element, with the role of each control and
+ * structure element kept (`structureLines`) and sub-second times rounded.
+ */
 export function pageLines(tree: string): string[] {
-  return visibleLines(tree).map(roundTimes);
+  return structureLines(tree).map(roundTimes);
 }
 
 const same = (a: readonly string[], b: readonly string[]): boolean =>
@@ -153,6 +193,19 @@ async function perform(
     await sleep(step.ms);
     return { ok: true };
   }
+  if ('goto' === step.action) {
+    return { ok: true === (await driver.goto?.(step.query)) };
+  }
+  if ('fault' === step.action) {
+    const rule = { urlContains: step.path, method: step.method, ...FAULT_ANSWER[step.fault] };
+    // Loaded again, so the requests the start page makes on load also see the fault.
+    const set = true === (await driver.mock?.([rule]));
+    return { ok: set && true === (await driver.goto?.(RELOAD)) };
+  }
+  if ('press' === step.action) {
+    const ref = firstRef(tree);
+    return ref === undefined ? { ok: false } : driver.act(ref, ActionType.PRESS, step.key);
+  }
   const acts =
     'fillall' === step.action
       ? step.fields.map((f) => ({ action: 'fill' as const, target: f.target, value: f.value }))
@@ -160,6 +213,10 @@ async function perform(
   let now = tree;
   let since: number | undefined;
   for (const act of acts) {
+    // A text probe is one click, never part of "fill every field".
+    if (act.target.text !== undefined) {
+      return driver.act({ text: act.target.text }, ControlKind.CLICK);
+    }
     const found = await locate(driver, now, act.target, sleep);
     now = found.tree;
     if (found.ref === undefined) {
@@ -214,7 +271,8 @@ export async function probeSequence(
   }
   const after = await settledRead(driver, sleep);
   const changed = before !== undefined && !same(before, after.lines);
-  return { tree: after.tree, active: busy || changed };
+  const effects = await effectsSince(driver, since);
+  return { tree: after.tree, active: busy || changed, effects };
 }
 
 const labelsOf = (seq: Sequence): string[] => [START_STEP, ...seq.map(stepLabel)];

@@ -8,6 +8,7 @@
  * MCP transport, with the same tool calls an agent makes.
  */
 import {
+  ActionType,
   isLocalhostSubdomain,
   isLoopbackHostname,
   ReticleTool,
@@ -79,6 +80,18 @@ function isDisposableBuild(url: string): boolean {
   }
 }
 
+/** The act tool's args: a press names its key as `text`, a fill or a select its `value`. */
+function actArgs(
+  action: string,
+  value: string | undefined,
+  guarded: Record<string, unknown>,
+): Record<string, unknown> {
+  if (value === undefined) {
+    return guarded;
+  }
+  return ActionType.PRESS === action ? { text: value, ...guarded } : { value, ...guarded };
+}
+
 /** One leased tab as the compare driver. Every call goes through `reticle_run` on that tab. */
 export function leasedPage(caller: ToolCaller, url: string, sessionId: string): OpenedPage {
   let id = sessionId;
@@ -108,25 +121,47 @@ export function leasedPage(caller: ToolCaller, url: string, sessionId: string): 
     }
     return refusal === undefined ? { payload } : { payload, refusal };
   };
+  const navigate = async (to: string): Promise<boolean> => {
+    const { payload, refusal } = await run(
+      ReticleTool.NAVIGATE,
+      { url: to, timeout_ms: NAVIGATE_WAIT_MS },
+      NAVIGATE_WAIT_MS * 2,
+    );
+    id = asText(payload['sessionId']) ?? id;
+    return refusal === undefined && true === payload['ok'] && false !== payload['confirmed'];
+  };
+  /** Faults stay on the tab until cleared, and each fresh sequence must see the real server. */
+  let mocked = false;
+  const mockRequests = async (args: Record<string, unknown>): Promise<boolean> => {
+    const { payload, refusal } = await run(ReticleTool.NETWORK_MOCK, args);
+    return refusal === undefined && true === payload['applied'];
+  };
   return {
     async open() {
-      const { payload, refusal } = await run(
-        ReticleTool.NAVIGATE,
-        { url, timeout_ms: NAVIGATE_WAIT_MS },
-        NAVIGATE_WAIT_MS * 2,
-      );
-      id = asText(payload['sessionId']) ?? id;
-      return refusal === undefined && true === payload['ok'] && false !== payload['confirmed'];
+      if (mocked) {
+        if (!(await mockRequests({ clear: true }))) {
+          return false;
+        }
+        mocked = false;
+      }
+      return navigate(url);
+    },
+    mock(rules) {
+      mocked = true;
+      return mockRequests({ mocks: rules });
+    },
+    goto(query) {
+      return navigate(new URL(query, url).href);
     },
     async read() {
       const { payload } = await run(ReticleTool.SNAPSHOT, { mode: SnapshotMode.FULL, ids: true });
       return asText(payload['tree']) ?? '';
     },
-    async act(ref, action, value) {
+    async act(at, action, value) {
       const { payload, refusal } = await run(ReticleTool.ACT, {
-        ref,
+        ...('string' === typeof at ? { ref: at } : { target: at }),
         action,
-        args: value === undefined ? guarded : { value, ...guarded },
+        args: actArgs(action, value, guarded),
       });
       const ok = refusal === undefined && false !== payload['dispatched'];
       const since = payload['since'];
