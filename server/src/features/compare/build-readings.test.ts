@@ -15,7 +15,13 @@ const noSleep = (): Promise<void> => Promise.resolve();
 
 /** A page with one counter button: each click adds one. `refuse` names refs whose act fails. */
 function counterPage(
-  opts: { refuse?: string; trees?: string[]; effects?: (since: number) => string[] } = {},
+  opts: {
+    refuse?: string;
+    /** Refuse `refuse` only this many times, then let it through (a step that fails once, on timing). */
+    refuseTimes?: number;
+    trees?: string[];
+    effects?: (since: number) => string[];
+  } = {},
 ): PageDriver & {
   reads: number;
   opens: number;
@@ -24,6 +30,7 @@ function counterPage(
 } {
   let count = 0;
   let clock = 100;
+  let refused = 0;
   const page = {
     reads: 0,
     opens: 0,
@@ -49,7 +56,8 @@ function counterPage(
     act: (ref: string, action: string) => {
       page.acts.push(`${action} ${ref}`);
       clock += 1;
-      if (ref === opts.refuse) {
+      if (ref === opts.refuse && (opts.refuseTimes === undefined || refused < opts.refuseTimes)) {
+        refused += 1;
         return Promise.resolve({ ok: false, since: clock });
       }
       count += 1;
@@ -105,6 +113,25 @@ describe('readBuild', () => {
     expect(readings.get(sequenceKey([add]))?.failedAt).toBe('click button "Add"');
     expect(readings.get(sequenceKey([add, add]))?.failedAt).toBe('click button "Add"');
     expect(readings.get(sequenceKey([]))?.lines).toContain('count 0');
+  });
+
+  it('tries a run again from a fresh page when a step fails once, and keeps the reading of the try that worked', async () => {
+    // A combobox whose options load after another select failed once on a loaded machine, and compare reported
+    // the correct build as different (dashboard restyles i91, i92, 2026-11-09).
+    const page = counterPage({ refuse: 'e1', refuseTimes: 1 });
+    const readings = await readBuild(page, [[], [add]], noSleep);
+    expect(readings.get(sequenceKey([add]))?.failedAt).toBeUndefined();
+    expect(readings.get(sequenceKey([add]))?.lines).toContain('count 1');
+    expect(page.opens).toBe(2);
+    // Never silently: the reading says which step failed once, so the comparison can report it.
+    expect(readings.get(sequenceKey([add]))?.retriedAt).toBe('click button "Add"');
+  });
+
+  it('still counts a step that fails on the second try too as a step that could not be done', async () => {
+    const page = counterPage({ refuse: 'e1' });
+    const readings = await readBuild(page, [[], [add]], noSleep);
+    expect(readings.get(sequenceKey([add]))?.failedAt).toBe('click button "Add"');
+    expect(page.opens).toBe(2);
   });
 
   it('counts a control that is not on the page as a step that could not be done', async () => {

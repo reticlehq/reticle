@@ -105,4 +105,17 @@ describe('compare report', () => {
     expect(json.differences).toHaveLength(TOP_DIFFERENCES + 2);
     expect(json.seconds).toEqual(timings);
   });
+
+  it('says which steps failed once on the candidate and passed on a retry', () => {
+    const flaky = {
+      ...result([]),
+      intermittent: [
+        { actions: ['open the start page', 'select "Expense"'], step: 'select "Travel"' },
+      ],
+    };
+    const text = compareReportLines(urls, flaky).join('\n');
+    expect(text).toContain('1 step failed once on the candidate and was done on a retry');
+    expect(text).toContain('select "Travel"');
+    expect(compareReportLines(urls, result([])).join('\n')).not.toContain('retry');
+  });
 });

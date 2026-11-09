@@ -78,6 +78,11 @@ export interface BehaviourComparison {
   planDropped?: PlanDropped;
   /** Why the run is invalid. */
   reason?: string;
+  /**
+   * Sequences where a candidate step failed once and was done on a retry from a fresh page. They do not change the
+   * verdict, and they are never hidden: a fault that comes and goes is reported here. Absent when there were none.
+   */
+  intermittent?: { actions: string[]; step: string }[];
 }
 
 export const MSG_NOTHING_COMPARED =
@@ -205,6 +210,7 @@ export function compareBehaviour(input: Input): BehaviourComparison {
   let unstable = 0;
   let referenceFailed = 0;
   let ignored = 0;
+  const intermittent: { actions: string[]; step: string }[] = [];
   const note = (key: string, difference: Omit<BehaviourDifference, 'id' | 'seen'>): void => {
     const id = differenceId(
       DifferenceKind.UNREACHED === difference.kind
@@ -234,6 +240,9 @@ export function compareBehaviour(input: Input): BehaviourComparison {
       continue;
     }
     const got = input.candidate.get(key);
+    if (got?.retriedAt !== undefined) {
+      intermittent.push({ actions: got.actions, step: got.retriedAt });
+    }
     if (got?.lines === undefined) {
       const failedAt = got?.failedAt ?? ours.actions.at(-1) ?? '';
       note(key, {
@@ -273,5 +282,6 @@ export function compareBehaviour(input: Input): BehaviourComparison {
     ...counts,
     differences,
     ...(input.base === undefined ? {} : { score: scoreOf(input, input.base, counters) }),
+    ...(0 === intermittent.length ? {} : { intermittent }),
   };
 }

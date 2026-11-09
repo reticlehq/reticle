@@ -137,4 +137,28 @@ describe('compareBehaviour', () => {
     expect(result.differences[0]?.tag).toBe(DifferenceTag.CHANGED);
     expect(result.score?.score).toBe(0);
   });
+
+  it('reports a step that failed once on the candidate and passed on the retry, without changing the verdict', () => {
+    // A retry must never hide an intermittent fault: it is listed beside the verdict, as evidence.
+    const result = compareBehaviour({
+      order: ['a'],
+      reference: build({ a: read(['shop']) }),
+      again: build({ a: read(['shop']) }),
+      candidate: build({ a: { ...read(['shop']), retriedAt: 'select "Travel"' } }),
+    });
+    expect(result.verdict).toBe(CompareVerdict.SAME);
+    expect(result.intermittent).toEqual([
+      { actions: ['open the start page'], step: 'select "Travel"' },
+    ]);
+  });
+
+  it('has no intermittent list when no step needed a retry', () => {
+    const result = compareBehaviour({
+      order: ['a'],
+      reference: build({ a: read(['shop']) }),
+      again: build({ a: read(['shop']) }),
+      candidate: build({ a: read(['shop']) }),
+    });
+    expect(result.intermittent).toBeUndefined();
+  });
 });
