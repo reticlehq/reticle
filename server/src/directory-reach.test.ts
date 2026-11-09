@@ -476,7 +476,12 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   edges: ['exhaust'],
   // `ports`: port-state.ts names the process that holds the bridge port, so every surface says the
   // same thing about a daemon that holds it and does not answer (#1937).
-  daemon: ['lifetime', 'binding', 'ports', 'telemetry'],
+  /**
+   * `init` is one function: `portFromEnv`, the CLI's single reader of `RETICLE_PORT`. `splitBrainNote`
+   * branches its advice on it, because the variable outranks `.reticle.json`; a second parser here
+   * would be a second opinion on what counts as a port.
+   */
+  daemon: ['lifetime', 'binding', 'ports', 'telemetry', 'init'],
   domain: ['args', 'dir', 'flows', 'oracles', 'project', 'tools'],
   flows: [
     // Steps that reach past the page (open a page, send a request). The folder imports nothing back.
