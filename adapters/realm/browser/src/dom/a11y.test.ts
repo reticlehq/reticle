@@ -4,6 +4,24 @@ import { isVisible } from './visibility.js';
 import { installShadowRegistry } from './shadow-registry.js';
 import { matchQuery } from './query.js';
 
+describe('script and style bodies inside a named element', () => {
+  // Magento's admin puts an inline <script> inside each tab label. The script body holds a variable
+  // name that is random on every render, so the tab's name changed on every page load. A grader that
+  // compared two reads of the same page saw a difference where nothing had changed, and failed a
+  // correct build. A browser never paints a script or style body, so it is not part of the name.
+  it.each(['script', 'style', 'noscript', 'template'])(
+    'leaves a <%s> body out of the name',
+    (tag) => {
+      const tab = document.createElement('div');
+      tab.setAttribute('role', 'tab');
+      tab.innerHTML = `Information <${tag}>var elemX0r5Array = 1;</${tag}>`;
+      document.body.appendChild(tab);
+      expect(getAccessibleName(tab)).toBe('Information');
+      tab.remove();
+    },
+  );
+});
+
 describe('name from content for roles that allow it', () => {
   // A segmented filter written as `<button role="radio">held</button>` is an extremely ordinary
   // design-system control. `radio` was missing from the name-from-content set, so six filters on a

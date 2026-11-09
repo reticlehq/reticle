@@ -22,6 +22,7 @@ import {
   isInViewport,
   isRenderedOutsideAriaHidden,
   isVisible,
+  isNonRendered,
 } from './visibility.js';
 import { dialogCovering, isIgnored, isReticleOverlay, isWordsIgnored } from './dom-ignore.js';
 import { hitTestOccluder } from './occlusion.js';
@@ -40,7 +41,7 @@ import {
   unreadableMatch,
 } from './text-match.js';
 import { pageRoute } from '@/security/page-location.js';
-import { elementsUnder, findIn, isNonRendered, queryByRoleAndName } from './query-finders.js';
+import { elementsUnder, findIn, queryByRoleAndName } from './query-finders.js';
 import { INTERACTIVE } from './snapshot.js';
 
 const MAX_PRESENT_TESTIDS = 12;

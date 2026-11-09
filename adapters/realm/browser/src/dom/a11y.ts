@@ -24,6 +24,7 @@ import {
   HTML_DETAILS_OPEN_ATTRIBUTE,
   HTML_DETAILS_TAG,
   HTML_SUMMARY_TAG,
+  isNonRendered,
   isVisible,
 } from './visibility.js';
 
@@ -256,7 +257,7 @@ function textWithoutHidden(node: Node): string {
     return '';
   }
   const el = node as Element;
-  if ('true' === el.getAttribute('aria-hidden')) {
+  if ('true' === el.getAttribute('aria-hidden') || isNonRendered(el)) {
     return '';
   }
   if (isImage(el)) {

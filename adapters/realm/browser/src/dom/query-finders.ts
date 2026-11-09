@@ -1,7 +1,7 @@
 import { DATA_RETICLE_SOURCE_ATTR, QueryBy, type ElementQuery } from '@reticlehq/core';
 import { isInput, isSelect, isTextArea } from './realm.js';
 import { getAccessibleName, getRole } from './a11y.js';
-import { isVisible } from './visibility.js';
+import { isNonRendered, isVisible } from './visibility.js';
 import { identifyComponent } from '@/registry/stores/adapters.js';
 import { readTestId, testIdSelector } from './addressing/testid-attr.js';
 import {
@@ -35,13 +35,6 @@ export function elementsUnder(container: HTMLElement): HTMLElement[] {
   // tag to match on, so only a true Element root joins the candidates.
   const self = Node.ELEMENT_NODE === container.nodeType ? [container] : [];
   return [...self, ...Array.from(container.querySelectorAll<HTMLElement>('*'))];
-}
-
-/** Tags whose text content is never rendered, however visible the element computes. */
-const NON_RENDERED_TAGS: readonly string[] = ['script', 'style', 'template', 'noscript'];
-
-export function isNonRendered(el: Element): boolean {
-  return NON_RENDERED_TAGS.includes(el.tagName.toLowerCase());
 }
 
 function directText(el: Element): string {
