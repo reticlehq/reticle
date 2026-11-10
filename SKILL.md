@@ -77,7 +77,7 @@ The advertised surface is deliberately small (`default` 10, `all` 30). `RETICLE_
 | `reticle_verify` | replay, coverage, Harness | `action`: `change` `flows` `affected` `coverage` `crawl` `explore` `mutate` `heal` |
 | `reticle_tools` / `reticle_run` | everything else (below) | `names`; `tool`, `args` |
 
-Actions: `click` `dblclick` `hover` `focus` `blur` `fill` `type` `clear` `select` `check` `uncheck` `submit` `press` `upload` `scrollIntoView` `scroll` `drag` `tap` `zoom`. `args`: `{ value }` for fill/select, `{ text: "Enter" }` for press, `{ toRef }` for drag, `{ path }` for upload, `{ native: true }` for a trusted click. A control whose label reads as destructive is refused until you pass `args.confirmDangerous: true`, and only do that when the user asked for it.
+Actions: `click` `dblclick` `hover` `focus` `blur` `fill` `type` `clear` `select` `check` `uncheck` `submit` `press` `upload` `scrollIntoView` `scroll` `drag` `tap` `zoom` `insertText`. `args`: `{ value }` for fill/select, `{ text: "Enter" }` for press, `{ toRef }` for drag, `{ path }` for upload, `{ native: true }` for a trusted click. `insertText` takes `{ text }` and types into a contenteditable/Tiptap/ProseMirror editor, where `fill` and `type` are refused. A control whose label reads as destructive is refused until you pass `args.confirmDangerous: true`, and only do that when the user asked for it.
 
 Beyond the advertised set, one hop each:
 

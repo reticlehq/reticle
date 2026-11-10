@@ -428,13 +428,22 @@ describe('browser-side action guards are recognized refusals, not unknown defect
     }
   });
 
-  it('an unsupported surface is named as unsupported, not as a possible bug', () => {
+  it('an unsupported surface names insertText, not a possible bug', () => {
     expect(
-      recoveryFor('cannot fill a contenteditable or EditContext editor; use press or an input'),
+      recoveryFor(
+        'cannot fill a contenteditable or EditContext editor; use the insertText action, or press for a key',
+      ),
     ).toBe(RECOVERY.UNSUPPORTED_SURFACE);
     expect(
       recoveryFor(
-        'cannot type into a contenteditable or EditContext editor; use press or an input',
+        'cannot type into a contenteditable or EditContext editor; use the insertText action, or press for a key',
+      ),
+    ).toBe(RECOVERY.UNSUPPORTED_SURFACE);
+    // The insertText refusal itself. It names no `contenteditable`, so it must have its own match or
+    // a deliberate refusal reads as a possible defect in Reticle.
+    expect(
+      recoveryFor(
+        'cannot insertText into an EditContext editor (Monaco, CodeMirror 6): code that calls updateText does not fire textupdate, so the editor model would keep the old text. Use press for a key.',
       ),
     ).toBe(RECOVERY.UNSUPPORTED_SURFACE);
   });

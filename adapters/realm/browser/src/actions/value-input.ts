@@ -62,17 +62,18 @@ export function setNativeValue(el: HTMLInputElement | HTMLTextAreaElement, value
  * makes when it refuses to fill a non-editable element.
  */
 /**
- * A rich-text target is UNSUPPORTED, not a mistake by the caller.
+ * A rich-text target is unsupported for `fill` and `type`, not a mistake by the caller.
  *
  * TipTap, Quill, ProseMirror, Slate, and Lexical set `contenteditable`. Monaco and CodeMirror do
  * not: they are a `role="textbox"` with the document in the EditContext API. Both used to read as
  * "you picked the wrong element". One sentence covers both, and it stays short because this file
- * is on the SDK's first load.
+ * is on the SDK's first load. A contenteditable editor takes `insertText`; an EditContext editor
+ * refuses it, because a scripted update fires no `textupdate` for the editor model to read.
  *
  * The attribute, not only `isContentEditable`: jsdom does not implement the property, so a test
  * would pass against a guard that never fires in the environment the unit suite runs in.
  */
-function isRichText(el: ActionTarget): boolean {
+export function isRichText(el: Element): boolean {
   const flag = el.getAttribute('contenteditable');
   if ((isHtmlElement(el) && el.isContentEditable) || (null !== flag && 'false' !== flag)) {
     return true;
@@ -107,7 +108,7 @@ function isEditorTextArea(el: ActionTarget): boolean {
 
 function refuseEditor(action: string): never {
   throw new Error(
-    `cannot ${action} a contenteditable or EditContext editor; use press or an input`,
+    `cannot ${action} a contenteditable or EditContext editor; use insertText, or press for a key`,
   );
 }
 

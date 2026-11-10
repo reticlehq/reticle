@@ -8,6 +8,10 @@
   },
   "dependencies": {
     "next": "^16.4.4",
+    "prosemirror-model": "^1.25.12",
+    "prosemirror-schema-basic": "^1.2.5",
+    "prosemirror-state": "^1.4.4",
+    "prosemirror-view": "^1.42.9",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },

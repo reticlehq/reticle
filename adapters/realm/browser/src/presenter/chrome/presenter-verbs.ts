@@ -14,6 +14,7 @@ export function actionVerb(action: string): string {
       return 'Clicking';
     case ActionType.FILL:
     case ActionType.TYPE:
+    case ActionType.INSERT_TEXT:
       return 'Typing into';
     case ActionType.HOVER:
       return 'Hovering';
