@@ -245,7 +245,7 @@ const APPLY_WINDOW_MS = 500;
  */
 const APPLY_SLACK_MS = 100;
 
-/** The store path or DOM element a reaction changed, when the event names one. */
+/** The store path or DOM text element a comparable reaction changed, when the event names one. */
 function reactionTarget(event: ReticleEvent): string | undefined {
   if (event.type === EventType.STATE_CHANGE) {
     const path = event.data['path'];
@@ -255,12 +255,9 @@ function reactionTarget(event: ReticleEvent): string | undefined {
     const name = 'string' === typeof event.data['name'] ? event.data['name'] : '';
     return `state:${name}:${path}`;
   }
-  const dom =
-    event.type === EventType.DOM_TEXT ||
-    event.type === EventType.DOM_ADDED ||
-    event.type === EventType.DOM_REMOVED ||
-    event.type === EventType.DOM_ATTR;
-  return dom && event.ref !== undefined ? `dom:${event.ref}` : undefined;
+  return event.type === EventType.DOM_TEXT && event.ref !== undefined
+    ? `dom:${event.ref}`
+    : undefined;
 }
 
 /** Whether a reaction belongs to this flight rather than another completion or request start. */

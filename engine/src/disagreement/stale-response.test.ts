@@ -26,6 +26,8 @@ const stateApplied = (t: number, path: string) =>
   ({ type: EventType.STATE_CHANGE, t, data: { name: 'filters', path } }) as unknown as ReticleEvent;
 const domApplied = (t: number, ref: string) =>
   ({ type: EventType.DOM_TEXT, t, ref, data: { text: 'loaded' } }) as unknown as ReticleEvent;
+const domAdded = (t: number, ref: string) =>
+  ({ type: EventType.DOM_ADDED, t, ref, data: {} }) as unknown as ReticleEvent;
 const signalApplied = (t: number) =>
   ({ type: EventType.SIGNAL, t, data: { name: 'loaded' } }) as unknown as ReticleEvent;
 const unidentifiedDomApplied = (t: number) =>
@@ -349,6 +351,10 @@ describe('parallel fan-out is not a race', () => {
       ],
     ])('keeps the timing fallback when the winner has %s', (_name, newer, older) => {
       expect(race(newer, older)).toHaveLength(1);
+    });
+
+    it('keeps the timing fallback when the winner adds a row and the loser changes a cell', () => {
+      expect(race(domAdded(150, 'shipment-row'), domApplied(700, 'shipment-cell'))).toHaveLength(1);
     });
   });
 
