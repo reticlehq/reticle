@@ -107,6 +107,20 @@ describe('readBuild', () => {
     expect(page.opens).toBe(2);
   });
 
+  it('adds the state lines read after each sequence, and reads no state without a reader', async () => {
+    let reads = 0;
+    const readState = (): Promise<string[]> => {
+      reads += 1;
+      return Promise.resolve([`state n ${String(reads)}`]);
+    };
+    const readings = await readBuild(counterPage(), [[], [add], [add, add]], noSleep, readState);
+    expect(readings.get(sequenceKey([]))?.lines?.at(-1)).toBe('state n 1');
+    expect(readings.get(sequenceKey([add, add]))?.lines?.at(-1)).toBe('state n 3');
+    expect(reads).toBe(3);
+    const without = await readBuild(counterPage(), [[], [add]], noSleep);
+    expect(without.get(sequenceKey([add]))?.lines?.some((l) => l.startsWith('state'))).toBe(false);
+  });
+
   it('records a step that could not be done for that sequence and every longer one', async () => {
     const page = counterPage({ refuse: 'e1' });
     const readings = await readBuild(page, [[], [add], [add, add]], noSleep);

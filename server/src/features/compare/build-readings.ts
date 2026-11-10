@@ -279,11 +279,15 @@ export async function probeSequence(
 
 const labelsOf = (seq: Sequence): string[] => [START_STEP, ...seq.map(stepLabel)];
 
-/** Drive the plan on one build. */
+/**
+ * Drive the plan on one build. With `readState`, the app's stored data is read after each sequence
+ * is read, and its lines (`outside/state-sources.ts`) follow the page and effect lines.
+ */
 export async function readBuild(
   driver: PageDriver,
   plan: readonly Sequence[],
   sleep: Sleep,
+  readState?: () => Promise<string[]>,
 ): Promise<BuildReadings> {
   const planned = new Set(plan.map(sequenceKey));
   const out: BuildReadings = new Map();
@@ -302,6 +306,9 @@ export async function readBuild(
     }
     const read = await settledRead(driver, sleep);
     const lines = [...read.lines, ...(await effectsSince(driver, since))];
+    if (readState !== undefined) {
+      lines.push(...(await readState()));
+    }
     out.set(sequenceKey(seq), {
       actions: labelsOf(seq),
       lines,

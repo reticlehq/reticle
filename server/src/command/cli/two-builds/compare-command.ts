@@ -27,7 +27,16 @@ import {
   type CompareUrls,
 } from '@/features/compare/behaviour-report.js';
 import { DriverLostError } from '@/features/compare/build-readings.js';
+import {
+  StateDeclarationSchema,
+  readStateSources,
+  type StateIo,
+  type StateSource,
+} from '@/features/compare/outside/state-sources.js';
 import { consoleLines, networkLines } from '@/features/compare/outside/effect-lines.js';
+import { execFile } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
+import { promisify } from 'node:util';
 import { callerArtifactRoot } from '@/memory/project/link-directory.js';
 import {
   defaultPairingTokenDir,
@@ -59,6 +68,16 @@ const DRIVER_LOST =
   /no browser session connected|no connected session|multiple sessions connected|session disconnected|names no session|no such session|session ended/i;
 const MSG_NO_DAEMON = 'could not reach the daemon on port';
 const MSG_LEASE_FAILED = 'could not open a browser on';
+const MSG_STATE_UNREADABLE = 'could not read the state sources in';
+/** How long one state source read may take. */
+const STATE_READ_MS = 60_000;
+/** The most output one state command may give. */
+const STATE_OUTPUT_BYTES = 64 * 1024 * 1024;
+const SHELL = 'sh';
+const SHELL_COMMAND_FLAG = '-c';
+const DOCKER = 'docker';
+const DOCKER_EXEC = 'exec';
+const UTF8 = 'utf8';
 
 const asText = (value: unknown): string | undefined =>
   'string' === typeof value ? value : undefined;
@@ -202,6 +221,8 @@ export interface CompareCommandOptions extends CompareUrls {
   report?: string;
   /** Injected so a test can capture the report; the default writes the file. */
   writeReport?: (path: string, html: string) => void;
+  /** The path of the declared state sources file (`--state`). */
+  state?: string;
 }
 
 export const MSG_REPORT_WRITTEN = 'Report:';
@@ -215,6 +236,42 @@ function writeReportFile(path: string, html: string): void {
 interface ReportSink {
   path: string;
   write: (path: string, html: string) => void;
+}
+
+const execFileText = promisify(execFile);
+
+/** State sources read on this machine: a shell, `docker exec`, `fetch` and the file system. */
+const hostStateIo: StateIo = {
+  async run(command, container) {
+    const [file, args] =
+      container === undefined
+        ? [SHELL, [SHELL_COMMAND_FLAG, command]]
+        : [DOCKER, [DOCKER_EXEC, container, SHELL, SHELL_COMMAND_FLAG, command]];
+    const { stdout } = await execFileText(file, args, {
+      encoding: UTF8,
+      timeout: STATE_READ_MS,
+      maxBuffer: STATE_OUTPUT_BYTES,
+    });
+    return stdout;
+  },
+  async fetchJson(url) {
+    const response = await fetch(url, { signal: AbortSignal.timeout(STATE_READ_MS) });
+    if (!response.ok) {
+      throw new Error(`HTTP ${String(response.status)}`);
+    }
+    return response.json();
+  },
+  readFile: (path) => readFile(path, UTF8),
+};
+
+/** The sources in the `--state` file, or why they could not be read. */
+async function loadStateSources(path: string): Promise<StateSource[] | { error: string }> {
+  try {
+    const parsed = StateDeclarationSchema.safeParse(JSON.parse(await readFile(path, UTF8)));
+    return parsed.success ? parsed.data.sources : { error: parsed.error.message };
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 /** Fetch a page or script file as a browser would. Undefined when it could not be fetched. */
@@ -275,6 +332,15 @@ export async function runCompareCommand(
     options.report === undefined
       ? undefined
       : { path: options.report, write: options.writeReport ?? writeReportFile };
+  let readState: (() => Promise<string[]>) | undefined;
+  if (options.state !== undefined) {
+    const loaded = await loadStateSources(options.state);
+    if ('error' in loaded) {
+      const reason = `${MSG_STATE_UNREADABLE} ${options.state}: ${loaded.error}`;
+      return render(options.json, urls, invalidComparison(reason, 0), undefined, sink);
+    }
+    readState = () => readStateSources(loaded, hostStateIo);
+  }
   const connect = options.connect ?? connectOverSse;
   let caller: ToolCaller;
   try {
@@ -298,6 +364,7 @@ export async function runCompareCommand(
       sleep: options.sleep ?? ((ms) => new Promise((resolve) => setTimeout(resolve, ms))),
       now: options.now ?? Date.now,
       fetchText: options.fetchText ?? fetchText,
+      ...(readState === undefined ? {} : { readState }),
     });
     return render(options.json, urls, result, timings, sink);
   } catch (error) {
@@ -313,7 +380,7 @@ export async function runCompareCommand(
  * or starts one. Nothing here stops a daemon, so an agent's MCP link stays up.
  */
 export async function handleCompare(
-  parsed: CompareUrls & { json: boolean; port: number; report?: string },
+  parsed: CompareUrls & { json: boolean; port: number; report?: string; state?: string },
   ensureDaemon: (port: number) => Promise<void>,
   out: { line: (text: string) => void; exit: (code: number) => void },
 ): Promise<void> {

@@ -6,9 +6,11 @@
 import { parseFeedbackArgs, type ParsedFeedback } from './cli-parse-feedback.js';
 import { HEADLESS_FLAG, parseServeFlags } from './cli-parse-serve.js';
 import { parseVerifySuffix, type VerifySuffix } from './cli-parse-verify.js';
+import { COMPARE_COMMAND, parseCompareArgs, type CompareArgs } from './cli-parse-compare.js';
 import { DAEMON_INNER_COMMAND } from '@/command/daemon/daemon-argv.js';
 import {
   HEADED_FLAG,
+  JSON_FLAG,
   PORT_FLAG,
   VERIFY_COMMAND,
   missingOperand,
@@ -58,10 +60,6 @@ const RESTART_FLAG = '--restart';
 const STATUS_COMMAND = 'status';
 const OPEN_COMMAND = 'open';
 const DRIVE_COMMAND = 'drive';
-const COMPARE_COMMAND = 'compare';
-/** `compare --base <url>`: the build before the change. */
-const BASE_FLAG = '--base';
-const REPORT_FLAG = '--report';
 /** Kept for one release as `gate --list`. */
 const AFFECTED_COMMAND = 'affected';
 const GATE_COMMAND = 'gate';
@@ -226,7 +224,6 @@ const NO_PROMPT_CAPTURE_FLAG = '--no-prompt-capture';
  * and reading one object is one turn where interpreting a report is several. The three opt-outs are
  * what a machine without a browser, or a caller already running their app, actually needs.
  */
-const JSON_FLAG = '--json';
 const NO_DRIVE_FLAG = '--no-drive';
 const NO_OPEN_FLAG = '--no-open';
 /** `reticle open <url> --navigate`: move a tab already on the origin to the url (#1140). */
@@ -921,78 +918,4 @@ export function parseCliArgs(
       // word somebody typed, and naming it is strictly more useful than reprinting the whole help.
       return unknownCommand(cmd);
   }
-}
-
-/*
- * `reticle compare <reference-url> <candidate-url> [--base <url>] [--json]`. The command has one
- * recipe, so it has no other settings. `--port` names the daemon, as on every command that uses one.
- */
-
-/** `compare` takes exactly a reference url and a candidate url. */
-const COMPARE_URLS = 2;
-
-type CompareArgs =
-  | {
-      kind: 'ok';
-      reference: string;
-      candidate: string;
-      base?: string;
-      /** Where to write the HTML report (`--report <file>`). */
-      report?: string;
-      json: boolean;
-      port: number;
-    }
-  | ParseError;
-
-export function parseCompareArgs(args: readonly string[], defaultPort: number): CompareArgs {
-  const urls: string[] = [];
-  let base: string | undefined;
-  let report: string | undefined;
-  let json = false;
-  let port = defaultPort;
-  for (let i = 0; i < args.length; i += 1) {
-    const arg = args[i] ?? '';
-    if (JSON_FLAG === arg) {
-      json = true;
-      continue;
-    }
-    if (BASE_FLAG === arg || PORT_FLAG === arg || REPORT_FLAG === arg) {
-      const value = args[i + 1];
-      if (value === undefined || value.startsWith('--')) {
-        return missingValue(arg);
-      }
-      i += 1;
-      if (BASE_FLAG === arg) {
-        base = value;
-        continue;
-      }
-      if (REPORT_FLAG === arg) {
-        report = value;
-        continue;
-      }
-      const n = Number(value);
-      if (!Number.isInteger(n)) {
-        return notANumber(arg, value);
-      }
-      port = n;
-      continue;
-    }
-    if (arg.startsWith('--') || COMPARE_URLS === urls.length) {
-      return unknownArgument(arg);
-    }
-    urls.push(arg);
-  }
-  const [reference, candidate] = urls;
-  if (reference === undefined || candidate === undefined) {
-    return missingOperand(COMPARE_COMMAND, 'a reference url and a candidate url');
-  }
-  return {
-    kind: 'ok',
-    reference,
-    candidate,
-    ...(base === undefined ? {} : { base }),
-    ...(report === undefined ? {} : { report }),
-    json,
-    port,
-  };
 }
