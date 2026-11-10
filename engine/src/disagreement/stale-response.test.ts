@@ -356,6 +356,20 @@ describe('parallel fan-out is not a race', () => {
     it('keeps the timing fallback when the winner adds a row and the loser changes a cell', () => {
       expect(race(domAdded(150, 'shipment-row'), domApplied(700, 'shipment-cell'))).toHaveLength(1);
     });
+
+    it('keeps the timing fallback when the winner adds a row and changes another text target', () => {
+      expect(
+        findStaleResponses([
+          pending(0, '/api/options?kind=gender', 'a'),
+          pending(60, '/api/options?kind=state', 'b'),
+          settled(150, 'b'),
+          domAdded(150, 'shipment-row'),
+          domApplied(150, 'result-count'),
+          settled(700, 'a'),
+          domApplied(700, 'shipment-cell'),
+        ]),
+      ).toHaveLength(1);
+    });
   });
 
   it('ignores a reaction far enough after to be unrelated', () => {

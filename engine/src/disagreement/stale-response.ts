@@ -302,14 +302,15 @@ function appliedAfter(
   winner: Flight,
   all: readonly Flight[],
 ): boolean {
+  const winnerReactions = events.filter((event) => belongsTo(event, winner, all));
   const winnerTargets = new Set(
-    events
-      .filter((event) => belongsTo(event, winner, all))
-      .map(reactionTarget)
-      .filter((target): target is string => target !== undefined),
+    winnerReactions.map(reactionTarget).filter((target): target is string => target !== undefined),
   );
   const winnerTargetKinds = new Set(
     [...winnerTargets].map((target) => target.slice(0, target.indexOf(':'))),
+  );
+  const winnerChangedDomStructure = winnerReactions.some(
+    (event) => event.type === EventType.DOM_ADDED || event.type === EventType.DOM_REMOVED,
   );
   return events.some((event) => {
     if (!belongsTo(event, loser, all)) {
@@ -319,6 +320,10 @@ function appliedAfter(
     // events and targets of another kind keep the timing fallback because the stream cannot compare them.
     const target = reactionTarget(event);
     if (target === undefined) {
+      return true;
+    }
+    // A structural change can contain the loser's text target, so different refs are not comparable.
+    if (event.type === EventType.DOM_TEXT && winnerChangedDomStructure) {
       return true;
     }
     const kind = target.slice(0, target.indexOf(':'));
