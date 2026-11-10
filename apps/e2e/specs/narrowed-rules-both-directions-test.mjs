@@ -1,5 +1,5 @@
 import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
-// Five narrowed rules, in both directions, in a real browser (#2141).
+// Narrowed rules, in both directions, in a real browser (#2141, #2175).
 //
 // #1627 (`write-field-ignored`), #1629 (`action-had-no-effect`) and #2127 (`pagination-not-fetched`)
 // each made a rule report less often. The merges took the merge queue's benchmark as the accuracy
@@ -9,6 +9,9 @@ import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 //
 // #2172 narrowed `signal-contradicted`: a signal sent before a declared failed write is no longer a
 // claim about it. The pair below keeps the claim that follows the failure.
+//
+// #2175 narrowed `stale-response-applied` to responses that update the same target. The pair below
+// keeps the same-target defect while proving that two unrelated store keys remain a pass.
 //
 // For each rule, one `reticle_act_and_wait` must report it and one must not. The control it must
 // report is the defect closest to the shape the PR silenced, because that is where a narrowed rule
@@ -59,6 +62,9 @@ const NET_PENDING = 'net.pending';
 const INVITE = `${API}/invite`;
 const FORM_SUBMIT = 'form:submit';
 const INVITE_SENT = 'invite:sent';
+const STALE_RESPONSE = 'stale-response-applied';
+const OPTIONS = `${API}/options`;
+const SAME_TASK_MS = 2;
 /** The words the engine's reason uses for a request sent through a `fetch` saved before connect. */
 const SAVED_FETCH_REASON = 'saved before Reticle connected';
 const BUILD_PLUGIN = 'build plugin';
@@ -188,6 +194,21 @@ const storeMoves = async (since, pathName) =>
     (e) => 'state.change' === e.type && String(e.data?.path ?? '') === pathName,
   ).length;
 
+/** When one options read was issued and settled, from the session's own events. */
+const optionFlight = async (since, query) => {
+  const recorded = await events(since);
+  const at = (type) =>
+    recorded.find(
+      (e) => type === e.type && String(e.data?.url ?? '').includes(`${OPTIONS}?${query}`),
+    )?.t;
+  return { issued: at('net.pending'), settled: at('net.request') };
+};
+
+const racedOutOfOrder = (first, second) =>
+  second.issued - first.issued >= SAME_TASK_MS &&
+  second.issued < first.settled &&
+  second.settled < first.settled;
+
 console.log('\n=== action-had-no-effect: a dead click while a click counter moves its store path ===');
 const dead = await act('rule-pairs-dead', { kind: 'settled' });
 if (dead !== undefined) {
@@ -208,6 +229,75 @@ if (remember !== undefined) {
     1 === (await storeMoves(remember.since, 'rulePairsChoice')),
   );
 }
+
+console.log('\n=== stale-response-applied: out-of-order reads update different store keys ===');
+const options = await T('reticle_act_sequence', {
+  steps: [
+    { target: { testid: 'rule-pairs-options-gender' }, action: 'click' },
+    { target: { testid: 'rule-pairs-options-state' }, action: 'click' },
+  ],
+  burst: 50,
+});
+chk('both option reads ran', 2 === options.completed, `completed=${String(options.completed)}`);
+await p
+  .locator('[data-testid="rule-pairs-gender-options"]', { hasText: 'gender' })
+  .waitFor({ timeout: 10000 });
+await T('reticle_wait_for', {
+  predicate: { kind: 'net', urlContains: `${OPTIONS}?kind=gender`, method: 'GET', status: 200 },
+  since: options.since,
+  timeout_ms: 10000,
+});
+await sleep(100);
+const separateTargets = await T('reticle_assert', {
+  predicate: { kind: 'text', contains: 'gender options' },
+  since: options.since,
+});
+chk('different store keys remain verified yes', VERIFIED_YES === separateTargets.verified, why(separateTargets));
+chk(
+  'each response moved its own store key',
+  1 === (await storeMoves(options.since, 'rulePairsGenderOptions')) &&
+    1 === (await storeMoves(options.since, 'rulePairsStateOptions')),
+);
+const gender = await optionFlight(options.since, 'kind=gender');
+const state = await optionFlight(options.since, 'kind=state');
+chk(
+  'the option reads overlapped and settled out of order',
+  racedOutOfOrder(gender, state),
+  `gender=${JSON.stringify(gender)} state=${JSON.stringify(state)}`,
+);
+
+console.log('\n=== stale-response-applied: out-of-order reads overwrite shipments.rows ===');
+const shipments = await T('reticle_act_sequence', {
+  steps: [
+    { target: { testid: 'rule-pairs-shipments-all' }, action: 'click' },
+    { target: { testid: 'rule-pairs-shipments-held' }, action: 'click' },
+  ],
+  burst: 50,
+});
+chk('both shipment reads ran', 2 === shipments.completed, `completed=${String(shipments.completed)}`);
+await p
+  .locator('[data-testid="rule-pairs-shipments"]', { hasText: 'all shipments' })
+  .waitFor({ timeout: 10000 });
+await T('reticle_wait_for', {
+  predicate: { kind: 'net', urlContains: `${OPTIONS}?status=all`, method: 'GET', status: 200 },
+  since: shipments.since,
+  timeout_ms: 10000,
+});
+await sleep(100);
+const sameTarget = await T('reticle_assert', {
+  predicate: { kind: 'text', contains: 'all shipments' },
+  since: shipments.since,
+});
+chk('an older response overwriting shipments.rows is verified no', VERIFIED_NO === sameTarget.verified, why(sameTarget));
+chk('the stale response is reported', kindsOf(sameTarget).includes(STALE_RESPONSE), why(sameTarget));
+chk('both responses moved shipments.rows', 2 === (await storeMoves(shipments.since, 'shipments')));
+const allShipments = await optionFlight(shipments.since, 'status=all');
+const heldShipments = await optionFlight(shipments.since, 'status=held');
+chk(
+  'the shipment reads overlapped and settled out of order',
+  racedOutOfOrder(allShipments, heldShipments),
+  `all=${JSON.stringify(allShipments)} held=${JSON.stringify(heldShipments)}`,
+);
 
 /** How many GETs asked `list` for page 1 in the window. */
 const pageOneReads = async (since, list) =>

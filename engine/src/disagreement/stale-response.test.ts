@@ -22,6 +22,16 @@ const settled = (t: number, id: string) =>
  */
 const applied = (t: number) =>
   ({ type: EventType.STATE_CHANGE, t, data: { store: 'list' } }) as unknown as ReticleEvent;
+const stateApplied = (t: number, path: string) =>
+  ({ type: EventType.STATE_CHANGE, t, data: { name: 'filters', path } }) as unknown as ReticleEvent;
+const domApplied = (t: number, ref: string) =>
+  ({ type: EventType.DOM_TEXT, t, ref, data: { text: 'loaded' } }) as unknown as ReticleEvent;
+const domAdded = (t: number, ref: string) =>
+  ({ type: EventType.DOM_ADDED, t, ref, data: {} }) as unknown as ReticleEvent;
+const signalApplied = (t: number) =>
+  ({ type: EventType.SIGNAL, t, data: { name: 'loaded' } }) as unknown as ReticleEvent;
+const unidentifiedDomApplied = (t: number) =>
+  ({ type: EventType.DOM_TEXT, t, data: { text: 'loaded' } }) as unknown as ReticleEvent;
 
 describe('stale response detection', () => {
   it('reports overlapping reads of one endpoint that settled out of order', () => {
@@ -300,6 +310,66 @@ describe('parallel fan-out is not a race', () => {
         settled(700, 'a'), // …and the older one landed after it, and was dropped
       ]),
     ).toEqual([]);
+  });
+
+  describe('the target each response updated', () => {
+    const race = (newer: ReticleEvent, older: ReticleEvent) =>
+      findStaleResponses([
+        pending(0, '/api/options?kind=gender', 'a'),
+        pending(60, '/api/options?kind=state', 'b'),
+        settled(150, 'b'),
+        newer,
+        settled(700, 'a'),
+        older,
+      ]);
+
+    it.each([
+      ['state paths', stateApplied(150, 'state.options'), stateApplied(700, 'gender.options')],
+      ['DOM targets', domApplied(150, 'state-select'), domApplied(700, 'gender-select')],
+    ])('stays silent when the responses update different %s', (_name, newer, older) => {
+      expect(race(newer, older)).toEqual([]);
+    });
+
+    it.each([
+      ['state path', stateApplied(150, 'shipments.rows'), stateApplied(700, 'shipments.rows')],
+      ['DOM target', domApplied(150, 'shipments-table'), domApplied(700, 'shipments-table')],
+    ])('still reports a race when both responses update the same %s', (_name, newer, older) => {
+      expect(race(newer, older)).toHaveLength(1);
+    });
+
+    it.each([
+      ['only a signal', signalApplied(150), stateApplied(700, 'shipments.rows')],
+      [
+        'only a DOM target',
+        domApplied(150, 'shipments-table'),
+        stateApplied(700, 'shipments.rows'),
+      ],
+      [
+        'a DOM event without a ref',
+        unidentifiedDomApplied(150),
+        domApplied(700, 'shipments-table'),
+      ],
+    ])('keeps the timing fallback when the winner has %s', (_name, newer, older) => {
+      expect(race(newer, older)).toHaveLength(1);
+    });
+
+    it('keeps the timing fallback when the winner adds a row and the loser changes a cell', () => {
+      expect(race(domAdded(150, 'shipment-row'), domApplied(700, 'shipment-cell'))).toHaveLength(1);
+    });
+
+    it('keeps the timing fallback when the winner adds a row and changes another text target', () => {
+      expect(
+        findStaleResponses([
+          pending(0, '/api/options?kind=gender', 'a'),
+          pending(60, '/api/options?kind=state', 'b'),
+          settled(150, 'b'),
+          domAdded(150, 'shipment-row'),
+          domApplied(150, 'result-count'),
+          settled(700, 'a'),
+          domApplied(700, 'shipment-cell'),
+        ]),
+      ).toHaveLength(1);
+    });
   });
 
   it('ignores a reaction far enough after to be unrelated', () => {
