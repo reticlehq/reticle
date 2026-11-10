@@ -13,6 +13,7 @@ import type { Session } from '@/portal/session/session.js';
 import type { ToolDeps } from './tool-kit.js';
 import { rewriteUploadArgs, tryRealInput, HOVER_NEEDS_POINTER_MSG } from './real-input-attempt.js';
 import { sessionRoot } from '@/memory/project/session-root.js';
+import { normalizeTypeSpelling } from './type-spelling.js';
 
 /**
  * Single dispatch point for every ACT and ACT_SEQUENCE command.
@@ -28,10 +29,11 @@ export async function actCommand(
   deps: ToolDeps,
   session: Session,
   command: ReticleCommand,
-  actArgs: Record<string, unknown>,
+  rawActArgs: Record<string, unknown>,
   timeoutMs?: number,
   realTried = false, // the caller (reticle_act) already tried real input: do not press twice
 ): Promise<import('@reticlehq/core').CommandResult> {
+  const actArgs = normalizeTypeSpelling(rawActArgs);
   const rewritten = await rewriteUploadArgs(
     { fs: deps.fs, reticleRoot: sessionRoot(deps, session.id) },
     'string' === typeof actArgs['action'] ? actArgs['action'] : '',
