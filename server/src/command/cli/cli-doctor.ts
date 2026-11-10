@@ -109,6 +109,7 @@ function splitBrainLine(port: number, projectId: string | undefined): string | u
     daemonsServingProjectElsewhere(projectId, port, home, isAlive, (other) =>
       hasProjectConnectedBefore(home, other, projectId),
     ),
+    { projectId, home },
   );
   return elsewhere ?? wrongDaemonNote(port, resolveDaemonForProject(projectId, home, isAlive));
 }

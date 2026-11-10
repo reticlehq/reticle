@@ -26,6 +26,7 @@ import {
   type DaemonRegistryEntry,
 } from '@reticlehq/core/artifacts';
 import { ReticleEnv, RETICLE_DEFAULT_PORT } from '@reticlehq/core';
+import { portFromEnv } from '../setup/init/init-port.js';
 
 const RETICLE_PORT_ENV = ReticleEnv.PORT;
 
@@ -184,10 +185,41 @@ export function projectlessNote(
  * record naming a daemon that is not the one being asked. The wording says which side is empty,
  * since the failure is invisible precisely because both sides look healthy from where they stand.
  */
-export function splitBrainNote(myPort: number, elsewhere: readonly number[]): string | undefined {
+export function splitBrainNote(
+  myPort: number,
+  elsewhere: readonly number[],
+  /** This project and the registry home, to tell whether the app's daemon belongs to another project. */
+  owner?: { projectId: string | undefined; home: string },
+  /** Where `RETICLE_PORT` is read from; injectable so the note is testable. */
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): string | undefined {
   if (0 === elsewhere.length) return undefined;
   const listed = elsewhere.map((port) => `:${String(port)}`).join(', ');
   const first = elsewhere[0] ?? myPort;
+  // The app landed on ANOTHER project's daemon (#1652): two projects share a port. `resolveMcpPort`
+  // never adopts a daemon registered to a different project, so RETICLE_PORT would only relocate the
+  // agent again. The step that works is giving this project its own port, so its app comes here.
+  // Owner by port alone is safe: `elsewhere` is already liveness-filtered (`daemonsServingProjectElsewhere`).
+  const holder = owner === undefined ? undefined : daemonProjectAt(first, owner.home);
+  if (owner !== undefined && holder !== undefined && !adoptable(holder, owner.projectId)) {
+    // Port resolution is env-first (`--port`, `RETICLE_PORT`, `.reticle.json`, 4400), so a
+    // `RETICLE_PORT` left in the agent's MCP config from the old advice outranks the new `port`.
+    const envFirst =
+      portFromEnv(env) === undefined
+        ? 'Give this project its own port instead: set'
+        : `Give this project its own port instead: first remove ${RETICLE_PORT_ENV} from the agent's ` +
+          'MCP config, because it takes precedence over `.reticle.json`, then set';
+    return (
+      `this project's app is connected to the Reticle daemon on :${String(first)}, which is ` +
+      `registered to another project, "${holder}", while this project's daemon is on ` +
+      `:${String(myPort)} — the two projects share a port, and the agent is attached to the empty ` +
+      `half. Pointing the agent at :${String(first)} will not help: an MCP server never attaches to ` +
+      `another project's daemon. ${envFirst} \`port\` in its ` +
+      `.reticle.json to one no other project uses (for example ${String(myPort)}), then restart the ` +
+      `dev server so the app connects to this project's daemon, and restart the agent session. ` +
+      `Leave :${String(first)} running; it serves "${holder}".`
+    );
+  }
   // The agent moves, not the app (#1546). The daemon the app is on is a working session this agent
   // did not start, and it may be a person's, another agent's or another project's. Stopping it was
   // the first thing this used to say. It comes last now, with what it costs.

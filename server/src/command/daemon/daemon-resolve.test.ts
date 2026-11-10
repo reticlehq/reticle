@@ -357,6 +357,96 @@ describe('splitBrainNote', () => {
   it('does not send the reader back to init', () => {
     expect(splitBrainNote(51234, [4400])).not.toContain('init');
   });
+
+  it('keeps the RETICLE_PORT advice when the daemon the app is on is this project’s or nobody’s', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'reticle-split-'));
+    try {
+      writeFileSync(
+        join(dir, 'daemon-4400.json'),
+        JSON.stringify({ port: 4400, pid: 1, cwd: '/b', startedAt: 1, projectId: 'shop' }),
+      );
+      expect(splitBrainNote(51234, [4400], { projectId: 'shop', home: dir })).toContain(
+        'RETICLE_PORT=4400',
+      );
+      expect(splitBrainNote(51234, [4401], { projectId: 'shop', home: dir })).toContain(
+        'RETICLE_PORT=4401',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  /**
+   * #1652: two projects on one default port. Project B's app connected to project A's daemon on
+   * :4400. Following "set RETICLE_PORT=4400" cannot work, because `resolveMcpPort` never adopts
+   * another project's daemon and relocates again. The advice and the resolver must agree.
+   */
+  it('does not offer RETICLE_PORT for a daemon registered to another project', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'reticle-split-'));
+    try {
+      writeFileSync(
+        join(dir, 'daemon-4400.json'),
+        JSON.stringify({ port: 4400, pid: 1, cwd: '/a', startedAt: 1, projectId: 'blog' }),
+      );
+      // What the agent would get after following RETICLE_PORT=4400: relocated off :4400 again.
+      await expect(
+        resolveMcpPort(4400, 'shop', dir, {
+          alive: live,
+          daemonPresent: () => Promise.resolve(true),
+          pickPort: () => Promise.resolve(51234),
+        }),
+      ).resolves.toBe(51234);
+
+      const note = splitBrainNote(51234, [4400], { projectId: 'shop', home: dir }, {}) ?? '';
+      expect(note).toContain(':4400');
+      expect(note).toContain(':51234');
+      expect(note).toContain('"blog"');
+      expect(note).not.toContain('RETICLE_PORT');
+      expect(note).toContain('.reticle.json');
+      expect(note).toContain('restart the dev server');
+      expect(note).not.toContain('init');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  /** RETICLE_PORT outranks `.reticle.json`, so the old advice left in the MCP env makes `port` inert. */
+  it('tells the reader to remove RETICLE_PORT first when it is set', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'reticle-split-'));
+    try {
+      writeFileSync(
+        join(dir, 'daemon-4400.json'),
+        JSON.stringify({ port: 4400, pid: 1, cwd: '/a', startedAt: 1, projectId: 'blog' }),
+      );
+      const owner = { projectId: 'shop', home: dir };
+      const note = splitBrainNote(51234, [4400], owner, { RETICLE_PORT: '4400' }) ?? '';
+      expect(note).toContain("remove RETICLE_PORT from the agent's MCP config");
+      expect(note).toContain('takes precedence over `.reticle.json`');
+      expect(note.indexOf('remove RETICLE_PORT')).toBeLessThan(note.indexOf('`port`'));
+      // An unusable value does not outrank anything, so it gets the plain advice.
+      expect(splitBrainNote(51234, [4400], owner, { RETICLE_PORT: 'abc' })).not.toContain(
+        'RETICLE_PORT',
+      );
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  /** An unknown caller id is adoptable by any daemon, so the old advice stays: no project to give a port to. */
+  it('keeps the RETICLE_PORT advice when the caller has no projectId', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'reticle-split-'));
+    try {
+      writeFileSync(
+        join(dir, 'daemon-4400.json'),
+        JSON.stringify({ port: 4400, pid: 1, cwd: '/a', startedAt: 1, projectId: 'blog' }),
+      );
+      const note = splitBrainNote(51234, [4400], { projectId: undefined, home: dir }, {}) ?? '';
+      expect(note).toContain('RETICLE_PORT=4400');
+      expect(note).not.toContain('.reticle.json');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
 });
 
 /*
