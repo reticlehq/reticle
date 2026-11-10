@@ -415,8 +415,8 @@ importers:
         specifier: ^10.1.0
         version: 10.1.0
       electron:
-        specifier: ^44.9.1
-        version: 44.9.1
+        specifier: ^45.2.1
+        version: 45.2.1
       vite:
         specifier: 8.3.3
         version: 8.3.3(@types/node@26.6.5)(esbuild@0.28.2)(jiti@2.7.0)(yaml@2.9.1)
@@ -428,10 +428,10 @@ importers:
     dependencies:
       '@electron-toolkit/preload':
         specifier: ^3.0.2
-        version: 3.0.2(electron@44.9.1)
+        version: 3.0.2(electron@45.2.1)
       '@electron-toolkit/utils':
         specifier: ^4.0.0
-        version: 4.0.0(electron@44.9.1)
+        version: 4.0.0(electron@45.2.1)
       pinia:
         specifier: ^4.1.0
         version: 4.1.0(@vue/devtools-api@8.2.1)(typescript@5.9.3)(vue@3.5.44(typescript@5.9.3))
@@ -461,8 +461,8 @@ importers:
         specifier: ^6.0.10
         version: 6.0.10(vite@7.3.7(@types/node@26.6.5)(jiti@2.7.0)(lightningcss@1.33.0)(yaml@2.9.1))(vue@3.5.44(typescript@5.9.3))
       electron:
-        specifier: ^44.9.1
-        version: 44.9.1
+        specifier: ^45.2.1
+        version: 45.2.1
       electron-builder:
         specifier: ^26.18.0
         version: 26.18.0(electron-builder-squirrel-windows@26.18.0)
@@ -1113,6 +1113,10 @@ packages:
 
   '@electron-internal/extract-zip@1.0.6':
     resolution: {integrity: sha512-/aQLgFDdCSnwChfUwqekSmE1q2dCTzhUy5saIHBb5vyYn5LzWaKPaIz1wM0lDMCZYBoIG4svJNvAJb6vkI8BuA==}
+    engines: {node: '>=22.12.0'}
+
+  '@electron-internal/extract-zip@1.0.8':
+    resolution: {integrity: sha512-8iajeLFbzNwM0m3AsQZSZgYREWglAImyGvvFSWU34FgMW8sHlzdwj9QKvv9dgN7jMP591EFUF/sLOC3Jl9YIjQ==}
     engines: {node: '>=22.12.0'}
 
   '@electron-toolkit/eslint-config-prettier@3.0.1':
@@ -3789,8 +3793,8 @@ packages:
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
-  electron@44.9.1:
-    resolution: {integrity: sha512-x/tECFFDa2OFNjMObFH0EGKWrCnFZPOR1wP2iMIVt0STecGl8FmDXdaiaryY0kf8mtw9kSLP2yK8dfdaWkfDmw==}
+  electron@45.2.1:
+    resolution: {integrity: sha512-t433yuo8Kh8WG/mTStnPRT/NtpWw8A+caNLJgeU0tS/FlfOkeNEntFsac4ViLgDxZOmDe7BeSkOANVqrqNHhDA==}
     engines: {node: '>= 22.12.0'}
     hasBin: true
 
@@ -7062,6 +7066,8 @@ snapshots:
 
   '@electron-internal/extract-zip@1.0.6': {}
 
+  '@electron-internal/extract-zip@1.0.8': {}
+
   '@electron-toolkit/eslint-config-prettier@3.0.1(eslint@9.39.4(jiti@2.7.0))(prettier@3.9.10)':
     dependencies:
       eslint: 9.39.4(jiti@2.7.0)
@@ -7082,17 +7088,17 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  '@electron-toolkit/preload@3.0.2(electron@44.9.1)':
+  '@electron-toolkit/preload@3.0.2(electron@45.2.1)':
     dependencies:
-      electron: 44.9.1
+      electron: 45.2.1
 
   '@electron-toolkit/tsconfig@2.0.0(@types/node@26.6.5)':
     dependencies:
       '@types/node': 26.6.5
 
-  '@electron-toolkit/utils@4.0.0(electron@44.9.1)':
+  '@electron-toolkit/utils@4.0.0(electron@45.2.1)':
     dependencies:
-      electron: 44.9.1
+      electron: 45.2.1
 
   '@electron/asar@3.4.1':
     dependencies:
@@ -9727,9 +9733,9 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  electron@44.9.1:
+  electron@45.2.1:
     dependencies:
-      '@electron-internal/extract-zip': 1.0.6
+      '@electron-internal/extract-zip': 1.0.8
       '@electron/get': 5.1.0
       '@types/node': 24.19.2
     transitivePeerDependencies:

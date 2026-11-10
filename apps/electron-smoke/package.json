@@ -24,7 +24,7 @@
     "@vitejs/plugin-react": "^6.1.2",
     "concurrently": "^10.0.6",
     "cross-env": "^10.1.0",
-    "electron": "^44.9.1",
+    "electron": "^45.2.1",
     "vite": "^8.2.1",
     "wait-on": "^9.5.1",
     "@reticlehq/electron": "workspace:*"
