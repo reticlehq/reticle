@@ -71,9 +71,11 @@ type EventCtor = new (type: string, init: Record<string, unknown>) => unknown;
 interface W {
   console: Record<'error' | 'warn', ConsoleFn>;
   addEventListener(type: string, listener: (event: unknown) => void, capture: boolean): void;
+  removeEventListener(type: string, listener: (event: unknown) => void, capture: boolean): void;
   dispatchEvent(event: unknown): boolean;
   setInterval(fn: () => void, ms: number): number;
   clearInterval(id: number): void;
+  Event: new (type: string) => { stopPropagation(): void };
   ErrorEvent: EventCtor;
   PromiseRejectionEvent: EventCtor;
   [key: string]: unknown;
@@ -141,6 +143,32 @@ export function queueEarlyConsole(arg: EarlyCaptureArg): void {
     }
     return new win.ErrorEvent('error', init);
   };
+  // A `<script>`, `<img>` or `<link>` that failed to load dispatches a plain `Event` on its element,
+  // and only the element names the URL. A copy on `window` loses it, and the SDK reported an error
+  // with no message, no source and line 0 (#2220). So such an event is sent again from the same
+  // element, and the SDK's capture listener on `window` reads the tag and the URL. A listener added
+  // after the SDK's stops it on `window`, so the page's own handlers on the element do not run twice.
+  // An element that left the page cannot reach `window`, so it gets the copy.
+  const resend = (event: Record<string, unknown>): boolean => {
+    const target = event['target'] as
+      { isConnected?: unknown; dispatchEvent?: (event: unknown) => boolean } | null | undefined;
+    if ('message' in event || 'reason' in event || true !== target?.isConnected) {
+      return false;
+    }
+    const again = new win.Event('error');
+    const stop = (seen: unknown): void => {
+      if (seen === again) {
+        again.stopPropagation();
+      }
+    };
+    win.addEventListener('error', stop, true);
+    try {
+      target.dispatchEvent?.(again);
+    } finally {
+      win.removeEventListener('error', stop, true);
+    }
+    return true;
+  };
   let polls = 0;
   const timer = win.setInterval(() => {
     polls += 1;
@@ -158,7 +186,10 @@ export function queueEarlyConsole(arg: EarlyCaptureArg): void {
       if ('method' in item) {
         win.console[item['method'] as 'error' | 'warn'](...(item['args'] as unknown[]));
       } else {
-        win.dispatchEvent(copy(item['event'] as Record<string, unknown>));
+        const event = item['event'] as Record<string, unknown>;
+        if (!resend(event)) {
+          win.dispatchEvent(copy(event));
+        }
       }
     }
     if (capture.dropped > 0) {
