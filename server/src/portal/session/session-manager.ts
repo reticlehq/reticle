@@ -74,20 +74,10 @@ function scopeSessions(sessions: Session[], scope?: ResolveScope): Session[] {
  * target it: both facts are already in hand here.
  */
 export function scopeMissError(connected: Session[], scope?: ResolveScope): string {
-  const who =
-    scope?.projectId !== undefined
-      ? `project '${scope.projectId}'`
-      : scope?.url !== undefined
-        ? `your app at ${scope.url}`
-        : 'the active project';
+  const who = scopeName(scope);
   const anyUntagged = connected.some((s) => s.projectId === undefined);
   const anyTagged = connected.some((s) => s.projectId !== undefined);
-  const how =
-    anyUntagged && !anyTagged
-      ? 'with no projectId'
-      : anyUntagged && anyTagged
-        ? 'under a different project or with no projectId'
-        : 'under a different project';
+  const how = whereConnected(anyUntagged, anyTagged);
   const listed = connected
     .map((s) =>
       s.projectId !== undefined
@@ -104,6 +94,51 @@ export function scopeMissError(connected: Session[], scope?: ResolveScope): stri
     `${listed}. The daemon scopes to the .reticle.json of the directory it was started in, so ` +
     `this is a scope mismatch, not a dead app. ${advice}`
   );
+}
+
+/** What the scope names, in the words of the refusal. */
+function scopeName(scope?: ResolveScope): string {
+  if (scope?.projectId !== undefined) {
+    return `project '${scope.projectId}'`;
+  }
+  if (scope?.url !== undefined) {
+    return `your app at ${scope.url}`;
+  }
+  return 'the active project';
+}
+
+/** Where the connected sessions are, given which of them carry a projectId. */
+function whereConnected(anyUntagged: boolean, anyTagged: boolean): string {
+  if (!anyUntagged) {
+    return 'under a different project';
+  }
+  if (!anyTagged) {
+    return 'with no projectId';
+  }
+  return 'under a different project or with no projectId';
+}
+
+/**
+ * A session's rank for auto-selection: lower is better.
+ *
+ * 0 = non-throttled (visible + recently-heard), 1 = throttled (hidden or stale heartbeat),
+ * 2 = an error document, 3 = attached but not answering commands. A wedged tab keeps streaming
+ * events, so recency RATES IT HIGHEST — it was beating a healthy sibling on the one signal scoring
+ * looked at, and every call auto-targeted the one tab guaranteed to time out. An error document (a
+ * dev server's 404 that still mounted the SDK) ranks below any working page, hidden or not: it is
+ * never the app the agent was asked about.
+ */
+function rankOf(session: Session): number {
+  if (session.unresponsive()) {
+    return 3;
+  }
+  if (isErrorDocument(session.page)) {
+    return 2;
+  }
+  if (session.throttled()) {
+    return 1;
+  }
+  return 0;
 }
 
 /**
@@ -640,6 +675,66 @@ export class SessionManager {
     );
   }
 
+  /**
+   * The sessions an id-less call may choose from: in the project scope, then in the caller's own
+   * checkout. Throws when those scopes leave nothing, or leave tabs of more than one project.
+   */
+  #candidates(scope?: ResolveScope): Session[] {
+    // Scope to the agent's active project FIRST, so a stray tab from another app/origin (e.g. a
+    // leftover dashboard on a different port) is structurally unselectable — it never enters the
+    // candidate set, no matter how recently it was heard from. This is the anti-cross-talk guard.
+    // An explicit per-call scope wins; otherwise the daemon's active-project default applies.
+    const effectiveScope = scope ?? this.#defaultScope;
+    const connected = [...this.#sessions.values()];
+    const inProject = scopeSessions(connected, effectiveScope);
+    // Then to the agent's own worktree: every worktree of a project declares the same projectId.
+    const byCheckout =
+      this.#checkoutScope === undefined
+        ? { sessions: inProject }
+        : scopeToCallerCheckout(inProject, this.#checkoutScope.caller(), this.#checkoutScope.ofTab);
+    if (byCheckout.refusal !== undefined) {
+      throw new Error(byCheckout.refusal);
+    }
+    const all = byCheckout.sessions;
+    if (0 === all.length) {
+      // Sessions exist, but none belong to the scoped project — never fall back to a foreign tab.
+      // ponytail: still a refusal, deliberately. Auto-targeting the only connected tab would be the
+      // friendlier 90% case and would also silently defeat the anti-cross-talk guard this scope
+      // exists to be. Naming the tab and its sessionId costs the agent one extra argument.
+      throw new Error(scopeMissError(connected, effectiveScope));
+    }
+
+    // Two projects and nothing to choose between them: refuse, BEFORE any scoring.
+    //
+    // Reported from the field: a call from `apps/next-app-router` was answered by a `rowy-*`
+    // session, and `act_and_wait` spent 16.9s returning `verified:'no'` about an app never under
+    // test — a confident false verdict, with a source pointer, about code the agent never touched.
+    //
+    // The recency rule in resolve() cannot prevent it. It asks "is one of these clearly fresher",
+    // which is the right question for two tabs of ONE app and the wrong question for two apps: the
+    // fresher tab of the wrong project is still the wrong project. The reported case had a clear
+    // winner, so the ambiguity check passed and the wrong app was selected.
+    //
+    // This sits ahead of scoring so freshness cannot rescue it. It only fires when nothing scoped
+    // the call — an explicit `sessionId` never reaches here, and an explicit or default scope has
+    // already narrowed `all` to one project by here. One session is one project, so it never fires.
+    const projects = new Set(all.map((s) => s.projectId).filter((p) => p !== undefined));
+    if (projects.size > 1) {
+      const listed = all
+        .filter((s) => s.projectId !== undefined)
+        .map((s) => `'${String(s.projectId)}' (${s.url}, sessionId '${s.id}')`)
+        .join(', ');
+      throw new Error(
+        `${String(projects.size)} different projects are connected and nothing says which one this ` +
+          `call is about: ${listed}. Pass sessionId to target one. Reticle refuses rather than ` +
+          'guessing here because picking the wrong app produces a confident verdict about code you ' +
+          'never touched — the daemon scopes to the directory it was started in, so running it above ' +
+          'several apps leaves it unable to tell them apart.',
+      );
+    }
+    return all;
+  }
+
   resolve(sessionId?: string, scope?: ResolveScope): Session {
     if (sessionId !== undefined) {
       const found = this.#sessions.get(sessionId) ?? this.#successorOf(sessionId);
@@ -668,29 +763,7 @@ export class SessionManager {
       notePendingNoSessionReason(this.#noSessionReason?.());
       throw new Error(`${hint ?? NO_SESSION_CONNECTED_ERROR}${refusal}${NO_SESSION_NAVIGATE_FIX}`);
     }
-    // Scope to the agent's active project FIRST, so a stray tab from another app/origin (e.g. a
-    // leftover dashboard on a different port) is structurally unselectable — it never enters the
-    // candidate set, no matter how recently it was heard from. This is the anti-cross-talk guard.
-    // An explicit per-call scope wins; otherwise the daemon's active-project default applies.
-    const effectiveScope = scope ?? this.#defaultScope;
-    const connected = [...this.#sessions.values()];
-    const inProject = scopeSessions(connected, effectiveScope);
-    // Then to the agent's own worktree: every worktree of a project declares the same projectId.
-    const byCheckout =
-      this.#checkoutScope === undefined
-        ? { sessions: inProject }
-        : scopeToCallerCheckout(inProject, this.#checkoutScope.caller(), this.#checkoutScope.ofTab);
-    if (byCheckout.refusal !== undefined) {
-      throw new Error(byCheckout.refusal);
-    }
-    const all = byCheckout.sessions;
-    if (0 === all.length) {
-      // Sessions exist, but none belong to the scoped project — never fall back to a foreign tab.
-      // ponytail: still a refusal, deliberately. Auto-targeting the only connected tab would be the
-      // friendlier 90% case and would also silently defeat the anti-cross-talk guard this scope
-      // exists to be. Naming the tab and its sessionId costs the agent one extra argument.
-      throw new Error(scopeMissError(connected, effectiveScope));
-    }
+    const all = this.#candidates(scope);
     if (1 === all.length) {
       const [only] = all;
       if (only === undefined) {
@@ -700,47 +773,8 @@ export class SessionManager {
       return only;
     }
 
-    // Two projects and nothing to choose between them: refuse, BEFORE any scoring.
-    //
-    // Reported from the field: a call from `apps/next-app-router` was answered by a `rowy-*`
-    // session, and `act_and_wait` spent 16.9s returning `verified:'no'` about an app never under
-    // test — a confident false verdict, with a source pointer, about code the agent never touched.
-    //
-    // The recency rule below cannot prevent it. It asks "is one of these clearly fresher", which is
-    // the right question for two tabs of ONE app and the wrong question for two apps: the fresher
-    // tab of the wrong project is still the wrong project. The reported case had a clear winner,
-    // so the ambiguity check passed and the wrong app was selected.
-    //
-    // This sits ahead of scoring so freshness cannot rescue it. It only fires when nothing scoped
-    // the call — an explicit `sessionId` returns far above, and an explicit or default scope has
-    // already narrowed `all` to one project by here.
-    const projects = new Set(all.map((s) => s.projectId).filter((p) => p !== undefined));
-    if (projects.size > 1) {
-      const listed = all
-        .filter((s) => s.projectId !== undefined)
-        .map((s) => `'${String(s.projectId)}' (${s.url}, sessionId '${s.id}')`)
-        .join(', ');
-      throw new Error(
-        `${String(projects.size)} different projects are connected and nothing says which one this ` +
-          `call is about: ${listed}. Pass sessionId to target one. Reticle refuses rather than ` +
-          'guessing here because picking the wrong app produces a confident verdict about code you ' +
-          'never touched — the daemon scopes to the directory it was started in, so running it above ' +
-          'several apps leaves it unable to tell them apart.',
-      );
-    }
-
-    // Multiple sessions: score each (lower = better candidate for auto-selection).
-    // 0 = non-throttled (visible + recently-heard), 1 = throttled (hidden or stale heartbeat),
-    // 2 = attached but not answering commands. A wedged tab keeps streaming events, so recency
-    // RATES IT HIGHEST — it was beating a healthy sibling on the one signal scoring looked at, and
-    // every call auto-targeted the one tab guaranteed to time out.
-    const scored = all.map((s) => ({
-      s,
-      // An error document (a dev server's 404 that still mounted the SDK) ranks below any working
-      // page, hidden or not: it is never the app the agent was asked about.
-      score: s.unresponsive() ? 3 : isErrorDocument(s.page) ? 2 : s.throttled() ? 1 : 0,
-      ms: s.lastSeenMs(),
-    }));
+    // Multiple sessions: score each (lower = better candidate for auto-selection). See rankOf().
+    const scored = all.map((s) => ({ s, score: rankOf(s), ms: s.lastSeenMs() }));
     const bestScore = Math.min(...scored.map((x) => x.score));
     const candidates = scored.filter((x) => x.score === bestScore);
 
@@ -790,6 +824,53 @@ export class SessionManager {
 
     best.s.markAgentActivity();
     return best.s;
+  }
+
+  /**
+   * Resolve the session for a call that only some sessions can serve.
+   *
+   * With no sessionId, resolve() chooses by health and recency alone. A lease that could resize the
+   * page lost to a focused tab that could not, and the call was refused (#1959). Here, when exactly
+   * one candidate can serve the call, that candidate is chosen.
+   */
+  async resolveServing(
+    sessionId: string | undefined,
+    canServe: (session: Session) => boolean | Promise<boolean>,
+  ): Promise<Session> {
+    // A named session, or none connected: resolve() already gives the answer and its refusals.
+    if (sessionId !== undefined || 0 === this.#sessions.size) {
+      return this.resolve(sessionId);
+    }
+
+    // The same candidates resolve() chooses from, so the project and checkout scopes still apply.
+    // canServe can ask a browser, so each answer is awaited in turn.
+    const serving: Session[] = [];
+    for (const candidate of this.#candidates()) {
+      if (await canServe(candidate)) {
+        serving.push(candidate);
+      }
+    }
+
+    // Exactly one can serve the call: there is nothing to guess.
+    const [onlyServing, secondServing] = serving;
+    if (onlyServing !== undefined && secondServing === undefined) {
+      onlyServing.markAgentActivity();
+      return onlyServing;
+    }
+
+    // None can serve: return the usual choice, so the tool gives its own refusal and its advice.
+    // Several can serve, and the usual choice cannot: choosing among them is a guess, so refuse
+    // and name them. canServe admits only the caller's own sessions, so no other agent's lease is
+    // named here.
+    const chosen = this.resolve();
+    if (0 < serving.length && !serving.includes(chosen)) {
+      const ids = serving.map((s) => `'${s.id}'`).join(', ');
+      throw new Error(
+        `no sessionId was given, and ${String(serving.length)} sessions can serve this call: ` +
+          `${ids}. Pass sessionId to choose one.`,
+      );
+    }
+    return chosen;
   }
 }
 

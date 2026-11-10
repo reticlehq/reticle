@@ -853,11 +853,6 @@
       "count": 1
     }
   },
-  "src/features/visual/screenshot-names-its-session.test.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
   "src/features/visual/step-shots.test.ts": {
     "curly": {
       "count": 5
@@ -871,11 +866,6 @@
   "src/features/visual/visual-store.ts": {
     "curly": {
       "count": 6
-    }
-  },
-  "src/features/visual/visual-tools.ts": {
-    "curly": {
-      "count": 15
     }
   },
   "src/gate-coverage.test.ts": {
@@ -2376,16 +2366,6 @@
       "count": 5
     }
   },
-  "src/portal/input/viewport-tools.test.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
-  "src/portal/input/viewport-tools.ts": {
-    "curly": {
-      "count": 7
-    }
-  },
   "src/portal/pool/lease-marker-stamp.ts": {
     "curly": {
       "count": 3
@@ -2655,11 +2635,6 @@
   "src/portal/session/session-manager.scope.test.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/portal/session/session-manager.ts": {
-    "no-nested-ternary": {
-      "count": 4
     }
   },
   "src/portal/session/session-reaper.ts": {
@@ -3644,11 +3619,6 @@
   "src/surface/tools/reticle-result.ts": {
     "curly": {
       "count": 11
-    }
-  },
-  "src/surface/tools/run-checks-arg-types.test.ts": {
-    "curly": {
-      "count": 1
     }
   },
   "src/surface/tools/run-report.test.ts": {

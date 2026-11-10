@@ -40,17 +40,24 @@ function harness(): {
     },
   } as unknown as RealInputProvider;
   const { fs } = createMemoryFs();
+  const session = { id: 's1', url: 'http://localhost:5173/' };
   const deps = {
     fs,
     reticleRoot: '/repo/.reticle',
     now: () => 1,
     realInput,
-    sessions: { resolve: () => ({ id: 's1', url: 'http://localhost:5173/' }), count: () => 1 },
+    sessions: {
+      resolve: () => session,
+      resolveServing: () => Promise.resolve(session),
+      count: () => 1,
+    },
   } as unknown as ToolDeps;
   const run = buildDynamicTools([...VIEWPORT_TOOLS, ...INTENT_TOOLS]).find(
     (tool) => tool.name === ReticleTool.RUN,
   );
-  if (run === undefined) throw new Error('no reticle_run');
+  if (run === undefined) {
+    throw new Error('no reticle_run');
+  }
   return {
     run: async (tool, args) => (await run.handler(deps, { tool, args })) as RunAnswer,
     resized,

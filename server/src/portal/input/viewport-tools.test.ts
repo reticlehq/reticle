@@ -1,27 +1,36 @@
 import { describe, expect, it } from 'vitest';
+import type { WebSocket } from 'ws';
 import {
   CDP_NO_PROVIDER_REASON,
   CDP_NO_PROVIDER_RECOMMENDATION,
   InputMode,
+  MessageKind,
+  RETICLE_PROTOCOL_VERSION,
   VIEWPORT_NO_PROVIDER_RECOMMENDATION,
+  type HelloMessage,
 } from '@reticlehq/core';
 import { VIEWPORT_TOOLS, leaseEmulationOf } from './viewport-tools.js';
 import { HEADLESS_VIEWPORT } from '@/chromium-launch-options.js';
 import { contextEmulationOf } from '@/portal/pool/lease-emulation.js';
 import { ReticleTool } from '@reticlehq/core';
 import type { RealInputProvider } from './real-input.js';
-import type { SessionManager } from '@/portal/session/session-manager.js';
+import { Session } from '@/portal/session/session.js';
+import { SessionManager } from '@/portal/session/session-manager.js';
 import { MERGE_PLANS, MERGED_TOOLS, TOOLS, type ToolDeps } from '@/surface/tools/tools.js';
 
 function tool() {
   const t = VIEWPORT_TOOLS.find((x) => x.name === ReticleTool.VIEWPORT);
-  if (t === undefined) throw new Error('no reticle_viewport tool');
+  if (t === undefined) {
+    throw new Error('no reticle_viewport tool');
+  }
   return t;
 }
 
 function depsWith(realInput: RealInputProvider | undefined, pool?: ToolDeps['pool']): ToolDeps {
+  const session = { url: 'http://localhost:5173/app' } as never;
   const sessions: Partial<SessionManager> = {
-    resolve: () => ({ url: 'http://localhost:5173/app' }) as never,
+    resolve: () => session,
+    resolveServing: () => Promise.resolve(session),
   };
   return {
     sessions: sessions as SessionManager,
@@ -253,8 +262,10 @@ describe('reticle_viewport on a leased tab', () => {
     observed: { width: number; height: number } | undefined,
     resized: string[],
   ): ToolDeps {
+    const lease = { id: LEASE, url: 'http://localhost:5173/app' } as never;
     const sessions: Partial<SessionManager> = {
-      resolve: () => ({ id: LEASE, url: 'http://localhost:5173/app' }) as never,
+      resolve: () => lease,
+      resolveServing: () => Promise.resolve(lease),
     };
     const pool = {
       leaseUrl: (id: string) => (id === LEASE ? 'http://localhost:5173/app' : undefined),
@@ -355,5 +366,88 @@ describe('a lease that names only one side of the viewport', () => {
     expect(leaseEmulationOf({ height: 600 })).toEqual({
       viewport: { width: HEADLESS_VIEWPORT.width, height: 600 },
     });
+  });
+});
+
+// ── An id-less call picks the one session that can serve it (#1959) ──
+
+/**
+ * One lease (with CDP) and one SDK-only tab in scope. An id-less reticle_viewport resolved to the
+ * focused SDK-only tab and refused with no-cdp-provider, while the lease could resize.
+ */
+describe('reticle_viewport without a sessionId', () => {
+  const LEASE = 'lease-1';
+  const SDK_ONLY = 'tab-1';
+  /** The agent that took the lease. */
+  const AGENT = 'agent-1';
+  /** An agent on the same daemon that holds no lease. */
+  const OTHER_AGENT = 'agent-2';
+  const APP_URL = 'http://localhost:5173/app';
+  const fakeSocket = { send: (): void => {} } as unknown as WebSocket;
+
+  /** A connected session on a fixed clock, so resolve() scores it the same on every run. */
+  function sessionOf(id: string, focused: boolean): Session {
+    const hello: HelloMessage = {
+      kind: MessageKind.HELLO,
+      protocolVersion: RETICLE_PROTOCOL_VERSION,
+      sessionId: id,
+      url: APP_URL,
+      title: id,
+      adapters: [],
+      hasCapabilities: false,
+    };
+    const session = new Session(hello, fakeSocket, () => 0);
+    session.touch();
+    session.applyHealth(false, focused);
+    return session;
+  }
+
+  /**
+   * The focused SDK-only tab and AGENT's lease, called by `caller`. `resized` collects the ids
+   * the pool resized.
+   */
+  function twoTabs(caller: string): { deps: ToolDeps; resized: string[] } {
+    const sessions = new SessionManager();
+    // The SDK-only tab has the focus, so resolve() picks it today.
+    sessions.add(sessionOf(SDK_ONLY, true));
+    sessions.add(sessionOf(LEASE, false));
+
+    const resized: string[] = [];
+    // Only the lease can be resized, as in the real pool.
+    const pool = {
+      leaseUrl: (id: string) => (id === LEASE ? APP_URL : undefined),
+      setViewportLease: (id: string) => {
+        if (id !== LEASE) {
+          return Promise.resolve(false);
+        }
+        resized.push(id);
+        return Promise.resolve(true);
+      },
+      viewportOfLease: () => Promise.resolve(undefined),
+      heldBy: (id: string, owner: string | undefined) => id === LEASE && owner === AGENT,
+    } as unknown as ToolDeps['pool'];
+
+    // No realInput: nothing drives the page, so only the lease can resize.
+    const deps = { sessions, pool, attachId: caller } as unknown as ToolDeps;
+    return { deps, resized };
+  }
+
+  it('resizes the one lease in scope, not the focused SDK-only tab', async () => {
+    const { deps, resized } = twoTabs(AGENT);
+
+    const res = await tool().handler(deps, { width: 390, height: 844 });
+
+    expect(res).toMatchObject({ applied: true, width: 390, height: 844 });
+    expect(resized).toEqual([LEASE]);
+  });
+
+  it("leaves another agent's lease alone (#1226)", async () => {
+    const { deps, resized } = twoTabs(OTHER_AGENT);
+
+    const res = await tool().handler(deps, { width: 390, height: 844 });
+
+    // The lease is AGENT's, so this caller has nothing that can resize, and it is refused.
+    expect(res).toMatchObject({ applied: false, reason: CDP_NO_PROVIDER_REASON });
+    expect(resized).toEqual([]);
   });
 });

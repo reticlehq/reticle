@@ -1,10 +1,17 @@
 import { removeTempDir } from '@/machine/temp-dir.js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { WebSocket } from 'ws';
 import { mkdtemp, readdir, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PNG } from 'pngjs';
-import { InputMode, VisualReason } from '@reticlehq/core';
+import {
+  InputMode,
+  MessageKind,
+  RETICLE_PROTOCOL_VERSION,
+  VisualReason,
+  type HelloMessage,
+} from '@reticlehq/core';
 import { TOOLS, type ToolDeps } from '@/surface/tools/tools.js';
 import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '@/memory/project/baselines.js';
@@ -14,8 +21,8 @@ import { ProjectStore } from '@/memory/project/project-store.js';
 import { AnnotationStore } from '@/language/flows/stores/annotation-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import type { RealInputProvider } from '@/portal/input/real-input.js';
-import type { Session } from '@/portal/session/session.js';
-import type { SessionManager } from '@/portal/session/session-manager.js';
+import { Session } from '@/portal/session/session.js';
+import { SessionManager } from '@/portal/session/session-manager.js';
 import { AppRuntime, RETICLE_CAPTURE_FILE_PREFIX, ReticleCommand } from '@reticlehq/core';
 
 const now = (): number => 0;
@@ -46,6 +53,15 @@ function fakeSession(runtime?: string): Session {
   return { id: 'demo', url: SESSION_URL, runtime } as Session;
 }
 
+/** A session manager that answers every lookup with `session`. */
+function sessionsOf(session: Session): SessionManager {
+  const sessions: Partial<SessionManager> = {
+    resolve: () => session,
+    resolveServing: () => Promise.resolve(session),
+  };
+  return sessions as SessionManager;
+}
+
 function tool(name: string) {
   const t = TOOLS.find((x) => x.name === name);
   if (t === undefined) {
@@ -69,10 +85,8 @@ describe('visual tools — temp dir, never touches the repo', () => {
   });
 
   function deps(provider?: RealInputProvider, sessionRuntime?: string): ToolDeps {
-    const session = fakeSession(sessionRuntime);
-    const sessions: Partial<SessionManager> = { resolve: () => session };
     const base: ToolDeps = {
-      sessions: sessions as SessionManager,
+      sessions: sessionsOf(fakeSession(sessionRuntime)),
       baselines: new BaselineStore(),
       recordings: new RecordingStore(),
       flows: new FlowStore(fs, root, { now }),
@@ -113,7 +127,7 @@ describe('visual tools — temp dir, never touches the repo', () => {
         });
         const session = { ...fakeSession(runtime), command } as unknown as Session;
         const d = deps();
-        d.sessions = { resolve: () => session } as unknown as SessionManager;
+        d.sessions = sessionsOf(session);
         const result = await tool(ReticleTool.SCREENSHOT).handler(d, {
           name: 'desktop-scope',
           sessionId: 'demo',
@@ -150,9 +164,7 @@ describe('visual tools — temp dir, never touches the repo', () => {
     const provider = { ...fakeProvider(png), screenshot };
     const d = deps(provider, AppRuntime.ELECTRON);
     const command = vi.fn(() => Promise.resolve({ ok: true, result: { box: clip } }));
-    d.sessions = {
-      resolve: () => ({ ...fakeSession(AppRuntime.ELECTRON), command }),
-    } as unknown as SessionManager;
+    d.sessions = sessionsOf({ ...fakeSession(AppRuntime.ELECTRON), command } as unknown as Session);
     expect(
       await tool(ReticleTool.SCREENSHOT).handler(d, {
         name: 'browser-scope',
@@ -200,7 +212,7 @@ describe('visual tools — temp dir, never touches the repo', () => {
           },
         }),
     } as unknown as Session;
-    const d = { ...deps(), sessions: { resolve: () => session } as unknown as SessionManager };
+    const d = { ...deps(), sessions: sessionsOf(session) };
     const r = (await tool(ReticleTool.SCREENSHOT).handler(d, { name: 'home' })) as {
       reason: string;
       recommendation?: string;
@@ -282,6 +294,59 @@ describe('visual tools — temp dir, never touches the repo', () => {
       // Flat, because a driven browser IS web — never under visual/tauri/.
       expect(result.path).toBe(join(root, 'visual', 'home.png'));
       expect(result.path).not.toContain(join('visual', 'tauri'));
+    });
+  });
+
+  /**
+   * One lease of this caller and one focused SDK-only tab. An id-less screenshot chose the tab, and
+   * capture() never tried a lease without an id, so it refused with no-provider (#1959).
+   */
+  describe('a screenshot without a sessionId', () => {
+    const LEASE = 'lease-1';
+    const SDK_ONLY = 'tab-1';
+    const AGENT = 'agent-1';
+    const fakeSocket = { send: (): void => {} } as unknown as WebSocket;
+
+    /** A connected web page on a fixed clock. It has no desktop capture helper, as in a browser. */
+    function sessionOf(id: string, focused: boolean): Session {
+      const hello: HelloMessage = {
+        kind: MessageKind.HELLO,
+        protocolVersion: RETICLE_PROTOCOL_VERSION,
+        sessionId: id,
+        url: SESSION_URL,
+        title: id,
+        adapters: [],
+        hasCapabilities: false,
+      };
+      const session = new Session(hello, fakeSocket, () => 0);
+      session.touch();
+      session.applyHealth(false, focused);
+      // The SDK in a browser page answers CAPTURE at once: it has no shell to ask.
+      return Object.assign(session, {
+        command: () => Promise.resolve({ ok: true, result: { ok: false } }),
+      });
+    }
+
+    it('photographs the one lease this caller holds, not the focused SDK-only tab', async () => {
+      const sessions = new SessionManager();
+      // The SDK-only tab has the focus, so resolve() picks it.
+      sessions.add(sessionOf(SDK_ONLY, true));
+      sessions.add(sessionOf(LEASE, false));
+
+      const shot: string[] = [];
+      const pool = {
+        heldBy: (id: string, owner: string | undefined) => id === LEASE && owner === AGENT,
+        screenshotLease: (id: string) => {
+          shot.push(id);
+          return Promise.resolve(solidPng([1, 2, 3]));
+        },
+      } as unknown as NonNullable<ToolDeps['pool']>;
+      const d = { ...deps(), sessions, pool, attachId: AGENT };
+
+      const result = await tool(ReticleTool.SCREENSHOT).handler(d, { name: 'mobile' });
+
+      expect(result).toMatchObject({ ok: true, saved: true });
+      expect(shot).toEqual([LEASE]);
     });
   });
 });

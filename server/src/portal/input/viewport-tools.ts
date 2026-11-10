@@ -76,7 +76,9 @@ export function mediaOf(raw: {
 
 /** A lease's `emulate` argument, read; a value it does not know is refused by name. */
 export function leaseEmulationOf(raw: unknown): LeaseEmulation | undefined {
-  if (raw === undefined) return undefined;
+  if (raw === undefined) {
+    return undefined;
+  }
   const parsed = EmulateSchema.safeParse(raw);
   if (!parsed.success) {
     const field = parsed.error.issues[0]?.path.join('.') ?? 'emulate';
@@ -88,7 +90,9 @@ export function leaseEmulationOf(raw: unknown): LeaseEmulation | undefined {
     width === undefined && height === undefined
       ? undefined
       : { width: width ?? DEFAULT_WIDTH, height: height ?? DEFAULT_HEIGHT };
-  if (media === undefined && viewport === undefined && pointer === undefined) return undefined;
+  if (media === undefined && viewport === undefined && pointer === undefined) {
+    return undefined;
+  }
   return {
     ...media,
     ...(viewport === undefined ? {} : { viewport }),
@@ -110,6 +114,30 @@ function viewportProvider(deps: ToolDeps): ViewportCapable | undefined {
   return p !== undefined && 'function' === typeof p.setViewport
     ? (p as ViewportCapable)
     : undefined;
+}
+
+/**
+ * Whether this caller holds the session as a lease. Another agent's lease is never this caller's
+ * to change (#1226).
+ */
+function holdsLease(deps: ToolDeps, sessionId: string): boolean {
+  return true === deps.pool?.heldBy(sessionId, deps.attachId);
+}
+
+/** Whether this call can resize the session: a lease of this caller, or a driven page. */
+async function canResize(
+  deps: ToolDeps,
+  session: { readonly id: string; readonly url: string },
+): Promise<boolean> {
+  if (holdsLease(deps, session.id)) {
+    return true;
+  }
+  // A driven browser resizes only a page it has. Having a driven browser is not enough.
+  const driven = viewportProvider(deps);
+  if (driven === undefined) {
+    return false;
+  }
+  return driven.isAvailableFor(session.url);
 }
 
 export const VIEWPORT_TOOLS: ToolDef[] = [
@@ -156,7 +184,10 @@ export const VIEWPORT_TOOLS: ToolDef[] = [
       }
       const media = mediaOf(args);
       if (media !== undefined && args['width'] === undefined && args['height'] === undefined) {
-        const session = deps.sessions.resolve(asString(args['sessionId']));
+        // Only a lease can set the media.
+        const session = await deps.sessions.resolveServing(asString(args['sessionId']), (s) =>
+          holdsLease(deps, s.id),
+        );
         if (true === (await deps.pool?.emulateLease(session.id, media))) {
           // No size was asked for, so answer the one the lease has; 0 by 0 reads as a broken
           // viewport (#1902). When the page cannot be read, leave the size out.
@@ -167,7 +198,9 @@ export const VIEWPORT_TOOLS: ToolDef[] = [
       }
       const width = clampDim('width', args['width']);
       const height = clampDim('height', args['height']);
-      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const session = await deps.sessions.resolveServing(asString(args['sessionId']), (s) =>
+        canResize(deps, s),
+      );
       // A lease is resized as the lease. The driven provider resizes its own page, whatever
       // session was named, so taking it first resized the wrong tab and said `applied: true`.
       const driven = viewportProvider(deps);
@@ -176,8 +209,12 @@ export const VIEWPORT_TOOLS: ToolDef[] = [
       if (provider !== undefined) {
         const applied = await provider.setViewport(session.url, { width, height });
         // The driven page takes the size; its media stay as the person's browser has them.
-        if (applied && media === undefined) return { applied: true, width, height };
-        if (applied) return { applied: true, width, height, recommendation: MEDIA_NEEDS_A_LEASE };
+        if (applied && media === undefined) {
+          return { applied: true, width, height };
+        }
+        if (applied) {
+          return { applied: true, width, height, recommendation: MEDIA_NEEDS_A_LEASE };
+        }
       }
       // A lease is a Playwright-owned page, so the resize was always possible — this tool just had
       // no route to it. Tried after the driven provider, on the same rule reticle_network_mock
@@ -188,14 +225,18 @@ export const VIEWPORT_TOOLS: ToolDef[] = [
       // only mounts under a breakpoint — could not be driven at a desktop viewport at all, and the
       // recommendation printed alongside the refusal asked the reader to install a second browser.
       const leased = await deps.pool?.setViewportLease(session.id, { width, height });
-      if (true !== leased) return refused();
+      if (true !== leased) {
+        return refused();
+      }
       // What the page reports after the resize, so `applied` is a reading and not a hope.
       const observed = await deps.pool?.viewportOfLease(session.id);
       if (observed !== undefined && (observed.width !== width || observed.height !== height)) {
         return { applied: false, width, height, observed, ok: false, reason: VIEWPORT_NOT_TAKEN };
       }
       const seen = observed === undefined ? {} : { observed };
-      if (media === undefined) return { applied: true, width, height, ...seen };
+      if (media === undefined) {
+        return { applied: true, width, height, ...seen };
+      }
       if (true === (await deps.pool?.emulateLease(session.id, media))) {
         return { applied: true, width, height, ...seen, ...media };
       }
@@ -244,7 +285,9 @@ function refused(): {
  * snapshot, click and screenshot on that page read as broken (#1118).
  */
 function clampDim(key: string, value: unknown): number {
-  if (value === undefined) return MIN_DIM;
+  if (value === undefined) {
+    return MIN_DIM;
+  }
   if ('number' !== typeof value || !Number.isFinite(value)) {
     throw new Error(
       `${ReticleTool.VIEWPORT}: \`${key}\` must be a number of CSS px, got ${JSON.stringify(value)} — NOT applied`,
