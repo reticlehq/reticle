@@ -16,16 +16,6 @@ import { sessionRoot } from '@/memory/project/session-root.js';
 import { normalizeTypeSpelling } from './type-spelling.js';
 
 /**
- * Map the `fill` spelling onto the `type` action.
- *
- * The tool documents `{ text }` for type and `{ value }` for fill/select, and agents mix them up
- * constantly — `reticle_act` with `{ action: "type", value: "…" }` then fails at run time with
- * "type requires a string `text`", after the action window opened. When `text` is absent and
- * `value` is a string, `value` becomes `text`, in the flat args and in the nested `args` object.
- * A non-string `value` is left alone so the browser's own refusal keeps its accurate message.
- */
-
-/**
  * Single dispatch point for every ACT and ACT_SEQUENCE command.
  *
  * reticle_act, act_and_wait and act_sequence rewrite uploads here, once. The path resolves against

@@ -8,12 +8,13 @@
  * and in the nested `args` object. A non-string `value` is left alone so the browser's own
  * refusal keeps its accurate message.
  *
- * Pure and free of imports, so both the dispatch point (act-command.ts) and the tests can use it
- * without pulling in a dependency graph.
+ * Shared by the dispatch point (act-command.ts) and the tests.
  */
 
+import { ActionType } from '@reticlehq/core';
+
 export function normalizeTypeSpelling(actArgs: Record<string, unknown>): Record<string, unknown> {
-  if ('type' !== actArgs['action']) {
+  if (ActionType.TYPE !== actArgs['action']) {
     return actArgs;
   }
   const out = { ...actArgs };

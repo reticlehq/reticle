@@ -290,11 +290,6 @@ async function handleAffected(files: string[], since: string | undefined): Promi
   }
 }
 
-/** Ensure a daemon is reachable on `port` (probe the real port; spawn + wait only if nothing's there). */
-// ensureDaemon moved to ./cli/ensure-daemon.js — it now retries once when a FOREIGN reading
-// matches a live recorded pid (reticlehq/reticle#2126: `reticle open` right after `restart` read
-// FOREIGN while the daemon was still answering its first /status on Windows).
-
 /**
  * `reticle open [url]` — the one-command "show me the app". Resolves the port (the requested one if a
  * daemon's there, else a running daemon it discovers — so the user never hunts for the port), ensures

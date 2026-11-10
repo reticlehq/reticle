@@ -27,7 +27,7 @@ describe('normalizeTypeSpelling', () => {
     const out = normalizeTypeSpelling({
       ref: 'r1',
       action: 'type',
-      args: { text: 'hello' },
+      args: { value: 'hello' },
     });
     expect(out).toEqual({ ref: 'r1', action: 'type', args: { text: 'hello' } });
   });
