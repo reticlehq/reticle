@@ -229,4 +229,37 @@ describe('runCompareCommand', () => {
     expect(out.lines).toHaveLength(1);
     expect(JSON.parse(out.lines[0] ?? '')).toMatchObject({ verdict: 'invalid', exitCode: 2 });
   });
+
+  it('writes the HTML report to the --report file, and says where', async () => {
+    const written: Record<string, string> = {};
+    const out = await runCompareCommand({
+      reference: 'http://a/',
+      candidate: 'http://b/',
+      json: false,
+      port: 14400,
+      report: 'out/report.html',
+      writeReport: (path, html) => {
+        written[path] = html;
+      },
+      connect: () => Promise.reject(new Error('ECONNREFUSED')),
+    });
+    expect(out.code).toBe(2);
+    expect(written['out/report.html']).toMatch(/^<!doctype html>/);
+    expect(written['out/report.html']).toContain('INVALID');
+    expect(out.lines.at(-1)).toBe('Report: out/report.html');
+  });
+
+  it('keeps --json output one object when --report is also given', async () => {
+    const out = await runCompareCommand({
+      reference: 'http://a/',
+      candidate: 'http://b/',
+      json: true,
+      port: 14400,
+      report: 'r.html',
+      writeReport: () => undefined,
+      connect: () => Promise.reject(new Error('ECONNREFUSED')),
+    });
+    expect(out.lines).toHaveLength(1);
+    expect(JSON.parse(out.lines[0] ?? '')).toMatchObject({ verdict: 'invalid' });
+  });
 });

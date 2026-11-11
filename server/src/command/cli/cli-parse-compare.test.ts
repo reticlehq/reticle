@@ -38,4 +38,21 @@ describe('parseCompareArgs', () => {
     expect(parseCompareArgs(['http://a/', 'http://b/', '--base'], PORT).kind).toBe('error');
     expect(parseCompareArgs(['http://a/', 'http://b/', '--port', 'x'], PORT).kind).toBe('error');
   });
+
+  it('takes --report and the file to write the HTML report to', () => {
+    expect(
+      parseCompareArgs(['http://a/', 'http://b/', '--report', 'out/report.html'], PORT),
+    ).toEqual({
+      kind: 'ok',
+      reference: 'http://a/',
+      candidate: 'http://b/',
+      report: 'out/report.html',
+      json: false,
+      port: PORT,
+    });
+  });
+
+  it('refuses --report with no file', () => {
+    expect(parseCompareArgs(['http://a/', 'http://b/', '--report'], PORT).kind).not.toBe('ok');
+  });
 });

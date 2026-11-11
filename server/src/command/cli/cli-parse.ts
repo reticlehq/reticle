@@ -61,6 +61,7 @@ const DRIVE_COMMAND = 'drive';
 const COMPARE_COMMAND = 'compare';
 /** `compare --base <url>`: the build before the change. */
 const BASE_FLAG = '--base';
+const REPORT_FLAG = '--report';
 /** Kept for one release as `gate --list`. */
 const AFFECTED_COMMAND = 'affected';
 const GATE_COMMAND = 'gate';
@@ -936,6 +937,8 @@ type CompareArgs =
       reference: string;
       candidate: string;
       base?: string;
+      /** Where to write the HTML report (`--report <file>`). */
+      report?: string;
       json: boolean;
       port: number;
     }
@@ -944,6 +947,7 @@ type CompareArgs =
 export function parseCompareArgs(args: readonly string[], defaultPort: number): CompareArgs {
   const urls: string[] = [];
   let base: string | undefined;
+  let report: string | undefined;
   let json = false;
   let port = defaultPort;
   for (let i = 0; i < args.length; i += 1) {
@@ -952,7 +956,7 @@ export function parseCompareArgs(args: readonly string[], defaultPort: number): 
       json = true;
       continue;
     }
-    if (BASE_FLAG === arg || PORT_FLAG === arg) {
+    if (BASE_FLAG === arg || PORT_FLAG === arg || REPORT_FLAG === arg) {
       const value = args[i + 1];
       if (value === undefined || value.startsWith('--')) {
         return missingValue(arg);
@@ -960,6 +964,10 @@ export function parseCompareArgs(args: readonly string[], defaultPort: number): 
       i += 1;
       if (BASE_FLAG === arg) {
         base = value;
+        continue;
+      }
+      if (REPORT_FLAG === arg) {
+        report = value;
         continue;
       }
       const n = Number(value);
@@ -978,5 +986,13 @@ export function parseCompareArgs(args: readonly string[], defaultPort: number): 
   if (reference === undefined || candidate === undefined) {
     return missingOperand(COMPARE_COMMAND, 'a reference url and a candidate url');
   }
-  return { kind: 'ok', reference, candidate, ...(base === undefined ? {} : { base }), json, port };
+  return {
+    kind: 'ok',
+    reference,
+    candidate,
+    ...(base === undefined ? {} : { base }),
+    ...(report === undefined ? {} : { report }),
+    json,
+    port,
+  };
 }

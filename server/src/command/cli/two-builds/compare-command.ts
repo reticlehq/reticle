@@ -14,7 +14,10 @@ import {
   ReticleTool,
   SnapshotMode,
 } from '@reticlehq/core';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { runCompare, type OpenedPage } from '@/features/compare/behaviour-compare.js';
+import { compareReportHtml } from '@/features/compare/compare-report-html.js';
 import { invalidComparison, type BehaviourComparison } from '@/features/compare/behaviour-diff.js';
 import {
   compareExitCode,
@@ -195,6 +198,23 @@ export interface CompareCommandOptions extends CompareUrls {
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
   fetchText?: (url: string) => Promise<string | undefined>;
+  /** `--report <file>`: also write the comparison as an HTML page there. */
+  report?: string;
+  /** Injected so a test can capture the report; the default writes the file. */
+  writeReport?: (path: string, html: string) => void;
+}
+
+export const MSG_REPORT_WRITTEN = 'Report:';
+export const MSG_REPORT_FAILED = 'Report not written:';
+
+function writeReportFile(path: string, html: string): void {
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, html);
+}
+
+interface ReportSink {
+  path: string;
+  write: (path: string, html: string) => void;
 }
 
 /** Fetch a page or script file as a browser would. Undefined when it could not be fetched. */
@@ -213,13 +233,33 @@ function render(
   urls: CompareUrls,
   result: BehaviourComparison,
   timings?: CompareTimings,
+  sink?: ReportSink,
 ): { code: number; lines: string[] } {
-  return {
-    code: compareExitCode(result),
-    lines: json
-      ? [JSON.stringify(compareReportJson(urls, result, timings))]
-      : compareReportLines(urls, result, timings),
-  };
+  const report = compareReportJson(urls, result, timings);
+  // A report that could not be written says so: a line in text mode, a field in the one JSON object.
+  let reportError: string | undefined;
+  if (sink !== undefined) {
+    try {
+      sink.write(sink.path, compareReportHtml(report));
+    } catch (error) {
+      reportError = error instanceof Error ? error.message : String(error);
+    }
+  }
+  if (json) {
+    return {
+      code: compareExitCode(result),
+      lines: [JSON.stringify(reportError === undefined ? report : { ...report, reportError })],
+    };
+  }
+  const lines = compareReportLines(urls, result, timings);
+  if (sink !== undefined) {
+    lines.push(
+      reportError === undefined
+        ? `${MSG_REPORT_WRITTEN} ${sink.path}`
+        : `${MSG_REPORT_FAILED} ${sink.path}: ${reportError}`,
+    );
+  }
+  return { code: compareExitCode(result), lines };
 }
 
 /** Compare the builds through the daemon on `port`. Returns the lines to print and the exit code. */
@@ -231,6 +271,10 @@ export async function runCompareCommand(
     candidate: options.candidate,
     ...(options.base === undefined ? {} : { base: options.base }),
   };
+  const sink: ReportSink | undefined =
+    options.report === undefined
+      ? undefined
+      : { path: options.report, write: options.writeReport ?? writeReportFile };
   const connect = options.connect ?? connectOverSse;
   let caller: ToolCaller;
   try {
@@ -238,7 +282,7 @@ export async function runCompareCommand(
   } catch (error) {
     const why = error instanceof Error ? error.message : String(error);
     const reason = `${MSG_NO_DAEMON} ${String(options.port)}: ${why}`;
-    return render(options.json, urls, invalidComparison(reason, 0));
+    return render(options.json, urls, invalidComparison(reason, 0), undefined, sink);
   }
   const open = async (url: string): Promise<OpenedPage> => {
     const lease = await acquireLease(caller, url, false, options.root);
@@ -255,10 +299,10 @@ export async function runCompareCommand(
       now: options.now ?? Date.now,
       fetchText: options.fetchText ?? fetchText,
     });
-    return render(options.json, urls, result, timings);
+    return render(options.json, urls, result, timings, sink);
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
-    return render(options.json, urls, invalidComparison(reason, 0));
+    return render(options.json, urls, invalidComparison(reason, 0), undefined, sink);
   } finally {
     await caller.close().catch(() => undefined);
   }
@@ -269,12 +313,14 @@ export async function runCompareCommand(
  * or starts one. Nothing here stops a daemon, so an agent's MCP link stays up.
  */
 export async function handleCompare(
-  parsed: CompareUrls & { json: boolean; port: number },
+  parsed: CompareUrls & { json: boolean; port: number; report?: string },
   ensureDaemon: (port: number) => Promise<void>,
   out: { line: (text: string) => void; exit: (code: number) => void },
 ): Promise<void> {
   const fail = (reason: string): void => {
-    const result = render(parsed.json, parsed, invalidComparison(reason, 0));
+    const sink =
+      parsed.report === undefined ? undefined : { path: parsed.report, write: writeReportFile };
+    const result = render(parsed.json, parsed, invalidComparison(reason, 0), undefined, sink);
     result.lines.forEach(out.line);
     out.exit(result.code);
   };
