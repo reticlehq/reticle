@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/server` — `reticle compare --state <file>` reads the app's stored data.** A page read sees only the pages that a sequence opens, so a candidate that also changed a record no page showed (the price of another product) was reported as the same. The file declares state sources of three kinds: a shell command (optional `docker exec` container), a JSON endpoint, or a file. Compare reads them after each sequence on every build and adds the rows as `state <label> <row>` lines, so the same diff and noise rule apply. A source over 1000 rows says that it was cut, and a read that fails says so.

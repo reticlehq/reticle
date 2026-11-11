@@ -83,9 +83,13 @@ It plans every action on every control of the reference, drives the plan on the 
 times and on the candidate one time, and ignores what changes between the two reference runs.
 Point it at builds whose data you can change: it presses every button it finds.
 
-  --base <url>   the build before the change: tag each difference as a regression, a missed
-                 target or a change, and print a score
-  --json         print one JSON object
+  --base <url>     the build before the change: tag each difference as a regression, a missed
+                   target or a change, and print a score
+  --state <file>   a JSON file { "sources": [...] } that declares how to read the app's stored
+                   data (kind command, http or file). Compare reads it after each sequence on
+                   every build, so a change to a record that no page shows is a difference.
+                   Start each row with the record id, so a changed row names its record
+  --json           print one JSON object
 Exit 0 = same, 1 = different, 2 = the run proves nothing (a lost browser session, or an error).`;
 
 const BROWSER_NOTE = `The browser Reticle opens for your agent is shown so you can watch the run. --headless hides
@@ -137,7 +141,8 @@ const COMMANDS: readonly CommandDoc[] = [
   },
   {
     name: 'compare',
-    synopsis: 'compare <reference-url> <candidate-url> [--base <url>] [--json] [--report <file>]',
+    synopsis:
+      'compare <reference-url> <candidate-url> [--base <url>] [--state <file>] [--json] [--report <file>]',
     summary: 'Drive two builds the same way and list what users would see change',
     group: HelpGroup.CHECK,
     detail: COMPARE_DETAIL,

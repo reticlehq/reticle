@@ -41,6 +41,8 @@ export const missingOperand = (command: string, what: string): ParseError => ({
 /** Show the browser. Shared by every command that can drive one. */
 export const HEADED_FLAG = '--headed';
 export const PORT_FLAG = '--port';
+/** Print one JSON object. */
+export const JSON_FLAG = '--json';
 export const VERIFY_COMMAND = 'verify';
 /**
  * The predicate flag, shared for the same reason the rest of this file is: two places have to name

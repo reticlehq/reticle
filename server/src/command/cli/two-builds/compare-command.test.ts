@@ -218,6 +218,26 @@ describe('runCompareCommand', () => {
     expect(out.lines[0]).toMatch(/^INVALID: could not reach the daemon on port 14400/);
   });
 
+  it('exits 2 and names the state file when it cannot be read, before it drives a build', async () => {
+    let connected = false;
+    const out = await runCompareCommand({
+      reference: 'http://a/',
+      candidate: 'http://b/',
+      state: '/no/such/state.json',
+      json: false,
+      port: 14400,
+      connect: () => {
+        connected = true;
+        return Promise.reject(new Error('ECONNREFUSED'));
+      },
+    });
+    expect(out.code).toBe(2);
+    expect(out.lines[0]).toMatch(
+      /^INVALID: could not read the state sources in \/no\/such\/state\.json/,
+    );
+    expect(connected).toBe(false);
+  });
+
   it('prints one JSON object with --json', async () => {
     const out = await runCompareCommand({
       reference: 'http://a/',

@@ -7,7 +7,7 @@ icon: code-compare
 `reticle compare` answers one question: does the candidate build show what the reference build shows? Use it to compare main with a pull request preview, or a known-good build with a changed build. The app needs nothing installed: no SDK, no plugin and no `reticle init`. Any URL works.
 
 ```bash
-npx @reticlehq/server compare <reference-url> <candidate-url> [--base <url>] [--json] [--report <file>]
+npx @reticlehq/server compare <reference-url> <candidate-url> [--base <url>] [--state <file>] [--json] [--report <file>]
 ```
 
 | Argument | Type | Default | What it does |
@@ -15,6 +15,7 @@ npx @reticlehq/server compare <reference-url> <candidate-url> [--base <url>] [--
 | `<reference-url>` | string | required | The build that is correct, for example main |
 | `<candidate-url>` | string | required | The build to check, for example a pull request preview |
 | `--base <url>` | string | unset | The build before the change. Each difference gets a tag, and the command prints a score |
+| `--state <file>` | string | unset | A JSON file that declares how to read the app's stored data. See [State sources](#state-sources) |
 | `--json` | boolean | off | Print one JSON object instead of text |
 | `--report <file>` | string | unset | Also write the result as one HTML page: the verdict, the counts, and each difference with its steps and the lines on each side. Open it in a browser, share it, or keep it as a CI artifact. It needs no network and runs no script |
 
@@ -28,6 +29,43 @@ The command has one recipe and no other settings.
 4. **Compare what a person sees, and what the app did.** Names, text, values, and the checked, selected, disabled, expanded and pressed states, in page order. Then each network call since the sequence's first action (method, path with the query values removed, status, and the start of the request body) and each console error and warning. Case and spacing of page text are folded, and elapsed times under one second are rounded to whole seconds. A line that differs between the two reference runs (a clock, a random id) is noise and is ignored. A step that the candidate cannot do and the reference could is a difference. When a network or console read fails, the reading says `effects failed`, so an empty list always means that nothing happened.
 
 The command presses every button it finds. On a build served from loopback (`localhost`, `127.0.0.1`) or a `*.localhost` name, that includes the controls the act guard holds back, such as "Place order" or "Delete": those builds are disposable copies, and their submits are the actions most worth comparing. On any other host the guard stays on and those controls are not pressed. Point it at builds whose data you can change, not at a production database.
+
+## State sources
+
+A page read sees only the pages that a sequence opens. If the candidate also changes a record that no page in the plan shows (for example, the price of another product), the page reads cannot see it. Declare how to read the app's stored data, and compare reads it too:
+
+```json
+{
+  "sources": [
+    {
+      "kind": "command",
+      "label": "prices",
+      "container": "shop-db",
+      "command": "mysql -N shop -e 'select entity_id, value from product_price'"
+    },
+    {
+      "kind": "http",
+      "label": "orders",
+      "url": "http://localhost:3000/api/orders",
+      "path": "data.items",
+      "ignore": ["updatedAt"]
+    },
+    { "kind": "file", "label": "settings", "path": "./data/settings.json" }
+  ]
+}
+```
+
+| Kind | Fields | What it reads |
+| --- | --- | --- |
+| `command` | `command`, optional `container` | Each output line of a shell command. With `container`, the command runs through `docker exec <container> sh -c` |
+| `http` | `url`, optional `path` | Each record of a JSON endpoint. `path` is a dotted path to the array |
+| `file` | `path`, optional `at`, optional `container` | Each JSON record of a file (`at` is a dotted path to the array), or each line when the file is not JSON. With `container`, the file is read in that container |
+
+Each source has a `label`. `ignore` is optional: for JSON records it holds field names to remove, and for text lines it holds regular expressions to remove (a time, or an id that changes on each run).
+
+After each sequence, on every build, compare reads each source and adds its rows to that sequence's reading as `state <label> <row>` lines, sorted. JSON records are written with their keys sorted. The same diff and the same noise rule apply: a row that differs between the two reference runs is ignored. Start each row with the record id, so that a changed row names its record. A source keeps at most 1000 rows. When it has more, a `state rows cut: <label>: kept 1000 of <n>` line says so. A read that fails gives a `state read failed: <label>: <reason>` line, never an empty list.
+
+The builds are driven one after the other, and compare does not reset their data. When two builds use one database, the second build starts from the data the first one changed. Give each build its own data, or reset it before each run.
 
 ## What it prints
 

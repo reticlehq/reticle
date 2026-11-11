@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { parseCompareArgs } from './cli-parse.js';
+import { parseCliArgs } from './cli-parse.js';
+import { parseCompareArgs } from './cli-parse-compare.js';
 
 const PORT = 4400;
 const TEST_PORT = 14400;
@@ -28,6 +29,20 @@ describe('parseCompareArgs', () => {
       base: 'http://c/',
       json: true,
       port: TEST_PORT,
+    });
+  });
+
+  it('takes --state, the file of state sources to read after each sequence', () => {
+    expect(parseCompareArgs(['http://a/', 'http://b/', '--state', 's.json'], PORT)).toMatchObject({
+      kind: 'ok',
+      state: 's.json',
+    });
+    expect(parseCompareArgs(['http://a/', 'http://b/', '--state'], PORT).kind).toBe('error');
+    expect(
+      parseCliArgs(['compare', 'http://a/', 'http://b/', '--state', 's.json'], PORT),
+    ).toMatchObject({
+      kind: 'compare',
+      state: 's.json',
     });
   });
 

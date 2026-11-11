@@ -7,6 +7,8 @@
  * 2. Drive the plan on the reference, the candidate, the base when given, and the reference again,
  *    in that order, each in a new browser tab (`build-readings.ts`). The two reference runs are on
  *    each side of the candidate, so a line that changes with time is seen as noise.
+ *    With declared state sources, the app's stored data is read after each sequence too
+ *    (`outside/state-sources.ts`), so a change to a record that no page shows is a difference.
  * 3. Compare (`behaviour-diff.ts`).
  *
  * A lost browser session makes the run invalid, never a difference.
@@ -39,6 +41,8 @@ export interface CompareInput {
   now: () => number;
   /** Fetch a file the way a browser does. Undefined when it could not be fetched. */
   fetchText: (url: string) => Promise<string | undefined>;
+  /** Read the app's declared state sources, after each sequence on every build. */
+  readState?: () => Promise<string[]>;
 }
 
 /** The event cursor before a tab's first event. */
@@ -90,7 +94,9 @@ export async function runCompare(
     );
     sequences = plan.length;
     const drive = (url: string): Promise<[BuildReadings, number]> =>
-      timed(() => withPage(input, url, (page) => readBuild(page, plan, input.sleep)));
+      timed(() =>
+        withPage(input, url, (page) => readBuild(page, plan, input.sleep, input.readState)),
+      );
     const [reference, referenceS] = await drive(input.reference);
     const [candidate, candidateS] = await drive(input.candidate);
     const based = input.base === undefined ? undefined : await drive(input.base);
