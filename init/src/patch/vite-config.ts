@@ -5,7 +5,7 @@
  * documented manual step).
  */
 
-import { matchingBraceEnd } from './brace-scan.js';
+import { braceDepth, maskStringsAndComments, matchingBraceEnd } from './brace-scan.js';
 import { PatchKind, type SourcePatch } from './patch-kind.js';
 
 export const VITE_IMPORT = "import { reticle } from '@reticlehq/vite-plugin';";
@@ -109,6 +109,9 @@ const UNREADABLE_REASON =
   'init could not read this config safely (a string, comment or regex that it could not follow), ' +
   'so it did not change it. Add `reticle()` to the `plugins` list of the exported config.';
 const NO_PLUGINS_REASON = "couldn't find a `plugins: [...]` array to extend";
+const AMBIGUOUS_PLUGINS_REASON =
+  'the config function builds more than one `plugins` list at the same level, so init did not ' +
+  'pick one. Add `reticle()` to the `plugins` list of the config that the function returns.';
 const PLUGINS_NOT_ARRAY_REASON =
   'the `plugins` key is not an array literal, so init did not change it. Add `reticle()` to the ' +
   'list that the key builds. Do not add a second `plugins` key: the later key replaces the first.';
@@ -136,128 +139,12 @@ function insertPlugin(source: string, call: string, at: number): string {
   return `${source.slice(0, at)}${call},${separator}${source.slice(at)}`;
 }
 
-/**
- * The source with every string literal, regex literal and comment blanked to spaces, newlines kept,
- * so each index still points at the same place in the real source. Null when the scan does not end
- * cleanly: a string, comment or regex that never closes, or braces that do not balance.
- *
- * The key search below counts braces. A `{` inside a string, or a `plugins: [` in a comment, used to
- * move that count, and init then added a second `plugins` key whose list Vite never reads. A source
- * this scan cannot read is a manual step, never a guess.
- */
-function maskStringsAndComments(source: string): string | null {
-  const out = source.split('');
-  const blank = (from: number, to: number): void => {
-    for (let k = from; k < to && k < out.length; k += 1) {
-      if ('\n' !== out[k]) {
-        out[k] = ' ';
-      }
-    }
-  };
-  /** The last character before `at` that is not whitespace, in the masked output so far. */
-  const previousToken = (at: number): string => {
-    for (let k = at - 1; k >= 0; k -= 1) {
-      const c = out[k] ?? '';
-      if (!/\s/.test(c)) {
-        return c;
-      }
-    }
-    return '';
-  };
-  let i = 0;
-  while (i < source.length) {
-    const ch = source[i] ?? '';
-    const next = source[i + 1];
-    let stop: number | null;
-    if ('/' === ch && '/' === next) {
-      const end = source.indexOf('\n', i);
-      stop = -1 === end ? source.length : end;
-    } else if ('/' === ch && '*' === next) {
-      const end = source.indexOf('*/', i + 2);
-      stop = -1 === end ? null : end + 2;
-    } else if ("'" === ch || '"' === ch || '`' === ch) {
-      stop = closingQuote(source, i, ch);
-    } else if ('/' === ch && REGEX_MAY_FOLLOW.includes(previousToken(i))) {
-      stop = closingRegex(source, i);
-    } else {
-      i += 1;
-      continue;
-    }
-    if (null === stop) {
-      return null;
-    }
-    blank(i, stop);
-    i = stop;
-  }
-  const masked = out.join('');
-  return 0 === braceDepth(masked, masked.length) ? masked : null;
-}
-
-/** Where a `/` starts a regex literal rather than a division: after one of these, or at the start. */
-const REGEX_MAY_FOLLOW = ['', '(', ',', '=', ':', '[', '!', '&', '|', '?', '{', '}', ';'];
-
-/** The index just past the quote that closes the string opened at `at`, or null. */
-function closingQuote(source: string, at: number, quote: string): number | null {
-  let j = at + 1;
-  while (j < source.length) {
-    const c = source[j];
-    if ('\\' === c) {
-      j += 2;
-    } else if (quote === c) {
-      return j + 1;
-    } else if ('\n' === c && '`' !== quote) {
-      return null;
-    } else {
-      j += 1;
-    }
-  }
-  return null;
-}
-
-/** The index just past the flags of the regex literal opened at `at`, or null. */
-function closingRegex(source: string, at: number): number | null {
-  let j = at + 1;
-  let inClass = false;
-  while (j < source.length) {
-    const c = source[j];
-    if ('\\' === c) {
-      j += 2;
-      continue;
-    }
-    if ('\n' === c) {
-      return null;
-    }
-    if ('[' === c) {
-      inClass = true;
-    } else if (']' === c) {
-      inClass = false;
-    } else if ('/' === c && !inClass) {
-      j += 1;
-      while (j < source.length && /[a-z]/i.test(source[j] ?? '')) {
-        j += 1;
-      }
-      return j;
-    }
-    j += 1;
-  }
-  return null;
-}
-
-/** How many `{` are open at `index`. A count, not a parser: see brace-scan.ts for its limits. */
-function braceDepth(source: string, index: number): number {
-  let depth = 0;
-  for (let i = 0; i < index; i += 1) {
-    if ('{' === source[i]) {
-      depth += 1;
-    } else if ('}' === source[i]) {
-      depth -= 1;
-    }
-  }
-  return depth;
-}
+/** No single `plugins` key can be told to be the config's own: two lists compete for it. */
+const AMBIGUOUS = 'ambiguous';
 
 /**
- * Where the value of the config's OWN `plugins` key starts, or undefined when the config has none.
+ * Where the value of the config's OWN `plugins` key starts, undefined when the config has none, or
+ * AMBIGUOUS when two lists compete and nothing says which one Vite reads.
  *
  * Other blocks can hold a `plugins` key too: Vite+'s `lint.plugins` names oxlint plugins, and
  * `worker.plugins` and `build.rollupOptions.plugins` are other bundlers' lists. The first match in
@@ -265,35 +152,94 @@ function braceDepth(source: string, index: number): number {
  * `reticle()` into the lint settings, reported the step done, and the app never connected (#2134).
  *
  * So when the exported object is a literal we can see, only a key at that literal's own level, inside
- * it, is its key. Without a literal (a config written as a function), the key with the fewest open
- * braces wins.
+ * it, is its key. A config written as a function is read by `functionConfigPluginsAt`.
  */
-function vitePluginsValueAt(source: string): number | undefined {
+function vitePluginsValueAt(source: string): number | typeof AMBIGUOUS | undefined {
   const literal = exportedLiteralStart(source);
   if (literal !== undefined) {
     // The literal is in view, so only its own keys count. A key outside it is another object's: a
     // hoisted `const lint = { plugins: [...] }` that the config names by shorthand.
-    const end = matchingBraceEnd(source, literal) ?? source.length;
-    const depth = braceDepth(source, literal);
-    for (const match of source.matchAll(PLUGINS_KEY_COLON)) {
-      if (match.index > literal && match.index < end && depth === braceDepth(source, match.index)) {
-        return match.index + match[0].length;
-      }
+    return ownPluginsKeyAt(source, literal);
+  }
+  return functionConfigPluginsAt(source, exportedRegion(source));
+}
+
+/** Where the value of the `plugins` key of the object literal whose inner start is `literal` begins. */
+function ownPluginsKeyAt(source: string, literal: number): number | undefined {
+  const end = matchingBraceEnd(source, literal) ?? source.length;
+  const depth = braceDepth(source, literal);
+  for (const match of source.matchAll(PLUGINS_KEY_COLON)) {
+    if (match.index > literal && match.index < end && depth === braceDepth(source, match.index)) {
+      return match.index + match[0].length;
     }
+  }
+  return undefined;
+}
+
+/** An object literal a config function gives back: `return {` or an arrow's `=> ({`. */
+const RETURNED_OBJECT = /\breturn\s*\(?\s*\{|=>\s*\(\s*\{/g;
+
+/**
+ * The `plugins` value of a config built by a function (`defineConfig(({ mode }) => { ... })`).
+ *
+ * The config is the object the function returns. A body can build other objects with a `plugins`
+ * key first (`const x = { plugins: [legacy()] }`), at the same depth as the returned one, and the
+ * key that came first used to win. So the returned object literals are read first: one with its own
+ * `plugins` key is the config's list, and two (a config per mode) are AMBIGUOUS. A returned object
+ * inside another one is that object's value, such as an inline plugin's hook, and does not count.
+ *
+ * A function that returns a name (`return config`) or a call has no literal to read, and a returned
+ * literal may take its list from a spread (`...shared`). Then the key with the fewest open braces in
+ * the exported expression wins, and a tie is AMBIGUOUS. A
+ * const declared above the export (`const lint = { plugins: [...] }`) is never in that region.
+ */
+function functionConfigPluginsAt(
+  source: string,
+  region: { from: number; to: number },
+): number | typeof AMBIGUOUS | undefined {
+  const returned: { start: number; end: number }[] = [];
+  for (const match of source.matchAll(RETURNED_OBJECT)) {
+    const start = match.index + match[0].length;
+    if (match.index < region.from || match.index >= region.to) {
+      continue;
+    }
+    if (returned.some((outer) => start > outer.start && start <= outer.end)) {
+      continue;
+    }
+    returned.push({ start, end: matchingBraceEnd(source, start) ?? source.length });
+  }
+  const keys = returned
+    .map((object) => ownPluginsKeyAt(source, object.start))
+    .filter((at): at is number => at !== undefined);
+  if (1 < keys.length) {
+    return AMBIGUOUS;
+  }
+  if (1 === keys.length) {
+    return keys[0];
+  }
+  // A returned literal with no `plugins` key of its own is the whole config, and it has no list:
+  // a `plugins` key elsewhere in the body is another object's. Only a spread (`...shared`) can
+  // bring one in, and then the body's own keys are all there is to go on.
+  if (
+    0 < returned.length &&
+    !returned.some((object) => source.slice(object.start, object.end).includes('...'))
+  ) {
     return undefined;
   }
-  // A config built by a function. Only a key in the exported expression can be its own: a const
-  // declared above it (`const lint = { plugins: [...] }`) is another object, whatever its depth.
-  const { from, to } = exportedRegion(source);
-  let best: { depth: number; valueAt: number } | undefined;
+  let best: { depth: number; valueAt: number; tied: boolean } | undefined;
   for (const match of source.matchAll(PLUGINS_KEY_COLON)) {
-    if (match.index < from || match.index >= to) {
+    if (match.index < region.from || match.index >= region.to) {
       continue;
     }
     const depth = braceDepth(source, match.index);
     if (best === undefined || depth < best.depth) {
-      best = { depth, valueAt: match.index + match[0].length };
+      best = { depth, valueAt: match.index + match[0].length, tied: false };
+    } else if (depth === best.depth) {
+      best.tied = true;
     }
+  }
+  if (best !== undefined && best.tied) {
+    return AMBIGUOUS;
   }
   return best?.valueAt;
 }
@@ -400,6 +346,9 @@ export function patchViteConfig(
     return { kind: VitePatchKind.MANUAL, reason: UNREADABLE_REASON };
   }
   const valueAt = vitePluginsValueAt(masked);
+  if (AMBIGUOUS === valueAt) {
+    return { kind: VitePatchKind.MANUAL, reason: AMBIGUOUS_PLUGINS_REASON };
+  }
   if (valueAt !== undefined) {
     const list = PLUGIN_LIST_START.exec(source.slice(valueAt));
     if (null === list) {

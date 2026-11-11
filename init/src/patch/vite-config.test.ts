@@ -402,6 +402,67 @@ export default defineConfig({
     expect(r.code).toContain('plugins: [reticle(), react()]');
   });
 
+  it.each([
+    'export default defineConfig(({ mode }) => {\n  const x = { plugins: [legacy()] };\n  return { plugins: [react()] };\n});',
+    'export default defineConfig(async () => {\n  const x = { plugins: [legacy()] };\n  return ({ plugins: [react()] });\n});',
+    'export default defineConfig(function () {\n  const x = { plugins: [legacy()] };\n  return { ...x, plugins: [react()] };\n});',
+    'const config = defineConfig(({ mode }) => {\n  const x = { plugins: [legacy()] };\n  return { plugins: [react()] };\n});\nexport default config;',
+  ])('patches the list a config function returns, not one its body builds first: %s', (body) => {
+    const r = patchViteConfig(`import { defineConfig } from 'vite';\n${body}\n`);
+    if (r.kind !== VitePatchKind.APPLY) {
+      throw new Error('expected apply');
+    }
+    expect(r.code).toContain('const x = { plugins: [legacy()] };');
+    expect(r.code).toContain('plugins: [reticle(), react()]');
+  });
+
+  it('does not count an object that an inline plugin hook returns', () => {
+    const r = patchViteConfig(`import { defineConfig } from 'vite';
+export default defineConfig(() => {
+  return {
+    plugins: [react(), { name: 'x', config() { return { plugins: [] }; } }],
+  };
+});
+`);
+    if (r.kind !== VitePatchKind.APPLY) {
+      throw new Error('expected apply');
+    }
+    expect(r.code).toContain('plugins: [reticle(), react(),');
+    expect(r.code).toContain('return { plugins: [] };');
+  });
+
+  it('patches the list of a config the function builds under a name and returns', () => {
+    const r = patchViteConfig(`import { defineConfig } from 'vite';
+export default defineConfig(({ mode }) => {
+  const config = { plugins: [react()] };
+  return config;
+});
+`);
+    if (r.kind !== VitePatchKind.APPLY) {
+      throw new Error('expected apply');
+    }
+    expect(r.code).toContain('const config = { plugins: [reticle(), react()] };');
+  });
+
+  it.each([
+    "export default defineConfig(({ command }) => {\n  if (command === 'serve') {\n    return { plugins: [react(), devOnly()] };\n  }\n  return { plugins: [react()] };\n});",
+    'export default defineConfig(() => {\n  const mk = () => ({ plugins: [a()] });\n  return { plugins: [react()] };\n});',
+    'export default defineConfig(() => {\n  const a = { plugins: [legacy()] };\n  const b = { plugins: [react()] };\n  return mergeConfig(a, b);\n});',
+  ])('leaves a manual step when two plugin lists compete in a config function: %s', (body) => {
+    const r = patchViteConfig(`import { defineConfig } from 'vite';\n${body}\n`);
+    expect(r.kind).toBe(VitePatchKind.MANUAL);
+  });
+
+  it('leaves a manual step when the returned config has no plugins list', () => {
+    const r = patchViteConfig(`import { defineConfig } from 'vite';
+export default defineConfig(() => {
+  const x = { plugins: [legacy()] };
+  return { server: { port: 3000 } };
+});
+`);
+    expect(r.kind).toBe(VitePatchKind.MANUAL);
+  });
+
   it('reads past a regex literal that holds a quote', () => {
     const r = patchViteConfig(`import { defineConfig } from 'vite';
 export default defineConfig({
