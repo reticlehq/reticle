@@ -4,6 +4,7 @@ import {
   ReticleCommand,
   VISUAL_NO_PROVIDER_RECOMMENDATION,
   VisualReason,
+  realmOf,
 } from '@reticlehq/core';
 import { ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '@/surface/tools/tool-kit.js';
@@ -49,6 +50,45 @@ function screenshotProvider(deps: ToolDeps): ScreenshotCapable | undefined {
     : undefined;
 }
 
+/**
+ * Whether this call can photograph the session: a lease of this caller, a desktop shell, or a page
+ * that the driven browser has.
+ *
+ * A desktop shell counts before its capture is known to work. Only a CAPTURE command can tell, and
+ * a person who connected a desktop app most likely wants that window, not a lease beside it.
+ */
+async function canCapture(
+  deps: ToolDeps,
+  session: { readonly id: string; readonly url: string; readonly runtime: string | undefined },
+): Promise<boolean> {
+  // A lease of this caller. Another agent's lease is never this caller's to photograph (#1226).
+  if (true === deps.pool?.heldBy(session.id, deps.attachId)) {
+    return true;
+  }
+  if (realmOf(session.runtime).isDesktopShell) {
+    return true;
+  }
+  // A driven browser photographs only a page it has. Having a driven browser is not enough.
+  const driven = screenshotProvider(deps);
+  if (driven === undefined) {
+    return false;
+  }
+  return driven.isAvailableFor(session.url);
+}
+
+/**
+ * The one session this call photographs, chosen once (#1959).
+ *
+ * capture() and captureRoot() each resolve the id again. With no id, each could choose another
+ * session, and capture() never tried a lease at all. After this, they all get the same, named id.
+ */
+async function captureTarget(deps: ToolDeps, args: Record<string, unknown>): Promise<string> {
+  const session = await deps.sessions.resolveServing(asString(args['sessionId']), (s) =>
+    canCapture(deps, s),
+  );
+  return session.id;
+}
+
 /** The "you need a driven browser" envelope, shared by both visual tools. */
 const noProvider = {
   ok: false as const,
@@ -61,7 +101,9 @@ function unavailable(
   reason: string | undefined,
   recommendation: string | undefined,
 ): { ok: false; reason?: string | undefined; recommendation?: string } {
-  if (recommendation !== undefined) return { ok: false, reason, recommendation };
+  if (recommendation !== undefined) {
+    return { ok: false, reason, recommendation };
+  }
   return reason === VisualReason.NO_PROVIDER ? noProvider : { ok: false, reason };
 }
 
@@ -71,8 +113,12 @@ function asBox(value: unknown): ElementBox | undefined {
   const y = asNumber(b['y']);
   const w = asNumber(b['width']);
   const h = asNumber(b['height']);
-  if (x === undefined || y === undefined || w === undefined || h === undefined) return undefined;
-  if (w <= 0 || h <= 0) return undefined;
+  if (x === undefined || y === undefined || w === undefined || h === undefined) {
+    return undefined;
+  }
+  if (w <= 0 || h <= 0) {
+    return undefined;
+  }
   return { x, y, width: w, height: h };
 }
 
@@ -86,14 +132,18 @@ async function buildOpts(
   if (clipArg !== undefined) {
     const c = asRecord(clipArg);
     const box = asBox({ box: c });
-    if (box !== undefined) return { clip: box };
+    if (box !== undefined) {
+      return { clip: box };
+    }
   }
   const ref = asString(args['ref']);
   if (ref !== undefined) {
     const session = deps.sessions.resolve(sessionId);
     const res = await session.command(ReticleCommand.INSPECT, { ref });
     const box = res.ok ? asBox(res.result) : undefined;
-    if (box !== undefined) return { clip: box };
+    if (box !== undefined) {
+      return { clip: box };
+    }
   }
   return true === args['fullPage'] ? { fullPage: true } : {};
 }
@@ -113,12 +163,16 @@ export async function driveFrame(
 ): Promise<Uint8Array | undefined> {
   try {
     const leased = await deps.pool?.screenshotLease(sessionId, { jpegQuality });
-    if (leased !== undefined) return leased;
+    if (leased !== undefined) {
+      return leased;
+    }
     // The window `reticle drive` opened: neither a lease nor a desktop shell, but its page is ours.
     const url = deps.sessions.resolve(sessionId).url;
     if (true === (await deps.realInput?.isAvailableFor(url))) {
       const shot = await deps.realInput?.screenshot?.(url, { jpegQuality });
-      if (shot !== undefined) return shot;
+      if (shot !== undefined) {
+        return shot;
+      }
     }
     return (await desktopCapture(deps, sessionId, false)).png;
   } catch {
@@ -186,7 +240,9 @@ async function capture(
     // A driven browser renders the session's URL in a BROWSER — so the pixels are web even when the
     // session named is a desktop window. Scoping those under the desktop runtime would corrupt that
     // runtime's baseline with a picture of a different renderer.
-    if (png !== undefined) return { png, runtime: AppRuntime.WEB };
+    if (png !== undefined) {
+      return { png, runtime: AppRuntime.WEB };
+    }
   }
   // The window's own backing store, via the Electron/Tauri adapter — the only route whose pixels
   // really are the desktop app.
@@ -199,7 +255,9 @@ async function capture(
     }
     return { png: desktop.png, runtime: runtimeOf(deps, sessionId) };
   }
-  if (desktop.reason !== undefined) return desktop;
+  if (desktop.reason !== undefined) {
+    return desktop;
+  }
 
   /*
    * A LEASED page is a real browser page, so the pixels were always there — the visual tools simply
@@ -215,18 +273,24 @@ async function capture(
         // shot of a lease saved the whole viewport and answered `saved: true`.
         await deps.pool?.screenshotLease(sessionId, await buildOpts(deps, sessionId, args));
   // A leased page is a real browser page, whatever the session is.
-  if (leased !== undefined) return { png: leased, runtime: AppRuntime.WEB };
+  if (leased !== undefined) {
+    return { png: leased, runtime: AppRuntime.WEB };
+  }
   return {
     reason: provider === undefined ? VisualReason.NO_PROVIDER : VisualReason.CAPTURE_FAILED,
   };
 }
 
 function rectsFrom(value: unknown): VisualRect[] | undefined {
-  if (!Array.isArray(value)) return undefined;
+  if (!Array.isArray(value)) {
+    return undefined;
+  }
   const rects: VisualRect[] = [];
   for (const r of value as unknown[]) {
     const box = asBox({ box: r });
-    if (box !== undefined) rects.push(box);
+    if (box !== undefined) {
+      rects.push(box);
+    }
   }
   return rects.length > 0 ? rects : undefined;
 }
@@ -274,9 +338,11 @@ export const VISUAL_TOOLS: ToolDef[] = [
       recommendation: z.string().optional(),
     },
     handler: async (deps: ToolDeps, args) => {
-      const sessionId = asString(args['sessionId']);
+      const sessionId = await captureTarget(deps, args);
       const { png, reason, recommendation, runtime } = await capture(deps, sessionId, args);
-      if (png === undefined) return unavailable(reason, recommendation);
+      if (png === undefined) {
+        return unavailable(reason, recommendation);
+      }
       const name = asString(args['name']) ?? 'default';
       // Beside the app that was captured. The tool RETURNS this path to the agent, so a wrong root
       // is not only a stray PNG — it is a path the agent is told to look at in a tree that has
@@ -329,22 +395,26 @@ export const VISUAL_TOOLS: ToolDef[] = [
     },
     handler: async (deps: ToolDeps, args) => {
       const baseline = asString(args['baseline']) ?? '';
-      const store = new VisualStore(deps.fs, captureRoot(deps, asString(args['sessionId'])));
+      const sessionId = await captureTarget(deps, args);
+      const store = new VisualStore(deps.fs, captureRoot(deps, sessionId));
 
       // Capture FIRST, then fetch the baseline for the runtime that produced these pixels. Reading it
       // by the session's runtime looked equivalent and is not: the route decides the renderer, so a
       // desktop session captured through a driven browser must be compared against the WEB baseline,
       // not the desktop one. Comparing across renderers is a confident wrong diff in one direction
       // and a silently overwritten baseline in the other.
-      const sessionId = asString(args['sessionId']);
       const captured = await capture(deps, sessionId, args);
       const { png: current, runtime } = captured;
-      if (current === undefined) return unavailable(captured.reason, captured.recommendation);
+      if (current === undefined) {
+        return unavailable(captured.reason, captured.recommendation);
+      }
 
       // A baseline from another runtime is not missing by accident — it is a different rendering, and
       // "no baseline for this one" is the honest answer.
       const baselineBytes = await store.readBaseline(baseline, runtime);
-      if (baselineBytes === undefined) return { ok: false, reason: VisualReason.BASELINE_MISSING };
+      if (baselineBytes === undefined) {
+        return { ok: false, reason: VisualReason.BASELINE_MISSING };
+      }
 
       const masks = rectsFrom(args['masks']);
       const threshold = asNumber(args['threshold']);

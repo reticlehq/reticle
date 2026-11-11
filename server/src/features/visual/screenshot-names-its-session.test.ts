@@ -60,7 +60,9 @@ const leasePool = {
 
 function tool(name: string) {
   const t = TOOLS.find((x) => x.name === name);
-  if (t === undefined) throw new Error(`no tool ${name}`);
+  if (t === undefined) {
+    throw new Error(`no tool ${name}`);
+  }
   return t;
 }
 
@@ -77,8 +79,10 @@ describe('a screenshot is of the session it names', () => {
 
   function deps(extra: { realInput?: RealInputProvider; pool?: BrowserPool }): ToolDeps {
     const fs = createNodeFileSystem();
+    const resolve = (id?: string): Session => (id === OTHER.id ? OTHER : DRIVEN);
     const sessions: Partial<SessionManager> = {
-      resolve: (id?: string) => (id === OTHER.id ? OTHER : DRIVEN),
+      resolve,
+      resolveServing: (id?: string) => Promise.resolve(resolve(id)),
     };
     return {
       sessions: sessions as SessionManager,
@@ -173,7 +177,10 @@ describe('a lease screenshot is scoped the way it was asked', () => {
       },
     } as unknown as BrowserPool;
     const fs = createNodeFileSystem();
-    const sessions: Partial<SessionManager> = { resolve: () => OTHER };
+    const sessions: Partial<SessionManager> = {
+      resolve: () => OTHER,
+      resolveServing: () => Promise.resolve(OTHER),
+    };
     const clip = { x: 10, y: 20, width: 300, height: 200 };
     const r = (await tool(ReticleTool.SCREENSHOT).handler(
       {
