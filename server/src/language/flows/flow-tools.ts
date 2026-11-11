@@ -7,7 +7,7 @@ import { confirmDangerousArg } from '@/surface/tools/args/confirm-dangerous-arg.
 import { z } from 'zod';
 import { emptyFlowRefusal } from './empty-flow.js';
 import { aliasParam, aliasUsed } from '@/surface/tools/args/alias-args.js';
-import { stillRecording, stillRecordingMessage } from './flow-result.js';
+import { REPLAY_TRUST_OUTPUT, stillRecording, stillRecordingMessage } from './flow-result.js';
 import { resolveAnnotateTarget } from './annotate-notes/annotate-target.js';
 import {
   type ProjectId,
@@ -402,7 +402,7 @@ export const FLOW_TOOLS: ToolDef[] = [
       'Status unverifiable means flow could not be graded (missing secrets, unmet preconditions, lost ' +
       'document) — neither pass nor fail, treat as UNKNOWN. ' +
       'An ok replay of a flow asserting no consequence also carries unverifiable:{reason} — do not ' +
-      'treat as proof. ' +
+      'treat as proof. verifiedReason names the clause that decided the status. ' +
       'Early halt carries halted:{atStep, notAttempted}: `steps` is shorter because replay stopped. ' +
       'A start page that kept loading past the step budget carries startPageWait:{waitedMs, budgetMs, stillLoading}.',
     inputSchema: {
@@ -518,12 +518,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         .describe(
           'Guarded defects that came back. This flow proved once that they were gone, so their return is a regression nothing else would have caught.',
         ),
-      unverifiable: z
-        .object({ reason: z.string() })
-        .optional()
-        .describe(
-          'Set on an ok replay that cannot fail: the flow asserts no observable consequence, so it passes even when the feature is broken. Same reason reticle_verify{action:"flows"} reports.',
-        ),
+      ...REPLAY_TRUST_OUTPUT,
       decision: z
         .object({
           verdict: z.string(),

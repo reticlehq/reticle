@@ -1483,14 +1483,6 @@
       "count": 1
     }
   },
-  "src/language/flows/flow-result.ts": {
-    "curly": {
-      "count": 3
-    },
-    "no-nested-ternary": {
-      "count": 1
-    }
-  },
   "src/language/flows/flow-save-nudges-sync.test.ts": {
     "curly": {
       "count": 1
