@@ -10,6 +10,7 @@ import {
   eventMatchesFilters,
   matchNet,
   OBSERVE_FILTER_BUCKETS,
+  declinedDialogIn,
 } from './event-filters.js';
 
 function ev(type: EventType, data: Record<string, unknown> = {}, t = 1): ReticleEvent {
@@ -313,5 +314,24 @@ describe('console projections keep the origin of an error', () => {
       }),
     );
     expect(view.source).toBe('/src/App.tsx:17');
+  });
+});
+
+describe('declinedDialogIn', () => {
+  it('finds a confirm that Reticle answered, with its question', () => {
+    const events = [
+      ev(EventType.DIALOG_OPENED, { kind: 'alert', message: 'Saved' }),
+      ev(EventType.DIALOG_OPENED, { kind: 'confirm', message: 'Delete?', answered: false }),
+    ];
+    expect(declinedDialogIn(events)).toEqual({ kind: 'confirm', message: 'Delete?' });
+  });
+
+  it('ignores an alert, which has no answer to change the path', () => {
+    expect(declinedDialogIn([ev(EventType.DIALOG_OPENED, { kind: 'alert' })])).toBeUndefined();
+  });
+
+  it('finds a prompt answered with no value', () => {
+    const events = [ev(EventType.DIALOG_OPENED, { kind: 'prompt', answered: null })];
+    expect(declinedDialogIn(events)).toEqual({ kind: 'prompt' });
   });
 });
