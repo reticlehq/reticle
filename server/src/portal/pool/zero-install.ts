@@ -46,6 +46,16 @@ const HTML_CONTENT_TYPES = ['text/html', 'application/xhtml+xml'];
  * reads `document.contentType`, because an init script runs before the parser makes the root
  * element. The check binds no name, so it cannot collide with a name that the bundle declares.
  */
+/*
+ * Run in the top frame only. Playwright runs an init script in every frame, and a rich-text editor's
+ * editing area is an iframe whose <body> IS the document being edited: the SDK mounted its HUD there,
+ * and saving the form stored the HUD markup in the app's data (Dolibarr product and project
+ * descriptions). The top frame's SDK already reads same-origin iframes, so a child frame needs nothing.
+ * A context with no `top` (a test sandbox) counts as the top frame.
+ */
+const TOP_FRAME_ONLY =
+  'if (globalThis.top !== undefined && globalThis.self !== undefined && globalThis.top !== globalThis.self) return;';
+
 const NOT_HTML_GUARD =
   `if (globalThis.document !== undefined && !${JSON.stringify(HTML_CONTENT_TYPES)}.includes(globalThis.document.contentType)) ` +
   `return ${JSON.stringify(READER_NOT_HTML)};`;
@@ -136,7 +146,7 @@ const ZOD_JITLESS = `(${ZOD_CONFIG} ??= {}).jitless ??= true;`;
  */
 export function zeroInstallScript(bundle: string, opts: InjectedConnect): string {
   const args = JSON.stringify(injectedConnectArgs(opts));
-  return `(() => {\n${NOT_HTML_GUARD}\nif (!globalThis.__reticleInstance) {\n${EARLY_KEEP}\n${ZOD_JITLESS}\n${bundle}\n}\n${CONNECT_WHEN_DOM_READY(args)}\n})();`;
+  return `(() => {\n${TOP_FRAME_ONLY}\n${NOT_HTML_GUARD}\nif (!globalThis.__reticleInstance) {\n${EARLY_KEEP}\n${ZOD_JITLESS}\n${bundle}\n}\n${CONNECT_WHEN_DOM_READY(args)}\n})();`;
 }
 
 /** The page is not an HTML document, so the lease did not give it the zero-install reader. */
