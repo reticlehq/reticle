@@ -29,7 +29,7 @@ import { hitTestOccluder } from './occlusion.js';
 import { isSensitiveKey } from '@/security/serialization.js';
 import { declaredTestids } from '@/registry/capabilities.js';
 import { refs } from './addressing/refs.js';
-import { firstIn, firstListIn, hintRoots, resolveContainers } from './scope-roots.js';
+import { firstIn, firstListIn, hintRoots, pageContent, resolveContainers } from './scope-roots.js';
 import { getTestIdAttr, readTestId, testIdSelector } from './addressing/testid-attr.js';
 import { stableSelectorFor } from './stable-selector.js';
 import {
@@ -232,6 +232,11 @@ function findCandidates(query: ElementQuery): {
       if (seen.has(el)) {
         continue;
       } // reachable from both host and root - count once
+      // The whole-document root reaches `<head>` too; its payloads (title, style) are not page
+      // content an agent can read or drive (#1781).
+      if (!pageContent(el, query.scope)) {
+        continue;
+      }
       // Reticle's OWN UI is not part of the app under test. `snapshot` has always excluded it; query
       // did not, so the presenter panel and the annotator answered `by: role` like app controls -
       // on a production-sized dashboard, 7 of the 40 buttons an agent could see were ours
@@ -526,6 +531,9 @@ function splitTextOwner(
     if (isIgnored(el)) {
       continue;
     } // never point an agent at Reticle's own UI
+    if (!pageContent(el, query.scope)) {
+      continue;
+    } // <title> text must not anchor a split match
     // The query's own case rule: a case-exact check that missed only on case is not "split".
     if (!textMatches(visibleTextOf(el, memo), query, wanted)) {
       continue;
@@ -543,7 +551,7 @@ function splitTextOwner(
 }
 
 /** The text as the page shows it, when it differs from `wanted` only by case. */
-function caseOnlyMatch(container: HTMLElement, wanted: string): string | undefined {
+function caseOnlyMatch(container: HTMLElement, wanted: string, scope?: string): string | undefined {
   const target = comparableText(wanted).toLowerCase();
   if (0 === target.length) {
     return undefined;
@@ -553,6 +561,9 @@ function caseOnlyMatch(container: HTMLElement, wanted: string): string | undefin
     if (isIgnored(el)) {
       continue;
     }
+    if (!pageContent(el, scope)) {
+      continue;
+    } // <title> text is not a page-shown casing
     const text = normaliseVisibleText(visibleTextOf(el, memo));
     const at = foldTypography(text).toLowerCase().indexOf(target);
     if (-1 !== at) {
@@ -831,6 +842,9 @@ function buildEmptyHint(
     if (isIgnored(el)) {
       continue;
     } // the "what IS here" hint must not advertise Reticle's own UI either
+    if (!pageContent(el, query.scope)) {
+      continue;
+    } // nor a testid sitting in <head>
     const id = readTestId(el);
     if (null === id || 0 === id.length || seen.has(id)) {
       continue;
@@ -864,7 +878,7 @@ function buildEmptyHint(
       const selector = stableSelectorFor(owner);
       hint.splitText = selector === undefined ? described : { ...described, selector };
     } else if (true === query.matchCase) {
-      const shown = firstIn(roots, (root) => caseOnlyMatch(root, wanted));
+      const shown = firstIn(roots, (root) => caseOnlyMatch(root, wanted, query.scope));
       if (shown !== undefined) {
         hint.caseMiss = shown;
       }

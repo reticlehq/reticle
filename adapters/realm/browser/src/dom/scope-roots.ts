@@ -5,7 +5,8 @@ import { refs } from './addressing/refs.js';
  * Resolve a scope to its containers. No containers means a scope was GIVEN but resolved to nothing
  * (unmounted, or a selector that matches no element) - the caller must NOT fall back to the whole
  * page, or a scoped query silently widens into a phantom match. `scope === undefined` (no scope)
- * legitimately searches the body.
+ * legitimately searches the whole DOCUMENT, rooted at `document.documentElement`: content mounted
+ * as a sibling of `<body>` renders on the page and must be reachable (#1781).
  *
  * A CSS scope resolves to EVERY element it matches. A list of repeated items with a shared test id
  * is where an agent writes such a scope, and searching only the first item answered a silent `no`
@@ -16,7 +17,7 @@ export function resolveContainers(scope: string | undefined): {
   scopeMissing: boolean;
 } {
   if (scope === undefined) {
-    return { containers: [document.body], scopeMissing: false };
+    return { containers: [document.documentElement], scopeMissing: false };
   }
   // An SVG element is a scope too. `look` hands out refs for SVG links, and the action layer drives
   // them, so refusing one here reported a scope the page plainly has as MISSING - a floor plan whose
@@ -75,4 +76,12 @@ export function firstListIn<T>(roots: HTMLElement[], find: (root: HTMLElement) =
       return found.length > 0 ? found : undefined;
     }) ?? []
   );
+}
+
+/**
+ * `<head>` payloads (title, style) are not page content to a whole-page search or hint (#1781).
+ * A scoped search names its root explicitly, so nothing is filtered there.
+ */
+export function pageContent(el: Element, scope: string | undefined): boolean {
+  return scope !== undefined || null === el.closest('head');
 }
