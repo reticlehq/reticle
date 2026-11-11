@@ -19,7 +19,7 @@
  */
 
 import { isLoopbackHostname, LeaseNotReadyReason } from '@reticlehq/core';
-import type { LeaseReaderFailure } from './lease-readiness.js';
+import { HeldLeaseReload, type LeaseReaderFailure } from './lease-readiness.js';
 import { INIT_COMMAND } from '@/portal/session/no-session-next-action.js';
 
 /** What the daemon can say for certain at the moment a lease comes back unconnected. */
@@ -253,4 +253,68 @@ export function leaseReaderFailedHint(url: string, failure: LeaseReaderFailure):
         'Acquire an HTML page of the app instead.'
     : `The zero-install reader failed on ${url}: ${failure.cause}. ${LEASE_RELEASED_SENTENCE} ` +
         'If the tab closed during setup, acquire again.';
+}
+
+/** What `reticle_lease` answers for a held lease that it loaded again and that did not connect. */
+export interface KeptLeaseAnswer {
+  sessionId: string;
+  url: string;
+  ready: false;
+  notReadyReason: LeaseNotReadyReason;
+  reused: true;
+  expiresInMs: number;
+  leased: number;
+  queued: number;
+  hint: string;
+}
+
+/**
+ * The answer for a held lease that is kept although its page did not connect (#1924). The tab is
+ * kept, because its context holds the cookies: a new context starts signed out. `reload` says
+ * whether its page loaded again; `cause` is why it did not connect, or why it did not load.
+ */
+export function keptLeaseAnswer(
+  lease: { sessionId: string; origin: string; url: string; reload: HeldLeaseReload },
+  pool: { leaseTtlMs(): number; activeCount(): number; queuedCount(): number },
+  cause: string,
+): KeptLeaseAnswer {
+  const reloaded = lease.reload === HeldLeaseReload.RELOADED;
+  const what = reloaded
+    ? 'Acquire loaded its page again, but the page did not connect.'
+    : `Acquire could not load ${lease.url} in it again: ${cause}`;
+  return {
+    sessionId: lease.sessionId,
+    url: lease.url,
+    ready: false,
+    notReadyReason: LeaseNotReadyReason.SDK_NEVER_DIALLED,
+    reused: true,
+    expiresInMs: pool.leaseTtlMs(),
+    leased: pool.activeCount(),
+    queued: pool.queuedCount(),
+    hint:
+      `You already hold a lease on ${lease.origin}: ${lease.sessionId}. ${what} The tab and its ` +
+      'context are kept, so its cookies and sign-in are kept. A new context has no cookies: ' +
+      'release this lease first only if you want one, and pass seedStorage to start it signed in.' +
+      (reloaded ? ` ${cause}` : ' Acquire again when the app answers.'),
+  };
+}
+
+/**
+ * Why a held lease's page did not load again, said from what the daemon can check: whether
+ * anything accepts a connection on the page's port. Only asked of a loopback URL, where the probe
+ * reaches the same server the browser does.
+ */
+export async function notLoadedCause(
+  url: string,
+  portAccepts: ((port: number) => Promise<boolean>) | undefined,
+): Promise<string> {
+  const target = URL.canParse(url) ? new URL(url) : undefined;
+  if (portAccepts === undefined || target === undefined || !isLoopbackHostname(target.hostname)) {
+    return 'the page did not load. The app may be restarting.';
+  }
+  const defaultPort = 'https:' === target.protocol ? '443' : '80';
+  const port = '' === target.port ? defaultPort : target.port;
+  return (await portAccepts(Number(port)).catch(() => false))
+    ? `the server on port ${port} accepted the connection, but the page did not finish loading. It may still be compiling.`
+    : `nothing accepts connections on port ${port}. The app may be restarting.`;
 }

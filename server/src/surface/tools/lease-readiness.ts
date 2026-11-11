@@ -322,3 +322,99 @@ export async function moveReusedLease(
   }
   return { navigated: true, url: requested, arrived: pageOf(tabUrl()) === target };
 }
+
+/** What loading a held lease's tab again found. */
+export const HeldLeaseReload = {
+  /** Its tab had already registered, so nothing was loaded again. */
+  REGISTERED: 'registered',
+  /** The page loaded again. Its SDK may or may not have dialled in since. */
+  RELOADED: 'reloaded',
+  /** The page is still open, but it did not load: the server did not answer, or it timed out. */
+  NOT_LOADED: 'not-loaded',
+  /** The page is closed, or its context is gone. Nothing is left to keep. */
+  GONE: 'gone',
+} as const;
+export type HeldLeaseReload = (typeof HeldLeaseReload)[keyof typeof HeldLeaseReload];
+
+/**
+ * Load a held lease's tab again in its own context, and wait for its SDK to dial in (#1924).
+ *
+ * A held lease whose tab never registered used to be released, and a new context minted. That
+ * context has no cookies, so a tab the agent had signed in to was closed and replaced by a
+ * signed-out one, and the retry could not get the sign-in back. The context is the sign-in, so the
+ * retry keeps it and only loads the page again. The reader the first acquire injected is an init
+ * script of that page, so it runs again on the new document by itself.
+ *
+ * A navigation that fails is not a closed tab: a dev server that restarts refuses the connection
+ * for a moment, and the context with its cookies is still there. `isOpen` asks the page something,
+ * which tells the two apart. A tab that has registered already is left alone.
+ */
+export async function reconnectHeldLease(
+  goto: (timeoutMs: number) => Promise<boolean>,
+  isOpen: () => Promise<boolean>,
+  isLoading: () => Promise<boolean>,
+  isRegistered: () => boolean,
+  deadline: number,
+  now: () => number,
+): Promise<HeldLeaseReload> {
+  if (isRegistered()) {
+    return HeldLeaseReload.REGISTERED;
+  }
+  // Bounded by the acquire's own deadline. Playwright reads a timeout of 0 as "none", so at least
+  // 1 ms; and raced too, because a frozen page can hold the navigation past its own timeout.
+  const budget = Math.max(1, deadline - now());
+  const went = await answerWithin(
+    Promise.resolve(budget).then(goto),
+    budget + HELD_PAGE_ANSWER_MS,
+    false,
+  );
+  if (!went) {
+    return (await pageStillOpen(isOpen)) ? HeldLeaseReload.NOT_LOADED : HeldLeaseReload.GONE;
+  }
+  const loading = (): Promise<boolean> => answerWithin(isLoading(), HELD_PAGE_ANSWER_MS, false);
+  await connectOrInject({ isLoading: loading }, isRegistered, connectWaitUntil(deadline, now));
+  return HeldLeaseReload.RELOADED;
+}
+
+/**
+ * How long one question to a held page may take. A page that answers does so in milliseconds; a
+ * frozen one (a script in an endless loop) never does, and must not hold the acquire with it.
+ */
+const HELD_PAGE_ANSWER_MS = 250;
+
+/** `work`'s answer, or `fallback` when it rejects or has not answered within `ms`. */
+async function answerWithin<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const late = new Promise<T>((resolve) => {
+    timer = setTimeout(() => {
+      resolve(fallback);
+    }, ms);
+  });
+  try {
+    return await Promise.race([work.catch(() => fallback), late]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/** How many times a page whose navigation failed is asked whether it is still there. */
+const OPEN_PROBE_ATTEMPTS = 3;
+
+/**
+ * Whether a page still answers, after a navigation on it failed.
+ *
+ * Asked more than once, because the first question right after a failed navigation is often lost
+ * ("Execution context was destroyed") on a page that is still open, and the next one is answered.
+ * A closed page, or a page whose context is closed, refuses every time. A frozen page never answers,
+ * so each question is bounded, and it reads as gone.
+ */
+async function pageStillOpen(isOpen: () => Promise<boolean>): Promise<boolean> {
+  for (let attempt = 0; attempt < OPEN_PROBE_ATTEMPTS; attempt++) {
+    const asked = Promise.resolve().then(isOpen);
+    if (await answerWithin(asked, HELD_PAGE_ANSWER_MS, false)) {
+      return true;
+    }
+    await sleep(LEASE_READY_POLL_MS);
+  }
+  return false;
+}

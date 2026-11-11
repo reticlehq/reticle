@@ -21,7 +21,12 @@
 
 import { describe, expect, it } from 'vitest';
 import { LeaseNotReadyReason } from '@reticlehq/core';
-import { LEASE_KEPT_SENTENCE, leaseNotConnectedHint, leaseReaderFailedHint } from './lease-hint.js';
+import {
+  LEASE_KEPT_SENTENCE,
+  leaseNotConnectedHint,
+  leaseReaderFailedHint,
+  notLoadedCause,
+} from './lease-hint.js';
 
 describe('leaseNotConnectedHint', () => {
   const hint = leaseNotConnectedHint('http://localhost:5173/', 4400);
@@ -239,5 +244,40 @@ describe('the release sentence on the MCP path', () => {
     const hint = leaseNotConnectedHint('http://localhost:5173/', 4400, evidence);
     expect(hint.endsWith(LEASE_KEPT_SENTENCE)).toBe(true);
     expect(hint).not.toContain('either way');
+  });
+});
+
+describe('notLoadedCause', () => {
+  const probe = (answer: boolean, seen: number[]) => (port: number) => {
+    seen.push(port);
+    return Promise.resolve(answer);
+  };
+
+  it('says nothing listens when the loopback port refuses, and that the app may be restarting', async () => {
+    const seen: number[] = [];
+    const cause = await notLoadedCause('http://127.0.0.1:5173/app', probe(false, seen));
+    expect(seen).toEqual([5173]);
+    expect(cause).toBe('nothing accepts connections on port 5173. The app may be restarting.');
+  });
+
+  it('says the page did not finish loading when the port accepts', async () => {
+    const cause = await notLoadedCause('https://localhost/', probe(true, []));
+    expect(cause).toContain('the server on port 443 accepted the connection');
+  });
+
+  it('does not probe a remote host, or without a probe', async () => {
+    const seen: number[] = [];
+    expect(await notLoadedCause('https://example.com/', probe(false, seen))).toBe(
+      'the page did not load. The app may be restarting.',
+    );
+    expect(seen).toEqual([]);
+    expect(await notLoadedCause('http://localhost:3000/', undefined)).toContain('did not load');
+  });
+
+  it('reads a probe that rejects as nothing accepting', async () => {
+    const cause = await notLoadedCause('http://localhost:3000/', () =>
+      Promise.reject(new Error('x')),
+    );
+    expect(cause).toContain('nothing accepts connections on port 3000');
   });
 });
