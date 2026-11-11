@@ -124,9 +124,31 @@ describe('readStateSources', () => {
       io({ run: () => Promise.resolve(rows) }),
     );
     expect(lines.filter((l) => l.startsWith('state big 0'))).toHaveLength(STATE_ROW_CAP);
-    expect(lines.at(-1)).toBe(
-      `state rows cut: big: kept ${String(STATE_ROW_CAP)} of ${String(total)}`,
+    expect(lines.at(-1)).toMatch(
+      new RegExp(`^state rows cut: big: kept ${String(STATE_ROW_CAP)} of ${String(total)}, rest `),
     );
+  });
+
+  // The defect: the cut line said only how many rows were kept. A change to a row past the cap (the
+  // price of product 237 when ids sort as text and the source has 2,040 products) gave the same lines
+  // on both builds, so compare passed a candidate that changed another record.
+  it('gives a different cut line when a row past the cap changes', async () => {
+    const read = (last: string) =>
+      readStateSources(
+        [{ kind: 'command', label: 'big', command: 'q' }],
+        io({
+          run: () =>
+            Promise.resolve(
+              [...Array.from({ length: STATE_ROW_CAP }, (_, i) => `a${String(i)}`), last].join(
+                '\n',
+              ),
+            ),
+        }),
+      );
+    const before = await read('z\t10.00');
+    const after = await read('z\t9.00');
+    expect(before.at(-1)).not.toBe(after.at(-1));
+    expect(before.slice(0, -1)).toEqual(after.slice(0, -1));
   });
 
   it('gives a line that names a read that failed, never an empty list', async () => {

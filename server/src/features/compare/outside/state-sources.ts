@@ -16,6 +16,7 @@
  *
  * I/O is injected (`StateIo`), so this file is pure.
  */
+import { createHash } from 'node:crypto';
 import { z } from 'zod';
 
 export const StateSourceKind = {
@@ -25,7 +26,7 @@ export const StateSourceKind = {
 } as const;
 
 /**
- * Rows kept for each source. More are cut, and a line declares the cut.
+ * Rows kept for each source. More are cut, and a line declares the cut and a digest of the cut rows.
  *
  * ponytail: the line diff is an O(n*m) table, so a source of thousands of rows makes each compared
  * sequence slow. Raise this only with a faster diff.
@@ -35,6 +36,12 @@ export const STATE_ROW_CAP = 1000;
 const STATE_PREFIX = 'state';
 const MSG_READ_FAILED = 'state read failed:';
 const MSG_ROWS_CUT = 'state rows cut:';
+const DIGEST_ALGORITHM = 'sha256';
+const DIGEST_LENGTH = 16;
+
+/** A short digest of the rows past the cap, so a change to one of them changes the cut line. */
+const digestOf = (rows: readonly string[]): string =>
+  createHash(DIGEST_ALGORITHM).update(rows.join('\n')).digest('hex').slice(0, DIGEST_LENGTH);
 const PATH_SEPARATOR = '.';
 const LINE_BREAK = /\r?\n/;
 const ANY_LINE_BREAK = /\s*\r?\n\s*/g;
@@ -161,7 +168,8 @@ const reasonOf = (error: unknown): string =>
 /**
  * Every source, read and turned into sorted `state <label> <row>` lines, in declared order. A read
  * that fails is one `state read failed: <label>: <reason>` line. A source with more than
- * `STATE_ROW_CAP` rows keeps the first rows in sorted order, then a `state rows cut:` line.
+ * `STATE_ROW_CAP` rows keeps the first rows in sorted order, then a `state rows cut:` line. That line
+ * holds a digest of the rows it cuts, so a change to a cut row still makes the reading differ.
  */
 export async function readStateSources(
   sources: readonly StateSource[],
@@ -181,7 +189,7 @@ export async function readStateSources(
     }
     if (rows.length > STATE_ROW_CAP) {
       out.push(
-        `${MSG_ROWS_CUT} ${source.label}: kept ${String(STATE_ROW_CAP)} of ${String(rows.length)}`,
+        `${MSG_ROWS_CUT} ${source.label}: kept ${String(STATE_ROW_CAP)} of ${String(rows.length)}, rest ${digestOf(rows.slice(STATE_ROW_CAP))}`,
       );
     }
   }
