@@ -97,6 +97,8 @@ export interface Reading {
   lines?: string[];
   /** The step that could not be done. */
   failedAt?: string;
+  /** The step that failed once and was done on a retry from a fresh page. The comparison reports it. */
+  retriedAt?: string;
 }
 
 /** Readings by sequence key. */
@@ -292,13 +294,19 @@ export async function readBuild(
   /** The cursor of the current run's first action. */
   let since: number | undefined;
   /** Read after `seq`: settled and recorded the first time, else one read for the refs. */
+  /** Set while a run is tried again: the step that failed on the first pass. */
+  let retrying: string | undefined;
   const take = async (seq: Sequence): Promise<string> => {
     if (!isNew(seq)) {
       return driver.read();
     }
     const read = await settledRead(driver, sleep);
     const lines = [...read.lines, ...(await effectsSince(driver, since))];
-    out.set(sequenceKey(seq), { actions: labelsOf(seq), lines });
+    out.set(sequenceKey(seq), {
+      actions: labelsOf(seq),
+      lines,
+      ...(retrying === undefined ? {} : { retriedAt: retrying }),
+    });
     return read.tree;
   };
   const failFrom = (run: Sequence, from: number, failedAt: string): void => {
@@ -309,21 +317,39 @@ export async function readBuild(
       }
     }
   };
-  for (const run of longestRuns(plan)) {
+  /** One pass over `run` from a fresh page. Returns the failed step's index, or undefined when every step was done. */
+  const pass = async (run: Sequence): Promise<number | undefined> => {
     since = undefined;
-    if (!(await driver.open())) {
-      failFrom(run, 0, START_STEP);
-      continue;
-    }
     let tree = await take([]);
     for (const [i, step] of run.entries()) {
       const done = await perform(driver, step, tree, sleep);
       if (!done.ok) {
-        failFrom(run, i + 1, stepLabel(step));
-        break;
+        return i;
       }
       since ??= done.since;
       tree = await take(run.slice(0, i + 1));
+    }
+    return undefined;
+  };
+  for (const run of longestRuns(plan)) {
+    if (!(await driver.open())) {
+      failFrom(run, 0, START_STEP);
+      continue;
+    }
+    let failed = await pass(run);
+    // A step that fails once can be timing (a select whose options load late, on a loaded machine): try the run
+    // ONE more time from a fresh page before it counts as a step the build could not do. A real breakage fails
+    // again. Never silently: the readings the retry records carry `retriedAt`, and the comparison lists them,
+    // because a fault that comes and goes is a fault. Readings already taken are kept.
+    const first = failed === undefined ? undefined : run[failed];
+    if (first !== undefined && (await driver.open())) {
+      retrying = stepLabel(first);
+      failed = await pass(run);
+      retrying = undefined;
+    }
+    if (failed !== undefined) {
+      const step = run[failed];
+      failFrom(run, failed + 1, step === undefined ? START_STEP : stepLabel(step));
     }
   }
   return out;

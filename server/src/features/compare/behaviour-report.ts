@@ -142,6 +142,15 @@ export function compareReportLines(
   if (timings !== undefined) {
     lines.push(timingLine(timings));
   }
+  // A retry never hides a fault that comes and goes: each such step is listed, whatever the verdict.
+  const flaky = result.intermittent ?? [];
+  if (flaky.length > 0) {
+    lines.push(
+      '',
+      `${plural(flaky.length, 'step', 'steps')} failed once on the candidate and was done on a retry (check for a fault that comes and goes):`,
+      ...flaky.map((f) => `${INDENT}${f.step}  after: ${f.actions.join(' > ')}`),
+    );
+  }
   const shown = result.differences.slice(0, TOP_DIFFERENCES);
   for (const [i, d] of shown.entries()) {
     lines.push('', ...differenceLines(i, d));

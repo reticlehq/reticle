@@ -54,7 +54,6 @@ function listOf(result: unknown, key: string): { items: unknown[] } | { failed: 
 const pathOf = (url: string): string => url.replace(HOST, '').replace(QUERY_VALUE, '=');
 
 const READ_METHOD = 'GET';
-
 /** The lines of a `reticle_observe { action: "network" }` result. */
 export function networkLines(result: unknown): string[] {
   const list = listOf(result, 'calls');
@@ -107,6 +106,14 @@ export function consoleLines(result: unknown): string[] {
   }
   return out;
 }
+
+const LOADED_READ = /^net: GET \S+ [1-3]\d\d$/;
+
+/**
+ * A read that loaded. Compare does not count it as a difference: what it loaded shows on the page, and when a
+ * read runs (a font, a refetch) changes from run to run. A read that failed, and every write, still count.
+ */
+export const isLoadedRead = (line: string): boolean => LOADED_READ.test(line);
 
 /** A network line for a call that was still in flight when it was read. */
 export const isPendingLine = (line: string): boolean =>

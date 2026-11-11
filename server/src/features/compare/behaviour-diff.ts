@@ -17,6 +17,7 @@
 import { DifferenceKind, differenceId, lineDiff, maskedDiff } from './compare-diff.js';
 import type { BuildReadings, Reading } from './build-readings.js';
 import type { PlanDropped } from './action-plan.js';
+import { isLoadedRead } from './outside/effect-lines.js';
 
 export const CompareVerdict = {
   SAME: 'same',
@@ -78,6 +79,11 @@ export interface BehaviourComparison {
   planDropped?: PlanDropped;
   /** Why the run is invalid. */
   reason?: string;
+  /**
+   * Sequences where a candidate step failed once and was done on a retry from a fresh page. They do not change the
+   * verdict, and they are never hidden: a fault that comes and goes is reported here. Absent when there were none.
+   */
+  intermittent?: { actions: string[]; step: string }[];
 }
 
 export const MSG_NOTHING_COMPARED =
@@ -115,7 +121,8 @@ const runNoise = (ours: Reading | undefined, repeat: Reading | undefined): strin
 };
 
 /**
- * The shapes of the noise lines that hold a number, over every sequence. A live counter read the
+ * What is noise in every sequence: a read that loaded (`isLoadedRead`), and the shapes of the noise lines that
+ * hold a number, over every sequence. A live counter read the
  * same on both reference runs in one sequence by chance, and was then a difference there. When the
  * reference runs showed it changing in any sequence, it is noise in all of them.
  */
@@ -128,7 +135,7 @@ function counterShapes(input: Input): IsNoise {
       }
     }
   }
-  return (line) => shapes.has(shapeOf(line));
+  return (line) => shapes.has(shapeOf(line)) || isLoadedRead(line);
 }
 
 /** The noise of one sequence: what its reference runs disagree on, and every counter shape. */
@@ -205,6 +212,7 @@ export function compareBehaviour(input: Input): BehaviourComparison {
   let unstable = 0;
   let referenceFailed = 0;
   let ignored = 0;
+  const intermittent: { actions: string[]; step: string }[] = [];
   const note = (key: string, difference: Omit<BehaviourDifference, 'id' | 'seen'>): void => {
     const id = differenceId(
       DifferenceKind.UNREACHED === difference.kind
@@ -234,6 +242,9 @@ export function compareBehaviour(input: Input): BehaviourComparison {
       continue;
     }
     const got = input.candidate.get(key);
+    if (got?.retriedAt !== undefined) {
+      intermittent.push({ actions: got.actions, step: got.retriedAt });
+    }
     if (got?.lines === undefined) {
       const failedAt = got?.failedAt ?? ours.actions.at(-1) ?? '';
       note(key, {
@@ -273,5 +284,6 @@ export function compareBehaviour(input: Input): BehaviourComparison {
     ...counts,
     differences,
     ...(input.base === undefined ? {} : { score: scoreOf(input, input.base, counters) }),
+    ...(0 === intermittent.length ? {} : { intermittent }),
   };
 }
