@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — the `reticle_flow_save` summary names the checks a flow runs.** After a save of a `reticle_act { steps }` journey, the summary graded the flow presence-only and told the agent to add a signal or network check. It did not say that every sub-step checked text, element state or the route, so an agent could read it as "this flow checks nothing" and rewrite a correct flow. `assertions.checks` now counts each kind of check over every step, sub-step and the success state. The presence-only note names them first, for example "This flow checks text (3), element (1) and route (1) on the page", and then says why a presence check is weaker than a consequence.

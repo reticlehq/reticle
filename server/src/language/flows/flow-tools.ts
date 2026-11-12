@@ -28,7 +28,7 @@ import { withShotRun, defaultRunId } from '@/judgement/runs/default-run-id.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import { buildSuiteVerdict } from './decision.js';
 import * as Bounded from './suite/sequential-run.js';
-import { classifyFlowAssertions, flattenSteps } from './flow-classify.js';
+import { FLOW_ASSERTIONS_OUTPUT, classifyFlowAssertions, flattenSteps } from './flow-classify.js';
 import { recordingBacktrackWarning } from './recording/recording-backtrack.js';
 import { isValidFlowName, flowPath } from '@/memory/project/dir/reticle-dir.js';
 import { type FlowAnnotations } from './flows.js';
@@ -150,16 +150,7 @@ export const FLOW_TOOLS: ToolDef[] = [
       stepCount: z.number().optional(),
       degraded: z.number().optional(),
       empty: z.boolean().optional(),
-      assertions: z
-        .object({
-          grade: z.string().describe('asserted | presence-only | assertion-free'),
-          hasConsequenceAssertion: z.boolean(),
-          totalSteps: z.number(),
-          consequenceSteps: z.number(),
-          weakSteps: z.number(),
-          warning: z.string().optional(),
-        })
-        .optional(),
+      assertions: FLOW_ASSERTIONS_OUTPUT,
       intentGap: INTENT_GAP_FIELD,
       normalized: z.array(z.string()).optional(),
       warning: z

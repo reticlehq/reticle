@@ -36,7 +36,9 @@ describe('classifyFlowAssertions', () => {
     expect(c.grade).toBe(FlowAssertionGrade.PRESENCE_ONLY);
     expect(c.hasConsequenceAssertion).toBe(false);
     expect(c.weakSteps).toBe(1);
-    expect(c.warning).toContain('element presence');
+    // The note names what the flow checks (#1840), then why a presence check is weak.
+    expect(c.warning).toContain('This flow checks element (1) on the page');
+    expect(c.warning).toContain('presence checks');
   });
 
   // Replay evaluates these (assertStepExpect); the coupling itself is guarded in

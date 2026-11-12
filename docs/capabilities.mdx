@@ -483,6 +483,8 @@ Nine hundred and fifty-three bytes for 445 recorded events. `timeline_omitted` h
 
 Reticle grades the flow as you save it, and tells you when you have just created a test that cannot fail. Take the warning seriously: an assertion-free flow replays green whatever the app does.
 
+When the flow checks something, `assertions.checks` counts each kind of check over every step, sub-step and the success state, for example `{ "element": 1, "route": 1, "text": 3 }`. A presence-only flow names those checks in its warning. The grade says how strong the checks are, not that there are none.
+
 A replay against a drifted app names what moved and where. This is `reticle_verify { action: "flows" }` reporting the same flow after the app changed underneath it:
 
 ```json
