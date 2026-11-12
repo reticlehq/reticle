@@ -8,11 +8,15 @@
  * other line that differs between the reference and the candidate is a difference, and the grade
  * fails. A source that could not be read makes the grade unverified, never a pass.
  *
+ * A row the candidate deleted and wrote again with a new id and the same values is not a difference
+ * (see `grade-renumber.ts`). The grade counts these rows.
+ *
  * State lines are sorted rows, so the diff is a count of each line, not an ordered diff. That keeps
  * the cost linear in the number of rows, and a source of many thousand rows is cheap.
  */
 import { z } from 'zod';
 import { MSG_READ_FAILED } from '../compare/outside/state-sources.js';
+import { renumber } from './grade-renumber.js';
 
 export const GradeVerdict = {
   PASS: 'pass',
@@ -57,6 +61,8 @@ export interface StateGrade {
   ignored: number;
   /** The reads that failed, on any snapshot. */
   unread: string[];
+  /** Rows the candidate deleted and wrote again with a new id and the same values. Not differences. */
+  renumbered: number;
 }
 
 const counts = (lines: readonly string[]): Map<string, number> => {
@@ -94,14 +100,20 @@ export function gradeState(reference: Snapshot, again: Snapshot, candidate: Snap
     removed: surplus(reference.lines, candidate.lines),
     added: surplus(candidate.lines, reference.lines),
   };
-  const removed = all.removed.filter((line) => !noise.has(line));
-  const added = all.added.filter((line) => !noise.has(line));
-  const ignored = all.removed.length + all.added.length - removed.length - added.length;
+  const kept = renumber(
+    all.removed.filter((line) => !noise.has(line)),
+    all.added.filter((line) => !noise.has(line)),
+    reference.lines,
+    candidate.lines,
+  );
+  const { removed, added, renumbered } = kept;
+  const ignored =
+    all.removed.length + all.added.length - removed.length - added.length - 2 * renumbered;
   let verdict: GradeVerdict = GradeVerdict.PASS;
   if (unread.length > 0) {
     verdict = GradeVerdict.UNVERIFIED;
   } else if (removed.length > 0 || added.length > 0) {
     verdict = GradeVerdict.FAIL;
   }
-  return { verdict, removed, added, ignored, unread };
+  return { verdict, removed, added, ignored, unread, renumbered };
 }

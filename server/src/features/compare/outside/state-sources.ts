@@ -126,10 +126,14 @@ function recordRows(value: unknown, dropped: readonly string[] = []): string[] {
 
 function textRows(text: string, patterns: readonly string[] = []): string[] {
   const res = patterns.map((p) => new RegExp(p, 'g'));
-  return text
-    .split(LINE_BREAK)
-    .filter((line) => '' !== line.trim())
-    .map((line) => res.reduce((row, re) => row.replace(re, ''), line));
+  return (
+    text
+      .split(LINE_BREAK)
+      .filter((line) => '' !== line.trim())
+      .map((line) => res.reduce((row, re) => row.replace(re, ''), line))
+      // A pattern that removes all of a row removes the row, so a row of no meaning can be ignored.
+      .filter((row) => '' !== row.trim())
+  );
 }
 
 /** A shell word that holds `text` as it is. */

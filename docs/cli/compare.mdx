@@ -61,7 +61,7 @@ A page read sees only the pages that a sequence opens. If the candidate also cha
 | `http` | `url`, optional `path` | Each record of a JSON endpoint. `path` is a dotted path to the array |
 | `file` | `path`, optional `at`, optional `container` | Each JSON record of a file (`at` is a dotted path to the array), or each line when the file is not JSON. With `container`, the file is read in that container |
 
-Each source has a `label`. `ignore` is optional: for JSON records it holds field names to remove, and for text lines it holds regular expressions to remove (a time, or an id that changes on each run).
+Each source has a `label`. `ignore` is optional: for JSON records it holds field names to remove, and for text lines it holds regular expressions to remove (a time, or an id that changes on each run). A text line that a pattern removes all of is removed.
 
 After each sequence, on every build, compare reads each source and adds its rows to that sequence's reading as `state <label> <row>` lines, sorted. JSON records are written with their keys sorted. The same diff and the same noise rule apply: a row that differs between the two reference runs is ignored. Start each row with the record id, so that a changed row names its record. A source keeps at most 1000 rows. When it has more, a `state rows cut: <label>: kept 1000 of <n>, rest <digest>` line says so. The digest covers the cut rows, so a change to a cut row changes this line, but the line does not name the record. If a cut row differs between the two reference runs, the digest is noise and a change to a cut row is not seen. Remove times with `ignore`, or query fewer rows. A read that fails gives a `state read failed: <label>: <reason>` line, never an empty list.
 

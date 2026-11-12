@@ -116,6 +116,16 @@ describe('readStateSources', () => {
     expect(lines).toEqual(['state p 1\tJacket\t']);
   });
 
+  // The defect: a pattern that matched a whole row left an empty row, so a row that one build
+  // deleted and the other kept still made the readings differ.
+  it('removes a row that an ignore pattern removes all of', async () => {
+    const lines = await readStateSources(
+      [{ kind: 'command', label: 'p', command: 'q', ignore: ['^\\d+\\tNULL$'] }],
+      io({ run: () => Promise.resolve('1\tJacket\n2\tNULL\n') }),
+    );
+    expect(lines).toEqual(['state p 1\tJacket']);
+  });
+
   it('cuts a source over the cap, and declares the cut on a line of its own', async () => {
     const total = STATE_ROW_CAP + 3;
     const rows = Array.from({ length: total }, (_, i) => String(i).padStart(6, '0')).join('\n');
