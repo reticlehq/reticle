@@ -33,6 +33,7 @@ const VALUE_FLAGS = {
   '--list': 'list',
   '--rows': 'rows',
   '--container': 'container',
+  '--skip': 'skip',
 } as const;
 type GradeField = (typeof VALUE_FLAGS)[keyof typeof VALUE_FLAGS];
 
@@ -43,7 +44,7 @@ const STEP_FLAGS: Record<GradeStep, { needs: GradeField[]; takes: GradeField[] }
     needs: ['reference', 'again', 'candidate'],
     takes: ['expect', 'answer'],
   },
-  [GradeStep.TABLES]: { needs: ['list', 'rows', 'out'], takes: ['container'] },
+  [GradeStep.TABLES]: { needs: ['list', 'rows', 'out'], takes: ['container', 'skip'] },
   [GradeStep.SUGGEST]: { needs: ['state', 'reference', 'again', 'out'], takes: [] },
 };
 

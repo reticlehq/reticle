@@ -9,7 +9,7 @@ icon: clipboard-check
 ```bash
 npx @reticlehq/server grade snapshot --state <file> --out <file> [--url <url>]
 npx @reticlehq/server grade judge --reference <file> --again <file> --candidate <file> [--expect <file>] [--answer <text>] [--json]
-npx @reticlehq/server grade tables --list <command> --rows <template> [--container <name>] --out <file>
+npx @reticlehq/server grade tables --list <command> --rows <template> [--container <name>] [--skip <regex>] --out <file>
 npx @reticlehq/server grade suggest --state <file> --reference <file> --again <file> --out <file>
 ```
 
@@ -23,6 +23,8 @@ npx @reticlehq/server grade suggest --state <file> --reference <file> --again <f
 Steps 1 and 2 are done one time for each task. Keep the two files, and grade every run of the task against them.
 
 `judge` compares the lines of the three snapshots. A line that differs between the two correct runs (a clock, a random id) is noise and is ignored. Any other line that differs between the reference and the candidate is a difference, and the grade fails. So the grade fails when the run changed the wrong record, changed a record the task did not name, or did not change the record at all. A source that could not be read makes the grade unverified, never a pass.
+
+A row that the two correct runs wrote with different values in some cells (a time of the run, written into `updated_at`) has noise in those cells only. A candidate row that differs from the reference row only in those cells is not a difference. A change to another cell of that row, or to the same cell of another row, is a difference.
 
 Many apps save a record by deleting its child rows and writing them again, with new ids. A run that saves a record two times then has the same data under other ids. `judge` matches these rows: a removed row and an added row of one source are the same record when every cell after the first (the id) is equal, after each id it already matched is replaced by its new id. So a row that links to a written-again row matches too. A match needs an old id that the candidate no longer has, and a new id that the reference did not have, so a changed value in a first column that is not an id is still a difference. `--json` gives the count as `state.renumbered`. This applies to text rows (a `command` source, or a file of plain lines) whose cells are separated by tabs.
 
@@ -76,7 +78,7 @@ The declaration must list every table that a run can change, or a change to that
 
 ```bash
 # 1. One source for each table.
-npx @reticlehq/server grade tables --container shop-db --list "mysql -N shop -e 'show tables'" --rows "mysql -N shop -e 'select * from {table}'" --out wide.json
+npx @reticlehq/server grade tables --container shop-db --skip '^(queue_|cron_)' --list "mysql -N shop -e 'show tables'" --rows "mysql -N shop -e 'select * from {table}'" --out wide.json
 
 # 2. Two snapshots of the correct steps, from a reset app each time.
 npx @reticlehq/server grade snapshot --state wide.json --out reference.json
@@ -87,5 +89,7 @@ npx @reticlehq/server grade suggest --state wide.json --reference reference.json
 ```
 
 `tables` takes the first column of each line of the `--list` output as a table name. It skips a name with a character other than A-Z, 0-9, `_` or `$`, and says so. `{table}` in `--rows` is the table name.
+
+`--skip <regex>` leaves out each table whose name matches. Use it for tables that hold no task data and that the app changes at its own time: a message queue that a background worker empties, a cron schedule, a session store. Two correct runs do not always show these tables as noise, because the worker can finish before both snapshots and not before a third. For Magento, `--skip '^(queue_|cron_|session)'`.
 
 `suggest` keeps a source that reads the same on both runs, also a source the correct steps did not change: a change to it by a run is a change to a record the task did not name. A source that differs between the two runs only by a date and time is kept, with the time removed. Every other source that differs (a session table, a log) is dropped, because each run adds its own new rows to it, and every run would fail. Each dropped source is printed with the first row that differs. A change to a dropped table is not seen.

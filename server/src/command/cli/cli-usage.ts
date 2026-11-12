@@ -85,9 +85,10 @@ daemon and no browser.
       compare the candidate snapshot with two snapshots of the correct run. A line that
       differs between the two correct runs is ignored. --expect declares a source whose
       rows are the correct answer, read now. Exit 0 = pass, 1 = fail, 2 = unverified
-  grade tables --list <command> --rows <template> [--container <name>] --out <file>
+  grade tables --list <command> --rows <template> [--container <name>] [--skip <regex>]
+               --out <file>
       write a declaration with one source for each table; {table} in the template is
-      the table name
+      the table name; --skip leaves out the tables whose name matches
   grade suggest --state <file> --reference <file> --again <file> --out <file>
       keep only the sources that read the same on two correct runs`;
 

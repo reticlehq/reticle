@@ -19,14 +19,14 @@
 const CELL = '\t';
 const INTEGER = /^\d+$/;
 
-interface Row {
+export interface Row {
   /** `state <label>`: the table. */
   table: string;
   id: string;
   cells: string[];
 }
 
-function parse(line: string): Row | undefined {
+export function parse(line: string): Row | undefined {
   const [first, ...cells] = line.split(CELL);
   if (first === undefined || 0 === cells.length) {
     return undefined;

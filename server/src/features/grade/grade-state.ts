@@ -4,7 +4,8 @@
  * A snapshot is the state lines of `readStateSources`, and optionally a `url` line for the page the
  * run ended on. Three snapshots go in: the reference (the app after the correct steps), again (the
  * app after the same correct steps, from the same start), and the candidate (the app after the steps
- * to grade). A line that differs between the two reference snapshots is noise and is ignored. Any
+ * to grade). A line that differs between the two reference snapshots is noise and is ignored, and so
+ * is a change to a cell of a row that the two references wrote differently (see `grade-noise.ts`). Any
  * other line that differs between the reference and the candidate is a difference, and the grade
  * fails. A source that could not be read makes the grade unverified, never a pass.
  *
@@ -16,6 +17,7 @@
  */
 import { z } from 'zod';
 import { MSG_READ_FAILED } from '../compare/outside/state-sources.js';
+import { noiseCells, withoutNoiseCells } from './grade-noise.js';
 import { renumber } from './grade-renumber.js';
 
 export const GradeVerdict = {
@@ -92,23 +94,25 @@ export function gradeState(reference: Snapshot, again: Snapshot, candidate: Snap
   const unread = [reference, again, candidate].flatMap((s) =>
     s.lines.filter((line) => line.startsWith(MSG_READ_FAILED)),
   );
-  const noise = new Set([
-    ...surplus(reference.lines, again.lines),
-    ...surplus(again.lines, reference.lines),
-  ]);
+  const referenceOnly = surplus(reference.lines, again.lines);
+  const againOnly = surplus(again.lines, reference.lines);
+  const noise = new Set([...referenceOnly, ...againOnly]);
   const all = {
     removed: surplus(reference.lines, candidate.lines),
     added: surplus(candidate.lines, reference.lines),
   };
-  const kept = renumber(
-    all.removed.filter((line) => !noise.has(line)),
+  const removedKept = all.removed.filter((line) => !noise.has(line));
+  const byCell = withoutNoiseCells(
     all.added.filter((line) => !noise.has(line)),
+    noiseCells(referenceOnly, againOnly),
+  );
+  const { removed, added, renumbered } = renumber(
+    removedKept,
+    byCell.added,
     reference.lines,
     candidate.lines,
   );
-  const { removed, added, renumbered } = kept;
-  const ignored =
-    all.removed.length + all.added.length - removed.length - added.length - 2 * renumbered;
+  const ignored = all.removed.length + all.added.length - removedKept.length - byCell.added.length;
   let verdict: GradeVerdict = GradeVerdict.PASS;
   if (unread.length > 0) {
     verdict = GradeVerdict.UNVERIFIED;

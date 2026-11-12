@@ -182,7 +182,15 @@ async function judge(args: Ok, io: GradeIo, out: GradeOut): Promise<void> {
 async function tables(args: Ok, io: GradeIo, out: GradeOut): Promise<void> {
   const listed = await io.state.run(args.list ?? '', args.container);
   const names = listed.split(LINE_BREAK).map((line) => line.split(COLUMN)[0] ?? '');
-  const result = tableSources(names, args.rows ?? '', args.container);
+  let skip: RegExp | undefined;
+  try {
+    skip = args.skip === undefined ? undefined : new RegExp(args.skip);
+  } catch (error) {
+    out.line(`--skip is not a regular expression: ${reasonOf(error)}`);
+    out.exit(GradeExit.UNVERIFIED);
+    return;
+  }
+  const result = tableSources(names, args.rows ?? '', args.container, skip);
   io.writeText(args.out ?? '', json({ sources: result.sources }));
   out.line(`Declaration: ${args.out ?? ''}: ${String(result.sources.length)} sources`);
   result.skipped.forEach((s) => out.line(`  skipped ${s.label}: ${s.reason}`));
