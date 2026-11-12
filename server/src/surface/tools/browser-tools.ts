@@ -7,7 +7,7 @@ import {
   idsOpenAtDispatch,
   ARRIVAL_TIMEOUT_MS,
 } from './act/navigation/navigate-arrival.js';
-import { reloadResult } from './act/navigation/reload-result.js';
+import { HardReload, hardReloadOf, reloadResult } from './act/navigation/reload-result.js';
 import {
   waitForReconnect,
   RELOAD_RECONNECT_TIMEOUT_MS,
@@ -149,7 +149,9 @@ export const BROWSER_TOOLS: ToolDef[] = [
       hard: z
         .boolean()
         .optional()
-        .describe('With reload:true, bypass the browser cache (Cmd+Shift+R). Default: false.'),
+        .describe(
+          'With reload:true, bypass the browser cache (Cmd+Shift+R) on a leased tab. On a tab Reticle does not drive, only the document is fetched again; scripts and modules can still come from the cache. Default: false.',
+        ),
       timeout_ms: timeoutMsSchema
         .optional()
         .describe(
@@ -178,6 +180,8 @@ export const BROWSER_TOOLS: ToolDef[] = [
       /** Present only when no session was connected and this call opened one on the URL. */
       sessionStarted: SessionStartedSchema.optional(),
       note: z.string().optional(),
+      /** On a `hard` reload: whether the browser ignored its cache, or only the document was fetched again. */
+      hardReload: z.nativeEnum(HardReload).optional(),
     },
     handler: async (deps, args) => {
       // reload:true is the absorbed reticle_refresh — same command, one fewer advertised tool.
@@ -193,9 +197,13 @@ export const BROWSER_TOOLS: ToolDef[] = [
         // coming back `contradicted` by hundreds of 500s against resources that were already gone.
         before.lastAct.markNavigated(before.elapsed());
         deps.recordings.markNavigated();
-        await commandOrThrow(deps, asString(args['sessionId']), ReticleCommand.REFRESH, {
-          hard: true === args['hard'],
-        });
+        const hard = true === args['hard'];
+        // A leased tab reloads through the browser with the cache ignored. The page itself can only
+        // re-fetch its document: scripts and modules still come from the cache (#1785).
+        const throughBrowser = hard && true === (await deps.pool?.hardReloadLease(before.id));
+        if (!throughBrowser) {
+          await commandOrThrow(deps, asString(args['sessionId']), ReticleCommand.REFRESH, { hard });
+        }
         // WAIT for the page to come back, rather than telling the agent to. The id survives the
         // reload, but the seconds between dispatch and the new HELLO are seconds in which every call
         // lands in the old, disconnected session — measured as reticle_run failing 5 of 5 on a page
@@ -210,7 +218,7 @@ export const BROWSER_TOOLS: ToolDef[] = [
         // Not a bare `{ ok: true }`. The URL branch below already discloses that `ok` means
         // DISPATCHED — the reload branch had identical semantics and said nothing, on the path most
         // likely to need it. See reload-result.
-        return reloadResult(back, timeoutMs);
+        return reloadResult(back, timeoutMs, hardReloadOf(hard, throughBrowser));
       }
       const requested = asString(args['url']);
       if (requested === undefined || 0 === requested.length) {

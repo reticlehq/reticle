@@ -56,6 +56,11 @@ export interface PooledPage {
    * page without it keeps the in-page dispatcher, whose synthetic Tab moves no focus.
    */
   press?(args: RealInputArgs): Promise<RealInputResult>;
+  /**
+   * Reload the page with the browser cache ignored for the document and every subresource, as
+   * Cmd+Shift+R does. OPTIONAL: without it a hard reload can only re-fetch the document (#1785).
+   */
+  reloadIgnoringCache?(): Promise<void>;
   /** Set prefers-color-scheme and prefers-reduced-motion. OPTIONAL: without it the media stay. */
   emulateMedia?(media: LeaseMedia): Promise<void>;
   /** Evaluate a script in the page's current document. OPTIONAL: without it no reader is injected. */
