@@ -7,6 +7,7 @@ import { parseFeedbackArgs, type ParsedFeedback } from './cli-parse-feedback.js'
 import { HEADLESS_FLAG, parseServeFlags } from './cli-parse-serve.js';
 import { parseVerifySuffix, type VerifySuffix } from './cli-parse-verify.js';
 import { COMPARE_COMMAND, parseCompareArgs, type CompareArgs } from './cli-parse-compare.js';
+import { GRADE_COMMAND, parseGradeArgs, type GradeArgs } from './cli-parse-grade.js';
 import { DAEMON_INNER_COMMAND } from '@/command/daemon/daemon-argv.js';
 import {
   HEADED_FLAG,
@@ -127,6 +128,7 @@ export const LOCAL_COMMANDS: readonly string[] = [
   DRIVE_COMMAND,
   VERIFY_COMMAND,
   COMPARE_COMMAND,
+  GRADE_COMMAND,
   AFFECTED_COMMAND,
   GATE_COMMAND,
   REPORT_COMMAND,
@@ -323,6 +325,7 @@ export type CliResult =
   // The verify fields are the suffix parser's, by type: a copied list dropped a new flag (#2061).
   | ({ kind: 'verify' } & Omit<Extract<VerifySuffix, { kind: 'ok' }>, 'kind'>)
   | ({ kind: 'compare' } & Omit<Extract<CompareArgs, { kind: 'ok' }>, 'kind'>)
+  | ({ kind: 'grade' } & { args: Extract<GradeArgs, { kind: 'ok' }> })
   | { kind: 'affected'; files: string[]; since?: string }
   | { kind: 'gate'; files: string[]; since?: string; hook?: boolean; acceptCoverage?: boolean }
   | { kind: 'report'; session?: string; hook: boolean }
@@ -851,6 +854,10 @@ export function parseCliArgs(
       }
       const { kind: _ok, ...fields } = r;
       return { kind: 'compare', ...fields };
+    }
+    case GRADE_COMMAND: {
+      const r = parseGradeArgs(rest);
+      return 'error' === r.kind ? r : { kind: 'grade', args: r };
     }
     case AFFECTED_COMMAND: {
       const t = parseTargetArgs(rest);

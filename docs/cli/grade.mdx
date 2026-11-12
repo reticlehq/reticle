@@ -1,0 +1,89 @@
+---
+title: reticle grade
+description: Grade a finished run of an app from snapshots of its stored data, and check its final answer.
+icon: clipboard-check
+---
+
+`reticle grade` answers one question: did a run leave the app the way the correct steps leave it, and give the correct answer? A run is any sequence of steps on an app you can reset: an agent, a script or a person. The command needs no daemon, no browser and nothing installed in the app. It reads the app's stored data through the [state sources](/cli/compare#state-sources) that `reticle compare --state` uses.
+
+```bash
+npx @reticlehq/server grade snapshot --state <file> --out <file> [--url <url>]
+npx @reticlehq/server grade judge --reference <file> --again <file> --candidate <file> [--expect <file>] [--answer <text>] [--json]
+npx @reticlehq/server grade tables --list <command> --rows <template> [--container <name>] --out <file>
+npx @reticlehq/server grade suggest --state <file> --reference <file> --again <file> --out <file>
+```
+
+## How to grade a run
+
+1. Reset the app. Do the correct steps. Run `grade snapshot --out reference.json`.
+2. Reset the app. Do the correct steps again. Run `grade snapshot --out again.json`.
+3. Reset the app. Do the run to grade. Run `grade snapshot --out candidate.json`.
+4. Run `grade judge --reference reference.json --again again.json --candidate candidate.json`.
+
+Steps 1 and 2 are done one time for each task. Keep the two files, and grade every run of the task against them.
+
+`judge` compares the lines of the three snapshots. A line that differs between the two correct runs (a clock, a random id) is noise and is ignored. Any other line that differs between the reference and the candidate is a difference, and the grade fails. So the grade fails when the run changed the wrong record, changed a record the task did not name, or did not change the record at all. A source that could not be read makes the grade unverified, never a pass.
+
+| Exit code | Verdict      | Meaning                                                            |
+| --------- | ------------ | ------------------------------------------------------------------ |
+| 0         | `PASS`       | The stored data matches, and the answer is correct                 |
+| 1         | `FAIL`       | A line differs, or the answer is wrong                             |
+| 2         | `UNVERIFIED` | A source or a snapshot could not be read. The grade proves nothing |
+
+`--json` prints one JSON object: `verdict`, `state.removed` and `state.added` (every line that differs), `state.ignored`, `answer` and `unread`. The text output shows the first 10 lines on each side and says how many it left out.
+
+## Snapshot
+
+`grade snapshot --state <file> --out <file>` reads each declared source and writes its rows as `state <label> <row>` lines, sorted. A snapshot keeps every row: unlike `compare`, it has no 1000-row cap, so a changed row always names its record. A read that fails gives a `state read failed: <label>: <reason>` line, and the command exits 2.
+
+`--url <url>` adds the page the run ended on, as a `url` line. Use it for a task whose goal is to open a page. The fragment and a final slash are removed, and the query values are sorted.
+
+## Check the answer
+
+A task that asks a question has a final answer. A fixed answer string goes stale when the data changes. Declare a source whose rows are the correct answer instead, and `judge` reads it when it grades:
+
+```json
+{
+  "answer": {
+    "source": {
+      "kind": "command",
+      "label": "answer",
+      "container": "shop-db",
+      "command": "mysql -N shop -e \"select count(*) from sales_order where customer_email = 'jane@example.com'\""
+    },
+    "match": "number",
+    "none": ["N/A"]
+  }
+}
+```
+
+Give the file with `--expect`, and the run's answer with `--answer`. Text is folded before it is compared: Unicode normal form, lower case, spacing, quotes and a final full stop.
+
+| `match` | The answer passes when |
+| --- | --- |
+| `exact` (default) | It is the one value in the rows. With more than one row, it is checked as `set` |
+| `number` | It is one number and nothing else, equal to the first value within 0.005. `$`, `%` and digit-group commas are removed. `3 orders` and `3 or 4` fail |
+| `set` | It is a list (split on commas, semicolons and new lines, or also on "and") with each value one time and nothing more, in any order |
+| `includes` | It contains each value. An answer that names every choice also passes, so use it only where the run cannot list all choices |
+
+A source with no rows means that the task cannot be done. Then the answer must be one of the `none` words. The default is `N/A`. A row with more than one column is one value, with the columns joined by a space.
+
+## Write the declaration
+
+The declaration must list every table that a run can change, or a change to that table is not seen. Do not write it by hand. Generate it, then remove the tables that change on every run:
+
+```bash
+# 1. One source for each table.
+npx @reticlehq/server grade tables --container shop-db --list "mysql -N shop -e 'show tables'" --rows "mysql -N shop -e 'select * from {table}'" --out wide.json
+
+# 2. Two snapshots of the correct steps, from a reset app each time.
+npx @reticlehq/server grade snapshot --state wide.json --out reference.json
+npx @reticlehq/server grade snapshot --state wide.json --out again.json
+
+# 3. Keep the tables that read the same on both runs.
+npx @reticlehq/server grade suggest --state wide.json --reference reference.json --again again.json --out state.json
+```
+
+`tables` takes the first column of each line of the `--list` output as a table name. It skips a name with a character other than A-Z, 0-9, `_` or `$`, and says so. `{table}` in `--rows` is the table name.
+
+`suggest` keeps a source that reads the same on both runs, also a source the correct steps did not change: a change to it by a run is a change to a record the task did not name. A source that differs between the two runs only by a date and time is kept, with the time removed. Every other source that differs (a session table, a log) is dropped, because each run adds its own new rows to it, and every run would fail. Each dropped source is printed with the first row that differs. A change to a dropped table is not seen.

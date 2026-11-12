@@ -74,6 +74,7 @@ import { handleDrive } from './cli/drive/drive-command.js';
 import { handleVerify } from './cli/cli-verify.js';
 import { handleVerifyAgainst } from './cli/verify-against.js';
 import { handleCompare } from './cli/two-builds/compare-command.js';
+import { handleGrade } from './cli/finished-run/grade-command.js';
 import { FIRST_VERDICT_REASON, bareRunsFirstVerdict } from './cli/first-verdict.js';
 import { cmdFirstVerdict } from './cli/first-verdict-node.js';
 import { reportOnboardingStop } from '@/telemetry/onboarding-funnel.js';
@@ -844,6 +845,13 @@ export function main(): void {
     case 'compare':
       // Two builds through the daemon, which it starts when there is none. Nothing to install.
       void handleCompare(parsed, ensureDaemon, {
+        line: (text) => process.stdout.write(`${text}\n`),
+        exit: (code) => process.exit(code),
+      });
+      break;
+    case 'grade':
+      // Reads the declared state sources and snapshot files. No daemon and no browser.
+      void handleGrade(parsed.args, {
         line: (text) => process.stdout.write(`${text}\n`),
         exit: (code) => process.exit(code),
       });

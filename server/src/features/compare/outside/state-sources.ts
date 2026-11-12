@@ -33,9 +33,9 @@ export const StateSourceKind = {
  */
 export const STATE_ROW_CAP = 1000;
 
-const STATE_PREFIX = 'state';
-const MSG_READ_FAILED = 'state read failed:';
-const MSG_ROWS_CUT = 'state rows cut:';
+export const STATE_PREFIX = 'state';
+export const MSG_READ_FAILED = 'state read failed:';
+export const MSG_ROWS_CUT = 'state rows cut:';
 const DIGEST_ALGORITHM = 'sha256';
 const DIGEST_LENGTH = 16;
 
@@ -146,7 +146,8 @@ function fileRows(text: string, path: string | undefined, patterns?: readonly st
   return recordRows(at(parsed, path), patterns);
 }
 
-async function rowsOf(source: StateSource, io: StateIo): Promise<string[]> {
+/** The rows of one source, unsorted and without the `state <label>` prefix. Throws when the read fails. */
+export async function sourceRows(source: StateSource, io: StateIo): Promise<string[]> {
   switch (source.kind) {
     case StateSourceKind.COMMAND:
       return textRows(await io.run(source.command, source.container), source.ignore);
@@ -168,28 +169,29 @@ const reasonOf = (error: unknown): string =>
 /**
  * Every source, read and turned into sorted `state <label> <row>` lines, in declared order. A read
  * that fails is one `state read failed: <label>: <reason>` line. A source with more than
- * `STATE_ROW_CAP` rows keeps the first rows in sorted order, then a `state rows cut:` line. That line
+ * `cap` rows (`STATE_ROW_CAP` by default) keeps the first rows in sorted order, then a `state rows cut:` line. That line
  * holds a digest of the rows it cuts, so a change to a cut row still makes the reading differ.
  */
 export async function readStateSources(
   sources: readonly StateSource[],
   io: StateIo,
+  cap: number = STATE_ROW_CAP,
 ): Promise<string[]> {
   const out: string[] = [];
   for (const source of sources) {
     let rows: string[];
     try {
-      rows = (await rowsOf(source, io)).sort();
+      rows = (await sourceRows(source, io)).sort();
     } catch (error) {
       out.push(`${MSG_READ_FAILED} ${source.label}: ${reasonOf(error)}`);
       continue;
     }
-    for (const row of rows.slice(0, STATE_ROW_CAP)) {
+    for (const row of rows.slice(0, cap)) {
       out.push(`${STATE_PREFIX} ${source.label} ${row}`);
     }
-    if (rows.length > STATE_ROW_CAP) {
+    if (rows.length > cap) {
       out.push(
-        `${MSG_ROWS_CUT} ${source.label}: kept ${String(STATE_ROW_CAP)} of ${String(rows.length)}, rest ${digestOf(rows.slice(STATE_ROW_CAP))}`,
+        `${MSG_ROWS_CUT} ${source.label}: kept ${String(cap)} of ${String(rows.length)}, rest ${digestOf(rows.slice(cap))}`,
       );
     }
   }

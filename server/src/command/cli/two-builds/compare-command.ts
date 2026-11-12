@@ -241,7 +241,7 @@ interface ReportSink {
 const execFileText = promisify(execFile);
 
 /** State sources read on this machine: a shell, `docker exec`, `fetch` and the file system. */
-const hostStateIo: StateIo = {
+export const hostStateIo: StateIo = {
   async run(command, container) {
     const [file, args] =
       container === undefined
