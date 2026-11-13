@@ -90,6 +90,9 @@ const PRESENCE_ONLY_WARNING = `This flow only checks element presence, not an ob
 /** The presence note when the checks are known: it names them, then says why they are weak. */
 const presenceOnlyWarning = (checks: string): string =>
   `This flow checks ${checks} on the page. These are presence checks, not an observable consequence (signal/network). ${PRESENCE_ONLY_ADVICE}`;
+/** The intent note when the flow has presence checks: it names them, then says what is not checked (#1801). */
+const intentWithPresenceWarning = (checks: string): string =>
+  `This flow declares a business intent and checks ${checks} on the page, but no step checks a request, a signal or app state. A change that keeps the page as it is but breaks the work behind it still passes. Add a success-state consequence so the flow fails when the goal stops being met.`;
 const INTENT_WITHOUT_OUTCOME_WARNING =
   'This flow declares a business intent but asserts no observable outcome (signal/network) — it claims to verify a goal it cannot actually check. Add a success-state consequence so the flow fails when the goal stops being met.';
 
@@ -258,7 +261,10 @@ export function classifyFlowAssertions(
   // A declared-but-unverifiable business goal is the sharper failure: surface it over the generic
   // assertion warning, since the flow actively claims to check something it cannot.
   if (intent !== undefined && !hasConsequenceAssertion) {
-    warning = INTENT_WITHOUT_OUTCOME_WARNING;
+    warning =
+      checks === undefined
+        ? INTENT_WITHOUT_OUTCOME_WARNING
+        : intentWithPresenceWarning(describeChecks(checks));
   }
 
   return {

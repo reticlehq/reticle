@@ -134,7 +134,21 @@ describe('classifyFlowAssertions — business intent + outcome oracle', () => {
       }),
     );
     expect(c.intentVerified).toBe(false);
-    expect(c.warning).toContain('declares a business intent but asserts no observable outcome');
+    expect(c.warning).toContain('checks element (1) on the page');
+    expect(c.warning).not.toContain('asserts no observable outcome');
+  });
+
+  // #1801. The flow checks page text, and a replay evaluates it. "Asserts no observable outcome"
+  // read as "the checks were lost": an agent told the user not to trust a flow that replays.
+  it('intent with text checks says what the flow checks and what it does not', () => {
+    const text = (contains: string): Predicate => ({ kind: 'text', contains });
+    const c = classifyFlowAssertions(
+      intentFlow([step(text('Saved')), step(text('2 items'))], 'save a draft'),
+    );
+    expect(c.intentVerified).toBe(false);
+    expect(c.warning).toContain('checks text (2) on the page');
+    expect(c.warning).toContain('no step checks a request, a signal or app state');
+    expect(c.warning).not.toContain('asserts no observable outcome');
   });
 });
 
