@@ -34,6 +34,7 @@ import type { RealInputArgs, RealInputResult } from '@/portal/input/real-input.j
 import { readViewport, type LeaseMedia } from './lease-emulation.js';
 import { injectReaderInto } from './zero-install.js';
 import { stepPage, type DeterminismStep } from './determinism.js';
+import { LeaseDialogs } from './lease-dialogs.js';
 export type {
   InitScriptHandle,
   Launcher,
@@ -427,15 +428,21 @@ export class BrowserPool {
   /**
    * Press a key with the leased page's real keyboard, or undefined when this session is not a lease
    * or its page has no keyboard. A throw is the caller's to read: a key that went down and did not
-   * come up must not be answered with a second, synthetic press.
+   * come up must not be answered with a second, synthetic press. `acceptConfirm` is the action's
+   * `confirmDangerous`: a yes to one `confirm` that this press opens (#2167).
    */
-  async pressLease(sessionId: string, args: RealInputArgs): Promise<RealInputResult | undefined> {
+  async pressLease(
+    sessionId: string,
+    args: RealInputArgs,
+    acceptConfirm = false,
+  ): Promise<RealInputResult | undefined> {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
     if (lease?.page.press === undefined) {
       return undefined;
     }
     this.touch(sessionId);
-    return lease.page.press(args);
+    const { page } = lease;
+    return lease.dialogs.during(acceptConfirm, async () => await page.press?.(args));
   }
 
   /**
@@ -633,7 +640,7 @@ export class BrowserPool {
     const sessionId = opts.sessionId ?? this.#genId();
     let context: PooledContext | undefined;
     let pending: string | undefined;
-    let pendingDialogMessage: string | undefined;
+    const dialogs = new LeaseDialogs();
     try {
       const browser = await this.#ensureBrowser(slot);
       const contextOpts = {
@@ -679,16 +686,11 @@ export class BrowserPool {
           pending = dialled;
         } // logged during goto, before the lease is registered below
       });
-      // Listen before goto, as onConsole does: a dialog in an onload handler is dismissed too. The SDK
-      // answers a dialog from its own input first; the hook records this "no" for the verdict (#1350).
+      // Listen before goto, as onConsole does: a dialog in an onload handler is answered too. The SDK
+      // answers a dialog from its own input first; the hook records the pool's answer for the verdict
+      // (#1350).
       page.onDialog?.((dialog) => {
-        const active = this.#active.get(sessionId);
-        if (active !== undefined) {
-          active.lastDialogMessage = dialog.message;
-        } else {
-          pendingDialogMessage = dialog.message;
-        }
-        void dialog.dismiss();
+        void dialogs.answer(dialog);
         this.#pageErrorHooks?.onDialog?.(sessionId, dialog);
       });
       // Listener on BEFORE goto — an import-time throw lands during it (#1966).
@@ -734,8 +736,8 @@ export class BrowserPool {
         permissions: opts.permissions ?? [],
         ignoresHTTPSErrors: true === opts.ignoreHTTPSErrors,
         csp,
+        dialogs,
         ...(pending === undefined ? {} : { dialFailureUrl: pending }),
-        ...(pendingDialogMessage === undefined ? {} : { lastDialogMessage: pendingDialogMessage }),
         ...(hostStub === undefined || opts.initScript === undefined
           ? {}
           : { hostStub, hostStubScript: opts.initScript }),
@@ -773,7 +775,7 @@ export class BrowserPool {
    * lease, if any. Diagnostic only — the dialog itself is already gone by the time this is readable.
    */
   lastDialogMessage(sessionId: string): string | undefined {
-    return this.#active.get(this.#leaseIdOf(sessionId))?.lastDialogMessage;
+    return this.#active.get(this.#leaseIdOf(sessionId))?.dialogs.lastMessage;
   }
 
   /** Close every context and the browser. Pending waiters are rejected (the pool is terminal now). */
