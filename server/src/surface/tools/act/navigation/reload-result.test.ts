@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { reloadResult } from './reload-result.js';
+import { HardReload, hardReloadOf, reloadResult } from './reload-result.js';
 
 describe('what a reload reports', () => {
   it('is not confirmed — ok means dispatched, and the page has not come back yet', () => {
@@ -38,5 +38,27 @@ describe('what a reload reports', () => {
     expect(String(out.note)).not.toContain('reticle_sessions');
     // Nothing expired, so there is no budget to report.
     expect(out.waitedMs).toBeUndefined();
+  });
+});
+
+/* #1785: a hard reload says how it reached the page, because only a lease can ignore the cache. */
+describe('what a hard reload reports', () => {
+  it('names the cache-ignoring reload of a lease, after the reconnect note', () => {
+    const out = reloadResult(true, 5000, HardReload.CACHE_IGNORED);
+    expect(out.hardReload).toBe(HardReload.CACHE_IGNORED);
+    expect(String(out.note)).toContain('re-announced itself');
+    expect(String(out.note)).toContain('cache ignored');
+  });
+
+  it('says only the document was fetched on a tab that is not a lease', () => {
+    const out = reloadResult(false, 5000, HardReload.DOCUMENT_ONLY);
+    expect(out.hardReload).toBe(HardReload.DOCUMENT_ONLY);
+    expect(String(out.note)).toContain('reticle_sessions');
+    expect(String(out.note)).toContain('only the document was fetched again');
+  });
+
+  it('adds nothing to a reload that did not ask for hard', () => {
+    expect(hardReloadOf(false, false)).toBeUndefined();
+    expect(reloadResult(true, 5000, hardReloadOf(false, false))).not.toHaveProperty('hardReload');
   });
 });

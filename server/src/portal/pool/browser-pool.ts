@@ -380,6 +380,21 @@ export class BrowserPool {
     }
   }
 
+  /** Reload a lease with the browser cache ignored, or false when this is not a lease or its page cannot. */
+  async hardReloadLease(sessionId: string): Promise<boolean> {
+    const lease = this.#active.get(this.#leaseIdOf(sessionId));
+    if (lease?.page.reloadIgnoringCache === undefined) {
+      return false;
+    }
+    this.touch(sessionId);
+    try {
+      await lease.page.reloadIgnoringCache();
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   /** Set a live lease's media features, or false when this is not a lease or its page cannot. */
   async emulateLease(sessionId: string, media: LeaseMedia): Promise<boolean> {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));

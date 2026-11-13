@@ -2381,11 +2381,6 @@
       "count": 1
     }
   },
-  "src/portal/pool/playwright-launcher.ts": {
-    "curly": {
-      "count": 3
-    }
-  },
   "src/portal/pool/storage-seed.ts": {
     "curly": {
       "count": 8

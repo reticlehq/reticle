@@ -134,6 +134,22 @@ export function gotoOptions(timeoutMs: number | undefined): {
   };
 }
 
+/**
+ * Reload with the cache ignored, as Cmd+Shift+R does (#1785).
+ *
+ * Playwright's `page.reload()` is a plain reload: a module with a fresh cache entry is not fetched
+ * again. The DevTools protocol's `Page.reload { ignoreCache: true }` is the browser's own hard
+ * reload. The pool launches Chromium, so the protocol is always there.
+ */
+async function reloadIgnoringCache(page: Page): Promise<void> {
+  const cdp = await page.context().newCDPSession(page);
+  try {
+    await cdp.send('Page.reload', { ignoreCache: true });
+  } finally {
+    await cdp.detach();
+  }
+}
+
 function wrapBrowser(browser: Browser, headless: boolean): PooledBrowser {
   return {
     isConnected: () => browser.isConnected(),
@@ -184,6 +200,7 @@ function wrapBrowser(browser: Browser, headless: boolean): PooledBrowser {
                 await page.mouse.move(x + 1, y);
                 await page.mouse.move(x, y);
               }),
+            reloadIgnoringCache: () => reloadIgnoringCache(page),
             // The same driver `reticle drive` presses with, so a held key and a chord read alike.
             emulateMedia: (media) => page.emulateMedia(media),
             press: (args) => performGesture(page, ActionType.PRESS, NO_BOX, args, sleepFor),
@@ -291,9 +308,13 @@ function pathFromPlaywrightError(msg: string): string | undefined {
   // Playwright puts the path at the end of the line, and a Windows path can hold a space
   // (for example C:\Users\Jo Doe). Read to the end of the line and trim the result.
   const found = /executable doesn.?t exist at (.+)$/im.exec(msg);
-  if (null === found) return undefined;
+  if (null === found) {
+    return undefined;
+  }
   const captured = found[1];
-  if (undefined === captured) return undefined;
+  if (undefined === captured) {
+    return undefined;
+  }
   const path = captured.trim();
   return '' === path ? undefined : path;
 }
@@ -342,7 +363,9 @@ export function chromiumLaunchHint(msg: string): string | undefined {
   // Checked FIRST: Playwright's host-requirement validation error also contains
   // "browserType.launch", so the generic check below would otherwise misdiagnose it as a
   // missing binary and send the user through a fix that changes nothing.
-  if (/host system is missing dependencies/i.test(msg)) return CHROMIUM_MISSING_DEPS_HINT;
+  if (/host system is missing dependencies/i.test(msg)) {
+    return CHROMIUM_MISSING_DEPS_HINT;
+  }
   if (/executable doesn.?t exist|playwright install|browsertype\.launch/i.test(msg)) {
     return chromiumMissingHint(pathFromPlaywrightError(msg));
   }

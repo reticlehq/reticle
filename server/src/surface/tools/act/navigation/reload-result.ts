@@ -32,8 +32,41 @@ const RELOAD_RECONNECTED_NOTE =
  * branch reports it (navigate-result.ts): so "Reticle stopped waiting" is distinguishable from "the
  * page never came back", and the fix — a larger `timeout_ms` — is visible in the result.
  */
-export function reloadResult(reconnected: boolean, waitedMs: number): Record<string, unknown> {
-  return reconnected
+export function reloadResult(
+  reconnected: boolean,
+  waitedMs: number,
+  hard?: HardReload,
+): Record<string, unknown> {
+  const base = reconnected
     ? { ok: true, confirmed: true, note: RELOAD_RECONNECTED_NOTE }
     : { ok: true, confirmed: false, waitedMs, note: RELOAD_NOTE };
+  if (hard === undefined) {
+    return base;
+  }
+  return { ...base, hardReload: hard, note: `${base.note} ${HARD_RELOAD_NOTE[hard]}` };
+}
+
+/**
+ * How a `hard` reload reached the page (#1785). A leased tab reloads through the browser with the
+ * cache ignored. Any other tab can only fetch its document again, so its modules can be stale.
+ */
+export const HardReload = {
+  CACHE_IGNORED: 'cache_ignored',
+  DOCUMENT_ONLY: 'document_only',
+} as const;
+export type HardReload = (typeof HardReload)[keyof typeof HardReload];
+
+const HARD_RELOAD_NOTE: Readonly<Record<HardReload, string>> = {
+  [HardReload.CACHE_IGNORED]:
+    'The browser reloaded with its cache ignored, so every script and module was fetched again.',
+  [HardReload.DOCUMENT_ONLY]:
+    'This tab is not a lease, so only the document was fetched again. Scripts and modules can still come from the browser cache. To fetch them again, reload the tab in the browser with Cmd+Shift+R, or take a lease with reticle_lease.',
+};
+
+/** The `hardReload` field for a reload, or nothing when the call did not ask for `hard`. */
+export function hardReloadOf(hard: boolean, throughBrowser: boolean): HardReload | undefined {
+  if (!hard) {
+    return undefined;
+  }
+  return throughBrowser ? HardReload.CACHE_IGNORED : HardReload.DOCUMENT_ONLY;
 }
