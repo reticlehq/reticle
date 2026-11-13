@@ -71,3 +71,30 @@ describe('a value that changed is still an ignored write', () => {
     expect(ignored({ ref: '123456789012345678' }, { ref: '123456789012345679' })).toBe(true);
   });
 });
+
+/*
+ * MySQL and SQLite store a boolean as 0 or 1, and many APIs echo the stored column. A PATCH that sent
+ * `archived: false` and was answered `archived: 0` was graded as a dropped write: a false `no`.
+ */
+describe('a boolean echoed as a bit is not an ignored write', () => {
+  it.each([
+    [
+      { archived: false, title: 'A' },
+      { archived: 0, title: 'A' },
+    ],
+    [
+      { archived: true, title: 'A' },
+      { archived: 1, title: 'A' },
+    ],
+    [
+      { archived: true, title: 'A' },
+      { archived: '1', title: 'A' },
+    ],
+  ])('%j answered %j', (asked, echoed) => {
+    expect(ignored(asked, echoed)).toBe(false);
+  });
+
+  it('still reports a boolean the server stored the other way', () => {
+    expect(ignored({ archived: true, title: 'A' }, { archived: 0, title: 'A' })).toBe(true);
+  });
+});
