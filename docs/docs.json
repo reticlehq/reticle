@@ -136,6 +136,7 @@
                   "cli/drive",
                   "cli/verify",
                   "cli/compare",
+                  "cli/grade",
                   "cli/try",
                   "cli/affected",
                   "cli/gate",
