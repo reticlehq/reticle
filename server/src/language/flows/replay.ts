@@ -525,6 +525,8 @@ export function compileSequenceStep(args: Record<string, unknown>, res: unknown)
     ? (asRecord(res)['steps'] as unknown[])
     : [];
   let stable = inputSteps.length > 0;
+  // A declared `expect` that a flow cannot keep (a session ref), said on save as for a single act (#2188).
+  let unkept = false;
   const subSteps = inputSteps.flatMap((raw, i) => {
     // A step on Reticle's own panel is not a step of the app's journey, as for a single act.
     if (true === asRecord(resolved[i])['reticleUi']) {
@@ -544,6 +546,9 @@ export function compileSequenceStep(args: Record<string, unknown>, res: unknown)
     // one batch, but what each step CLAIMED is per step -- folding them together would let one
     // signal answer for every click in the journey.
     const expect = enforceableExpect(step['expect']);
+    if (expect === undefined && step['expect'] !== undefined) {
+      unkept = true;
+    }
     return [expect === undefined ? compiled.args : { ...compiled.args, expect }];
   });
   const timeoutMs = explicitTimeoutMs(args);
@@ -557,6 +562,7 @@ export function compileSequenceStep(args: Record<string, unknown>, res: unknown)
     args: { steps: subSteps },
     ...(timeoutMs === undefined ? {} : { timeoutMs }),
     ...(burstMs === undefined ? {} : { burstMs }),
+    ...(unkept ? { unkeptExpect: UNKEPT_EXPECT } : {}),
   };
 }
 
