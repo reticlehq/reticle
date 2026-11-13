@@ -43,6 +43,7 @@ export const MAX_TEXT_LINES = 10;
 const UTF8 = 'utf8';
 const COLUMN = '\t';
 const LINE_BREAK = /\r?\n/;
+const SKIP_SEPARATOR = ',';
 
 type Ok = Extract<GradeArgs, { kind: 'ok' }>;
 export interface GradeOut {
@@ -182,14 +183,7 @@ async function judge(args: Ok, io: GradeIo, out: GradeOut): Promise<void> {
 async function tables(args: Ok, io: GradeIo, out: GradeOut): Promise<void> {
   const listed = await io.state.run(args.list ?? '', args.container);
   const names = listed.split(LINE_BREAK).map((line) => line.split(COLUMN)[0] ?? '');
-  let skip: RegExp | undefined;
-  try {
-    skip = args.skip === undefined ? undefined : new RegExp(args.skip);
-  } catch (error) {
-    out.line(`--skip is not a regular expression: ${reasonOf(error)}`);
-    out.exit(GradeExit.UNVERIFIED);
-    return;
-  }
+  const skip = (args.skip ?? '').split(SKIP_SEPARATOR).filter((prefix) => '' !== prefix);
   const result = tableSources(names, args.rows ?? '', args.container, skip);
   io.writeText(args.out ?? '', json({ sources: result.sources }));
   out.line(`Declaration: ${args.out ?? ''}: ${String(result.sources.length)} sources`);

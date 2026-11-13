@@ -3,7 +3,7 @@
  *
  * Two steps:
  * 1. `tableSources`: one `command` source for each table of a database, from a list of table names
- *    and a command template with `{table}` in it. `skip` removes the tables that hold no task data,
+ *    and a command template with `{table}` in it. `skip` holds name prefixes. It removes the tables that hold no task data,
  *    such as a message queue that a background worker empties at its own time.
  * 2. `quietSources`: keep the sources that read the same on two runs of the same correct steps.
  *    A source that changes between those two runs (a session table, a log) would make every
@@ -38,7 +38,7 @@ export function tableSources(
   names: readonly string[],
   template: string,
   container?: string,
-  skip?: RegExp,
+  skip: readonly string[] = [],
 ): { sources: StateSource[]; skipped: Skipped[] } {
   const sources: StateSource[] = [];
   const skipped: Skipped[] = [];
@@ -47,8 +47,8 @@ export function tableSources(
     if ('' === name) {
       continue;
     }
-    if (true === skip?.test(name)) {
-      skipped.push({ label: name, reason: 'the name matches --skip' });
+    if (skip.some((prefix) => name.startsWith(prefix))) {
+      skipped.push({ label: name, reason: 'the name starts with a --skip prefix' });
       continue;
     }
     if (!TABLE_NAME.test(name)) {

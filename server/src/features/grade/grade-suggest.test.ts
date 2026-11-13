@@ -23,15 +23,14 @@ describe('tableSources', () => {
 
   // The defect: a background worker had emptied the message queue before one snapshot and not before
   // another, so a correct run failed on a table that holds no task data.
-  it('skips the tables whose name matches the skip pattern', () => {
-    const result = tableSources(
-      ['queue_message', 'sales_order'],
-      'dump {table}',
-      undefined,
-      /^queue_/,
-    );
+  it('skips the tables whose name starts with a skip prefix', () => {
+    const result = tableSources(['queue_message', 'sales_order'], 'dump {table}', undefined, [
+      'queue_',
+    ]);
     expect(result.sources.map((s) => s.label)).toEqual(['sales_order']);
-    expect(result.skipped).toEqual([{ label: 'queue_message', reason: 'the name matches --skip' }]);
+    expect(result.skipped).toEqual([
+      { label: 'queue_message', reason: 'the name starts with a --skip prefix' },
+    ]);
   });
 });
 

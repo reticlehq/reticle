@@ -153,4 +153,26 @@ describe('reticle grade', () => {
     expect(result.lines[0]).toBe('Declaration: state.json: kept 1 of 2 sources');
     expect(JSON.parse(files['state.json'] ?? '')).toMatchObject({ sources: [{ label: 'orders' }] });
   });
+
+  it('skips the tables whose name starts with one of the --skip prefixes', async () => {
+    const files: Record<string, string> = {};
+    const result = await run(
+      [
+        'tables',
+        '--list',
+        'show tables',
+        '--rows',
+        'dump {table}',
+        '--skip',
+        'queue_,cron_',
+        '--out',
+        'wide.json',
+      ],
+      fakeIo(files, { rows: 'queue_message\norders\ncron_schedule\n' }),
+    );
+    expect(JSON.parse(files['wide.json'] ?? '')).toEqual({
+      sources: [{ kind: 'command', label: 'orders', command: 'dump orders' }],
+    });
+    expect(result.lines.filter((line) => line.includes('skipped'))).toHaveLength(2);
+  });
 });
