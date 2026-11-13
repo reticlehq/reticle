@@ -6,6 +6,7 @@ import {
   boxFractionFromArgs,
   clampHoldMs,
   clickInputProblem,
+  confirmsDialog,
   DRAG_TO_POINT_ARG,
   DANGEROUS_ACTION_CONFIRM_ARG,
   ElementState,
@@ -832,7 +833,7 @@ export async function executeAction(
   let settleReason: SettleReason | null = null;
   try {
     // `confirmDangerous: true` is also the caller's yes to a `confirm()` this dispatch opens (#2167).
-    const outcome = await withDialogConsent(true === args[DANGEROUS_ACTION_CONFIRM_ARG], () =>
+    const outcome = await withDialogConsent(confirmsDialog(args), () =>
       dispatchFor(el, action, args),
     );
     defaultPrevented = outcome.prevented;

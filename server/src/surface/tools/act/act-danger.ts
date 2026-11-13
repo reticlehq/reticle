@@ -1,5 +1,6 @@
 import {
   ActionType,
+  DANGER_CONFIRMED_BY_DECLARATION_ARG,
   DANGEROUS_ACTION_CONFIRM_ARG,
   NATIVE_INPUT_ARG,
   OutwardAction,
@@ -167,6 +168,12 @@ export function confirmedByDeclaration(
   // to /delete-account consents to nothing, and the guard still reads the whole control.
   const words = ['name', 'text', 'label'].map((key) => asString(named[key]) ?? '').join(' ');
   return isDangerousActionText(words, asString(named['role']))
-    ? { ...innerArgs, [DANGEROUS_ACTION_CONFIRM_ARG]: true }
+    ? {
+        ...innerArgs,
+        [DANGEROUS_ACTION_CONFIRM_ARG]: true,
+        // The declaration lets the control be pressed. It is not a yes to the app's own confirm():
+        // only a caller that set the flag itself gives that (#2167).
+        [DANGER_CONFIRMED_BY_DECLARATION_ARG]: true,
+      }
     : innerArgs;
 }

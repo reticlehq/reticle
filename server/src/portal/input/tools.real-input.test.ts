@@ -866,7 +866,14 @@ describe('keyboard on a lease', () => {
       args: { text: 'Enter', confirmDangerous: true },
     });
 
-    expect(accepted).toEqual([false, true]);
+    // An act_and_wait whose declaration set the flag (#2167 review) presses, but says no.
+    await runAct(deps, {
+      ref: 'e1',
+      action: 'press',
+      args: { text: 'Enter', confirmDangerous: true, confirmedByDeclaration: true },
+    });
+
+    expect(accepted).toEqual([false, true, false]);
   });
 
   it('focuses the named control first, then presses Enter on it with the real keyboard', async () => {

@@ -9,7 +9,11 @@
  * `confirmDangerous: true` on the action is the caller's yes to that `confirm()` (#2167). It follows
  * the same rules as the SDK's `takeDialogConsent`: one `confirm` of that press only, and no when
  * another press without the yes is in flight beside it. `alert`, `prompt` and `beforeunload` are
- * always dismissed.
+ * always dismissed. The yes comes only from a flag the caller set itself (`confirmsDialog`): a
+ * declaration that set it does not give one.
+ *
+ * Limit: a pooled dialog does not say which code opened it. A `confirm` that a page timer opens
+ * while the flagged press is still in flight (a held key) also takes the yes. The docs say so.
  */
 import type { PooledDialog } from './pool-contract.js';
 

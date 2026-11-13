@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { EventType } from '@reticlehq/core';
+import { EventType, ReticleCommand, confirmsDialog } from '@reticlehq/core';
 import { Bridge } from './bridge.js';
 import { TOOLS, type ToolDeps } from '@/surface/tools/tools.js';
 import { FakeBrowser, callTool, makeDeps, waitUntil } from './bridge.test-harness.js';
@@ -35,6 +35,31 @@ describe('reticle_act_and_wait (composite)', () => {
     expect(tool?.inputSchema['ref']).toBeDefined();
     expect(tool?.inputSchema['action']).toBeDefined();
     expect(tool?.inputSchema['until']).toBeDefined();
+  });
+
+  // #2167 review: naming "Delete" and an `until` lets the control be pressed (the declaration is the
+  // confirmation), but it is not the caller's yes to the app's own confirm(). Only an explicit
+  // confirmDangerous gives that, so the SDK and a leased tab still answer that confirm no.
+  it('a declaration presses "Delete" but does not answer its confirm() yes; an explicit flag does', async () => {
+    browser.matcher = (q) => 'Delete' === q.name;
+    const sentArgs = async (args?: Record<string, unknown>): Promise<Record<string, unknown>> => {
+      browser.received.length = 0;
+      await callTool(deps, 'reticle_act_and_wait', {
+        target: { role: 'button', name: 'Delete' },
+        action: 'click',
+        ...(args === undefined ? {} : { args }),
+        timeout_ms: 200,
+        until: { kind: 'element', query: { role: 'dialog', name: 'Deleted' }, state: 'visible' },
+      });
+      const act = browser.received.find((c) => ReticleCommand.ACT === c.name);
+      return (act?.args['args'] ?? {}) as Record<string, unknown>;
+    };
+    const declared = await sentArgs();
+    expect(declared['confirmDangerous'], 'the declaration still lets the press through').toBe(true);
+    expect(confirmsDialog(declared), 'but its confirm() is not answered yes').toBe(false);
+    const explicit = await sentArgs({ confirmDangerous: true });
+    expect(confirmsDialog(explicit), 'the caller said yes itself').toBe(true);
+    browser.matcher = () => false;
   });
 
   it('acts and returns effect + passing verdict + trace when the predicate holds', async () => {

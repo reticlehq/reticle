@@ -394,7 +394,15 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * instead of a signal. Measured 267,263 B (every page that loads the SDK pays this, so the year budget is the tightest: ~27%) at 81e046201. Review it once a year, not per change; a
  * sudden jump inside it is still worth a look in review.
  */
-const MAX_FIRST_LOAD_BYTES = 340_000;
+/*
+ * Raised by 300 B for #2167: `confirmDangerous: true` answers the action's own `confirm()` with yes.
+ * Main measured 339,977 B at 1f83ca9f6, 23 B under the year budget, and this feature costs 312 B on
+ * the way in: the consent counter every action dispatch runs through (`dialog-consent.ts`, cut from
+ * 260 B to 180 B by tracking one count and one set) and the explicit-flag check from `core`. Both
+ * have to be on the way in, because the dialog observer answers during the first action.
+ * Measured with it: 340,289 B.
+ */
+const MAX_FIRST_LOAD_BYTES = 340_300;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The

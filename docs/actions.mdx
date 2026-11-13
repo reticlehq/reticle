@@ -38,7 +38,7 @@ Three `args` keys apply across actions rather than belonging to one:
 | --- | --- |
 | `native` | Forces a trusted native click instead of the occlusion-honest synthetic path. For file pickers and clipboard access |
 | `holdMs` | Keeps the pointer **down** for that long between mousedown and mouseup. The only way to drive a hold-to-confirm control. `effect.heldMs` reports the hold actually achieved |
-| `confirmDangerous` | A permission gate for a control Reticle judged destructive. It also answers yes to the one `confirm()` the action's handler opens synchronously; without it, that dialog is answered no. A `confirm()` opened after an `await` or a timer is outside the action and keeps the old behaviour (the page's own dialog, or dismissed on a leased tab). It is **not** a duration |
+| `confirmDangerous` | A permission gate for a control Reticle judged destructive. When you pass it yourself, it also answers yes to the one `confirm()` the action's handler opens synchronously; without it, that dialog is answered no. A flag that `reticle_act_and_wait` sets because the target you named reads as destructive lets the press through, but does not answer the `confirm()` yes. In the page, a `confirm()` opened after an `await` or a timer is outside the action and keeps the old behaviour. On a leased tab a key press is real input, and Reticle cannot see which code opened a dialog: the one `confirm()` that opens while the flagged press is in flight is answered yes, also when a page timer opened it. It is **not** a duration |
 
 <Warning>
   `confirmDangerous` and `holdMs` are routinely confused because both show up around delete buttons.

@@ -148,6 +148,24 @@ describe('a native confirm() on a lease', () => {
     await pool.shutdown();
   });
 
+  // A stated limit, not a goal (#2167 review). The pool sees only that a dialog opened, never which
+  // code opened it. A confirm that a page timer opens while the flagged press is still in flight
+  // (a held key, `holdMs`) takes that press's yes. The docs and the changeset say so.
+  it('accepts a confirm a timer opens while the flagged press is still in flight', async () => {
+    const fake = new DialogPage();
+    const { pool, id } = await leased(fake);
+    let release: () => void = () => undefined;
+    fake.hold = new Promise((resolve) => {
+      release = resolve;
+    });
+    const flagged = pool.pressLease(id, { ...ENTER, holdMs: 200 }, true);
+    fake.open('confirm');
+    release();
+    await flagged;
+    expect(fake.answers).toEqual(['confirm:accepted']);
+    await pool.shutdown();
+  });
+
   it('is dismissed when the page cannot accept a dialog', async () => {
     const fake = new DialogPage();
     fake.canAccept = false;

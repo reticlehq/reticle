@@ -81,6 +81,15 @@ describe('confirmDangerous answers the confirm() of its own dispatch', () => {
     expect(answered).toEqual([false, false]);
   });
 
+  // #2167 review: act_and_wait on a "Delete" button with an `until` gets confirmDangerous from its
+  // declaration, not from the caller. The press goes through, and the confirm is still answered no.
+  it('answers no when the flag came from a declaration, not from the caller', async () => {
+    const answers = guarded('b', 'Delete this item?');
+    await executeAction(refTo('#b'), 'click', { ...YES, confirmedByDeclaration: true });
+    expect(answers, 'the press went through, and the confirm was declined').toEqual([false]);
+    expect(answered).toEqual([false]);
+  });
+
   it('spends the yes on one dialog: a second confirm in the same dispatch is declined', async () => {
     const answers = guarded('b', 'Delete this item?', 'Delete it everywhere too?');
     await executeAction(refTo('#b'), 'click', YES);
