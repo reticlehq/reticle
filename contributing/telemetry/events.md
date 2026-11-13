@@ -446,13 +446,14 @@ The new start reads the dead daemon's log before it rotates it (`server/src/comm
 | Field | Type | Meaning |
 | --- | --- | --- |
 | `ageMs` | int | Time from the dead daemon's start to this discovery. No pid, no port. |
-| `end` | enum | How its log says it ended: `died_silently` (the heartbeat stopped), `signalled`, `clean`, `alive`, or `unknown` (no heartbeat at all). |
+| `end` | enum | How its log says it ended: `died_silently` (the heartbeat stopped), `signalled`, `clean`, `alive`, `start_failed` (it logged a failed start before its first heartbeat), or `unknown` (no heartbeat and no failed start). |
 | `silentMs` | int | Time from its last heartbeat to this discovery. Short, with `sessions` or `served`: it died while in use. Long: a reboot or a sleep. |
 | `signal` | string | The signal it logged, such as `SIGTERM`. A signal name only. |
 | `sessions` | int | Browser sessions connected at its last heartbeat. |
 | `served` | bool | Whether it had served any tool call by its last heartbeat. |
 | `rssMb` | int | Its resident memory at its last heartbeat, in MB. |
 | `error` | string | The Node error code of a failed start or a crash, such as `EADDRINUSE`. The code only, never the message, which can hold a path. |
+| `startupError` | enum | Where the start failed, from core's closed `DaemonStartupError`: `listen` (the bind of the port failed) \| `start` (another failure of the start) \| `uncaught_exception` \| `unhandled_rejection` \| `before_log` (Node stopped the process before its first log line, for example on a failed import). Present only with `end: start_failed`. Never the message. |
 
 ```json
 {
@@ -462,6 +463,17 @@ The new start reads the dead daemon's log before it rotates it (`server/src/comm
   "daemonDeath_sessions": 1,
   "daemonDeath_served": true,
   "daemonDeath_rssMb": 210
+}
+```
+
+A daemon that could not bind its port:
+
+```json
+{
+  "daemonDeath_ageMs": 140,
+  "daemonDeath_end": "start_failed",
+  "daemonDeath_startupError": "listen",
+  "daemonDeath_error": "EADDRINUSE"
 }
 ```
 

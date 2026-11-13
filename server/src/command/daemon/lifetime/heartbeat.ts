@@ -20,6 +20,7 @@
 
 import { DaemonEnd } from '@reticlehq/core';
 import { DAEMON_LOG_TRUNCATED_EVENT, guardDaemonLog } from './log-cap.js';
+import { DAEMON_START_FAILED_EVENT } from './startup-failure.js';
 
 /** The event name a beat carries. One `grep` separates liveness from everything else in the file. */
 export const DAEMON_HEARTBEAT_EVENT = 'reticle_daemon_alive';
@@ -195,7 +196,12 @@ export function classifyDaemonLife(lines: readonly LogLine[], nowMs: number): Da
   }
 
   const last = beats.at(-1);
-  if (last === undefined) return { end: DaemonEnd.UNKNOWN };
+  if (last === undefined) {
+    // A daemon that logged a failed start never beat. Without this branch its death was `unknown`,
+    // which said "no evidence" about a log that held the cause (#2043).
+    const failed = lines.some((l) => l.event === DAEMON_START_FAILED_EVENT);
+    return { end: failed ? DaemonEnd.START_FAILED : DaemonEnd.UNKNOWN };
+  }
 
   const everyMs = 'number' === typeof last.everyMs ? last.everyMs : DAEMON_HEARTBEAT_MS;
   const silentForMs = nowMs - last.t;

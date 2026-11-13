@@ -141,6 +141,14 @@ describe('classifyDaemonLife', () => {
     );
   });
 
+  it('a daemon that logged a failed start is START_FAILED, not unknown (#2043)', () => {
+    const life = classifyDaemonLife(
+      [{ t: 1_000, event: 'reticle_daemon_start_failed', stage: 'listen', code: 'EADDRINUSE' }],
+      9_000,
+    );
+    expect(life.end).toBe(DaemonEnd.START_FAILED);
+  });
+
   it('tolerates one missed beat before calling it dead', () => {
     // Timers slip under load, and a reader that cries death on a single late beat is a reader people
     // learn to ignore.
