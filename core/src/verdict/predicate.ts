@@ -432,10 +432,35 @@ function readAbsentKind(obj: Record<string, unknown>): ShorthandRead | undefined
   };
 }
 
+/**
+ * `"{\"kind\":\"text\",...}"`: the predicate object sent as a JSON string (#1117). Read as page
+ * text, it is on no page, so a check that held answered `no`. A JSON object is read as that object.
+ * Any other string that starts with `{` is refused: it has no reading as text on a page.
+ */
+function readJsonString(written: string): ShorthandRead {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(written);
+  } catch {
+    parsed = undefined;
+  }
+  if (!isPlainRecord(parsed)) {
+    return {
+      value: written,
+      refusal:
+        'this string starts with { but is not a JSON object, so it was not read as text. Send the ' +
+        'predicate as an object: { kind: "text", contains: "Saved" }',
+    };
+  }
+  const inner = readShorthand(parsed);
+  const note = 'a JSON string → the object it holds';
+  return { ...inner, note: inner.note === undefined ? note : `${note}; ${inner.note}` };
+}
+
 /** The one place a lenient form is read. The parse and the report both call it. */
 function readShorthand(input: unknown): ShorthandRead {
   if ('string' === typeof input) {
-    return readBareString(input);
+    return input.trimStart().startsWith('{') ? readJsonString(input) : readBareString(input);
   }
   if (!isPlainRecord(input)) {
     return { value: input };

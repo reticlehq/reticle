@@ -80,6 +80,23 @@ describe('a bare string predicate', () => {
     }
   });
 
+  // #1117. Some clients send the predicate object as a JSON string. Read as page text, it is on no
+  // page, so a check that held answered `no` and blamed the app.
+  it('reads a JSON object written as a string as that object, and names it in the report', () => {
+    const written = JSON.stringify({ kind: 'text', contains: 'Saved' });
+    expect(PredicateSchema.parse(written)).toEqual({ kind: 'text', contains: 'Saved' });
+    expect(predicateAliasesUsed(written)[0]).toContain('a JSON string');
+  });
+
+  it('refuses a string that starts with { and is not a JSON object, never reading it as text', () => {
+    for (const written of ['{kind: text}', '{"kind":"text"', ' { "kind": "net" ']) {
+      const got = PredicateSchema.safeParse(written);
+      expect(got.success, written).toBe(false);
+      const said = got.success ? '' : got.error.issues.map((issue) => issue.message).join('\n');
+      expect(said, written).toContain('not a JSON object');
+    }
+  });
+
   it('keeps text that only has a colon and spaces, such as "Total: 5"', () => {
     expect(PredicateSchema.parse('Total: 5')).toMatchObject({ kind: 'text', contains: 'Total: 5' });
   });
