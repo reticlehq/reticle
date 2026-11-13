@@ -252,6 +252,12 @@ async function main() {
   ok('with its own tab closed, agent in wt-a did not reach tab-b', 0 === gone.ids.length, `reached [${gone.ids}]`);
   ok('…and the refusal names wt-b and its branch', gone.text.includes(WT_B) && gone.text.includes('feat/b'), gone.text.slice(0, 200));
 
+  // #1916: Claude Code starts the MCP proxy in the main checkout and then moves the agent into a
+  // linked worktree. With one worktree serving every tab, that tab is the agent's own.
+  console.log('\n— a proxy in the main checkout reaches the one worktree that serves every tab');
+  const only = await reached(tabs, () => agentMain.call(...LOOK));
+  ok('agent in the main checkout reached tab-b', 'tab-b' === only.ids.join(','), `reached [${only.ids}]`);
+
   console.log('\n— an explicit sessionId still reaches any tab');
   const explicit = await reached(tabs, () => agentA.call('reticle_look', { action: 'page', sessionId: 'tab-b' }));
   ok('agent in wt-a reached tab-b when it named it', 'tab-b' === explicit.ids.join(','), `reached [${explicit.ids}]`);
