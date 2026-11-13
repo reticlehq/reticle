@@ -352,7 +352,7 @@
   },
   "src/command/daemon/lifetime/heartbeat.ts": {
     "curly": {
-      "count": 6
+      "count": 5
     }
   },
   "src/command/daemon/lifetime/idle-grace.ts": {

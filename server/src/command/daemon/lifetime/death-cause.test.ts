@@ -7,7 +7,7 @@
  * is connected, and nothing told them apart.
  */
 import { describe, expect, it } from 'vitest';
-import { DaemonEnd } from '@reticlehq/core';
+import { DaemonEnd, DaemonStartupError } from '@reticlehq/core';
 import { deathCauseFromLog } from './death-cause.js';
 
 const START = Date.parse('2026-10-27T05:00:00.000Z');
@@ -54,8 +54,26 @@ describe('deathCauseFromLog', () => {
       error: 'listen EADDRINUSE: address already in use 127.0.0.1:4400 in /Users/someone/app',
     });
     const cause = deathCauseFromLog(log, START, START + 5_000);
-    expect(cause).toMatchObject({ end: DaemonEnd.UNKNOWN, error: 'EADDRINUSE' });
+    expect(cause).toMatchObject({ end: DaemonEnd.START_FAILED, error: 'EADDRINUSE' });
     expect(JSON.stringify(cause)).not.toContain('someone');
+  });
+
+  it('prefers the code and the stage that the failed start wrote as fields', () => {
+    const log = line(500, 'reticle_daemon_start_failed', {
+      error: 'connect failed in /Users/someone/app',
+      code: 'EACCES',
+      stage: DaemonStartupError.LISTEN,
+    });
+    expect(deathCauseFromLog(log, START, START + 5_000)).toEqual({
+      end: DaemonEnd.START_FAILED,
+      startupError: DaemonStartupError.LISTEN,
+      error: 'EACCES',
+    });
+  });
+
+  it('sends no stage that is not in the closed list', () => {
+    const log = line(500, 'reticle_daemon_start_failed', { stage: '/Users/someone' });
+    expect(deathCauseFromLog(log, START, START + 5_000)).toEqual({ end: DaemonEnd.START_FAILED });
   });
 
   it('reads the code from a raw Node stack that a crash wrote before any log line', () => {
@@ -65,7 +83,11 @@ describe('deathCauseFromLog', () => {
       "Error [ERR_MODULE_NOT_FOUND]: Cannot find module 'C:\\Users\\someone\\x.js'",
     ].join('\n');
     const cause = deathCauseFromLog(log, START, START + 1_000);
-    expect(cause.error).toBe('ERR_MODULE_NOT_FOUND');
+    expect(cause).toEqual({
+      end: DaemonEnd.START_FAILED,
+      startupError: DaemonStartupError.BEFORE_LOG,
+      error: 'ERR_MODULE_NOT_FOUND',
+    });
     expect(JSON.stringify(cause)).not.toContain('someone');
   });
 

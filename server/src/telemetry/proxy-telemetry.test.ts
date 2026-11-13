@@ -163,6 +163,19 @@ describe('the proxy exit, unclean death and wake refusal reach the wire', () => 
     expect(properties?.daemonDeath_ageMs).toBe(60_000);
   });
 
+  it('sends where a daemon start failed, as a value from the closed list (#2043)', async () => {
+    const { telemetry, calls } = recording();
+    await reportDaemonDiedUnclean(
+      120,
+      { end: 'start_failed', startupError: 'listen', error: 'EADDRINUSE' },
+      telemetry,
+    );
+    const properties = calls[0]?.batch[0]?.properties;
+    expect(properties?.daemonDeath_end).toBe('start_failed');
+    expect(properties?.daemonDeath_startupError).toBe('listen');
+    expect(properties?.daemonDeath_error).toBe('EADDRINUSE');
+  });
+
   it('sends wake_refused once per process, naming what held the port', async () => {
     const { telemetry, calls } = recording();
     await reportWakeRefused(WakeRefusalPresence.OTHER_PROJECT, telemetry);

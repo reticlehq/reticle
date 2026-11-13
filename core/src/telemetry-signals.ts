@@ -263,10 +263,27 @@ export const DaemonEnd = {
   SIGNALLED: 'signalled',
   /** The beat simply stopped. No exit, no signal: killed, crashed, or swept. */
   DIED_SILENTLY: 'died_silently',
+  /** It failed to start, before its first beat. `startupError` says where. */
+  START_FAILED: 'start_failed',
   /** No beat was ever emitted, so the log cannot answer the question. */
   UNKNOWN: 'unknown',
 } as const;
 export type DaemonEnd = (typeof DaemonEnd)[keyof typeof DaemonEnd];
+
+/** Where a daemon start failed. A closed list: the message of the error never leaves the machine. */
+export const DaemonStartupError = {
+  /** The bind of the port failed, for example with `EADDRINUSE` or `EACCES`. */
+  LISTEN: 'listen',
+  /** The start failed for a different reason. */
+  START: 'start',
+  /** A throw that nothing caught stopped the start. */
+  UNCAUGHT_EXCEPTION: 'uncaught_exception',
+  /** A rejected promise that nothing handled stopped the start. */
+  UNHANDLED_REJECTION: 'unhandled_rejection',
+  /** Node stopped the process before it wrote its first log line, for example on a failed import. */
+  BEFORE_LOG: 'before_log',
+} as const;
+export type DaemonStartupError = (typeof DaemonStartupError)[keyof typeof DaemonStartupError];
 
 /** A signal name, never anything else. */
 const SIGNAL_NAME = /^SIG[A-Z0-9]{1,12}$/;
@@ -291,6 +308,8 @@ export const DaemonDeathSchema = z.object({
   rssMb: z.number().int().nonnegative().optional(),
   /** The Node error code of a failed start or a crash. */
   error: z.string().regex(NODE_ERROR_CODE).optional(),
+  /** Where the start failed, when `end` is `start_failed`. */
+  startupError: z.nativeEnum(DaemonStartupError).optional(),
 });
 export type DaemonDeath = z.infer<typeof DaemonDeathSchema>;
 

@@ -11,7 +11,7 @@
  * counts. Never a message, because a message can carry the user's paths.
  */
 import { closeSync, fstatSync, openSync, readSync } from 'node:fs';
-import { DaemonEnd, NODE_ERROR_CODE, type DaemonDeath } from '@reticlehq/core';
+import { DaemonEnd, DaemonStartupError, NODE_ERROR_CODE, type DaemonDeath } from '@reticlehq/core';
 import { DAEMON_HEARTBEAT_EVENT, classifyDaemonLife } from './heartbeat.js';
 import { DAEMON_START_FAILED_EVENT } from './startup-failure.js';
 
@@ -55,6 +55,16 @@ function lastErrorCode(text: string): string | undefined {
   const codes = [...text.matchAll(ERROR_CODE_IN_TEXT)].map((m) => m[1]);
   const code = codes.filter((c) => c !== undefined && !NOT_A_CODE.has(c)).at(-1);
   return code !== undefined && NODE_ERROR_CODE.test(code) ? code : undefined;
+}
+
+/** The stage of a failed start, only when it is a member of the closed list. */
+function startupStage(v: unknown): DaemonStartupError | undefined {
+  return Object.values(DaemonStartupError).find((stage) => stage === v);
+}
+
+/** The code field of a failed start, only when it has the shape of a Node error code. */
+function codeField(v: unknown): string | undefined {
+  return 'string' === typeof v && NODE_ERROR_CODE.test(v) ? v : undefined;
 }
 
 const count = (v: unknown): number | undefined =>
@@ -113,13 +123,24 @@ export function deathCauseFromLog(text: string, startedMs: number, nowMs: number
   }
 
   const failed = ours.findLast((l) => l.event === DAEMON_START_FAILED_EVENT);
+  const stage = startupStage(failed?.['stage']);
+  if (stage !== undefined) {
+    cause.startupError = stage;
+  }
   const error =
+    codeField(failed?.['code']) ??
     ('string' === typeof failed?.['error'] ? lastErrorCode(failed['error']) : undefined) ??
     // Raw lines before this daemon's first line belong to the daemon before it, unless this one
     // wrote no line at all, which is a crash before its first log line.
     lastErrorCode((0 < ours.length ? rawInOurs : rawAfterLastLine).join('\n'));
   if (error !== undefined) {
     cause.error = error;
+  }
+  // No line of its own, and a Node error after the last line of the daemon before it: Node stopped
+  // this daemon before its code could write anything, for example on a module that did not load.
+  if (0 === ours.length && error !== undefined) {
+    cause.end = DaemonEnd.START_FAILED;
+    cause.startupError = DaemonStartupError.BEFORE_LOG;
   }
   return cause;
 }

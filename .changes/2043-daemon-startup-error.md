@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a daemon that failed to start left no reason that a reader could use.** A throw or a rejection before the daemon was ready went to the crash guard, which wrote one sentence with no event name and no error code. The next start then reported the death as `unknown`. The daemon now writes `reticle_daemon_start_failed` with the Node error `code` (for example `EADDRINUSE`) and the `stage` where the start failed. `classifyDaemonLife` reads that line as `start_failed`, and `daemon_died_unclean` sends the stage as `daemonDeath_startupError`. Refs [#2043](https://github.com/reticlehq/reticle/issues/2043).

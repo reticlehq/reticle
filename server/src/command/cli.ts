@@ -36,7 +36,7 @@ import { exitAfterClose } from './daemon/lifetime/daemon-exit.js';
 import { isSameOrAbove, portForInit, portFromEnv } from './setup/init/init-port.js';
 import { daemonStartOptions } from './cli/daemon-start-options.js';
 import { handleGate, loadNamedFlows, resolveChangedFiles } from './cli/cli-flow-commands.js';
-import { RETICLE_DEFAULT_PORT, ReticleDir, ReticleEnv } from '@reticlehq/core';
+import { DaemonStartupError, RETICLE_DEFAULT_PORT, ReticleDir, ReticleEnv } from '@reticlehq/core';
 import { loadDotEnv } from '@/telemetry/dev-repo.js';
 import { licenseKeyFromEnvFiles } from '@/features/license/license-env.js';
 import { LICENSE_KEY_ENV } from '@/features/license/license.js';
@@ -61,7 +61,7 @@ import {
 import { IdleShutdown, resolveIdleShutdownMs, resolveIdleCheckMs } from './daemon/idle-shutdown.js';
 import { DaemonHeartbeat, resolveHeartbeatMs } from './daemon/lifetime/heartbeat.js';
 import { everServedToolCall } from './daemon/lifetime/daemon-usefulness.js';
-import { DAEMON_START_FAILED_EVENT } from './daemon/lifetime/startup-failure.js';
+import { installStartupTrap, recordStartupFailure } from './daemon/lifetime/startup-failure.js';
 import {
   summarizeStatus,
   decideOpen,
@@ -450,8 +450,12 @@ function handleDaemonInner(parsed: {
     hudLink: (root) => cmdLink([], root, PlatformLinkVia.HUD),
   };
 
+  // Until the daemon is ready, a throw or a rejection is a failed start. Write it to the log with
+  // its code, so the next start can say why this one died (#2043).
+  const disposeStartupTrap = installStartupTrap(process, log);
   startDaemon(options)
     .then((server) => {
+      disposeStartupTrap();
       log('reticle_daemon_ready', { port: parsed.port, pid: process.pid });
       // Daemon lifecycle telemetry: started, a one-shot project profile, the periodic counter flush,
       // and the rich summary on shutdown. All of it lives in one module — see daemon-telemetry.ts.
@@ -536,8 +540,8 @@ function handleDaemonInner(parsed: {
       }).start();
     })
     .catch((error: unknown) => {
-      const message = error instanceof Error ? error.message : String(error);
-      log(DAEMON_START_FAILED_EVENT, { error: message });
+      disposeStartupTrap();
+      recordStartupFailure(log, error, DaemonStartupError.START);
       removePid(parsed.port);
       process.exit(1);
     });
