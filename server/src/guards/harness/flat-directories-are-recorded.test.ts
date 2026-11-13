@@ -54,7 +54,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // +1: connect-args.ts, split out of index.ts (988 lines, against the 1000 cap) with the body cap.
   // +1: stamping.ts, which module ids get a source stamp and the per-file @reticle-ignore opt-out.
   // The grouping this directory still wants is a `stamping/` subdirectory beside svelte-source.ts.
-  'adapters/build/vite/src': 14,
+  // +1: pre-attach-errors.ts, the inline error buffer, split out of index.ts at the 1000-line cap
+  // (#1540).
+  'adapters/build/vite/src': 15,
   // 13 with `render-page.ts`, the in-page step screenshot. It has to be its own module: the command
   // registry imports it lazily, so a page downloads the renderer only when a picture is first drawn.
   // +1: stable-selector.ts, split out of query.ts when that file crossed the 1000-line cap (#1147).
@@ -146,7 +148,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // `constants.ts`, because that file is already the monorepo's broad wire vocabulary. The split is
   // deliberate even though it makes this shallow directory cross the line.
   // 13 with `determinism.ts`: the names a deterministic lease shares with the SDK in its page.
-  'core/src/wire/constants': 13,
+  // 14 with `console-event.ts`: the console payload fields and the pre-attach error buffer's global,
+  // split out of `constants.ts` at its 1000-line cap (#1540).
+  'core/src/wire/constants': 14,
   // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
   // things on the Node side read back, and its parser was living beside the MCP tool handlers — so
   // every other reader imported from the tool surface to parse a string the tool surface does not

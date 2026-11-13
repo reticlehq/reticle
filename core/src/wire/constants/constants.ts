@@ -125,21 +125,6 @@ export const RETICLE_URL_PARAM = {
  */
 export const RETICLE_SESSION_STORAGE_KEY = '__reticle_session';
 
-/**
- * Payload fields and `kind` values on console/error events that the AGENT reads back through
- * `reticle_console`. The console payload is passthrough rather than closed, so these are named
- * here instead of schema-enforced: a wire string a server writes inline is one a rename
- * half-lands, with the agent reading a field that quietly stopped arriving.
- */
-export const CONSOLE_EVENT = {
-  /** The payload field naming what kind of console/error event it is (`resource`, `pageerror`, ...). */
-  KIND: 'kind',
-  /** The kind for an uncaught error the SERVER observed through the page's own browser handle. */
-  PAGE_ERROR: 'pageerror',
-  /** The payload field reporting how many buffered page errors were dropped — loss, declared. */
-  DROPPED_PAGE_ERRORS: 'droppedPageErrors',
-} as const;
-
 /** The loopback bind address. The daemon/bridge bind here by default — never expose Reticle off-host. */
 export const LOOPBACK_HOST = '127.0.0.1';
 

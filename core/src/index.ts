@@ -29,6 +29,7 @@ export * from './graph/app-graph.js'; // the App Graph: an app as screens, actio
 export * from './wire/constants/constants.js'; // EventType, ActionType, wire constants, TRANSPORT_LIMITS, …
 export * from './wire/constants/animation-command.js'; // reticle_animations argument names
 export * from './wire/constants/response-body-reason.js'; // why a NET_REQUEST carries no response body (#1520)
+export * from './wire/constants/console-event.js'; // console payload fields (CONSOLE_EVENT) and the pre-attach error buffer (#1540)
 export * from './identity/source-constants.js'; // DATA_RETICLE_SOURCE_ATTR, RETICLE_ROOT_GLOBAL
 export * from './identity/testid-attribute.js'; // DEFAULT_TESTID_ATTR, ALTERNATIVE_TESTID_ATTRS
 export * from './identity/github-action.js'; // RETICLE_ACTION_USES — the Action tag docs and cloud print
