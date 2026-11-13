@@ -391,12 +391,15 @@ export async function evalElement(
     const reason = describeUnusableElementQuery(query, residual.unusable);
     return { pass: false, failureReason: reason, inconclusive: reason };
   }
+  // A `text` checked on this side is checked against the element's text, which is the 80-character
+  // display form unless the full text is asked for: words past the cut read as absent.
+  const textOnThisSide = residual.checks.some(([field]) => 'text' === field);
   let match = await matchOnce(
     session,
     withAltProjected(query, residual.checks),
     state,
     diagnose,
-    fullText,
+    fullText || textOnThisSide,
   );
   const subject = JSON.stringify(query);
   // Full text was asked for to JUDGE it, so a reading that is not the full text is not graded.
