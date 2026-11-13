@@ -9,6 +9,8 @@ import { runDrivenBy } from '@/hooks/driven-by.js';
 import { forgetAgents, noteAgentAttached, runAsAgent } from '@/hooks/coding-agents.js';
 import { JournalRecorder, type JournalSink } from './journal-recorder.js';
 
+const TEST_IDENTITY = { sessionId: 'journal-session', root: '/repo/journal' };
+
 function evt(seq: number): ReticleEvent {
   return { t: seq, seq, type: EventType.NET_REQUEST, sessionId: 'demo', data: {} };
 }
@@ -48,7 +50,7 @@ function stepClock(values: number[]): () => number {
 describe('JournalRecorder', () => {
   it("stamps an action the Harness drove, and leaves the agent's own actions unstamped", async () => {
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100 });
+    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100, identity: TEST_IDENTITY });
     const by = { harness: 'h1', driver: 'server' };
     await runDrivenBy(by, () => {
       rec.beginAction('c1', 'reticle_act_and_wait', {});
@@ -66,7 +68,7 @@ describe('JournalRecorder', () => {
     noteAgentAttached('a1', 'claude-code');
     noteAgentAttached('a2', 'cursor-vscode');
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100 });
+    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100, identity: TEST_IDENTITY });
     await runAsAgent('a1', () => {
       rec.beginAction('c1', 'reticle_act_and_wait', {});
       rec.finishAction();
@@ -89,7 +91,7 @@ describe('JournalRecorder', () => {
   it('never writes a typed value: fill, type, or a sequence step', async () => {
     const TYPED = 'hunter2-correct-horse';
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100 });
+    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100, identity: TEST_IDENTITY });
     rec.beginAction('c1', 'reticle_act_and_wait', {
       ref: 'e7',
       action: 'fill',
@@ -112,7 +114,7 @@ describe('JournalRecorder', () => {
 
   it('journals ambient events with no attribution when no action is active', async () => {
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100 });
+    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100, identity: TEST_IDENTITY });
     const out = rec.observe(evt(0));
     expect(out.actionId).toBeUndefined();
     await rec.flush();
@@ -122,7 +124,11 @@ describe('JournalRecorder', () => {
 
   it('attributes events inside an action window and records seqRange + tRange', async () => {
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: stepClock([10, 42]), flushAt: 100 });
+    const rec = new JournalRecorder(sink, {
+      now: stepClock([10, 42]),
+      flushAt: 100,
+      identity: TEST_IDENTITY,
+    });
     rec.beginAction('c1', 'reticle_act', { ref: 'e7' }); // now->10 (tStart)
     const a = rec.observe(evt(3));
     const b = rec.observe(evt(5));
@@ -141,7 +147,7 @@ describe('JournalRecorder', () => {
 
   it('flushes attributed events before the action that closes them (ordering)', async () => {
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100 });
+    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100, identity: TEST_IDENTITY });
     rec.beginAction('c1', 'reticle_act', {});
     rec.observe(evt(0));
     rec.finishAction();
@@ -151,7 +157,7 @@ describe('JournalRecorder', () => {
 
   it('finishAction with no active action is a no-op', async () => {
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: () => 0 });
+    const rec = new JournalRecorder(sink, { now: () => 0, identity: TEST_IDENTITY });
     rec.finishAction();
     await rec.flush();
     expect(sink.actions).toHaveLength(0);
@@ -159,7 +165,7 @@ describe('JournalRecorder', () => {
 
   it('auto-flushes a batch once flushAt events accumulate', async () => {
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 2 });
+    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 2, identity: TEST_IDENTITY });
     rec.observe(evt(0));
     rec.observe(evt(1)); // reaches flushAt -> flush
     await rec.flush();
@@ -168,7 +174,7 @@ describe('JournalRecorder', () => {
 
   it('an action with no observed events records no seqRange', async () => {
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: () => 0 });
+    const rec = new JournalRecorder(sink, { now: () => 0, identity: TEST_IDENTITY });
     rec.beginAction('c9', 'reticle_navigate', {});
     rec.finishAction();
     await rec.flush();
@@ -185,7 +191,7 @@ describe('JournalRecorder', () => {
 describe('JournalRecorder.recordAction (a verdict with no window)', () => {
   it('writes the action record with its effect', async () => {
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: () => 7, flushAt: 100 });
+    const rec = new JournalRecorder(sink, { now: () => 7, flushAt: 100, identity: TEST_IDENTITY });
     rec.recordAction('a4', 'reticle_assert', { predicate: {} }, { claim: 'the row is gone' });
     await rec.flush();
     const action = sink.actions[0];
@@ -197,7 +203,7 @@ describe('JournalRecorder.recordAction (a verdict with no window)', () => {
 
   it('omits seqRange and records an empty tRange — no window, so nothing was attributed', async () => {
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: () => 7, flushAt: 100 });
+    const rec = new JournalRecorder(sink, { now: () => 7, flushAt: 100, identity: TEST_IDENTITY });
     rec.recordAction('a4', 'reticle_assert', {}, {});
     await rec.flush();
     expect(sink.actions[0]?.seqRange).toBeUndefined();
@@ -207,7 +213,7 @@ describe('JournalRecorder.recordAction (a verdict with no window)', () => {
 
   it('does NOT open a window — a later event stays unattributed', () => {
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100 });
+    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100, identity: TEST_IDENTITY });
     rec.recordAction('a4', 'reticle_assert', {}, {});
     const after = rec.observe(evt(9));
     expect(after.actionId).toBeUndefined();
@@ -216,7 +222,11 @@ describe('JournalRecorder.recordAction (a verdict with no window)', () => {
 
   it('leaves an in-flight action window untouched', async () => {
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: stepClock([10, 20, 42]), flushAt: 100 });
+    const rec = new JournalRecorder(sink, {
+      now: stepClock([10, 20, 42]),
+      flushAt: 100,
+      identity: TEST_IDENTITY,
+    });
     rec.beginAction('c1', 'reticle_act_and_wait', {});
     const before = rec.observe(evt(3));
     rec.recordAction('a2', 'reticle_assert', {}, {});
@@ -232,7 +242,7 @@ describe('JournalRecorder.recordAction (a verdict with no window)', () => {
 
   it('flushes buffered events before the record, so ordering holds', async () => {
     const sink = fakeSink();
-    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100 });
+    const rec = new JournalRecorder(sink, { now: () => 0, flushAt: 100, identity: TEST_IDENTITY });
     rec.observe(evt(0));
     rec.recordAction('a1', 'reticle_assert', {}, {});
     await rec.flush();

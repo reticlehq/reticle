@@ -28,7 +28,7 @@ import {
   type VerificationRunInput,
 } from './artifact/build-verification-run.js';
 import { mapReplayToFlowResult } from './artifact/replay-mapping.js';
-import { runLedger } from './run-ledger.js';
+import { runLedger, type RunIdentity } from './run-ledger.js';
 import { defaultRunId } from './default-run-id.js';
 import { currentShotRun } from './default-run-id.js';
 import { RunStore } from './artifact/run-store.js';
@@ -145,13 +145,16 @@ export async function persistAndSyncVerificationRun(
   deps: ToolDeps,
   timed: TimedReplay[],
   target: ProjectTarget,
+  identity: RunIdentity,
 ): Promise<string | undefined> {
   const { projectId } = target;
   if (0 === timed.length) return undefined;
   // A replay the Harness made inside its own drive is part of that drive's run: written on its own
   // it was a second row ("Passed · Flow replay · Your agent") beside the plan run it belonged to.
   if (currentDrivenBy() !== undefined) return undefined;
-  for (const t of timed) runLedger.replayed(t.replay.name, replayVerified(t.replay, t.durationMs));
+  for (const t of timed) {
+    runLedger.replayed(t.replay.name, replayVerified(t.replay, t.durationMs), identity);
+  }
   let run: ReticleVerificationRun;
   // The project the suite ran for, not the directory the daemon was started in. Both halves below
   // take it: the artifact `reticle_run` reads back through `sessionRoot`, and the cloud link that
