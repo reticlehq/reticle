@@ -160,6 +160,8 @@ function fakePool(): {
       return id !== undefined && owner !== undefined && owners.get(id) === owner ? id : undefined;
     },
     touch: () => undefined,
+    heldBy: (id: string, owner: string | undefined) =>
+      owner !== undefined && owners.get(id) === owner,
     isHeaded: (id: string) => headedIds.has(id),
     ignoresHTTPSErrors: (id: string) => certSkipIds.has(id),
     stubInstalled: (id: string) => stubBySession.has(id),
@@ -2411,5 +2413,34 @@ describe('connectOrInject — the lease supplies an SDK only when the page never
       ready: false,
       zeroInstall: false,
     });
+  });
+});
+
+/*
+ * `reticle_lease { action: "release" }` with no sessionId was refused, though the agent held one
+ * lease and nothing else could be meant. Agents sent it often: a refusal, then a second call.
+ */
+describe('reticle_lease release with no sessionId', () => {
+  const acquire = (deps: ToolDeps, url: string) =>
+    tool(ReticleTool.LEASE_ACQUIRE)(deps, { url }) as Promise<{ sessionId: string }>;
+
+  it("releases the caller's only lease, and never another agent's", async () => {
+    const { pool, released } = fakePool();
+    const mine = { ...baseDeps, pool } as ToolDeps;
+    const theirs = { ...baseDeps, pool, attachId: 'agent-2' } as ToolDeps;
+    const own = await acquire(mine, 'http://localhost:3000/');
+    await acquire(theirs, 'http://localhost:4000/');
+    const result = (await tool(ReticleTool.LEASE_RELEASE)(mine, {})) as { released: boolean };
+    expect(result.released).toBe(true);
+    expect(released).toEqual([own.sessionId]);
+  });
+
+  it('refuses, and names them, when the caller holds more than one lease', async () => {
+    const { pool, released } = fakePool();
+    const mine = { ...baseDeps, pool } as ToolDeps;
+    await acquire(mine, 'http://localhost:3000/');
+    await acquire(mine, 'http://localhost:4000/');
+    await expect(tool(ReticleTool.LEASE_RELEASE)(mine, {})).rejects.toThrow(/2 leases/);
+    expect(released).toEqual([]);
   });
 });
