@@ -787,8 +787,8 @@ export function waitForPredicate(
             return;
           }
           // "Exactly N" cannot be concluded from a passing sample — the count can still rise. Hold,
-          // re-evaluate WITH diagnostics, and let that second read be the verdict: if an N+1th
-          // arrived in the meantime it now fails, carrying observed/expected rather than a bare no.
+          // re-evaluate WITH diagnostics: if an N+1th arrived it fails with observed/expected.
+          // A transient failure in another clause can still recover within the budget.
           if (!holdsForCount) {
             finish(r);
             return;
@@ -799,7 +799,18 @@ export function waitForPredicate(
           confirming = true;
           const confirm = (): void => {
             void evaluatePredicate(reader, predicate, since, true, baselines)
-              .then(finish)
+              .then((result) => {
+                if (
+                  holdsForAbsence ||
+                  result.pass ||
+                  true === result.decided ||
+                  result.inconclusive !== undefined
+                ) {
+                  finish(result);
+                } else {
+                  confirming = false;
+                }
+              })
               .catch((error: unknown) => {
                 finish(failed(error));
               });
