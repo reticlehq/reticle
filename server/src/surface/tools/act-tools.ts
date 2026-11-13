@@ -93,7 +93,7 @@ import {
 } from '@/portal/session/control-envelope.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { sourceOf } from './tools-helpers.js';
-import { confirmedByDeclaration } from './act/act-danger.js';
+import { confirmedByDeclaration, ownConsent } from './act/act-danger.js';
 import { dispatchAct, preflightAct } from './act/act-preflight.js';
 import {
   actInconclusive,
@@ -144,7 +144,7 @@ export const ACT_TOOLS: ToolDef[] = [
         .record(z.string(), z.unknown())
         .optional()
         .describe(
-          'Action-specific arguments: { value } for fill/select (select also drives an ARIA combobox: it opens it and clicks the option by its label), { text } for type/press/insertText (the key NAME, e.g. Escape or Tab, for press/type — or the text to insert for insertText), { modifiers: ["Meta","Shift"] } for a press shortcut (Meta/Control/Shift/Alt — a Cmd+K) or a click/dblclick (Shift+click range select), { button: "right" | "middle" } for a click (right sends contextmenu), { toRef } for drag (the ref to drop ON — without it the drag lands nowhere), { at: { x, y } } for click/dblclick/hover/tap/drag to act at a point of the element as fractions 0..1 of its box (a canvas has no child elements), { to: { x, y } } for drag to end at a point of the drop target (or of the source), { native: true } to force a trusted native click, { holdMs: N } to keep the pointer or the key DOWN for N ms (hold-to-confirm controls; effect.heldMs reports what was achieved), { confirmDangerous: true } to allow a potentially destructive control and, when the caller passes it, answer yes to the one confirm() its handler opens synchronously (without it a confirm() is answered no; in the page, one opened after an await or a timer is not answered yes; on a leased tab, any one confirm() that opens while the flagged key press is in flight is) — a permission gate, NOT a duration. For press: { keys: ["Control","k"] } holds several keys down TOGETHER (pressed in order, released in reverse) and { code } names the physical key — both stay on the in-page dispatcher, the only path that can express them. For upload: { path } is a path on disk (absolute or relative to the project root; the daemon reads the file and delivers real bytes to the file picker — this is the way to verify document-ingestion flows); or { name, content?, type? } to supply inline bytes directly.',
+          'Action-specific arguments: { value } for fill/select (select also drives an ARIA combobox: it opens it and clicks the option by its label), { text } for type/press/insertText (the key NAME, e.g. Escape or Tab, for press/type — or the text to insert for insertText), { modifiers: ["Meta","Shift"] } for a press shortcut (Meta/Control/Shift/Alt — a Cmd+K) or a click/dblclick (Shift+click range select), { button: "right" | "middle" } for a click (right sends contextmenu), { toRef } for drag (the ref to drop ON — without it the drag lands nowhere), { at: { x, y } } for click/dblclick/hover/tap/drag to act at a point of the element as fractions 0..1 of its box (a canvas has no child elements), { to: { x, y } } for drag to end at a point of the drop target (or of the source), { native: true } to force a trusted native click, { holdMs: N } to keep the pointer or the key DOWN for N ms (hold-to-confirm controls; effect.heldMs reports what was achieved), { confirmDangerous: true } to allow a potentially destructive control and, when the caller passes it, answer yes to the one confirm() its handler opens synchronously (without it, and on a crawl, a flow replay or a compare, a confirm() is answered no; in the page, one opened after an await or a timer is not answered yes; on a leased tab, any one confirm() that opens while the flagged key press is in flight is) — a permission gate, NOT a duration. For press: { keys: ["Control","k"] } holds several keys down TOGETHER (pressed in order, released in reverse) and { code } names the physical key — both stay on the in-page dispatcher, the only path that can express them. For upload: { path } is a path on disk (absolute or relative to the project root; the daemon reads the file and delivers real bytes to the file picker — this is the way to verify document-ingestion flows); or { name, content?, type? } to supply inline bytes directly.',
         ),
       refuseWhenThrottled: z
         .boolean()
@@ -222,7 +222,7 @@ export const ACT_TOOLS: ToolDef[] = [
       let settledOutcome: boolean | undefined;
       try {
         // drive native pointer input when a provider is available; otherwise fall back.
-        const real = await tryRealInput(deps, session, ref, action, args);
+        const real = await tryRealInput(deps, session, ref, action, ownConsent(args));
         if (real.result !== undefined) {
           captureAct(deps.recordings, args, real.result, routeBefore, session.id);
           settledOutcome = real.settled ?? undefined;
@@ -243,7 +243,7 @@ export const ACT_TOOLS: ToolDef[] = [
 
         // actCommand is the single interception point: it rewrites upload+path args to real bytes
         // before any ACT command crosses the bridge, covering this call site and all others.
-        const plain = { ref: targetRef.ref, action: args['action'], args: args['args'] ?? {} };
+        const plain = { ref: targetRef.ref, action: args['action'], args: ownConsent(args).args };
         const result = await actCommand(deps, session, ReticleCommand.ACT, plain, undefined, true);
         if (!result.ok) {
           throw new Error(result.error ?? 'act failed');
@@ -314,7 +314,7 @@ export const ACT_TOOLS: ToolDef[] = [
         .record(z.string(), z.unknown())
         .optional()
         .describe(
-          'Action-specific arguments: { value } for fill/select (select also drives an ARIA combobox: it opens it and clicks the option by its label), { text } for type/press/insertText (the key NAME, e.g. Escape or Tab, for press/type — or the text to insert for insertText), { modifiers: ["Meta","Shift"] } for a press shortcut or a click (Meta/Control/Shift/Alt), { button: "right" | "middle" } for a click, { toRef } for drag (the ref to drop ON — without it the drag lands nowhere), { at: { x, y } } for click/dblclick/hover/tap/drag to act at a point of the element as fractions 0..1 of its box (a canvas has no child elements), { to: { x, y } } for drag to end at a point of the drop target (or of the source), { confirmDangerous: true } for a potentially destructive control, and, only when you pass it yourself, to answer yes to the one confirm() its handler opens synchronously (not one opened after an await or a timer). A flag set because the named target reads as destructive does not answer a confirm() yes. For upload: { path } is a path on disk (absolute or relative to project root; daemon reads real bytes) or { name, content?, type? } for inline bytes.',
+          'Action-specific arguments: { value } for fill/select (select also drives an ARIA combobox: it opens it and clicks the option by its label), { text } for type/press/insertText (the key NAME, e.g. Escape or Tab, for press/type — or the text to insert for insertText), { modifiers: ["Meta","Shift"] } for a press shortcut or a click (Meta/Control/Shift/Alt), { button: "right" | "middle" } for a click, { toRef } for drag (the ref to drop ON — without it the drag lands nowhere), { at: { x, y } } for click/dblclick/hover/tap/drag to act at a point of the element as fractions 0..1 of its box (a canvas has no child elements), { to: { x, y } } for drag to end at a point of the drop target (or of the source), { confirmDangerous: true } for a potentially destructive control, and, only when you pass it yourself, to answer yes to the one confirm() its handler opens synchronously (not one opened after an await or a timer). A flag set because the named target reads as destructive, and a crawl, a flow replay or a compare, do not answer a confirm() yes. For upload: { path } is a path on disk (absolute or relative to project root; daemon reads real bytes) or { name, content?, type? } for inline bytes.',
         ),
       predicate: PredicateSchema.optional().describe('Alias for `until`.'),
       until: PredicateSchema.optional().describe(

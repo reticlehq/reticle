@@ -18,7 +18,6 @@
 import { EventType } from '@reticlehq/core';
 import { observeSafely, type Emit, type Teardown } from './types.js';
 import { isSyntheticInput } from '@/actions/synthetic/synthetic-input.js';
-import { takeDialogConsent } from '@/actions/synthetic/dialog-consent.js';
 
 /**
  * What Reticle answers, per dialog.
@@ -28,11 +27,31 @@ import { takeDialogConsent } from '@/actions/synthetic/dialog-consent.js';
  * nobody approved — and `confirmDangerous` exists precisely so that decision is the caller's,
  * stated up front, rather than something the SDK does on their behalf inside a click.
  *
- * The accept path is that decision (#2167). An action with `confirmDangerous: true` gets yes for ONE
- * `confirm` of its own dispatch, and nothing else changes: `prompt` still gets no value, and every
- * other `confirm` still gets no. `takeDialogConsent` holds the rules for when the yes applies.
+ * The accept path is that decision (#2167). An action whose caller passed `confirmDangerous: true`
+ * (sent by the server as a positive consent) gets yes for ONE `confirm` of its own dispatch, and
+ * nothing else changes: `prompt` still gets no value, and every other `confirm` still gets no.
+ * `actionConsent` holds the rules for when the yes applies.
  */
 const DECLINED = { alert: undefined, confirm: false, prompt: null } as const;
+
+/** How many actions are in flight, with a yes or without one. */
+let acts = 0;
+/** The one action in flight still holds its caller's unused yes to a `confirm()`. */
+let yes = false;
+
+/**
+ * An action starts (`step` 1, `given`: its caller's yes to a `confirm()` in advance) or ends
+ * (`step` -1). The yes is narrow on purpose:
+ * - It is spent on ONE `confirm()`. A second one in the same dispatch is declined.
+ * - It ends when the dispatch ends. The next action starts with no.
+ * - It applies only while the action runs alone. Actions can overlap (a held click awaits between
+ *   pointerdown and pointerup), and a `confirm()` during the overlap cannot be given to one action
+ *   or the other. So an action that starts or ends beside another takes the yes away.
+ */
+export function actionConsent(step: 1 | -1, given?: unknown): void {
+  acts += step;
+  yes = 1 === acts && true === given;
+}
 
 type DialogKind = keyof typeof DECLINED;
 
@@ -57,13 +76,22 @@ export function installDialogs(emit: Emit): Teardown {
     const original = slots[kind];
     // A page that has already removed one of these is not a page to patch. Skipping is safer than
     // installing a wrapper with nothing to fall back to for a dialog we decide not to answer.
-    if ('function' !== typeof original) continue;
+    if ('function' !== typeof original) {
+      continue;
+    }
     originals.set(kind, original);
     const callOriginal = original.bind(window);
     const wrapper = (...args: unknown[]): unknown => {
       // Not ours: the person opened it, and it behaves exactly as it always did.
-      if (!isSyntheticInput()) return callOriginal(...args);
-      const answered = 'confirm' === kind && takeDialogConsent() ? true : DECLINED[kind];
+      if (!isSyntheticInput()) {
+        return callOriginal(...args);
+      }
+      let answered: boolean | null | undefined = DECLINED[kind];
+      // Only a `confirm` is declined with false, so this is the confirm, named by its answer.
+      if (false === answered && yes) {
+        yes = false; // spent: one yes answers one confirm()
+        answered = true;
+      }
       const message = args[0];
       // The answer is what the app is waiting on, so observation cannot be allowed to replace it with
       // a throw: the dialog is being answered whether or not the event lands.
@@ -85,7 +113,9 @@ export function installDialogs(emit: Emit): Teardown {
     for (const [kind, original] of originals) {
       // Restore only if the slot still holds OUR wrapper — the same rule installConsole follows, so
       // a logging SDK that wrapped these after connect() keeps its instrumentation on teardown.
-      if (slots[kind] === patched.get(kind)) slots[kind] = original;
+      if (slots[kind] === patched.get(kind)) {
+        slots[kind] = original;
+      }
     }
   };
 }

@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DANGEROUS_ACTION_CONFIRM_ARG,
+  DIALOG_CONSENT_ARG,
   ReticleCommand,
   type CommandResult,
   type ReticleEvent,
@@ -21,6 +22,7 @@ const noSleep = (): Promise<void> => Promise.resolve();
 describe('confirmDangerous does not carry over to what a click revealed', () => {
   it('sends the authorization with the first page’s clicks only', async () => {
     const clicks: { ref: string; confirmed: boolean }[] = [];
+    const consents: unknown[] = [];
     let opened = false;
     const ok = (result: unknown): Promise<CommandResult> =>
       Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result });
@@ -39,6 +41,7 @@ describe('confirmDangerous does not carry over to what a click revealed', () => 
         const ref = String(args?.['ref']);
         const extra = (args?.['args'] ?? {}) as Record<string, unknown>;
         clicks.push({ ref, confirmed: true === extra[DANGEROUS_ACTION_CONFIRM_ARG] });
+        consents.push(extra[DIALOG_CONSENT_ARG]);
         if ('e1' === ref) {
           opened = true;
         }
@@ -48,5 +51,8 @@ describe('confirmDangerous does not carry over to what a click revealed', () => 
     await crawl(session, { maxSteps: 10, confirmDangerous: true }, noSleep);
     expect(clicks).toContainEqual({ ref: 'e1', confirmed: true });
     expect(clicks.filter((c) => 'e2' === c.ref)).toEqual([{ ref: 'e2', confirmed: false }]);
+    // #2167 review: the crawl presses with the flag, but never says yes to the app's confirm().
+    expect(consents.length).toBeGreaterThan(0);
+    expect(consents.every((c) => c === undefined)).toBe(true);
   });
 });

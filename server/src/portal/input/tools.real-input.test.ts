@@ -11,6 +11,7 @@ import {
   HelloScope,
   SessionState,
   ReticleCommand,
+  DIALOG_CONSENT_ARG,
 } from '@reticlehq/core';
 import type { CommandResult } from '@reticlehq/core';
 import { asRecord } from '@reticlehq/core';
@@ -866,11 +867,11 @@ describe('keyboard on a lease', () => {
       args: { text: 'Enter', confirmDangerous: true },
     });
 
-    // An act_and_wait whose declaration set the flag (#2167 review) presses, but says no.
+    // A consent the caller wrote itself, without the flag, is dropped (#2167 review): no.
     await runAct(deps, {
       ref: 'e1',
       action: 'press',
-      args: { text: 'Enter', confirmDangerous: true, confirmedByDeclaration: true },
+      args: { text: 'Enter', [DIALOG_CONSENT_ARG]: true },
     });
 
     expect(accepted).toEqual([false, true, false]);

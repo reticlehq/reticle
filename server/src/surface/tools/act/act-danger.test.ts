@@ -4,11 +4,12 @@
  * here is a Payment option that is still refused.
  */
 import { describe, expect, it } from 'vitest';
-import { ActionType, confirmsDialog } from '@reticlehq/core';
+import { ActionType, DIALOG_CONSENT_ARG } from '@reticlehq/core';
 import {
   assertNotDestructive,
   assertNotPaymentNavigation,
   confirmedByDeclaration,
+  withOwnDialogConsent,
 } from './act-danger.js';
 import { runDrivenBy } from '@/hooks/driven-by.js';
 
@@ -84,22 +85,18 @@ describe('assertNotDestructive', () => {
 describe('confirmedByDeclaration', () => {
   const PLACE_ORDER = { role: 'button', name: 'Place order' };
 
+  // #2167 review: the declaration lets the control be pressed, and sends no positive consent, so
+  // the app's own confirm() is still answered no.
   it('confirms a control named by its own dangerous words when the consequence is declared', () => {
-    const BY_DECLARATION = { confirmDangerous: true, confirmedByDeclaration: true };
+    const BY_DECLARATION = { confirmDangerous: true };
     expect(confirmedByDeclaration({}, PLACE_ORDER, true)).toEqual(BY_DECLARATION);
     expect(confirmedByDeclaration({}, { text: 'Approve refund' }, true)).toEqual(BY_DECLARATION);
   });
 
-  // #2167 review: the declaration lets the control be pressed. It is not a yes to the app's own
-  // confirm(): only a caller that set the flag itself gives that.
-  it('lets the control be pressed, but does not answer its confirm() yes', () => {
-    expect(confirmsDialog(confirmedByDeclaration({}, PLACE_ORDER, true))).toBe(false);
-  });
-
-  it("keeps the caller's own flag a yes, declaration or not", () => {
-    const own = { confirmDangerous: true };
-    expect(confirmedByDeclaration(own, PLACE_ORDER, true)).toBe(own);
-    expect(confirmsDialog(confirmedByDeclaration(own, PLACE_ORDER, true))).toBe(true);
+  it("turns the caller's own flag into the positive consent, declaration or not", () => {
+    const yes = { confirmDangerous: true, [DIALOG_CONSENT_ARG]: true };
+    expect(confirmedByDeclaration({ confirmDangerous: true }, PLACE_ORDER, true)).toEqual(yes);
+    expect(confirmedByDeclaration({ confirmDangerous: true }, PLACE_ORDER, false)).toEqual(yes);
   });
 
   it('does not confirm without a declared consequence', () => {
@@ -165,5 +162,40 @@ describe('the Harness and payment', () => {
       ),
     ).resolves.toBeUndefined();
     expect(() => assertNotPaymentNavigation('https://checkout.stripe.com/c/pay/x')).not.toThrow();
+  });
+});
+
+/** #2167 review: the yes to an action's confirm() is a positive argument, given only from the flag. */
+describe('withOwnDialogConsent', () => {
+  it("adds the consent only for the caller's own confirmDangerous: true", () => {
+    expect(withOwnDialogConsent({ confirmDangerous: true })).toEqual({
+      confirmDangerous: true,
+      [DIALOG_CONSENT_ARG]: true,
+    });
+    expect(withOwnDialogConsent({})).toEqual({});
+    expect(withOwnDialogConsent({ confirmDangerous: false })).toEqual({ confirmDangerous: false });
+    expect(withOwnDialogConsent({ confirmDangerous: 'true' })).toEqual({
+      confirmDangerous: 'true',
+    });
+  });
+
+  it('keeps the no when the flag comes with an explicit false, as compare sends it', () => {
+    expect(withOwnDialogConsent({ confirmDangerous: true, [DIALOG_CONSENT_ARG]: false })).toEqual({
+      confirmDangerous: true,
+    });
+  });
+
+  it('gives no consent to a Harness call, whose run sets the flag for the whole journey', async () => {
+    const out = await runDrivenBy({ harness: 'h1', driver: 'server' }, () =>
+      Promise.resolve(withOwnDialogConsent({ confirmDangerous: true })),
+    );
+    expect(out).toEqual({ confirmDangerous: true });
+  });
+
+  it('drops a consent the caller wrote itself: the flag is the only way to give it', () => {
+    expect(withOwnDialogConsent({ [DIALOG_CONSENT_ARG]: true })).toEqual({});
+    expect(withOwnDialogConsent({ [DIALOG_CONSENT_ARG]: true, value: 'x' })).toEqual({
+      value: 'x',
+    });
   });
 });

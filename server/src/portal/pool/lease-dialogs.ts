@@ -6,19 +6,17 @@
  * handler asks `confirm()`. The SDK never sees that dialog, because a trusted key is not one of its
  * own dispatches, so the pool answers it.
  *
- * `confirmDangerous: true` on the action is the caller's yes to that `confirm()` (#2167). It follows
- * the same rules as the SDK's `takeDialogConsent`: one `confirm` of that press only, and no when
- * another press without the yes is in flight beside it. `alert`, `prompt` and `beforeunload` are
- * always dismissed. The yes comes only from a flag the caller set itself (`confirmsDialog`): a
- * declaration that set it does not give one.
+ * The positive `DIALOG_CONSENT_ARG` on the press is the caller's yes to that `confirm()` (#2167). Only
+ * `reticle_act`, `reticle_act_and_wait` and `reticle_act_sequence` set it, from the caller's own
+ * `confirmDangerous`. It follows the same rules as the SDK's `actionConsent`: one `confirm` of
+ * that press only, and no when another press without the yes is in flight beside it. `alert`,
+ * `prompt` and `beforeunload` are always dismissed.
  *
  * Limit: a pooled dialog does not say which code opened it. A `confirm` that a page timer opens
  * while the flagged press is still in flight (a held key) also takes the yes. The docs say so.
  */
+import { CONFIRM_DIALOG_KIND } from '@reticlehq/core';
 import type { PooledDialog } from './pool-contract.js';
-
-/** The `kind` a pooled dialog reports for `window.confirm`. */
-export const CONFIRM_DIALOG = 'confirm';
 
 interface Consent {
   /** False once a `confirm` has used this yes. */
@@ -63,7 +61,7 @@ export class LeaseDialogs {
    */
   answer(dialog: PooledDialog): boolean {
     this.lastMessage = dialog.message;
-    if (dialog.accept !== undefined && CONFIRM_DIALOG === dialog.kind && this.#take()) {
+    if (dialog.accept !== undefined && CONFIRM_DIALOG_KIND === dialog.kind && this.#take()) {
       void dialog.accept();
       return true;
     }

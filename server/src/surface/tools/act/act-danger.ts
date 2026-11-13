@@ -1,7 +1,7 @@
 import {
   ActionType,
-  DANGER_CONFIRMED_BY_DECLARATION_ARG,
   DANGEROUS_ACTION_CONFIRM_ARG,
+  DIALOG_CONSENT_ARG,
   NATIVE_INPUT_ARG,
   OutwardAction,
   isDangerousActionText,
@@ -143,6 +143,33 @@ export function assertNativeInputSupported(innerArgs: Record<string, unknown>): 
 }
 
 /**
+ * The caller's own `confirmDangerous` is also its yes to the action's `confirm()` (#2167), sent as
+ * the positive `DIALOG_CONSENT_ARG`. Only `reticle_act`, `reticle_act_and_wait` and
+ * `reticle_act_sequence` call this, with the caller's args. Crawl and replay never reach it, so
+ * their `confirm()` is answered no. Three more cases answer no:
+ * - a consent the caller wrote itself is dropped: the flag is the only way to give it;
+ * - `DIALOG_CONSENT_ARG: false` beside the flag keeps the no: `compare` sends it, because it sets
+ *   the flag for every press on a disposable build, not as a person's yes;
+ * - a Harness call: its run sets the flag for the whole journey.
+ */
+export function withOwnDialogConsent(innerArgs: Record<string, unknown>): Record<string, unknown> {
+  const { [DIALOG_CONSENT_ARG]: written, ...rest } = innerArgs;
+  return true === innerArgs[DANGEROUS_ACTION_CONFIRM_ARG] &&
+    false !== written &&
+    currentDrivenBy() === undefined
+    ? { ...rest, [DIALOG_CONSENT_ARG]: true }
+    : rest;
+}
+
+/** A `reticle_act` call with its inner args through `withOwnDialogConsent`: the caller's own yes. */
+export function ownConsent(call: Record<string, unknown>): {
+  args: Record<string, unknown>;
+  [key: string]: unknown;
+} {
+  return { ...call, args: withOwnDialogConsent(asRecord(call['args'])) };
+}
+
+/**
  * The agent's own declaration counts as the confirmation, for that one control.
  *
  * `reticle_act_and_wait { target: { role: "button", name: "Place order" }, until }` names the
@@ -157,23 +184,19 @@ export function confirmedByDeclaration(
   target: unknown,
   declared: boolean,
 ): Record<string, unknown> {
+  // The caller's own flag gives the yes; a flag this declaration sets below only lets the press go.
+  const own = withOwnDialogConsent(innerArgs);
   if (!declared || true === innerArgs[DANGEROUS_ACTION_CONFIRM_ARG]) {
-    return innerArgs;
+    return own;
   }
   if (currentDrivenBy() !== undefined) {
-    return innerArgs;
+    return own;
   }
   const named = asRecord(target);
   // The words must themselves be the dangerous ones: naming "Continue" on a button whose form posts
   // to /delete-account consents to nothing, and the guard still reads the whole control.
   const words = ['name', 'text', 'label'].map((key) => asString(named[key]) ?? '').join(' ');
   return isDangerousActionText(words, asString(named['role']))
-    ? {
-        ...innerArgs,
-        [DANGEROUS_ACTION_CONFIRM_ARG]: true,
-        // The declaration lets the control be pressed. It is not a yes to the app's own confirm():
-        // only a caller that set the flag itself gives that (#2167).
-        [DANGER_CONFIRMED_BY_DECLARATION_ARG]: true,
-      }
-    : innerArgs;
+    ? { ...own, [DANGEROUS_ACTION_CONFIRM_ARG]: true }
+    : own;
 }

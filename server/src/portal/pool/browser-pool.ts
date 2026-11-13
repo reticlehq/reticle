@@ -429,7 +429,7 @@ export class BrowserPool {
    * Press a key with the leased page's real keyboard, or undefined when this session is not a lease
    * or its page has no keyboard. A throw is the caller's to read: a key that went down and did not
    * come up must not be answered with a second, synthetic press. `acceptConfirm` is the action's
-   * `confirmDangerous`: a yes to one `confirm` that this press opens (#2167).
+   * positive consent, from its caller's own flag: a yes to one `confirm` this press opens (#2167).
    */
   async pressLease(
     sessionId: string,
@@ -441,8 +441,7 @@ export class BrowserPool {
       return undefined;
     }
     this.touch(sessionId);
-    const { page } = lease;
-    return lease.dialogs.during(acceptConfirm, async () => await page.press?.(args));
+    return lease.dialogs.during(acceptConfirm, async () => await lease.page.press?.(args));
   }
 
   /**
@@ -687,8 +686,7 @@ export class BrowserPool {
         } // logged during goto, before the lease is registered below
       });
       // Listen before goto, as onConsole does: a dialog in an onload handler is answered too. The SDK
-      // answers a dialog from its own input first; the hook records the pool's answer for the verdict
-      // (#1350).
+      // answers a dialog from its own input first; the hook records the pool's answer (#1350).
       page.onDialog?.((dialog) => {
         const accepted = dialogs.answer(dialog);
         const { kind, message } = dialog;

@@ -395,14 +395,17 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * sudden jump inside it is still worth a look in review.
  */
 /*
- * Raised by 300 B for #2167: `confirmDangerous: true` answers the action's own `confirm()` with yes.
- * Main measured 339,977 B at 1f83ca9f6, 23 B under the year budget, and this feature costs 312 B on
- * the way in: the consent counter every action dispatch runs through (`dialog-consent.ts`, cut from
- * 260 B to 180 B by tracking one count and one set) and the explicit-flag check from `core`. Both
- * have to be on the way in, because the dialog observer answers during the first action.
- * Measured with it: 340,289 B.
+ * Raised by 50 B for #2167: an action whose caller passed `confirmDangerous` answers its own
+ * `confirm()` with yes. Main measured 339,899 B at 4f2fc3c47, 101 B under the year budget. This
+ * costs 148 B on the way in, so it does not fit, and the reason is written here instead of hidden.
+ * What is left is the minimum for the rules the yes must keep: the positive argument's name (the
+ * page must read it), one count of the actions in flight (no yes while two overlap), and spending
+ * the yes on one `confirm()`. It was cut from 312 B, then 220 B: no `confirmsDialog` from `core`,
+ * no consent module of its own (its state lives in the dialog observer, in the same chunk as the
+ * action), and no kind constant in the page (a confirm is the dialog declined with `false`).
+ * Measured with it: 340,047 B.
  */
-const MAX_FIRST_LOAD_BYTES = 340_300;
+const MAX_FIRST_LOAD_BYTES = 340_050;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The

@@ -289,11 +289,6 @@
       "count": 13
     }
   },
-  "src/observers/dialogs.ts": {
-    "curly": {
-      "count": 3
-    }
-  },
   "src/observers/download.test.ts": {
     "curly": {
       "count": 1

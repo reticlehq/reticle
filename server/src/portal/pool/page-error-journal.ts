@@ -24,7 +24,13 @@
  * first, the SDK's right after — can still journal both; the SDK's own event is authoritative and
  * only the redundant second copy is cost, not wrong evidence.
  */
-import { CONSOLE_EVENT, EventType, RETICLE_URL_PARAM, type ReticleEvent } from '@reticlehq/core';
+import {
+  CONFIRM_DIALOG_KIND,
+  CONSOLE_EVENT,
+  EventType,
+  RETICLE_URL_PARAM,
+  type ReticleEvent,
+} from '@reticlehq/core';
 import type { AnsweredDialog, PooledPageError } from './pool-contract.js';
 
 /**
@@ -250,7 +256,7 @@ export function makePageErrorJournal(deps: {
         kind !== undefined && Object.hasOwn(DISMISSED_ANSWER, kind)
           ? DISMISSED_ANSWER[kind]
           : undefined;
-      if (true === dialog.accepted && 'confirm' === kind) {
+      if (true === dialog.accepted && CONFIRM_DIALOG_KIND === kind) {
         answer = { answered: true }; // the caller's own yes, as the SDK records it (#2167)
       }
       const session = deps.resolveSession(leaseId);
