@@ -73,6 +73,7 @@ import {
   startPathMismatchHint,
   withStartPageWait,
 } from './flow-start-path.js';
+import { startPageLoadingProbe } from './start-page-loading.js';
 import { requestSender, type OpenPage } from './steps/page-steps.js';
 
 export function latestRecordedFlow(
@@ -406,10 +407,9 @@ async function replayOnce(
   // connected session — and the hint below turns the wrong-page drift into an actionable next move.
   // Continuing at a step means the page is already there; going to the start would undo it.
   const { to, at: continueAt } = replayWindow(args);
-  const pool = deps.pool;
-  // Only a pool lease can say its page is still loading; any other tab keeps the step budget.
-  const stillLoading =
-    pool === undefined ? undefined : (): Promise<boolean> => pool.leaseLoading(connected.id);
+  // A lease, or the tab `verify` drives, can say its page is still loading. Any other tab keeps the
+  // step budget.
+  const stillLoading = await startPageLoadingProbe(deps.pool, deps.realInput, connected);
   const arrival =
     continueAt === undefined
       ? await arriveAtStartPath(
