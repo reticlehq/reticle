@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — `reticle_flow_save` told an agent that a flow with page checks "asserts no observable outcome".** A flow with an `intent` whose steps check page text was warned that it "claims to verify a goal it cannot actually check". The flow does check the text, and a replay evaluates it, so agents read the warning as "the checks were lost" and told users not to trust a flow that replays. The warning now names what the flow checks (for example `text (2)`) and says what it does not: a request, a signal or app state. Closes [#1801](https://github.com/reticlehq/reticle/issues/1801).
