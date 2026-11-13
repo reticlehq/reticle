@@ -182,3 +182,54 @@ describe('a key that belongs to another action of the same tool', () => {
     );
   });
 });
+
+/*
+ * #2144. Two actions bound one field differently, and the merged tool kept only the first bound.
+ * `reticle_assert { action: "now" }` caps `timeout_ms` at one request; `action: "wait"` takes up to
+ * 600000 and answers `resume_ms` for the rest. The merged schema kept the cap of "now", so every wait
+ * longer than one request was refused, and `reticle verify --expect --timeout 120000` printed
+ * `verified: unknown`.
+ */
+describe('a field two actions bound differently', () => {
+  const merged = mergeTools({
+    name: 'reticle_pair',
+    description: 'two',
+    actions: {
+      short: member('a', { timeout_ms: z.number().max(10).optional() }),
+      long: member('b', { timeout_ms: z.number().max(100).optional() }),
+    },
+    defaultAction: 'short',
+  });
+  const accepts = (value: unknown): boolean =>
+    z.object(merged.inputSchema).safeParse({ timeout_ms: value }).success;
+
+  it('advertises a schema that takes the value either action takes', () => {
+    expect(accepts(50)).toBe(true);
+    expect(accepts(5)).toBe(true);
+    expect(accepts(500), 'no action takes it').toBe(false);
+  });
+
+  it('gives each action its own bound', async () => {
+    await expect(merged.handler(deps, { action: 'long', timeout_ms: 50 })).resolves.toMatchObject({
+      ran: 'b',
+    });
+    await expect(merged.handler(deps, { action: 'short', timeout_ms: 50 })).rejects.toThrow(
+      /invalid parameter for reticle_pair \{ action: "short" \}: timeout_ms/,
+    );
+  });
+
+  it('checks a bare call against its default action', async () => {
+    await expect(merged.handler(deps, { timeout_ms: 50 })).rejects.toThrow('timeout_ms');
+    await expect(merged.handler(deps, { timeout_ms: 5 })).resolves.toMatchObject({ ran: 'a' });
+  });
+
+  it('lets reticle_assert { action: "wait" } take a wait longer than one request', async () => {
+    const assert = MERGED_TOOLS.find((t) => t.name === ReticleTool.ASSERT);
+    if (assert === undefined) {
+      throw new Error('reticle_assert is not on the merged surface');
+    }
+    const asked = { predicate: { kind: 'text', contains: 'x' }, timeout_ms: 120_000 };
+    expect(z.object(assert.inputSchema).safeParse({ action: 'wait', ...asked }).success).toBe(true);
+    await expect(assert.handler(deps, { action: 'now', ...asked })).rejects.toThrow('timeout_ms');
+  });
+});

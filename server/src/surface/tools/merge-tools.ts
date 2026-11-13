@@ -95,13 +95,112 @@ function strayKeysRefusal(
 /** The union of member input shapes, every field optional so one schema serves every action. */
 function unionShape(actions: Record<string, ToolDef>): Record<string, z.ZodType> {
   const shape: Record<string, z.ZodType> = {};
+  const contested = contestedKeys(actions);
   for (const tool of Object.values(actions)) {
     for (const [key, schema] of Object.entries(tool.inputSchema)) {
-      // First definition wins; siblings share field names/meanings by construction.
-      shape[key] ??= schema.isOptional() ? schema : schema.optional();
+      if (key in shape) {
+        continue;
+      }
+      // First definition wins, unless members accept different values for it: see contestedKeys.
+      if (contested.has(key)) {
+        shape[key] = eitherBound(key, actions);
+      } else {
+        shape[key] = schema.isOptional() ? schema : schema.optional();
+      }
     }
   }
   return shape;
+}
+
+/**
+ * What a field accepts, without its description: two members that word one field differently
+ * still accept the same values.
+ */
+function boundOf(schema: z.ZodType): string | undefined {
+  try {
+    const json: Record<string, unknown> = { ...z.toJSONSchema(schema, { unrepresentable: 'any' }) };
+    delete json['description'];
+    return JSON.stringify(json);
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * The fields two members accept different values for (#2144).
+ *
+ * `reticle_assert { action: "now" }` caps `timeout_ms` at one request, and `action: "wait"` takes up
+ * to 600000 and answers `resume_ms` for the rest. With the first definition winning, the merged tool
+ * kept the cap of "now", and refused every wait longer than one request: `reticle verify --expect
+ * --timeout 120000` printed `verified: unknown`.
+ */
+function contestedKeys(actions: Record<string, ToolDef>): ReadonlySet<string> {
+  const seen = new Map<string, string | undefined>();
+  const contested = new Set<string>();
+  for (const tool of Object.values(actions)) {
+    for (const [key, schema] of Object.entries(tool.inputSchema)) {
+      const bound = boundOf(schema);
+      if (!seen.has(key)) {
+        seen.set(key, bound);
+      } else if (seen.get(key) !== bound) {
+        contested.add(key);
+      }
+    }
+  }
+  return contested;
+}
+
+/**
+ * A contested field accepts what any member accepts. The dispatch then checks the value against the
+ * chosen action's own schema (`contestedRefusal`), so no action gets a value it would refuse.
+ */
+function eitherBound(key: string, actions: Record<string, ToolDef>): z.ZodType {
+  const owners = Object.entries(actions).filter(([, tool]) => key in tool.inputSchema);
+  const schemas = owners.flatMap(([, tool]) => {
+    const schema = tool.inputSchema[key];
+    return schema === undefined ? [] : [schema];
+  });
+  const described = owners
+    .map(([action, tool]) => {
+      const said = tool.inputSchema[key]?.description;
+      return said === undefined ? undefined : `For action "${action}": ${said}`;
+    })
+    .filter((said): said is string => said !== undefined)
+    .join(' ');
+  const [first, second, ...rest] = schemas;
+  if (first === undefined || second === undefined) {
+    throw new Error(`mergeTools: contested key '${key}' has fewer than two schemas`);
+  }
+  const either = z.union([first, second, ...rest]).optional();
+  return 0 === described.length ? either : either.describe(described);
+}
+
+/** The refusal for a contested field whose value the chosen action does not accept. */
+function contestedRefusal(
+  tool: string,
+  action: string,
+  args: Record<string, unknown>,
+  chosen: ToolDef,
+  contested: ReadonlySet<string>,
+): string | undefined {
+  const named: string[] = [];
+  for (const key of contested) {
+    const schema = chosen.inputSchema[key];
+    if (schema === undefined || args[key] === undefined) {
+      continue;
+    }
+    const checked = schema.safeParse(args[key]);
+    if (!checked.success) {
+      named.push(`${key} (${checked.error.issues.map((issue) => issue.message).join('; ')})`);
+    }
+  }
+  if (0 === named.length) {
+    return undefined;
+  }
+  return (
+    `invalid ${1 === named.length ? 'parameter' : 'parameters'} for ${tool} { action: "${action}" }: ` +
+    `${named.join('; ')} — NOT applied, so any result would be an answer to a different question`
+  );
 }
 
 /**
@@ -210,6 +309,7 @@ export function mergeTools(spec: MergeSpec): ToolDef {
       `mergeTools(${spec.name}): defaultAction '${spec.defaultAction}' is not one of its actions`,
     );
   }
+  const contested = contestedKeys(spec.actions);
   return {
     name: spec.name,
     description: spec.description,
@@ -240,6 +340,13 @@ export function mergeTools(spec: MergeSpec): ToolDef {
       );
       if (0 < stray.length && action !== undefined) {
         return Promise.reject(new Error(strayKeysRefusal(spec.name, action, stray, spec.actions)));
+      }
+      const outOfBounds =
+        action === undefined
+          ? undefined
+          : contestedRefusal(spec.name, action, args, chosen, contested);
+      if (outOfBounds !== undefined) {
+        return Promise.reject(new Error(outOfBounds));
       }
       return chosen.handler(deps, args, call);
     },

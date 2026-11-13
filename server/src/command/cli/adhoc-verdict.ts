@@ -170,15 +170,49 @@ function runRefusal(result: unknown): string | undefined {
   return refusalText(result) ?? ('string' === typeof said ? said : undefined);
 }
 
+/** The `reticle_assert` action that waits for a predicate within a budget. */
+const ASSERT_WAIT_ACTION = 'wait';
+
+/**
+ * The refusal of a daemon whose `reticle_assert` takes no `action`: every surface but the merged
+ * one, where `reticle_wait_for` is still a tool of its own.
+ */
+const REFUSES_ACTION = /unknown parameter[^\n]*\baction\b/i;
+
+/**
+ * One wait for the predicate, through `reticle_assert { action: "wait" }` (#2144).
+ *
+ * It went through `reticle_run { tool: "reticle_wait_for" }`. That name was merged into
+ * `reticle_assert`, and a 3.9.0 daemon answered it with "reticle_wait_for was merged into
+ * reticle_assert", so every `--expect` with a long `--timeout` printed `verified: unknown`. A daemon
+ * whose `reticle_assert` takes no action still has `reticle_wait_for` as a tool, so that is the
+ * one place the name is still used.
+ */
+async function waitOnce(
+  caller: ToolCaller,
+  args: Record<string, unknown>,
+  timeoutMs: number,
+): Promise<unknown> {
+  const waited = await caller.call(
+    ReticleTool.ASSERT,
+    { action: ASSERT_WAIT_ACTION, ...args },
+    timeoutMs,
+  );
+  const refused = runRefusal(waited);
+  if (refused === undefined || !REFUSES_ACTION.test(refused)) {
+    return waited;
+  }
+  return caller.call(ReticleTool.RUN, { tool: ReticleTool.WAIT_FOR, args }, timeoutMs);
+}
+
 /**
  * Wait for the expectation, then grade it with ONE `reticle_assert` (#1533).
  *
- * The grade is `reticle_assert`'s, never the wait's: it journals, captures the assertion, and
- * carries `verifiedReason`, contradictions and coverage, which `reticle_wait_for` does not.
- * `reticle_assert` already waits when `timeout_ms > 0`, up to one request. A longer budget spends
- * the part one assert cannot hold in `reticle_wait_for` first, through `reticle_run` (the route
- * every tool profile has), following `resume_ms`, and then asserts. No `since` is passed by
- * either: both default to the same last-act cursor, and nothing here acts in between.
+ * The grade is the final `reticle_assert`'s: it journals, captures the assertion, and carries
+ * `verifiedReason`, contradictions and coverage. `reticle_assert` already waits when
+ * `timeout_ms > 0`, up to one request. A longer budget spends the part one assert cannot hold in
+ * `reticle_assert { action: "wait" }` first, following `resume_ms`, and then asserts. No `since` is
+ * passed by either: both default to the same last-act cursor, and nothing here acts in between.
  */
 async function waitForExpectation(
   caller: ToolCaller,
@@ -189,22 +223,23 @@ async function waitForExpectation(
   const budget = Math.max(0, timeoutMs ?? DEFAULT_EXPECT_WAIT_MS);
   let settle = budget - ASSERT_MAX_WAIT_MS;
   while (0 < settle) {
-    const waited = await caller.call(
-      ReticleTool.RUN,
-      { tool: ReticleTool.WAIT_FOR, args: { predicate, timeout_ms: settle, ...pin } },
-      // The daemon blocks no longer than one request allows and answers resume_ms past that, so
-      // the budget plus slack always outlasts the call.
+    // The daemon blocks no longer than one request allows and answers resume_ms past that, so the
+    // budget plus slack always outlasts the call.
+    const waited = await waitOnce(
+      caller,
+      { predicate, timeout_ms: settle, ...pin },
       settle + WAIT_CALL_SLACK_MS,
     );
     const refused = runRefusal(waited);
     if (refused !== undefined) {
       return { refused };
     }
-    // By `pass`, which every wait answers with: a "not yet" carries no `verified`.
-    const report = verdictOf(waited, 'pass');
+    // In the shape `reticle_assert` answers: a final answer carries `verified`, and only a wait
+    // that the per-call cap stopped carries `resume_ms` without one.
+    const report = verdictOf(waited, 'resume_ms');
     const resume = report?.['resume_ms'];
     if (
-      true === report?.['pass'] ||
+      report?.['verified'] !== undefined ||
       'number' !== typeof resume ||
       resume <= 0 ||
       resume >= settle

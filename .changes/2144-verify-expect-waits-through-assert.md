@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — `reticle verify <url> --expect` with a `--timeout` over 110 s answered `verified: unknown`.** The merged `reticle_assert` kept the 55 s `timeout_ms` cap of `action: "now"` for `action: "wait"` too, so every wait longer than one request was refused with `timeout_ms (Too big: expected number to be <=55000)`. Each action now has its own bound: `wait` takes up to 600000 again and answers `resume_ms` past one request, and `now` still refuses more than 55000. The CLI now waits through `reticle_assert { action: "wait" }` and no longer calls the merged name `reticle_wait_for`, which a 3.9.0 daemon answered with "was merged into reticle_assert". Closes [#2144](https://github.com/reticlehq/reticle/issues/2144).
