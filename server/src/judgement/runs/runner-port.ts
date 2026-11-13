@@ -16,6 +16,26 @@ import type { RunnerPort } from './reticle-runner.js';
 import { defaultRunId } from './default-run-id.js';
 export { defaultRunId } from './default-run-id.js';
 
+/**
+ * How long a flow's end waits for a session to come back. A page of the app reconnects in well
+ * under this ceiling. A page with no SDK never does. It is a ceiling, not a delay.
+ */
+const SESSION_BACK_TIMEOUT_MS = 5000;
+const SESSION_POLL_MS = 25;
+
+/** The session this run drives, or undefined when none is connected. */
+function liveSession(deps: ToolDeps, sessionId: string | undefined): object | undefined {
+  try {
+    return deps.sessions.resolve(sessionId);
+  } catch {
+    return undefined;
+  }
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /** Wire a RunnerPort to the live session. Pass sessionId to disambiguate when several tabs are open. */
 export function createRunnerPort(
   deps: ToolDeps,
@@ -23,6 +43,16 @@ export function createRunnerPort(
   /** `reticle verify --confirm-dangerous`: this run acknowledges the steps held as destructive. */
   opts: { confirmDangerous?: boolean; requireStartControl?: boolean; sweep?: boolean } = {},
 ): RunnerPort {
+  const sessionBack = async (): Promise<boolean> => {
+    const start = deps.now();
+    while (liveSession(deps, sessionId) === undefined) {
+      if (deps.now() - start >= SESSION_BACK_TIMEOUT_MS) {
+        return false;
+      }
+      await sleep(SESSION_POLL_MS);
+    }
+    return true;
+  };
   // Each flow starts from the state the run started in, so one that signs out cannot fail the rest.
   const startState = flowStartState(deps.realInput, () => sessionUrlOf(deps, sessionId));
   return {
@@ -49,6 +79,14 @@ export function createRunnerPort(
         ...(true === opts.sweep ? { sweep: true } : {}),
       });
     },
+    sessionLost: async () => {
+      if (await sessionBack()) {
+        return undefined;
+      }
+      const lastUrl = deps.realInput?.pageUrl?.();
+      return lastUrl === undefined ? {} : { lastUrl };
+    },
+    reopen: async () => true === (await deps.realInput?.reopen?.()) && (await sessionBack()),
     now: () => deps.now(),
     newRunId: defaultRunId,
   };
