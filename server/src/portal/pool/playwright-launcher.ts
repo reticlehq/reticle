@@ -30,6 +30,7 @@ import {
 import { widenDocumentCsp } from './csp-widen.js';
 import { contextEmulationOf } from './lease-emulation.js';
 import { determinismConfigOf, installDeterminism } from './determinism.js';
+import { watchCodeFetches } from './code-fetch-tracker.js';
 
 /** A key addresses focus, not a point; the gesture driver takes a box for every action. */
 const NO_BOX: ElementBox = { x: 0, y: 0, width: 0, height: 0 };
@@ -172,6 +173,8 @@ function wrapBrowser(browser: Browser, headless: boolean): PooledBrowser {
       return {
         newPage: async (): Promise<PooledPage> => {
           const page = await context.newPage();
+          // Before the first navigation, so the requests of the first load are counted.
+          const codeFetches = watchCodeFetches(page, Date.now);
           // Before the first navigation, so the code that runs while the page loads is counted.
           if (true === jsCoverage) {
             await startJsCoverage(page, covering);
@@ -179,6 +182,7 @@ function wrapBrowser(browser: Browser, headless: boolean): PooledBrowser {
           return {
             goto: (url, opts) => page.goto(url, gotoOptions(opts?.timeoutMs)),
             close: () => page.close(),
+            fetchingCode: () => codeFetches.fetching(),
             evaluate: (script) => page.evaluate(script),
             // Playwright returns a Buffer; Uint8Array is what the visual store and differ take.
             // Same determinism as the driven path's capturePage: without it a lease baseline caught
