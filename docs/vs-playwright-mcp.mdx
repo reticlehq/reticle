@@ -73,6 +73,35 @@ They compose cleanly, and the combination is better than either alone:
 
 Reticle also has a driven mode (`reticle drive`) that provides real CDP input and screenshots, so a lot of teams do not need both. Start with whichever matches the question you ask most often.
 
+## Driving the app with Playwright while Reticle is embedded
+
+When an agent or test runner drives the browser with its own Playwright instance while Reticle's dev SDK is embedded, clicks must interact with the app rather than Reticle's own UI overlays.
+
+### Tour under automation
+
+In `@reticlehq/browser` 3.3.0 and later, the first-run onboarding tour automatically disables itself when automation is detected:
+
+```ts
+if (true === deps.navigator?.webdriver) return undefined;
+```
+
+Playwright sets `navigator.webdriver` to `true` by default, so a Playwright context launched by an agent never mounts the tour or its click-intercepting scrim. If you are on `@reticlehq/browser` 3.2.0 or earlier, upgrade to 3.3.0 or higher to avoid the tour scrim capturing initial clicks.
+
+### Identifying Reticle's UI subtree
+
+All presenter elements (the HUD toolbar, floating action buttons, and chat panel) are mounted within a single subtree marked by `[data-reticle-overlay]`:
+
+- To await Reticle's readiness before driving actions:
+  ```ts
+  await page.waitForSelector('[data-reticle-overlay]', { state: 'attached' });
+  ```
+- To minimise the HUD during automation: click the minimise button or set `reticle-presenter-minimised` to `'1'` in `sessionStorage`. Minimised state is preserved across reloads.
+- To scope your Playwright locators away from Reticle: target your app root (such as `#root`, `#app`, or `main`) or exclude `[data-reticle-overlay]`.
+
+### If an overlay covers a control
+
+Reticle is built so that its presenter surfaces do not occlude application controls. If any Reticle element obstructs an app interaction during automation, file an issue with the selector and layout details. Obstructing the app under test is treated as a bug.
+
 ## Choosing
 
 <CardGroup cols={2}>
