@@ -493,3 +493,45 @@ describe('the driven provider supports the tools that require a driven browser',
     expect(await provider.screenshot(DRIVE_URL, {})).toBeUndefined();
   });
 });
+
+/*
+ * #2060: a flow went to a page with no Reticle SDK, so the session dropped and did not come back.
+ * The next flow then ran with no session. The provider must say where the page went, and load the
+ * start URL again in the same page.
+ */
+describe('after a flow left the app', () => {
+  const DEAD_URL = 'http://localhost:3000/stats?id=missing';
+  const STAMPED = `${DRIVE_URL}?__reticle_opened=1`;
+
+  it('says the URL of the page it drives', async () => {
+    const spy = newSpy();
+    const provider = makeProvider(spy);
+    await provider.navigate();
+    spy.state.page.url = DEAD_URL;
+    expect(provider.pageUrl()).toBe(DEAD_URL);
+  });
+
+  it('loads the start URL again in the same page', async () => {
+    const spy = newSpy();
+    const provider = makeProvider(spy);
+    await provider.navigate();
+    spy.state.page.url = DEAD_URL;
+    await expect(provider.reopen()).resolves.toBe(true);
+    expect(spy.calls).toHaveLength(1);
+    expect(spy.state.page.gotoCalls).toEqual([STAMPED, STAMPED]);
+  });
+
+  it('is false, and does not throw, when the page cannot load', async () => {
+    const spy = newSpy();
+    const provider = makeProvider(spy);
+    await provider.navigate();
+    spy.state.page.gotoThrows = true;
+    await expect(provider.reopen()).resolves.toBe(false);
+  });
+
+  it('is false before navigate ran', async () => {
+    const provider = makeProvider(newSpy());
+    expect(provider.pageUrl()).toBeUndefined();
+    await expect(provider.reopen()).resolves.toBe(false);
+  });
+});
