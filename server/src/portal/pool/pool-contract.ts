@@ -63,6 +63,12 @@ export interface PooledPage {
   reloadIgnoringCache?(): Promise<void>;
   /** Set prefers-color-scheme and prefers-reduced-motion. OPTIONAL: without it the media stay. */
   emulateMedia?(media: LeaseMedia): Promise<void>;
+  /**
+   * Whether the page still fetches its code: a document, script or stylesheet request is open, or
+   * one ended a moment ago (see `trackCodeFetches`). OPTIONAL: without it only the document's
+   * `readyState` says whether the page is loading.
+   */
+  fetchingCode?(): boolean;
   /** Evaluate a script in the page's current document. OPTIONAL: without it no reader is injected. */
   evaluate?(script: string): Promise<unknown>;
   /** Add an init script to run after document creation but before any page scripts run. */
