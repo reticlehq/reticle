@@ -13,9 +13,13 @@ export const PRE_ATTACH_ERRORS_LIMIT = 50;
  *
  * This runs during parse, before any module. It keeps the raw `error` events (capture phase, because
  * a failed `<script>` dispatches on the element and does not bubble), the unhandled rejections and
- * the `console.error` arguments. The SDK reads the queue once when it attaches, reports each entry
- * marked as pre-attach, and calls `close()`, so nothing is kept or reported twice. The
- * `console.error` wrapper stays in the chain after that and only calls through.
+ * the `console.error` arguments. When the SDK's console observer installs, it calls
+ * `drain(onError, onRejection, onConsole, dropped)` once. The buffer stops keeping and removes its
+ * listeners, then hands each entry to the SDK's own handler. Before each one it calls `dropped`:
+ * with the count of the entries it did not keep before the first, and with 0 after that. The SDK
+ * marks what it gets during this call as pre-attach itself. The handling code lives here and not
+ * in the SDK, so a page pays nothing for it in the SDK bundle.
+ * The `console.error` wrapper stays in the chain after that and only calls through.
  *
  * It does not install on a page Reticle drives: that page already has the pool's early capture
  * (RETICLE_EARLY_CAPTURE), which hands the same errors to the SDK.
@@ -25,13 +29,18 @@ export const PRE_ATTACH_ERRORS_LIMIT = 50;
 export const PRE_ATTACH_ERRORS_SOURCE = `(function(){try{
 var P='${RETICLE_PRE_ATTACH_ERRORS}',D='${RETICLE_EARLY_CAPTURE}',g=globalThis;
 if(g[P]!==undefined||g[D]!==undefined||typeof g.addEventListener!=='function')return;
-var B={queue:[],dropped:0,open:true};
+var B={open:true},q=[],n=0;
 g[P]=B;
-var keep=function(item){if(!B.open)return;if(B.queue.length<${String(PRE_ATTACH_ERRORS_LIMIT)}){B.queue.push(item);}else{B.dropped++;}};
+var keep=function(item){if(!B.open)return;if(q.length<${String(PRE_ATTACH_ERRORS_LIMIT)}){q.push(item);}else{n++;}};
 var onEvent=function(e){keep({event:e});};
 g.addEventListener('error',onEvent,true);
 g.addEventListener('unhandledrejection',onEvent,true);
 var c=g.console,ne=c&&c.error;
 if(typeof ne==='function'){c.error=function(){keep({args:Array.prototype.slice.call(arguments)});return ne.apply(this,arguments);};}
-B.close=function(){B.open=false;B.queue=[];g.removeEventListener('error',onEvent,true);g.removeEventListener('unhandledrejection',onEvent,true);};
+B.drain=function(onError,onRejection,onConsole,dropped){
+if(!B.open)return;
+var kept=q,i,it;B.open=false;q=[];
+g.removeEventListener('error',onEvent,true);g.removeEventListener('unhandledrejection',onEvent,true);
+for(i=0;i<kept.length;i++){it=kept[i];try{dropped(i===0?n:0);
+if(it.args){onConsole('error',it.args);}else if(it.event.type==='unhandledrejection'){onRejection(it.event);}else{onError(it.event);}}catch(e){}}};
 }catch(e){}})();`;

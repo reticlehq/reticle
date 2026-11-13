@@ -615,13 +615,14 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       // Two nudges, both only on a GREEN verdict (a failing one is moot): a presence-only assertion
       // a wrong element can fake, and an assertion pinned to a status Reticle derived rather than one
       // a server sent. Neither blocks — the assertion still passes; they steer the next one.
-      const advice = !verdict.pass
-        ? {}
-        : isPresenceOnlyAssertion(predicate)
-          ? { advice: PRESENCE_ONLY_ADVICE }
-          : assertsDerivedIpcStatus(predicate)
-            ? { advice: DERIVED_IPC_STATUS_ADVICE }
-            : {};
+      let advice: { advice?: string } = {};
+      if (verdict.pass) {
+        if (isPresenceOnlyAssertion(predicate)) {
+          advice = { advice: PRESENCE_ONLY_ADVICE };
+        } else if (assertsDerivedIpcStatus(predicate)) {
+          advice = { advice: DERIVED_IPC_STATUS_ADVICE };
+        }
+      }
       // Asked of every verdict drawn after an observed edit, not once per edit — see
       // isChangeUndeclared for why repeating it is disclosure rather than nagging.
       // Read once: the undeclared-change check and the engine's claim reading share it.
@@ -805,8 +806,10 @@ export const OBSERVE_TOOLS: ToolDef[] = [
        * `true` and `false` keep their exact old meanings, so a caller that already passes one is
        * unaffected. Only the omitted case moves.
        */
-      const bodyMode: BodyMode =
-        'boolean' === typeof args['bodies'] ? (args['bodies'] ? 'all' : 'none') : 'auto';
+      let bodyMode: BodyMode = 'auto';
+      if ('boolean' === typeof args['bodies']) {
+        bodyMode = args['bodies'] ? 'all' : 'none';
+      }
       // A filter names specific calls, so under `auto` their bodies are the thing being asked about.
       const named = method !== undefined || urlContains !== undefined || status !== undefined;
       const buffer = bufferEnvelope(session);

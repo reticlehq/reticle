@@ -274,11 +274,6 @@
       "count": 13
     }
   },
-  "src/observers/console.ts": {
-    "curly": {
-      "count": 7
-    }
-  },
   "src/observers/context-open.ts": {
     "curly": {
       "count": 2

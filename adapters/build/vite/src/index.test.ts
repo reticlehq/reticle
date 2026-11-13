@@ -35,7 +35,9 @@ const serveRequest = (
   req: { url?: string; headers?: { accept?: string } },
 ): void => {
   const watch = plugin.injectionWatchForTest;
-  if (true === watch?.isDocumentRequest(req)) watch.noteHtmlRequest();
+  if (true === watch?.isDocumentRequest(req)) {
+    watch.noteHtmlRequest();
+  }
 };
 
 // Point the token lookup at an empty temp dir so tests never pick up a real ~/.reticle/pairing-token.
@@ -43,8 +45,11 @@ const emptyTokenDir = mkdtempSync(join(tmpdir(), 'reticle-vite-token-'));
 const savedTokenDir = process.env[ReticleEnv.PAIRING_TOKEN_DIR];
 process.env[ReticleEnv.PAIRING_TOKEN_DIR] = emptyTokenDir;
 afterAll(() => {
-  if (savedTokenDir === undefined) delete process.env[ReticleEnv.PAIRING_TOKEN_DIR];
-  else process.env[ReticleEnv.PAIRING_TOKEN_DIR] = savedTokenDir;
+  if (savedTokenDir === undefined) {
+    delete process.env[ReticleEnv.PAIRING_TOKEN_DIR];
+  } else {
+    process.env[ReticleEnv.PAIRING_TOKEN_DIR] = savedTokenDir;
+  }
 });
 
 describe('reticle vite plugin', () => {
@@ -272,8 +277,11 @@ describe('connect options the SDK supports are reachable from the plugin', () =>
     try {
       expect(connectModuleSource({})).toContain('allowNonLocalhost');
     } finally {
-      if (prev === undefined) delete process.env[ALLOW_ENV];
-      else process.env[ALLOW_ENV] = prev;
+      if (prev === undefined) {
+        delete process.env[ALLOW_ENV];
+      } else {
+        process.env[ALLOW_ENV] = prev;
+      }
     }
   });
 });

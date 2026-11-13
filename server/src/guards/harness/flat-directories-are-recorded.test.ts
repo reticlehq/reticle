@@ -72,9 +72,7 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   'adapters/realm/browser/src/actions': 12,
   'adapters/realm/browser/src/dom': 20,
   // +1: error-repeats.ts, the limiter every uncaught-error path in console.ts goes through (#986).
-  // +1: pre-attach-errors.ts, which reads the build plugin's buffer of errors raised before the SDK
-  // attached; console.ts reports them (#1540).
-  'adapters/realm/browser/src/observers': 28,
+  'adapters/realm/browser/src/observers': 27,
   // 17 since the HUD's position primitives left `presenter-drag.ts` for their own leaf: the drag
   // gesture re-syncs the dock layout, and the dock layout reads the HUD's position, so the two files
   // needed each other over primitives that belong to neither.
@@ -150,7 +148,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // `constants.ts`, because that file is already the monorepo's broad wire vocabulary. The split is
   // deliberate even though it makes this shallow directory cross the line.
   // 13 with `determinism.ts`: the names a deterministic lease shares with the SDK in its page.
-  'core/src/wire/constants': 13,
+  // 14 with `console-event.ts`: the console payload fields and the pre-attach error buffer's global,
+  // split out of `constants.ts` at its 1000-line cap (#1540).
+  'core/src/wire/constants': 14,
   // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
   // things on the Node side read back, and its parser was living beside the MCP tool handlers — so
   // every other reader imported from the tool surface to parse a string the tool surface does not

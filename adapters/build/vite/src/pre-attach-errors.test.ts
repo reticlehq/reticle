@@ -52,10 +52,20 @@ function fakePage(extra: Record<string, unknown> = {}): FakePage {
 }
 
 interface Buffer {
-  queue: unknown[];
-  dropped: number;
   open: boolean;
-  close: () => void;
+  drain: (
+    onError: (event: unknown) => void,
+    onRejection: (event: unknown) => void,
+    onConsole: (method: string, args: unknown[]) => void,
+    dropped: (count: number) => void,
+  ) => void;
+}
+
+/** One call the buffer made into the SDK's handlers, with the dropped count it set before it. */
+interface Handed {
+  to: 'error' | 'rejection' | 'console';
+  what: unknown;
+  dropped: number | undefined;
 }
 
 function run(page: FakePage): Buffer | undefined {
@@ -63,12 +73,27 @@ function run(page: FakePage): Buffer | undefined {
   return page.global[RETICLE_PRE_ATTACH_ERRORS] as Buffer | undefined;
 }
 
+/** Drain the buffer the way the SDK's console observer does, and record what it handed over. */
+function drain(buffer: Buffer | undefined): { handed: Handed[] } {
+  const handed: Handed[] = [];
+  let dropped: number | undefined;
+  buffer?.drain(
+    (event) => handed.push({ to: 'error', what: event, dropped }),
+    (event) => handed.push({ to: 'rejection', what: event, dropped }),
+    (method, args) => handed.push({ to: 'console', what: [method, args], dropped }),
+    (count) => {
+      dropped = count;
+    },
+  );
+  return { handed };
+}
+
 function logError(page: FakePage, ...args: unknown[]): void {
   (page.global['console'] as { error: (...a: unknown[]) => void }).error(...args);
 }
 
 describe('the pre-attach error buffer (#1540)', () => {
-  it('keeps error events, rejections and console.error calls, and still prints them', () => {
+  it('hands each kept entry to the matching SDK handler, in order', () => {
     const page = fakePage();
     const buffer = run(page);
     const failed = { type: 'error', target: 'script' };
@@ -76,41 +101,65 @@ describe('the pre-attach error buffer (#1540)', () => {
     page.fire('error', failed);
     page.fire('unhandledrejection', rejected);
     logError(page, 'htmx:syntax:error', 42);
-
-    expect(buffer?.open).toBe(true);
-    expect(buffer?.queue).toEqual([
-      { event: failed },
-      { event: rejected },
-      { args: ['htmx:syntax:error', 42] },
-    ]);
+    // It still prints: the buffer only listens.
     expect(page.printed).toEqual([['htmx:syntax:error', 42]]);
+
+    expect(drain(buffer).handed).toEqual([
+      { to: 'error', what: failed, dropped: 0 },
+      { to: 'rejection', what: rejected, dropped: 0 },
+      { to: 'console', what: ['error', ['htmx:syntax:error', 42]], dropped: 0 },
+    ]);
   });
 
-  it('stops keeping and stops listening once the SDK closes it', () => {
+  it('stops keeping and listening when drained, and a second drain hands over nothing', () => {
     const page = fakePage();
     const buffer = run(page);
     page.fire('error', { type: 'error' });
-    buffer?.close();
+    expect(drain(buffer).handed).toHaveLength(1);
     page.fire('error', { type: 'error' });
     logError(page, 'after attach');
 
     expect(buffer?.open).toBe(false);
-    expect(buffer?.queue).toEqual([]);
     expect(page.listeners.get('error')).toEqual([]);
     expect(page.listeners.get('unhandledrejection')).toEqual([]);
+    expect(drain(buffer)).toEqual({ handed: [] });
     // The console.error wrapper stays in the chain and only calls through.
     expect(page.printed).toEqual([['after attach']]);
   });
 
-  it('keeps the first errors up to its limit and counts the rest', () => {
+  it('drains an empty buffer without calling any handler', () => {
+    const buffer = run(fakePage());
+    expect(drain(buffer).handed).toEqual([]);
+    expect(buffer?.open).toBe(false);
+  });
+
+  it('keeps the first errors up to its limit and declares the rest on the first entry', () => {
     const page = fakePage();
     const buffer = run(page);
     for (let i = 0; i < PRE_ATTACH_ERRORS_LIMIT + 7; i += 1) {
       page.fire('error', { i });
     }
-    expect(buffer?.queue).toHaveLength(PRE_ATTACH_ERRORS_LIMIT);
-    expect(buffer?.queue[0]).toEqual({ event: { i: 0 } });
-    expect(buffer?.dropped).toBe(7);
+    const { handed } = drain(buffer);
+    expect(handed).toHaveLength(PRE_ATTACH_ERRORS_LIMIT);
+    expect(handed[0]).toEqual({ to: 'error', what: { i: 0 }, dropped: 7 });
+    expect(handed[1]?.dropped).toBe(0);
+  });
+
+  it('goes on with the next entry when an SDK handler throws', () => {
+    const page = fakePage();
+    const buffer = run(page);
+    page.fire('error', { type: 'error' });
+    logError(page, 'second');
+    const seen: unknown[] = [];
+    buffer?.drain(
+      () => {
+        throw new Error('handler failed');
+      },
+      () => undefined,
+      (_method, args) => seen.push(args),
+      () => undefined,
+    );
+    expect(seen).toEqual([['second']]);
   });
 
   it('does not install on a page Reticle drives, which has its own early capture', () => {
@@ -131,6 +180,6 @@ describe('the pre-attach error buffer (#1540)', () => {
     const page = fakePage({ console: undefined });
     const buffer = run(page);
     page.fire('error', { type: 'error' });
-    expect(buffer?.queue).toHaveLength(1);
+    expect(drain(buffer).handed).toHaveLength(1);
   });
 });

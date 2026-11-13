@@ -3474,11 +3474,6 @@
       "count": 1
     }
   },
-  "src/surface/tools/observe-tools.ts": {
-    "no-nested-ternary": {
-      "count": 3
-    }
-  },
   "src/surface/tools/platform-moment-nudge.test.ts": {
     "curly": {
       "count": 1

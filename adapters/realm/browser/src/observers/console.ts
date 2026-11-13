@@ -1,9 +1,14 @@
-import { CONSOLE_EVENT, EventType, TRANSPORT_LIMITS } from '@reticlehq/core';
+import {
+  DROPPED_PRE_ATTACH_FIELD,
+  EventType,
+  PRE_ATTACH_FIELD,
+  RETICLE_PRE_ATTACH_ERRORS,
+  TRANSPORT_LIMITS,
+} from '@reticlehq/core';
 import { observeSafely, type Emit, type Teardown } from './types.js';
 import { safeStringify } from '@/security/serialization.js';
 import { requireCapturedMethod } from '@/util/captured-method.js';
 import { createRepeatLimiter, type ErrorIdentity } from './error-repeats.js';
-import { takePreAttachErrors } from './pre-attach-errors.js';
 
 type ConsoleMethod = 'log' | 'warn' | 'error' | 'info' | 'debug';
 
@@ -25,8 +30,12 @@ const METHOD_EVENT: Record<ConsoleMethod, EventType> = {
 function stringifyArgs(args: unknown[]): string {
   return args
     .map((a) => {
-      if ('string' === typeof a) return a;
-      if (a instanceof Error) return a.message;
+      if ('string' === typeof a) {
+        return a;
+      }
+      if (a instanceof Error) {
+        return a.message;
+      }
       return safeStringify(a);
     })
     .join(' ');
@@ -36,16 +45,34 @@ function stringifyArgs(args: unknown[]): string {
 const MAX_STACK_LEN = TRANSPORT_LIMITS.MAX_STACK_LENGTH;
 
 function capStack(stack: string | undefined): string | undefined {
-  if (stack === undefined || 0 === stack.length) return undefined;
+  if (stack === undefined || 0 === stack.length) {
+    return undefined;
+  }
   return stack.length > MAX_STACK_LEN ? stack.slice(0, MAX_STACK_LEN) : stack;
 }
 
-/** The stack of the first Error argument, if any — the single biggest diagnosis upgrade, near-zero cost. */
-function firstErrorStack(args: unknown[]): string | undefined {
-  for (const arg of args) {
-    if (arg instanceof Error) return capStack(arg.stack);
-  }
-  return undefined;
+/**
+ * `{ stack }` for an Error, capped, and `{}` for anything else. One helper for every path that
+ * reports a stack (#1540: the shared shape keeps the SDK inside its first-load budget).
+ */
+function stackOf(value: unknown): { stack?: string } {
+  const stack = value instanceof Error ? capStack(value.stack) : undefined;
+  return stack === undefined ? {} : { stack };
+}
+
+/**
+ * The build plugin's pre-attach error buffer, as the SDK sees it (#1540). `drain` hands back what
+ * the page raised before the SDK attached: each kept error event, rejection or `console.error`
+ * call goes to the matching handler. Before the first entry it calls `dropped` with the count of
+ * the entries it did not keep, and after it with 0.
+ */
+interface PreAttachBuffer {
+  drain: (
+    onError: (event: Event) => void,
+    onRejection: (event: PromiseRejectionEvent) => void,
+    onConsole: (method: ConsoleMethod, args: unknown[]) => void,
+    dropped: (count: number) => void,
+  ) => void;
 }
 
 /** Patch console.{log,warn,error} and window error events. Reversible. */
@@ -53,18 +80,18 @@ export function installConsole(emit: Emit): Teardown {
   const methods: ConsoleMethod[] = ['log', 'warn', 'error', 'info', 'debug'];
   const originals = new Map<ConsoleMethod, (...args: unknown[]) => void>();
   const patched = new Map<ConsoleMethod, (...args: unknown[]) => void>();
-
-  const emitConsole = (
-    method: ConsoleMethod,
-    args: unknown[],
-    extra: Record<string, unknown>,
-  ): void => {
-    // Only console.error carries a stack — the diagnosis case; log/warn stay lean.
-    const stack = 'error' === method ? firstErrorStack(args) : undefined;
-    emit(METHOD_EVENT[method], {
-      message: stringifyArgs(args),
-      ...(stack === undefined ? {} : { stack }),
-      ...extra,
+  // The pre-attach fields (#1540): set only while the buffer hands its entries over, and spread
+  // FIRST, so they can never replace a field of the event itself.
+  let marks: Record<string, unknown> = {};
+  const report = (method: ConsoleMethod, args: unknown[]): void => {
+    observeSafely(() => {
+      emit(METHOD_EVENT[method], {
+        ...marks,
+        message: stringifyArgs(args),
+        // Only console.error carries a stack, of its first Error argument — the diagnosis case,
+        // near-zero cost. log/warn stay lean.
+        ...('error' === method ? stackOf(args.find((arg) => arg instanceof Error)) : {}),
+      });
     });
   };
 
@@ -80,9 +107,7 @@ export function installConsole(emit: Emit): Teardown {
       // same reason. `stringifyArgs` walks arbitrary app objects, so one hostile getter or revoked
       // proxy would otherwise throw out of the app's own `console.log` before it had logged anything.
       callOriginal(...args);
-      observeSafely(() => {
-        emitConsole(method, args, {});
-      });
+      report(method, args);
     };
     patched.set(method, wrapper);
     console[method] = wrapper;
@@ -96,20 +121,21 @@ export function installConsole(emit: Emit): Teardown {
    * Emit an uncaught error unless it is a repeat already reported enough times.
    *
    * The payload IS the identity: every field that distinguishes two occurrences is a field the
-   * event already carries, so there is nothing to keep in step between them. `extra` is not part of
-   * it: it says WHEN the error was heard (before the SDK attached), not which error it is.
+   * event already carries, so there is nothing to keep in step between them.
    */
-  const emitError = (payload: ErrorIdentity, extra: Record<string, unknown>): void => {
+  const emitError = (payload: ErrorIdentity): void => {
     const decision = repeats.admit(payload);
-    if (!decision.emit) return;
+    if (!decision.emit) {
+      return;
+    }
     emit(EventType.ERROR_UNCAUGHT, {
+      ...marks,
       ...payload,
       ...(undefined === decision.repeats ? {} : { repeats: decision.repeats }),
-      ...extra,
     });
   };
 
-  const reportError = (event: Event, extra: Record<string, unknown>): void => {
+  const onError = (event: Event): void => {
     // A SUBRESOURCE that failed to load — `<img>`, `<script>`, `<link>`, media. The browser writes
     // these to the console and none of them passes through a console method, so patching console
     // cannot see them. They dispatch on the ELEMENT and do not bubble, which is why this listener
@@ -121,71 +147,34 @@ export function installConsole(emit: Emit): Teardown {
     // failure dispatches a plain `Event` whose target is the element. No double-report either way.
     if (!(event instanceof ErrorEvent)) {
       const target = event.target;
-      if (!(target instanceof Element) || target === (document as unknown as Element)) return;
+      if (!(target instanceof Element) || target === (document as unknown as Element)) {
+        return;
+      }
       const tag = target.tagName.toLowerCase();
       const url = target.getAttribute('src') ?? target.getAttribute('href') ?? '';
       observeSafely(() => {
         const message = `<${tag}> failed to load${0 === url.length ? '' : `: ${url}`}`;
-        emitError(
-          { message, kind: 'resource', ...(0 === url.length ? {} : { source: url }) },
-          extra,
-        );
+        emitError({ message, kind: 'resource', ...(0 === url.length ? {} : { source: url }) });
       });
       return;
     }
     observeSafely(() => {
-      const stack = capStack(event.error instanceof Error ? event.error.stack : undefined);
-      const payload = {
+      emitError({
         message: event.message,
         source: event.filename,
         line: event.lineno,
-        ...(stack === undefined ? {} : { stack }),
-      };
-      emitError(payload, extra);
-    });
-  };
-  const onError = (event: Event): void => {
-    reportError(event, {});
-  };
-  const reportRejection = (reason: unknown, extra: Record<string, unknown>): void => {
-    observeSafely(() => {
-      const stack = capStack(reason instanceof Error ? reason.stack : undefined);
-      const payload = {
-        message: reason instanceof Error ? reason.message : String(reason),
-        kind: 'unhandledrejection',
-        ...(stack === undefined ? {} : { stack }),
-      };
-      emitError(payload, extra);
+        ...stackOf(event.error),
+      });
     });
   };
   const onRejection = (event: PromiseRejectionEvent): void => {
-    reportRejection(event.reason, {});
-  };
-  const reportPreAttach = (): void => {
-    const early = takePreAttachErrors();
-    if (early === undefined) {
-      return;
-    }
-    early.entries.forEach((entry, i) => {
-      // The loss is declared on the first entry: the buffer keeps the first errors, which name the
-      // cause, and counts the rest.
-      const extra: Record<string, unknown> = {
-        [CONSOLE_EVENT.PRE_ATTACH]: true,
-        ...(0 === i && early.dropped > 0
-          ? { [CONSOLE_EVENT.DROPPED_PRE_ATTACH]: early.dropped }
-          : {}),
-      };
-      if ('console' === entry.kind) {
-        observeSafely(() => {
-          emitConsole('error', [...entry.args], extra);
-        });
-        return;
-      }
-      if ('reason' in entry.event) {
-        reportRejection((entry.event as PromiseRejectionEvent).reason, extra);
-        return;
-      }
-      reportError(entry.event, extra);
+    observeSafely(() => {
+      const reason: unknown = event.reason;
+      emitError({
+        message: reason instanceof Error ? reason.message : String(reason),
+        kind: 'unhandledrejection',
+        ...stackOf(reason),
+      });
     });
   };
   /**
@@ -200,17 +189,17 @@ export function installConsole(emit: Emit): Teardown {
    * it is named rather than reported as a blocked empty string.
    */
   const onViolation = (event: SecurityPolicyViolationEvent): void => {
-    const what = 0 === event.blockedURI.length ? 'inline content' : event.blockedURI;
+    const uri = event.blockedURI;
+    const what = 0 === uri.length ? 'inline content' : uri;
     // A report-only policy blocked NOTHING: the browser ran the resource and only reported it, and
     // DevTools shows it as a warning. Calling it an error that "blocked" something would be a false
     // red against a page that works.
     const reportOnly = REPORT_ONLY === event.disposition;
     emit(reportOnly ? EventType.CONSOLE_WARN : EventType.CONSOLE_ERROR, {
-      message: reportOnly
-        ? `[Report Only] Content Security Policy directive: ${event.violatedDirective} would block ${what}`
-        : `Content Security Policy directive: ${event.violatedDirective} blocked ${what}`,
+      // One template for both texts: the two differ only in the prefix and the verb.
+      message: `${reportOnly ? '[Report Only] ' : ''}Content Security Policy directive: ${event.violatedDirective} ${reportOnly ? 'would block' : 'blocked'} ${what}`,
       kind: CSP_VIOLATION_EVENT,
-      ...(0 === event.blockedURI.length ? {} : { source: event.blockedURI }),
+      ...(0 === uri.length ? {} : { source: uri }),
     });
   };
   // Capture phase: element `error` events do not bubble, so this is the only registration that
@@ -227,19 +216,31 @@ export function installConsole(emit: Emit): Teardown {
   window.addEventListener(CSP_VIOLATION_EVENT, onViolation, { capture: true, signal });
 
   // What the page raised before this observer existed: an entry module that 404'd or threw, a
-  // rejection, a `console.error` during start-up (#1540). The build plugin's inline buffer kept it;
-  // it is reported here once, through the same paths as a live error, and marked so the reader knows
-  // it happened before the SDK attached. The listeners above are already installed, so the buffer
-  // is closed with no gap, and nothing it kept is heard twice.
+  // rejection, a `console.error` during start-up (#1540). The build plugin's inline buffer kept it,
+  // and hands it over HERE, synchronously, after the listeners above are installed: it stops
+  // keeping in the same call, so there is no gap and nothing is reported twice.
+  // The buffer is page data, so the SDK writes the fields itself: `preAttach`, and the dropped
+  // count only when it is a positive integer. They apply only during this call: a `dropped` that a
+  // page keeps and calls later writes to an object no event reads any more.
   observeSafely(() => {
-    reportPreAttach();
+    const mark: Record<string, unknown> = { [PRE_ATTACH_FIELD]: true };
+    marks = mark;
+    (globalThis as unknown as Record<string, PreAttachBuffer | undefined>)[
+      RETICLE_PRE_ATTACH_ERRORS
+    ]?.drain(onError, onRejection, report, (count) => {
+      mark[DROPPED_PRE_ATTACH_FIELD] = Number.isInteger(count) && count > 0 ? count : undefined;
+    });
   });
+  // Outside the guarded call, so a drain that throws still leaves no mark behind.
+  marks = {};
 
   return () => {
     for (const [method, original] of originals) {
       // Restore only if console[method] still holds Reticle's wrapper — a logging SDK (Sentry, LogRocket)
       // that wrapped console AFTER connect() must keep its instrumentation on teardown.
-      if (console[method] === patched.get(method)) console[method] = original as typeof console.log;
+      if (console[method] === patched.get(method)) {
+        console[method] = original as typeof console.log;
+      }
     }
     listeners.abort();
   };

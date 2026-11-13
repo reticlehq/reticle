@@ -125,29 +125,6 @@ export const RETICLE_URL_PARAM = {
  */
 export const RETICLE_SESSION_STORAGE_KEY = '__reticle_session';
 
-/**
- * Payload fields and `kind` values on console/error events that the AGENT reads back through
- * `reticle_console`. The console payload is passthrough rather than closed, so these are named
- * here instead of schema-enforced: a wire string a server writes inline is one a rename
- * half-lands, with the agent reading a field that quietly stopped arriving.
- */
-export const CONSOLE_EVENT = {
-  /** The payload field naming what kind of console/error event it is (`resource`, `pageerror`, ...). */
-  KIND: 'kind',
-  /** The kind for an uncaught error the SERVER observed through the page's own browser handle. */
-  PAGE_ERROR: 'pageerror',
-  /** The payload field reporting how many buffered page errors were dropped — loss, declared. */
-  DROPPED_PAGE_ERRORS: 'droppedPageErrors',
-  /**
-   * The payload field set to `true` on an error the page raised BEFORE the SDK attached. The build
-   * plugin's error buffer held it, and the SDK reported it when it attached (see
-   * RETICLE_PRE_ATTACH_ERRORS).
-   */
-  PRE_ATTACH: 'preAttach',
-  /** The payload field reporting how many pre-attach errors the buffer did not keep — loss, declared. */
-  DROPPED_PRE_ATTACH: 'droppedPreAttach',
-} as const;
-
 /** The loopback bind address. The daemon/bridge bind here by default — never expose Reticle off-host. */
 export const LOOPBACK_HOST = '127.0.0.1';
 
@@ -601,17 +578,6 @@ export const RETICLE_RENDERS_STORE = '__reticle_renders';
 
 /** Global the render pre-hook parks its commit buffer on (see the vite plugin's RENDER_PREHOOK_SOURCE). */
 export const RETICLE_RENDER_PREHOOK = '__reticleRenderPreHook';
-
-/**
- * Global where the build plugin's inline error buffer keeps the errors a page raises before the SDK
- * attaches: uncaught errors, failed script and resource loads, unhandled rejections and
- * `console.error` calls (see the vite plugin's PRE_ATTACH_ERRORS_SOURCE).
- *
- * The SDK reads it once, when its console observer installs, and closes it. Holds
- * `{ queue, dropped, close }`. A page that Reticle drives has RETICLE_EARLY_CAPTURE instead, and the
- * buffer then does not install, so one error is never kept twice.
- */
-export const RETICLE_PRE_ATTACH_ERRORS = '__reticlePreAttachErrors';
 
 /**
  * Global where a driven page queues console calls and error events until the SDK installs.
