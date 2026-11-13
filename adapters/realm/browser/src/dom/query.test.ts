@@ -86,6 +86,13 @@ describe('typographic quotes and dashes', () => {
     expect(runQuery({ text: 'Say \u201chi\u201d \u2014 now', matchCase: true }).count).toBe(1);
   });
 
+  // German and other languages open a quote low: „Gespeichert“ and ‚so‘. The page showed the
+  // text and a check typed with plain quotes answered `no`.
+  it('a check with plain quotes matches low opening quotes', () => {
+    document.body.innerHTML = '<p>Status: \u201eGespeichert\u201c und \u201aso\u2018</p>';
+    expect(runQuery({ text: 'Status: "Gespeichert" und \'so\'', matchCase: true }).count).toBe(1);
+  });
+
   it('a role name matches across the same fold', () => {
     document.body.innerHTML = '<button>Don\u2019t save</button>';
     expect(runQuery({ by: 'role', value: 'button', name: "Don't save" }).count).toBe(1);

@@ -12,8 +12,10 @@ export function normaliseVisibleText(value: string): string {
 }
 
 /** Typographic quotes and dashes, and the plain character each one compares as. */
-const SINGLE_QUOTES = /[\u2018\u2019]/g;
-const DOUBLE_QUOTES = /[\u201c\u201d]/g;
+/** ‘ ’, and the low and reversed forms ‚ ‛ that German and other languages open a quote with. */
+const SINGLE_QUOTES = /[\u2018-\u201b]/g;
+/** “ ”, and the low and reversed forms „ ‟. */
+const DOUBLE_QUOTES = /[\u201c-\u201f]/g;
 const DASHES = /[\u2013\u2014]/g;
 
 /**
