@@ -40,7 +40,7 @@ const FIBER_PREFIXES = ['__reactFiber$', '__reactInternalInstance$'];
 /** How many elements to look at before concluding this is not a React page. A root is near the top. */
 const MAX_HOST_SCAN = 200;
 /** Fibers visited in one walk. A cap, not a budget — real trees finish far inside it. */
-const MAX_FIBER_NODES = 20000;
+export const MAX_FIBER_NODES = 20000;
 
 /** React 18 renders a provider whose `type` carries this; React 19 uses the context object itself. */
 const PROVIDER_TYPE = Symbol.for('react.provider');
@@ -58,7 +58,7 @@ interface DiscoveredStore {
   source: object;
 }
 
-interface FiberNode {
+export interface FiberNode {
   return?: FiberNode | null;
   child?: FiberNode | null;
   sibling?: FiberNode | null;
@@ -67,15 +67,21 @@ interface FiberNode {
 }
 
 function isStoreLike(value: unknown): value is StoreLike {
-  if (null === value) return false;
-  if ('object' !== typeof value && 'function' !== typeof value) return false;
+  if (null === value) {
+    return false;
+  }
+  if ('object' !== typeof value && 'function' !== typeof value) {
+    return false;
+  }
   const candidate = value as Partial<StoreLike>;
   return 'function' === typeof candidate.getState && 'function' === typeof candidate.subscribe;
 }
 
 /** A TanStack QueryClient, identified by the one method the adapter needs. */
 function isQueryClient(value: unknown): value is { getQueryCache: () => unknown } {
-  if (null === value || 'object' !== typeof value) return false;
+  if (null === value || 'object' !== typeof value) {
+    return false;
+  }
   return 'function' === typeof (value as { getQueryCache?: unknown }).getQueryCache;
 }
 
@@ -86,7 +92,9 @@ function isQueryClient(value: unknown): value is { getQueryCache: () => unknown 
  * `reticle_state({ store })`, and `ReactRedux.Provider` is not a thing anyone will type correctly.
  */
 function keyFromName(name: string | undefined): string | undefined {
-  if ('string' !== typeof name) return undefined;
+  if ('string' !== typeof name) {
+    return undefined;
+  }
   const cleaned = name.toLowerCase().replace(/[^a-z0-9]/g, '');
   return cleaned.length > 0 ? cleaned : undefined;
 }
@@ -101,9 +109,13 @@ export function classifyProviderValue(
   value: unknown,
   displayName: string | undefined,
 ): DiscoveredStore | null {
-  if (null === value || undefined === value) return null;
+  if (null === value || undefined === value) {
+    return null;
+  }
   const nested = (value as { store?: unknown }).store;
-  if (isStoreLike(nested)) return { key: AUTO_STORE_KEY.REDUX, store: nested, source: nested };
+  if (isStoreLike(nested)) {
+    return { key: AUTO_STORE_KEY.REDUX, store: nested, source: nested };
+  }
   if (isQueryClient(value)) {
     return {
       key: AUTO_STORE_KEY.QUERY,
@@ -121,38 +133,48 @@ export function classifyProviderValue(
 
 /** The context a provider fiber renders, across the versions that spell it differently. */
 function providerContext(type: unknown): { displayName?: string } | null {
-  if (null === type || 'object' !== typeof type) return null;
+  if (null === type || 'object' !== typeof type) {
+    return null;
+  }
   const marker = (type as { $$typeof?: symbol }).$$typeof;
   if (PROVIDER_TYPE === marker) {
     const inner = (type as { _context?: { displayName?: string } })._context;
     return inner ?? type;
   }
-  if (CONTEXT_TYPE === marker) return type;
+  if (CONTEXT_TYPE === marker) {
+    return type;
+  }
   return null;
 }
 
 /** The topmost fiber reachable from one node — the tree we then walk downward. */
-function topOf(fiber: FiberNode): FiberNode {
+export function topOf(fiber: FiberNode): FiberNode {
   let current = fiber;
   for (let i = 0; i < MAX_FIBER_NODES; i += 1) {
     const parent = current.return;
-    if (null === parent || undefined === parent) return current;
+    if (null === parent || undefined === parent) {
+      return current;
+    }
     current = parent;
   }
   return current;
 }
 
 /** Any fiber React has stamped on the document, as the entry point into the tree. */
-function findFiber(doc: Document): FiberNode | null {
+export function findFiber(doc: Document): FiberNode | null {
   const elements = doc.querySelectorAll('*');
   const limit = Math.min(elements.length, MAX_HOST_SCAN);
   for (let i = 0; i < limit; i += 1) {
     const node = elements[i] as unknown as Record<string, unknown> | undefined;
-    if (undefined === node) continue;
+    if (undefined === node) {
+      continue;
+    }
     for (const key of Object.keys(node)) {
       if (FIBER_PREFIXES.some((prefix) => key.startsWith(prefix))) {
         const fiber = node[key];
-        if (null !== fiber && 'object' === typeof fiber) return fiber;
+        if (null !== fiber && 'object' === typeof fiber) {
+          return fiber;
+        }
       }
     }
   }
@@ -167,7 +189,9 @@ function findFiber(doc: Document): FiberNode | null {
  */
 export function discoverStores(doc: Document): DiscoveredStore[] {
   const entry = findFiber(doc);
-  if (null === entry) return [];
+  if (null === entry) {
+    return [];
+  }
   const found: DiscoveredStore[] = [];
   const used = new Set<string>();
   try {
@@ -175,7 +199,9 @@ export function discoverStores(doc: Document): DiscoveredStore[] {
     let visited = 0;
     while (stack.length > 0 && visited < MAX_FIBER_NODES) {
       const fiber = stack.pop();
-      if (undefined === fiber || null === fiber) continue;
+      if (undefined === fiber || null === fiber) {
+        continue;
+      }
       visited += 1;
       const context = providerContext(fiber.type);
       if (null !== context) {
@@ -188,15 +214,21 @@ export function discoverStores(doc: Document): DiscoveredStore[] {
           // a micro-frontend. Both are worth reading, so the second gets a suffixed key rather than
           // silently replacing the first.
           let key = store.key;
-          for (let n = 2; used.has(key); n += 1) key = `${store.key}${String(n)}`;
+          for (let n = 2; used.has(key); n += 1) {
+            key = `${store.key}${String(n)}`;
+          }
           used.add(key);
           found.push({ key, store: store.store, source: store.source });
         }
       }
       const sibling = fiber.sibling;
-      if (null !== sibling && undefined !== sibling) stack.push(sibling);
+      if (null !== sibling && undefined !== sibling) {
+        stack.push(sibling);
+      }
       const child = fiber.child;
-      if (null !== child && undefined !== child) stack.push(child);
+      if (null !== child && undefined !== child) {
+        stack.push(child);
+      }
     }
   } catch {
     // A fiber shape we have not seen must never break the host app. Whatever was found still counts.
@@ -245,12 +277,16 @@ export function autoRegisterStores(doc: Document): string[] {
     // `tanstackQueryStore(client)`; discovery finds the same `client` and, keying on the name alone,
     // added `query` beside it — one cache listed twice in every state read. Comparing read values
     // cannot catch it either, because that adapter builds a fresh snapshot on every `getState`.
-    if (sourceOwner(source) !== undefined) continue;
+    if (sourceOwner(source) !== undefined) {
+      continue;
+    }
     // A name we registered ourselves for a DIFFERENT source is stale: HMR re-ran the module that
     // creates the store, so the page now holds a new instance under the same name. Replace it —
     // registerStore swaps the getter and subscription — instead of reading the old instance forever.
     const replacesOurs = registered.has(key) && registered.get(key) !== source;
-    if (!replacesOurs && (taken.has(key) || registered.has(key))) continue;
+    if (!replacesOurs && (taken.has(key) || registered.has(key))) {
+      continue;
+    }
     try {
       registerStore(key, store);
     } catch {
