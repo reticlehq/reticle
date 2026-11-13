@@ -19,8 +19,9 @@
  * Pure: no IO, no clock.
  */
 
-import { flowExpectHasConsequence, flowExpectIsPresenceOnly } from '@reticlehq/core';
-import type { FlowFile, FlowStep } from '@reticlehq/core';
+import { PredicateKind, flowExpectHasConsequence, flowExpectIsPresenceOnly } from '@reticlehq/core';
+import type { FlowFile, FlowStep, Predicate } from '@reticlehq/core';
+import { z } from 'zod';
 
 export const FlowAssertionGrade = {
   /** At least one step (or the success end-condition) asserts a signal/network consequence. */
@@ -49,14 +50,46 @@ export interface FlowAssertionClassification {
    * intent but only presence-only checks is the dangerous case — it claims a goal it cannot verify.
    */
   intentVerified: boolean;
+  /**
+   * How many checks of each predicate kind the flow runs, over every step, sub-step and the success
+   * state, composites flattened. Absent when the flow checks nothing. A presence-only grade with
+   * this list says WHAT is checked, so the grade does not read as "checks nothing" (#1840).
+   */
+  checks?: Record<string, number>;
   /** Present for presence-only / assertion-free flows: how to make the flow a real test. */
   warning?: string;
 }
 
+/**
+ * The `assertions` block of the `reticle_flow_save` result. Declared here, next to the type it
+ * describes, because a validating profile removes a field that the output schema does not declare.
+ */
+export const FLOW_ASSERTIONS_OUTPUT = z
+  .object({
+    grade: z.string().describe('asserted | presence-only | assertion-free'),
+    hasConsequenceAssertion: z.boolean(),
+    totalSteps: z.number(),
+    consequenceSteps: z.number(),
+    weakSteps: z.number(),
+    checks: z
+      .record(z.string(), z.number())
+      .optional()
+      .describe(
+        'Checks of each predicate kind (text, element, route, net, signal, …) the flow runs.',
+      ),
+    warning: z.string().optional(),
+  })
+  .optional();
+
 const ASSERTION_FREE_WARNING =
   'This flow performs actions but asserts no observable consequence, so it will pass even if the feature is broken. Add a consequence assertion with reticle_annotate (assert-signal / assert-net) or a success-state.';
-const PRESENCE_ONLY_WARNING =
-  'This flow only checks element presence, not an observable consequence (signal/network). A locator healed to the wrong element can still pass it. Add a consequence assertion (assert-signal / assert-net / success-state).';
+/** Why a presence check is weaker than a consequence, and the fix. Shared by both presence notes. */
+const PRESENCE_ONLY_ADVICE =
+  'A locator healed to the wrong element can still pass it. Add a consequence assertion (assert-signal / assert-net / success-state).';
+const PRESENCE_ONLY_WARNING = `This flow only checks element presence, not an observable consequence (signal/network). ${PRESENCE_ONLY_ADVICE}`;
+/** The presence note when the checks are known: it names them, then says why they are weak. */
+const presenceOnlyWarning = (checks: string): string =>
+  `This flow checks ${checks} on the page. These are presence checks, not an observable consequence (signal/network). ${PRESENCE_ONLY_ADVICE}`;
 const INTENT_WITHOUT_OUTCOME_WARNING =
   'This flow declares a business intent but asserts no observable outcome (signal/network) — it claims to verify a goal it cannot actually check. Add a success-state consequence so the flow fails when the goal stops being met.';
 
@@ -132,6 +165,43 @@ function invokedAssertsConsequence(
   return false;
 }
 
+/** Every leaf clause of an expectation, composites flattened. */
+function leafClauses(expect: Predicate | undefined): Predicate[] {
+  if (expect === undefined) {
+    return [];
+  }
+  if (PredicateKind.ALL_OF === expect.kind || PredicateKind.ANY_OF === expect.kind) {
+    return expect.predicates.flatMap(leafClauses);
+  }
+  if (PredicateKind.NOT === expect.kind) {
+    return leafClauses(expect.predicate);
+  }
+  return [expect];
+}
+
+/** Checks of each kind over the given expectations, keys in name order, or undefined for none. */
+function countChecks(
+  expects: readonly (Predicate | undefined)[],
+): Record<string, number> | undefined {
+  const counts = new Map<string, number>();
+  for (const clause of expects.flatMap(leafClauses)) {
+    counts.set(clause.kind, (counts.get(clause.kind) ?? 0) + 1);
+  }
+  if (0 === counts.size) {
+    return undefined;
+  }
+  return Object.fromEntries([...counts.entries()].sort(([a], [b]) => a.localeCompare(b)));
+}
+
+/** "text (3), element (1) and route (1)": most checks first, ties in name order. */
+function describeChecks(checks: Record<string, number>): string {
+  const parts = Object.entries(checks)
+    .sort(([a, x], [b, y]) => y - x || a.localeCompare(b))
+    .map(([kind, n]) => `${kind} (${String(n)})`);
+  const last = parts.pop() ?? '';
+  return 0 === parts.length ? last : `${parts.join(', ')} and ${last}`;
+}
+
 function responseIsDeclared(step: FlowStep): boolean {
   const r = step.response;
   return (
@@ -168,6 +238,7 @@ export function classifyFlowAssertions(
   const hasConsequenceAssertion = consequenceSteps > 0 || successIsConsequence || invokedAsserts;
   const hasAnyAssertion = hasConsequenceAssertion || weakSteps > 0 || successIsWeak;
 
+  const checks = countChecks([...all.map((s) => s.expect), flow.success]);
   const intent = flow.intent;
   const intentVerified = intent !== undefined && hasConsequenceAssertion;
 
@@ -177,7 +248,9 @@ export function classifyFlowAssertions(
     grade = FlowAssertionGrade.ASSERTED;
   } else if (hasAnyAssertion) {
     grade = FlowAssertionGrade.PRESENCE_ONLY;
-    warning = PRESENCE_ONLY_WARNING;
+    // What it checks first, so the grade does not read as "checks nothing" (#1840).
+    warning =
+      checks === undefined ? PRESENCE_ONLY_WARNING : presenceOnlyWarning(describeChecks(checks));
   } else {
     grade = FlowAssertionGrade.ASSERTION_FREE;
     warning = ASSERTION_FREE_WARNING;
@@ -195,6 +268,7 @@ export function classifyFlowAssertions(
     consequenceSteps,
     weakSteps,
     successIsConsequence,
+    ...(checks === undefined ? {} : { checks }),
     ...(intent !== undefined ? { intent } : {}),
     intentVerified,
     ...(warning !== undefined ? { warning } : {}),
