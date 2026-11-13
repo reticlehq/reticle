@@ -14,6 +14,7 @@
  */
 
 import {
+  CanvasTrigger,
   EventType,
   FieldChangeField,
   FieldChangeKind,
@@ -245,6 +246,102 @@ export function screenMoved(event: ReticleEvent): boolean {
     event.type === EventType.ROUTE_CHANGE ||
     settledFieldRendered(event)
   );
+}
+
+/**
+ * What the canvases on the page show about a window (#1525). A canvas renders as pixels, so a
+ * repaint makes no DOM mutation. The SDK sends a `CANVAS_DIGEST` for each canvas on its poll when the
+ * digest changed, and at the end of every act.
+ */
+export const CanvasPaint = {
+  /** No digest of a visible canvas in the window. */
+  NONE: 'none',
+  /** A visible canvas that was steady before the action showed something different: a render. */
+  PAINTED: 'painted',
+  /**
+   * A visible canvas was on screen and no change the action caused was seen. Not proof that it did
+   * not paint: the digest is a 16x16 sample, a canvas can paint after the act's own sample was taken,
+   * and a canvas that was already changing (a spinner, a live chart) cannot show what the action drew.
+   */
+  UNOBSERVED: 'unobserved',
+} as const;
+export type CanvasPaint = (typeof CanvasPaint)[keyof typeof CanvasPaint];
+
+/**
+ * How long a canvas must have held its digest before the action for a change to count as the
+ * action's render: two of the SDK's 500 ms poll periods. The poll reports only a change, so a canvas
+ * that animates reports one every period, and its last change is always closer than this.
+ */
+export const CANVAS_STEADY_MS = 1_000;
+
+/**
+ * How far back a canvas that changed on its own disqualifies it. A dashboard chart, a clock or a
+ * ticker refreshes on a timer slower than `CANVAS_STEADY_MS`, so its last change can be seconds old
+ * and its next tick can land in the window. A change the poll found, not just after an act, is
+ * such a tick. A timer slower than this can still read as the render.
+ */
+export const CANVAS_QUIET_MS = 10_000;
+
+/** What the canvas showed last, when it last changed, and when it last changed on its own. */
+interface CanvasHistory {
+  digest: string;
+  changedAt: number | undefined;
+  driftAt: number | undefined;
+}
+
+/**
+ * Did a canvas paint in this window, because of the action at `since`?
+ *
+ * A digest is a paint when it differs from the last digest of the same canvas (from `prior` or from
+ * earlier in the window), that canvas held its digest for `CANVAS_STEADY_MS` before the action, and
+ * it did not change on its own in the `CANVAS_QUIET_MS` before it. A change on its own is one the
+ * SDK's poll found more than `CANVAS_STEADY_MS` after the last act's digest: no act drew it. A
+ * canvas with no earlier digest is not a paint: nothing says what it showed before. A digest that
+ * says `visible: false` (no size, or outside the viewport) is never the paint, nor a canvas seen in
+ * the window: a hidden canvas cannot carry a render the user sees. It still counts as what the canvas
+ * showed before, since a click may scroll a canvas into view. An SDK older than the field sends no
+ * `visible`, and is read as visible.
+ */
+export function canvasPaint(
+  events: readonly ReticleEvent[],
+  prior: readonly ReticleEvent[],
+  since: number,
+): CanvasPaint {
+  const last = new Map<string, CanvasHistory>();
+  let actAt: number | undefined;
+  let seen = false;
+  for (const [event, inWindow] of [
+    ...prior.map((e) => [e, false] as const),
+    ...events.map((e) => [e, true] as const),
+  ]) {
+    const digest =
+      EventType.CANVAS_DIGEST === event.type ? asString(event.data['digest']) : undefined;
+    if (digest === undefined) {
+      continue;
+    }
+    const polled = CanvasTrigger.POLL === event.data['trigger'];
+    // A sample taken off screen is still the canvas's last picture, so it is the baseline; only a
+    // sample on screen can be the render the user saw.
+    const shown = false !== event.data['visible'];
+    const key = event.ref ?? '';
+    const before = last.get(key);
+    const changed = before !== undefined && before.digest !== digest;
+    const steady = before?.changedAt === undefined || before.changedAt < since - CANVAS_STEADY_MS;
+    const quiet = before?.driftAt === undefined || before.driftAt < since - CANVAS_QUIET_MS;
+    if (inWindow && shown && changed && steady && quiet) {
+      return CanvasPaint.PAINTED;
+    }
+    seen ||= inWindow && shown;
+    const onItsOwn =
+      changed && polled && (actAt === undefined || event.t > actAt + CANVAS_STEADY_MS);
+    last.set(key, {
+      digest,
+      changedAt: changed ? event.t : before?.changedAt,
+      driftAt: onItsOwn ? event.t : before?.driftAt,
+    });
+    actAt = polled ? actAt : event.t;
+  }
+  return seen ? CanvasPaint.UNOBSERVED : CanvasPaint.NONE;
 }
 
 /**

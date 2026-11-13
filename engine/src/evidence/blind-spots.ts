@@ -8,6 +8,8 @@
 // The kind enum lives in core (it crosses the wire in a BLIND_SPOT event); re-exported here for the
 // honesty-side callers.
 export { BlindSpotKind } from '@reticlehq/core';
+import { readStateRender, StateRender } from '../disagreement/contradictions.js';
+import type { ContradictionOptions } from '../disagreement/contradiction-types.js';
 import {
   BlindSpotKind,
   ChannelId,
@@ -88,6 +90,10 @@ const LABEL: Record<BlindSpotKind, (n: number) => string> = {
   // and that reading is the false green: every IPC call went unseen and every `assert { net }` over
   // them is vacuous. Document-initiated loads ARE seen since subresource observation (#447), so
   // the note names the missing half instead of claiming the whole view is blind.
+  // A fact about one act window, phrased as what an absent render MEANS there: the store moved, no
+  // DOM node did, and a canvas could hold the render in pixels the digest did not see change.
+  [BlindSpotKind.CANVAS_PAINT_UNOBSERVED]: (n) =>
+    `canvas paint not observed: the store changed and no DOM node did, and ${String(n)} canvas${1 === n ? '' : 'es'} on screen showed no change the digest could see, so state-vs-render was not judged`,
   [BlindSpotKind.UNOBSERVED_IPC]: () =>
     "this Electron renderer has no Reticle preload, so NO ipcRenderer.invoke is observed; document-initiated loads may still appear, so a view with no ipc:// records means unseen IPC, not none (add require('@reticlehq/electron/preload') to your preload)",
 };
@@ -491,4 +497,20 @@ function childEvidencePresent(child: Predicate, events: readonly ReticleEvent[])
     return events.some((e) => 'string' === typeof e.type && e.type.startsWith('console.'));
   }
   return false;
+}
+
+/** The coverage-line spot for a window where `readStateRender` abstained for a canvas, else none. */
+export function canvasPaintSpots(
+  events: readonly ReticleEvent[],
+  options: Pick<ContradictionOptions, 'actionSince' | 'prior'>,
+): BlindSpot[] {
+  if (StateRender.CANVAS_UNOBSERVED !== readStateRender(events, options)) {
+    return [];
+  }
+  const canvases = new Set(
+    events
+      .filter((e) => EventType.CANVAS_DIGEST === e.type && false !== e.data['visible'])
+      .map((e) => e.ref ?? ''),
+  );
+  return [{ kind: BlindSpotKind.CANVAS_PAINT_UNOBSERVED, count: canvases.size }];
 }

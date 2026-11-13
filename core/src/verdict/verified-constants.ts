@@ -299,6 +299,17 @@ export const BlindSpotKind = {
    * subscribable store registers, which is when the SDK emits this kind with count 0.
    */
   UNWATCHED_STATE: 'unwatched-state',
+  /**
+   * The store committed, no DOM node moved, and a `<canvas>` on screen showed no change that the
+   * canvas digest could see.
+   *
+   * A canvas renders as pixels, so a repaint makes no DOM mutation. The digest is a 16x16 sample, so
+   * a small repaint can leave it the same, and a WebGL canvas without `preserveDrawingBuffer` reads
+   * back blank. `state-vs-render` does not fire then, and this says why: the render may be in pixels
+   * this window could not compare (#1525). Computed by the daemon for one act window; no SDK sends
+   * it. BOUNDING, never impeaching: what WAS observed is observed completely.
+   */
+  CANVAS_PAINT_UNOBSERVED: 'canvas-paint-unobserved',
 } as const;
 export type BlindSpotKind = (typeof BlindSpotKind)[keyof typeof BlindSpotKind];
 
