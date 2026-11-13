@@ -56,8 +56,8 @@ describe('evalNet marks an exceeded exact count as decided', () => {
   });
 
   it('does not set decided on a wrong-status miss — a retry could still match', () => {
-    // Deliberate: a 500 now does not mean a 200 will not follow. This is the case it would be
-    // tempting to call decided, and it is not one.
+    // A 500 now does not mean a 200 will not follow. With no clock, nothing says how long the
+    // endpoint has been quiet, so this miss is not decided. See net-status-miss.ts (#1656).
     const r = evalNet([netEvent(10, { ...POST, status: 500, ok: false })], {
       kind: PredicateKind.NET,
       urlContains: '/api/refund',

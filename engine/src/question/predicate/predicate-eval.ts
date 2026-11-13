@@ -15,8 +15,9 @@ import { isReticleVoice } from '../../state-bookkeeping.js';
 import { describeObserved } from './observed-in-window.js';
 import { netEvidence } from './net-evidence.js';
 import { truncatedBodyAdvice } from './truncated-body-advice.js';
+import { withStatusMiss } from './net-status-miss.js';
 import { mergeNetworkDetail, withDownloadRequests } from '@/window/network-detail-merge.js';
-import { departedInWindow, mediaEntryBeforeWindow } from '@/window/event-filters.js';
+import { departedInWindow, endpointCalls, mediaEntryBeforeWindow } from '@/window/event-filters.js';
 import {
   checkRequestBody,
   REMEDY_BODY_CAPTURE,
@@ -31,6 +32,7 @@ import {
   describeBodyFieldMiss,
   describeFieldMiss,
   describeNetFilter,
+  describeSignalFilter,
   matchJsonBody,
   num,
   redactedOnPath,
@@ -126,14 +128,6 @@ function observedNetCalls(
     return url.includes(REDACTED_VALUE) || url.includes(encoded);
   });
   return redacted ? `${base}; ${REDACTED_PATH_HINT}` : base;
-}
-
-/** Same, for a signal: the matcher as applied, with the cardinality and the floor taken out. */
-function describeSignalFilter(
-  p: Extract<Predicate, { kind: typeof PredicateKind.SIGNAL }>,
-): string {
-  const { kind: _kind, count: _count, since: _since, ...filter } = p;
-  return JSON.stringify(filter);
 }
 
 function nativeDownloadMiss(
@@ -266,6 +260,8 @@ export function evalNet(
   events: ReticleEvent[],
   p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
   sdkVersion?: string,
+  /** The session clock. Without it, a status miss is never decided; see `withStatusMiss`. */
+  now?: number,
 ): EvalResult {
   // SSE headers close the request immediately. A later detail supplies its captured body without another call.
   if (p.bodyContains !== undefined || p.bodyMatches !== undefined) {
@@ -544,17 +540,19 @@ export function evalNet(
       assertion: 'net.unobserved-channel',
     };
   }
-  return hit !== undefined
-    ? { pass: true, evidence: netEvidence(hit.data, p) }
-    : {
-        pass: false,
-        failureReason: `no network call matched ${JSON.stringify(p)}${0 === since ? PRE_ATTACH_CAVEAT : ''}`,
-        // Same reasoning as the signal miss: "no matching call" cannot be told apart from "the app
-        // made no calls at all", and those need different fixes.
-        observed: observedNetCalls(events, p.urlContains),
-        expected: `at least one call matching ${JSON.stringify(p)}`,
-        assertion: 'net.present',
-      };
+  if (hit !== undefined) {
+    return { pass: true, evidence: netEvidence(hit.data, p) };
+  }
+  const miss: EvalResult = {
+    pass: false,
+    failureReason: `no network call matched ${JSON.stringify(p)}${0 === since ? PRE_ATTACH_CAVEAT : ''}`,
+    // Same reasoning as the signal miss: "no matching call" cannot be told apart from "the app
+    // made no calls at all", and those need different fixes.
+    observed: observedNetCalls(events, p.urlContains),
+    expected: `at least one call matching ${JSON.stringify(p)}`,
+    assertion: 'net.present',
+  };
+  return withStatusMiss(miss, endpointCalls(events, since, p.method, p.urlContains), p, now);
 }
 
 export function evalSignal(

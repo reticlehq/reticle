@@ -379,6 +379,14 @@ export function describeNetFilter(
   return JSON.stringify(filter);
 }
 
+/** Same, for a signal: the matcher as applied, with the cardinality and the floor taken out. */
+export function describeSignalFilter(
+  p: Extract<Predicate, { kind: typeof PredicateKind.SIGNAL }>,
+): string {
+  const { kind: _kind, count: _count, since: _since, ...filter } = p;
+  return JSON.stringify(filter);
+}
+
 /** Leading `major.minor.patch` as numbers; a pre-release of a version counts as that version. */
 function versionParts(version: string): [number, number, number] | undefined {
   const m = /^(\d+)\.(\d+)\.(\d+)/.exec(version);

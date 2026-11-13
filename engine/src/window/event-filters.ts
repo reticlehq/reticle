@@ -110,6 +110,54 @@ export function reconcileNet(events: ReticleEvent[]): ReticleEvent[] {
   return [...completed, ...unresolved].sort((a, b) => a.t - b.t);
 }
 
+/** The calls to one endpoint in a window: what each settled call answered, and if one is in flight. */
+export interface EndpointCalls {
+  /** Each completed call at or after the floor. `status` is undefined when it carried none. */
+  settled: { t: number; status: number | undefined }[];
+  /** A call to the endpoint started and has not completed. */
+  inFlight: boolean;
+}
+
+/**
+ * Read the calls to one method and URL (#1656). Status and body are not read to pick them.
+ *
+ * A pending record with no completion for its id is in flight. The count is per id, as in
+ * `evalSettled`: a retry that reuses an id has two pending records and one completion. A pending
+ * record with no id cannot be paired, so it counts as in flight.
+ */
+export function endpointCalls(
+  events: readonly ReticleEvent[],
+  since: number,
+  method: string | undefined,
+  urlContains: string | undefined,
+): EndpointCalls {
+  const settled: EndpointCalls['settled'] = [];
+  const open = new Map<string, number>();
+  let unpaired = false;
+  for (const e of events) {
+    if (!matchNet(e, method, urlContains, undefined)) {
+      continue;
+    }
+    const id = asString(e.data['id']);
+    if (EventType.NET_PENDING === e.type) {
+      if (id === undefined) {
+        unpaired = true;
+      } else {
+        open.set(id, (open.get(id) ?? 0) + 1);
+      }
+    } else if (EventType.NET_REQUEST === e.type) {
+      if (id !== undefined) {
+        open.set(id, (open.get(id) ?? 0) - 1);
+      }
+      if (e.t >= since) {
+        settled.push({ t: e.t, status: asNumber(e.data['status']) });
+      }
+    }
+  }
+  const inFlight = unpaired || [...open.values()].some((count) => count > 0);
+  return { settled, inFlight };
+}
+
 /**
  * Strip the grader-only raw URL before an event is rendered to the agent.
  *
