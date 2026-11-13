@@ -89,6 +89,24 @@ describe('scopeToCallerCheckout', () => {
     expect(scopeToCallerCheckout([tabB], bareA, of).refusal).toContain('/wt/b');
   });
 
+  /*
+   * #1916. Claude Code starts the MCP server in the folder it was opened in, the main checkout, and
+   * then moves the agent into `.claude/worktrees/<name>`. The proxy folder is then not where the agent
+   * works, and every call was refused although the agent drove the tab of its own worktree.
+   */
+  it('drives the one linked worktree that serves every tab when the proxy runs in the main checkout', () => {
+    const tabs = [tab('s-b', 'http://localhost:5175/')];
+    expect(scopeToCallerCheckout(tabs, MAIN, checkoutOfTab)).toEqual({ sessions: tabs });
+  });
+
+  it('still refuses when tabs of more than one linked worktree are open and the proxy runs in the main checkout', () => {
+    const tabs = [tab('s-a', 'http://localhost:5174/'), tab('s-b', 'http://localhost:5175/')];
+    const result = scopeToCallerCheckout(tabs, MAIN, checkoutOfTab);
+    expect(result.sessions).toEqual([]);
+    expect(result.refusal).toContain('/wt/a');
+    expect(result.refusal).toContain('/wt/b');
+  });
+
   it('keeps every tab when the agent is outside git', () => {
     const tabs = [tab('s-b', 'http://localhost:5175/')];
     expect(scopeToCallerCheckout(tabs, undefined, checkoutOfTab)).toEqual({ sessions: tabs });

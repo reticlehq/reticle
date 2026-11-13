@@ -916,6 +916,14 @@ export function scopeToCallerCheckout<S extends Tab>(
   if (0 === siblings.length) {
     return { sessions: [] };
   }
+  // The caller is the folder the MCP proxy started in, not always where the agent works. Claude Code
+  // starts the proxy in the main checkout and then moves the agent into a linked worktree (#1916).
+  // So from the main checkout, one linked worktree that serves every tab is the agent's own: drive it.
+  // The tab names its `worktree`. Tabs of two worktrees, or a proxy in a linked worktree, stay refused.
+  const roots = new Set(siblings.map((p) => p.checkout?.root));
+  if (!caller.linked && 1 === roots.size && true === siblings[0]?.checkout?.linked) {
+    return { sessions: siblings.map((p) => p.session) };
+  }
   const listed = siblings
     .map((p) => `${describeCheckout(p.checkout)} (sessionId '${p.session.id}', ${p.session.url})`)
     .join(', ');
