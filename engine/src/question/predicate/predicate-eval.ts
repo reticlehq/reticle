@@ -1,6 +1,6 @@
 import {
   EventType,
-  NetInitiator,
+  neverAnswered,
   PredicateKind,
   ResponseBodyReason,
   SettledChannel,
@@ -16,11 +16,7 @@ import { describeObserved } from './observed-in-window.js';
 import { netEvidence } from './net-evidence.js';
 import { truncatedBodyAdvice } from './truncated-body-advice.js';
 import { mergeNetworkDetail, withDownloadRequests } from '@/window/network-detail-merge.js';
-import {
-  departedInWindow,
-  mediaEntryBeforeWindow,
-  unpatchedInWindow,
-} from '@/window/event-filters.js';
+import { departedInWindow, mediaEntryBeforeWindow } from '@/window/event-filters.js';
 import {
   checkRequestBody,
   REMEDY_BODY_CAPTURE,
@@ -52,8 +48,7 @@ import {
   targetsNativeDownload,
   targetsUnobservedChannel,
   unobservedChannelReason,
-  unpatchedFetchReason,
-  UNPATCHED_FETCH_ASSERTION,
+  unrecordedCallMiss,
 } from './net-blind-spots.js';
 export {
   clipBody,
@@ -171,25 +166,6 @@ function nativeDownloadMiss(
     observed: observedNetCalls(events, p.urlContains),
     expected: `a fetch or XHR matching ${filter}`,
     assertion,
-  };
-}
-
-/** `unknown` when the browser recorded a matching call no patched transport saw; else `undefined`. */
-function unpatchedFetchMiss(
-  events: ReticleEvent[],
-  p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
-): EvalResult | undefined {
-  if (!unpatchedInWindow(events, p.since ?? 0, p.urlContains)) {
-    return undefined;
-  }
-  const reason = unpatchedFetchReason(describeNetFilter(p));
-  return {
-    pass: false,
-    failureReason: reason,
-    inconclusive: reason,
-    observed: observedNetCalls(events, p.urlContains),
-    expected: `a recorded call matching ${describeNetFilter(p)}`,
-    assertion: UNPATCHED_FETCH_ASSERTION,
   };
 }
 
@@ -510,7 +486,7 @@ export function evalNet(
   // but fired the WRONG number of times. Without `count`, the matcher is presence-only (≥1).
   if (p.count !== undefined) {
     // A marked call is not in `matches`, so no count over its URL can be judged, a pass included.
-    const unpatched = unpatchedFetchMiss(events, p);
+    const unpatched = unrecordedCallMiss(events, p, () => observedNetCalls(events, p.urlContains));
     if (unpatched !== undefined) {
       return unpatched;
     }
@@ -550,7 +526,9 @@ export function evalNet(
   }
   const hit = matches[0];
   if (hit === undefined) {
-    const download = nativeDownloadMiss(events, p) ?? unpatchedFetchMiss(events, p);
+    const download =
+      nativeDownloadMiss(events, p) ??
+      unrecordedCallMiss(events, p, () => observedNetCalls(events, p.urlContains));
     if (download !== undefined) {
       return download;
     }
@@ -752,11 +730,10 @@ const RETICLE_BUSY_SIGNAL = 'reticle:busy';
  * The act wait (`server/src/surface/tools/act/settle-in-flight.ts`) has always excluded it and
  * `core/src/wire/net.ts` says it must be; this predicate counted it, so `act_and_wait { until:
  * settled }` after a plain `<a href>` never passed and agents dropped `settled` from their `until`.
- * Spelled against the shared constant rather than the string, so the two settle decisions cannot
- * drift onto two vocabularies.
+ * Read through core's `neverAnswered`, so every settle decision uses one rule. It also covers a
+ * request whose page unloaded before its answer arrived (#1944): that answer went away too.
  */
-const isDeparture = (data: Record<string, unknown>): boolean =>
-  data['initiator'] === NetInitiator.NAVIGATION;
+const isDeparture = neverAnswered;
 
 /**
  * What the caller knows about whose traffic this is.

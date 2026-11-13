@@ -179,8 +179,17 @@ const MAX_FILES_IMPORTING_CORE = 45;
  * a timer is not read as the render of a click. The trigger crosses the wire, so it lives in core as
  * `CanvasTrigger` and rule 3 forbids spelling it here. It joins the import
  * `contradiction-evidence.ts` already has, so the file count is unmoved.
+ *
+ * 72 -> 74 for a request whose page unloaded before its answer (#1944).
+ *
+ * The daemon carries such a request into the next document's session with two flags, and their
+ * names cross the wire, so they live in core as `DepartedNetField`. `neverAnswered` is the one rule
+ * for "this pending can never close", shared by the settle predicate, the act's settle wait and the
+ * contradiction pass. Copying it here would give the engine and the server two rules for one
+ * question again. Both join imports that `event-filters.ts`, `contradiction-evidence.ts`,
+ * `contradictions.ts` and `predicate-eval.ts` already have, so the file count is unmoved.
  */
-const MAX_DISTINCT_SYMBOLS = 72;
+const MAX_DISTINCT_SYMBOLS = 74;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.

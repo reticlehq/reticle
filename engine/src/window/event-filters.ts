@@ -1,4 +1,11 @@
-import { EventType, NetInitiator, URL_RAW, urlForMatch, type ReticleEvent } from '@reticlehq/core';
+import {
+  DepartedNetField,
+  EventType,
+  NetInitiator,
+  URL_RAW,
+  urlForMatch,
+  type ReticleEvent,
+} from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
 import { mergeNetworkDetail } from './network-detail-merge.js';
 
@@ -39,7 +46,9 @@ export function eventMatchesFilters(e: ReticleEvent, filters: readonly string[])
     // then `.includes` would throw — a crash on an odd-but-harmless agent input. Only an OWN key is a
     // real bucket; anything else falls through to the raw-type comparison.
     const bucket = Object.hasOwn(OBSERVE_FILTER_BUCKETS, f) ? OBSERVE_FILTER_BUCKETS[f] : undefined;
-    if (bucket !== undefined ? bucket.includes(e.type) : e.type === f) return true;
+    if (bucket !== undefined ? bucket.includes(e.type) : e.type === f) {
+      return true;
+    }
   }
   return false;
 }
@@ -66,8 +75,12 @@ export function matchNet(
   if (urlContains !== undefined && !urlForMatch(d).includes(urlContains)) {
     return false;
   }
-  if (status !== undefined && asNumber(d['status']) !== status) return false;
-  if (ok !== undefined && d['ok'] !== ok) return false;
+  if (status !== undefined && asNumber(d['status']) !== status) {
+    return false;
+  }
+  if (ok !== undefined && d['ok'] !== ok) {
+    return false;
+  }
   return true;
 }
 
@@ -87,7 +100,9 @@ export function reconcileNet(events: ReticleEvent[]): ReticleEvent[] {
   );
   const unresolved = events
     .filter((e) => {
-      if (e.type !== EventType.NET_PENDING) return false;
+      if (e.type !== EventType.NET_PENDING) {
+        return false;
+      }
       const id = asString(e.data['id']);
       return id === undefined || !doneIds.has(id);
     })
@@ -103,10 +118,14 @@ export function reconcileNet(events: ReticleEvent[]): ReticleEvent[] {
  * or a network listing.
  */
 export function withoutUrlRaw(event: unknown): unknown {
-  if (typeof event !== 'object' || null === event) return event;
+  if (typeof event !== 'object' || null === event) {
+    return event;
+  }
   const rec = event as Record<string, unknown>;
   const data = rec['data'];
-  if (typeof data !== 'object' || null === data || !(URL_RAW in data)) return event;
+  if (typeof data !== 'object' || null === data || !(URL_RAW in data)) {
+    return event;
+  }
   const { [URL_RAW]: _raw, ...rest } = data as Record<string, unknown>;
   return { ...rec, data: rest };
 }
@@ -135,6 +154,13 @@ interface NetCallView {
    * which is the reading that turns an unverifiable call into an assumed success.
    */
   oneWay?: boolean;
+  /**
+   * The document before this one made this request, and the daemon carried it here (#1944). Its
+   * place in the list is when this document connected, not when the request happened.
+   */
+  fromDepartedDocument?: boolean;
+  /** Its page unloaded before the answer arrived: the outcome is unknown, not failed (#1944). */
+  pageUnloaded?: boolean;
 }
 export function projectNetCall(e: ReticleEvent, includeBodies = true): NetCallView {
   const status = e.data['status'];
@@ -148,22 +174,44 @@ export function projectNetCall(e: ReticleEvent, includeBodies = true): NetCallVi
     method: asString(e.data['method']) ?? '',
     url: asString(e.data['url']) ?? '',
   };
-  if ('number' === typeof status || 'string' === typeof status) view.status = status;
-  if (statusText !== undefined) view.statusText = statusText;
-  if (contentType !== undefined) view.contentType = contentType;
-  if (responseSize !== undefined) view.responseSize = responseSize;
+  if ('number' === typeof status || 'string' === typeof status) {
+    view.status = status;
+  }
+  if (statusText !== undefined) {
+    view.statusText = statusText;
+  }
+  if (contentType !== undefined) {
+    view.contentType = contentType;
+  }
+  if (responseSize !== undefined) {
+    view.responseSize = responseSize;
+  }
   // Bodies dominate the payload of the most-called read tool, and are only occasionally the part
   // anyone wanted — `bodies: false` on reticle_network drops them for a body-free listing (#401).
-  if (includeBodies && requestBody !== undefined) view.requestBody = requestBody;
-  if (includeBodies && responseBody !== undefined) view.responseBody = responseBody;
+  if (includeBodies && requestBody !== undefined) {
+    view.requestBody = requestBody;
+  }
+  if (includeBodies && responseBody !== undefined) {
+    view.responseBody = responseBody;
+  }
   if (
     includeBodies &&
     (true === e.data['requestBodyTruncated'] || true === e.data['responseBodyTruncated'])
   ) {
     view.bodyTruncated = true;
   }
-  if (ms !== undefined) view.ms = ms;
-  if (true === e.data['oneWay']) view.oneWay = true;
+  if (ms !== undefined) {
+    view.ms = ms;
+  }
+  if (true === e.data['oneWay']) {
+    view.oneWay = true;
+  }
+  if (true === e.data[DepartedNetField.FROM_DEPARTED_DOCUMENT]) {
+    view.fromDepartedDocument = true;
+  }
+  if (true === e.data[DepartedNetField.PAGE_UNLOADED]) {
+    view.pageUnloaded = true;
+  }
   const headers = e.data['headers'];
   if (headers !== null && 'object' === typeof headers) {
     view.headers = headers as Record<string, string>;
@@ -203,7 +251,9 @@ export function projectConsoleLog(e: ReticleEvent): ConsoleLogView {
   const level = e.type === EventType.ERROR_UNCAUGHT ? 'error' : e.type.replace('console.', '');
   const view: ConsoleLogView = { level, text: asString(e.data['message']) ?? '' };
   const stack = asString(e.data['stack']);
-  if (stack !== undefined && stack.length > 0) view.stack = topFrames(stack);
+  if (stack !== undefined && stack.length > 0) {
+    view.stack = topFrames(stack);
+  }
   // An uncaught error reports its origin as discrete fields rather than in a stack; render them in
   // the same file:line form the element descriptors use so the agent reads one shape everywhere.
   const source = asString(e.data['source']);
@@ -228,8 +278,12 @@ export function isConsoleEvent(e: ReticleEvent): boolean {
 
 /** Match a console/error event against an optional level filter (reticle_console). */
 export function matchConsole(e: ReticleEvent, level: string | undefined): boolean {
-  if (!isConsoleEvent(e)) return false;
-  if (level === undefined) return true;
+  if (!isConsoleEvent(e)) {
+    return false;
+  }
+  if (level === undefined) {
+    return true;
+  }
   return (
     e.type === `console.${level}` || ('error' === level && e.type === EventType.ERROR_UNCAUGHT)
   );
@@ -288,9 +342,11 @@ interface ConsoleEmptyHint {
 export function consoleEmptyHint(allConsole: ReticleEvent[]): ConsoleEmptyHint {
   const byLevel: ConsoleLevelCounts = { log: 0, warn: 0, error: 0 };
   for (const e of allConsole) {
-    if (e.type === EventType.CONSOLE_LOG) byLevel.log += 1;
-    else if (e.type === EventType.CONSOLE_WARN) byLevel.warn += 1;
-    else if (e.type === EventType.CONSOLE_ERROR || e.type === EventType.ERROR_UNCAUGHT) {
+    if (e.type === EventType.CONSOLE_LOG) {
+      byLevel.log += 1;
+    } else if (e.type === EventType.CONSOLE_WARN) {
+      byLevel.warn += 1;
+    } else if (e.type === EventType.CONSOLE_ERROR || e.type === EventType.ERROR_UNCAUGHT) {
       byLevel.error += 1;
     }
   }
@@ -343,6 +399,28 @@ export function unpatchedInWindow(
     (e) =>
       e.type === EventType.NET_UNPATCHED &&
       e.t >= since &&
+      (urlContains === undefined || urlForMatch(e.data).includes(urlContains)),
+  );
+}
+
+/**
+ * Did the page send a request this filter names, inside the window, and unload before its answer
+ * arrived (#1944)? The daemon marks such a carried `NET_PENDING` `pageUnloaded`. Its outcome is
+ * unknown, so a miss over it is unobservable, not a failure.
+ */
+export function unloadedInWindow(
+  events: readonly ReticleEvent[],
+  since: number,
+  method: string | undefined,
+  urlContains: string | undefined,
+): boolean {
+  return events.some(
+    (e) =>
+      e.type === EventType.NET_PENDING &&
+      e.t >= since &&
+      true === e.data[DepartedNetField.PAGE_UNLOADED] &&
+      (method === undefined ||
+        asString(e.data['method'])?.toUpperCase() === method.toUpperCase()) &&
       (urlContains === undefined || urlForMatch(e.data).includes(urlContains)),
   );
 }

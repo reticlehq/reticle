@@ -2787,11 +2787,6 @@
       "count": 3
     }
   },
-  "src/surface/mcp/mcp.test.ts": {
-    "curly": {
-      "count": 3
-    }
-  },
   "src/surface/mcp/merged-name-dispatches.test.ts": {
     "curly": {
       "count": 1
@@ -3033,11 +3028,6 @@
   "src/surface/tools/act/screen-request.ts": {
     "curly": {
       "count": 9
-    }
-  },
-  "src/surface/tools/act/settle-in-flight.ts": {
-    "curly": {
-      "count": 11
     }
   },
   "src/surface/tools/act/unsettled-find.ts": {

@@ -22,6 +22,11 @@ import {
 } from './session-successor.js';
 import { SESSION_DISCONNECTED_REASON, SESSION_PARKED_REASON } from './facts/session-replaced.js';
 import { isErrorDocument } from './session-info.js';
+import {
+  carryOnNewDocument,
+  departedNetworkOf,
+  type DepartedNetwork,
+} from './facts/departed-network.js';
 
 /** The two checkout facts a worktree-scoped resolve needs. */
 export interface CheckoutSource {
@@ -192,6 +197,11 @@ export class SessionManager {
   /** The tabs already open when each tombstoned session departed: siblings, never its successor. */
   readonly #siblingsAtDeparture = new Map<string, ReadonlySet<string>>();
   /**
+   * The network record each departed document made after the agent's last act, kept until the same
+   * tab's next document connects (#1944). Bounded with the tombstones. See departed-network.ts.
+   */
+  readonly #departedNetwork = new Map<string, DepartedNetwork>();
+  /**
    * The active project's scope, set once from the daemon's .reticle.json. When a tool resolves a session
    * without passing its own scope, this is applied — so auto-selection is project-scoped by default
    * and a stray tab from another app is never picked, even on the no-sessionId path.
@@ -246,9 +256,25 @@ export class SessionManager {
     // that silently fails to register is a leak nothing would report.
     declareDrivenRedactionKeys(session.id, session.redactKeys);
     this.#attachment.attached(session.id);
+    this.#carryDepartedNetwork(session, previous);
     this.#tombstones.delete(session.id);
     this.#siblingsAtDeparture.delete(session.id);
     return previous;
+  }
+
+  /**
+   * Give a new document the requests its tab's previous document made after the last act (#1944).
+   * `previous` is that document when its socket has not closed yet; else the record kept at removal.
+   */
+  #carryDepartedNetwork(session: Session, previous: Session | undefined): void {
+    const departed =
+      previous !== undefined && previous !== session
+        ? departedNetworkOf(previous)
+        : this.#departedNetwork.get(session.id);
+    this.#departedNetwork.delete(session.id);
+    if (departed !== undefined) {
+      carryOnNewDocument(session, departed);
+    }
   }
 
   /**
@@ -277,6 +303,7 @@ export class SessionManager {
     session.disconnect(SESSION_PARKED_REASON);
     this.remove(session);
     this.#tombstones.delete(session.id);
+    this.#departedNetwork.delete(session.id);
   }
 
   isParked(sessionId: string): boolean {
@@ -295,6 +322,13 @@ export class SessionManager {
     // the reconnect is exactly where that matters.
     this.#attachment.detached(session.id);
     this.#rememberTombstone(session);
+    // Kept only beside a tombstone, so the tombstone cap bounds it too.
+    const departedNetwork = this.#tombstones.has(session.id)
+      ? departedNetworkOf(session)
+      : undefined;
+    if (departedNetwork !== undefined) {
+      this.#departedNetwork.set(session.id, departedNetwork);
+    }
     return this.#sessions.delete(session.id);
   }
 
@@ -329,6 +363,7 @@ export class SessionManager {
       }
       this.#tombstones.delete(oldest);
       this.#siblingsAtDeparture.delete(oldest);
+      this.#departedNetwork.delete(oldest);
     }
   }
 

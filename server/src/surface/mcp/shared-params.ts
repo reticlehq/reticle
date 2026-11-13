@@ -1,4 +1,5 @@
 import type { z } from 'zod';
+import { ReticleTool } from '@reticlehq/core';
 
 /**
  * Parameters that mean the same thing on every tool, documented ONCE instead of every turn.
@@ -55,4 +56,38 @@ export function sharedParamShort(name: string, schema: z.ZodTypeAny): string | u
 /** Is this a parameter whose guidance now lives in the instructions block? */
 export function isSharedParam(name: string): boolean {
   return Object.hasOwn(SHARED_PARAM_SHORT, name);
+}
+
+/**
+ * Where to go when a tool refuses a parameter that another tool takes (#1944).
+ *
+ * An agent proved a click with `reticle_act_and_wait`, saw a request missing from the act's window,
+ * and asked for a wider window with `since`. The refusal listed what the tool declares and stopped
+ * there, so the agent did not learn that `reticle_assert` reads any window it is given. The refusal
+ * now names that tool.
+ *
+ * A lookup table, keyed by tool and then by the refused parameter. Add a row only where another
+ * tool really does what the refused parameter asked for.
+ */
+
+const REDIRECTS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  [ReticleTool.ACT_AND_WAIT]: {
+    since:
+      `${ReticleTool.ACT_AND_WAIT} always reads the window that its own action opens. To check a ` +
+      `window that starts earlier, call ${ReticleTool.ASSERT} { predicate, since } with the cursor ` +
+      'from an earlier result.',
+  },
+};
+
+/** The sentences that name the tool for each refused key, or an empty string. */
+export function refusedKeyRedirect(toolName: string, refused: readonly string[]): string {
+  const forTool = REDIRECTS[toolName];
+  if (forTool === undefined) {
+    return '';
+  }
+  return refused
+    .map((key) => (Object.hasOwn(forTool, key) ? forTool[key] : undefined))
+    .filter((line): line is string => line !== undefined)
+    .map((line) => `${line} `)
+    .join('');
 }
