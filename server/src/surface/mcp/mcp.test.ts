@@ -23,7 +23,9 @@ describe('withSessionEnvelope — spliced fields survive structuredContent valid
 
   it('every session-bound tool with an outputSchema declares the envelope fields (superset guard)', () => {
     for (const tool of TOOLS) {
-      if (tool.outputSchema === undefined || !SESSION_BOUND_TOOLS.has(tool.name)) continue;
+      if (tool.outputSchema === undefined || !SESSION_BOUND_TOOLS.has(tool.name)) {
+        continue;
+      }
       const merged = withSessionEnvelope(tool.name, tool.outputSchema) ?? {};
       for (const key of ENVELOPE_KEYS) {
         expect(Object.keys(merged), `${tool.name} must keep '${key}'`).toContain(key);
@@ -174,7 +176,9 @@ describe('firstSentence does not cut inside an abbreviation', () => {
       ].filter((text) => text.length > 0);
       for (const text of texts) {
         const trimmed = firstSentence(text);
-        if (trimmed === text) continue;
+        if (trimmed === text) {
+          continue;
+        }
         expect(trimmed.trimEnd()).not.toMatch(/\b(e\.g|i\.e|etc|vs|cf)\.$/);
       }
     },
@@ -269,7 +273,9 @@ describe('a wrong-shaped call is answered with a correct one', () => {
     const server = createMcpServer(toolDepsForTest(), TOOL_SURFACE.DEFAULT);
     // Passing an empty example map re-wraps the validator so every failure answers with the
     // no-example fallback, which is what tools without an advertised example serve today.
-    if (examples !== undefined) installFriendlyArgErrors(server, examples);
+    if (examples !== undefined) {
+      installFriendlyArgErrors(server, examples);
+    }
     const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair();
     await server.connect(serverTransport);
     const client = new Client({ name: 'c', version: '0' });
@@ -430,6 +436,21 @@ describe('an unknown parameter is refused, never silently dropped', () => {
       arguments: { mdoe: 'interactive' },
     });
     expect(text(result)).toContain('A valid call looks like');
+    await close();
+  });
+
+  // #1944: an agent could not widen the act's window, and the refusal did not say which tool can.
+  it('names reticle_assert when act_and_wait is given `since`', async () => {
+    const { client, close } = await openServer();
+    const result = await client.callTool({
+      name: ReticleTool.ACT_AND_WAIT,
+      arguments: { ref: 'e1', action: 'click', since: 0, until: { kind: 'route', pathname: '/' } },
+    });
+    expect(result.isError).toBe(true);
+    expect(text(result)).toContain('since');
+    expect(text(result), 'it must name the tool that takes since').toContain(
+      `${ReticleTool.ASSERT} { predicate, since }`,
+    );
     await close();
   });
 

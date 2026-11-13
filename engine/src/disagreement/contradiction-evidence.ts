@@ -15,6 +15,7 @@
 
 import {
   CanvasTrigger,
+  DepartedNetField,
   EventType,
   FieldChangeField,
   FieldChangeKind,
@@ -53,6 +54,12 @@ export interface NetCall {
    * raised `ui-advanced-request-failed` against a UI that had done nothing wrong.
    */
   ok: boolean | undefined;
+  /**
+   * The document before this one made the call, and that document then unloaded (#1944). Its
+   * client reaction happened there, or was the unload itself, so no rule may read this window's
+   * quiet as "the client ignored the response".
+   */
+  departed?: true;
 }
 
 export function netCall(e: ReticleEvent): NetCall {
@@ -69,6 +76,7 @@ export function netCall(e: ReticleEvent): NetCall {
       e.data['ok'] === undefined && status === undefined
         ? undefined
         : true === e.data['ok'] || (e.data['ok'] === undefined && (status ?? 0) < 400),
+    ...(true === e.data[DepartedNetField.FROM_DEPARTED_DOCUMENT] ? { departed: true } : {}),
   };
 }
 

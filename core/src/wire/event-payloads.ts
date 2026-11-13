@@ -15,7 +15,7 @@ import { ResponseBodyReason } from './constants/response-body-reason.js';
 import { BlindSpotKind } from '@/verdict/verified-constants.js';
 import { BrowserBrand } from '@/telemetry-feedback.js';
 import { HudUseDataSchema, HumanControlDataSchema, HumanMarkDataSchema } from './messages.js';
-import { NEXT_ACTION_FIELD, REQUEST_SHAPE_FIELD } from './net.js';
+import { DepartedNetField, NEXT_ACTION_FIELD, REQUEST_SHAPE_FIELD } from './net.js';
 
 /**
  * Per-event-type payload schemas — the typed replacement for the envelope's open `data` record.
@@ -119,6 +119,7 @@ const netRequestSchema = z
     urlRaw: z.string().optional(),
     [NEXT_ACTION_FIELD]: z.string().optional(),
     [REQUEST_SHAPE_FIELD]: z.string().optional(),
+    [DepartedNetField.FROM_DEPARTED_DOCUMENT]: z.boolean().optional(),
   })
   .passthrough();
 
@@ -158,6 +159,8 @@ export const EVENT_PAYLOAD_SCHEMAS = {
     url: z.string(),
     initiator: z.string(),
     urlRaw: z.string().optional(),
+    [DepartedNetField.FROM_DEPARTED_DOCUMENT]: z.boolean().optional(),
+    [DepartedNetField.PAGE_UNLOADED]: z.boolean().optional(),
   }),
   [EventType.NET_UNPATCHED]: z
     .object({

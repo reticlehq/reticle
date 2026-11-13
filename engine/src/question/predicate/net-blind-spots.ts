@@ -6,8 +6,12 @@
  * zero-match `net` verdict says "not observable" or names its blind stretch, instead of "never
  * happened". Split from `predicate-eval.ts`, which decides the verdict; this only knows the channel.
  *
- * Takes the filter's parts rather than the predicate, so it needs nothing from the contract.
+ * Takes the filter's parts rather than the predicate, so it needs nothing from the contract. The
+ * one exception is `unrecordedCallMiss`, which builds the whole `unknown` result for a net clause.
  */
+
+import { unloadedInWindow, unpatchedInWindow } from '@/window/event-filters.js';
+import { describeNetFilter, type EvalResult } from './predicate-eval-kit.js';
 
 /**
  * URL suffixes only the DOCUMENT fetches, which the network observer therefore never records.
@@ -237,4 +241,58 @@ export function unpatchedFetchReason(filter: string): string {
     `body are not known, so this clause cannot be judged. Connect Reticle earlier: add the build ` +
     `plugin (@reticlehq/vite-plugin or @reticlehq/next), which runs connect() before the app code`
   );
+}
+
+/** The oracle that reports a miss over a request whose page unloaded before its answer (#1944). */
+export const PAGE_UNLOADED_ASSERTION = 'net.page-unloaded';
+
+/**
+ * Why a `net` miss is unknown when the page sent a matching request and then unloaded before the
+ * answer arrived. `filter` is the net clause as applied — `describeNetFilter` of it.
+ *
+ * A click can send a POST and then load a new document. Nobody records an answer that comes after
+ * the unload. The daemon carries the request into the new session marked `pageUnloaded`, so the
+ * record says the page sent it. "No call matched" would say it never did (#1944).
+ */
+export function pageUnloadedReason(filter: string): string {
+  return (
+    `the page sent a request matching ${filter}, and then its document unloaded before the answer ` +
+    'arrived. Nothing recorded the answer, so its status and body are unknown. This is not a ' +
+    'missing request. To prove the outcome, assert the state the request makes on the new page, ' +
+    'or make the request finish before the page navigates'
+  );
+}
+
+/** The net clause a miss is judged against, as `describeNetFilter` takes it. */
+type NetClause = Parameters<typeof describeNetFilter>[0];
+
+/**
+ * `unknown` when a matching call happened and its record cannot answer: no patched transport saw it
+ * (#1660), or its page unloaded before the answer arrived (#1944). Else `undefined`. `observed` is
+ * read only when the miss is reported.
+ */
+export function unrecordedCallMiss(
+  events: Parameters<typeof unpatchedInWindow>[0],
+  p: NetClause,
+  observed: () => string,
+): EvalResult | undefined {
+  const since = p.since ?? 0;
+  const filter = describeNetFilter(p);
+  let reason = unpatchedFetchReason(filter);
+  let assertion = UNPATCHED_FETCH_ASSERTION;
+  if (!unpatchedInWindow(events, since, p.urlContains)) {
+    if (!unloadedInWindow(events, since, p.method, p.urlContains)) {
+      return undefined;
+    }
+    reason = pageUnloadedReason(filter);
+    assertion = PAGE_UNLOADED_ASSERTION;
+  }
+  return {
+    pass: false,
+    failureReason: reason,
+    inconclusive: reason,
+    observed: observed(),
+    expected: `a recorded call matching ${filter}`,
+    assertion,
+  };
 }
