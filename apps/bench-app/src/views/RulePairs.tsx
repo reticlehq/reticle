@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useApp } from '../store/store.js';
 import { emit, Sig } from '../lib/reticle-bridge.js';
 
@@ -32,6 +32,9 @@ import { emit, Sig } from '../lib/reticle-bridge.js';
  *    same race when both answers update `shipments.rows` (report) (#2175).
  *  - `dialog_declined`: a publish behind `confirm()`, which Reticle declines, so its request never
  *    goes (unknown). The dead button is the other direction: no dialog, no effect (no).
+ *  - `state-vs-render` beside a canvas (#1525): a store change that the canvas draws (silent), and a
+ *    store change that it does not draw (silent, and the coverage line names the canvas). The canvas
+ *    mounts only when asked, so "Remember" above still has no canvas on the page (report).
  */
 const API = 'http://localhost:8787/api/rule-pairs';
 /**
@@ -87,6 +90,47 @@ async function putLocked(outcome: string): Promise<void> {
   });
 }
 
+/** Draw `bars` as a column chart. The pixels are the only render: no DOM node shows the count. */
+function drawBars(canvas: HTMLCanvasElement | null, bars: number): void {
+  const ctx = canvas?.getContext('2d');
+  if (null === ctx || undefined === ctx) {
+    return;
+  }
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, 240, 120);
+  ctx.fillStyle = '#2f7d5b';
+  for (let i = 0; i < bars; i += 1) {
+    ctx.fillRect(10 + i * 40, 20, 30, 100);
+  }
+}
+
+/** A chart drawn on a canvas, as an editor, a chart or a game renders. */
+function CanvasPanel(): React.ReactElement {
+  const canvas = useRef<HTMLCanvasElement>(null);
+  useEffect(() => drawBars(canvas.current, useApp.getState().rulePairsBars), []);
+  return (
+    <>
+      <canvas ref={canvas} data-testid="rule-pairs-canvas" width={240} height={120} />
+      <button
+        data-testid="rule-pairs-canvas-draw"
+        onClick={() => {
+          const bars = useApp.getState().rulePairsBars + 1;
+          useApp.setState({ rulePairsBars: bars });
+          drawBars(canvas.current, bars);
+        }}
+      >
+        Add a bar
+      </button>
+      <button
+        data-testid="rule-pairs-canvas-tally"
+        onClick={() => useApp.setState({ rulePairsTally: useApp.getState().rulePairsTally + 1 })}
+      >
+        Count
+      </button>
+    </>
+  );
+}
+
 async function readPage(list: string): Promise<void> {
   await fetch(`${API}/${list}?page=1`);
 }
@@ -106,6 +150,7 @@ export function RulePairs(): React.ReactElement {
   const genderOptions = useApp((state) => state.rulePairsGenderOptions);
   const stateOptions = useApp((state) => state.rulePairsStateOptions);
   const shipments = useApp((state) => state.shipments);
+  const [chart, setChart] = useState(false);
 
   useEffect(() => {
     void readPage('pages');
@@ -176,6 +221,9 @@ export function RulePairs(): React.ReactElement {
           onClick={() => useApp.setState({ rulePairsChoice: 'remembered' })}
         >
           Remember
+        </button>
+        <button data-testid="rule-pairs-canvas-open" onClick={() => setChart(true)}>
+          Show chart
         </button>
       </div>
       <div className="panel panel-pad" style={{ maxWidth: 560 }}>
@@ -325,6 +373,13 @@ export function RulePairs(): React.ReactElement {
           {`${String(selected)} of ${String(TOTAL)} selected`}
         </output>
       </div>
+      {/* Mounted only when asked, so the page above keeps the layout the earlier pairs click in. */}
+      {chart ? (
+        <div className="panel panel-pad" style={{ maxWidth: 560 }}>
+          <h3>Canvas</h3>
+          <CanvasPanel />
+        </div>
+      ) : null}
     </div>
   );
 }

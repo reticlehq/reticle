@@ -68,6 +68,7 @@ import { predicateToExpectedLinks } from '@reticlehq/engine/question/predicate/p
 import {
   absenceBlindSpotNote,
   buildCoverageStatement,
+  canvasPaintSpots,
   blindSpotsFromState,
   failingClauseReadsLostChannel,
   restsOnCompleteWindow,
@@ -644,7 +645,10 @@ export const ACT_TOOLS: ToolDef[] = [
         // stronger than this block. Grade from the strongest asserted consequence; integrity from evictions.
         // Coverage: cross-origin frames / other blind spots the SDK reported during this window mean the
         // verdict didn't see everything — say so, never imply full coverage.
-        const spots = blindSpotsFromState(session.blindSpots(), session.runtime);
+        const prior =
+          since > 0 ? (await session.queryEvents({ since: 0 })).filter((e) => e.t < since) : [];
+        const canvas = canvasPaintSpots(windowEvents, { actionSince: since, prior });
+        const spots = [...blindSpotsFromState(session.blindSpots(), session.runtime), ...canvas];
         // The window's own counts, so sampling before it is not described as this window's (#1414).
         const windowSpots = blindSpotsFromState(session.blindSpots(since), session.runtime);
         const coverage = buildCoverageStatement(spots, windowSpots);
@@ -722,9 +726,8 @@ export const ACT_TOOLS: ToolDef[] = [
         // flagship path, and nothing said so: the finding was simply never produced.
         //
         // Learning material only. Attribution is unchanged — findings still come exclusively from
-        // `windowEvents`, exactly as on the assert path.
-        const prior =
-          since > 0 ? (await session.queryEvents({ since: 0 })).filter((e) => e.t < since) : [];
+        // `windowEvents`, exactly as on the assert path. It is read above, before coverage, because the
+        // canvas-paint spot (#1525) learns the last canvas digest from it too.
         //
         // `actionSince` is the window's own floor here, which is the tightest attribution there is —
         // and it is what lets `duplicate-request` claim "one user action was performed" and mean it.

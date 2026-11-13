@@ -89,3 +89,26 @@ describe('the canvas digest after an act', () => {
     ]);
   });
 });
+
+/*
+ * A hidden canvas is still sampled, as evidence, but its digest says it was not on screen, so the
+ * engine does not read it as the render of an action (#1525).
+ */
+describe('the canvas digest says whether the canvas was on screen', () => {
+  it('marks each digest with visible from the on-screen check', () => {
+    document.body.innerHTML = '<canvas id="shown"></canvas><canvas id="hidden"></canvas>';
+    const events: { type: EventType; data: Record<string, unknown> }[] = [];
+    let tick: () => void = () => undefined;
+    const teardown = installCanvas((type, data) => events.push({ type, data }), {
+      sample: () => solid(255, 0, 0),
+      onScreen: (canvas) => 'shown' === canvas.id,
+      every: (run) => {
+        tick = run;
+        return () => undefined;
+      },
+    });
+    tick();
+    teardown();
+    expect(events.map((e) => e.data['visible'])).toEqual([true, false]);
+  });
+});

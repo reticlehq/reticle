@@ -2,6 +2,7 @@ import { CanvasTrigger, EventType } from '@reticlehq/core';
 
 export { CanvasTrigger };
 import { refs } from '@/dom/addressing/refs.js';
+import { isInViewport } from '@/dom/visibility.js';
 import { nativeSetInterval } from '@/timers/native/native-timers.js';
 import { observeSafely, observeValue, type Emit, type Teardown } from './types.js';
 
@@ -73,6 +74,8 @@ interface CanvasOptions {
   /** Injected for the tests; jsdom has no 2D context. */
   sample?: (canvas: HTMLCanvasElement) => CanvasSample | undefined;
   every?: (run: () => void, ms: number) => () => void;
+  /** Injected for the tests; jsdom lays nothing out, so every box is empty there. */
+  onScreen?: (canvas: HTMLCanvasElement) => boolean;
 }
 
 /** The installed observer's sampler, for `canvasAfterAct`. One page, one observer. */
@@ -90,6 +93,7 @@ export function canvasAfterAct(): void {
 export function installCanvas(emit: Emit, opts: CanvasOptions = {}): Teardown {
   const sample = opts.sample ?? sampleCanvas;
   const every = opts.every ?? nativeSetInterval;
+  const onScreen = opts.onScreen ?? ((canvas: HTMLCanvasElement) => isInViewport(canvas));
   const last = new WeakMap<HTMLCanvasElement, string>();
   const look = (trigger: CanvasTrigger): void => {
     observeSafely(() => {
@@ -106,7 +110,15 @@ export function installCanvas(emit: Emit, opts: CanvasOptions = {}): Teardown {
         last.set(canvas, digest);
         emit(
           EventType.CANVAS_DIGEST,
-          { digest, width: read.width, height: read.height, mean, trigger },
+          // `visible`: a hidden or off-screen canvas cannot carry a render the user sees (#1525).
+          {
+            digest,
+            width: read.width,
+            height: read.height,
+            mean,
+            trigger,
+            visible: onScreen(canvas),
+          },
           refs.refFor(canvas),
         );
       }

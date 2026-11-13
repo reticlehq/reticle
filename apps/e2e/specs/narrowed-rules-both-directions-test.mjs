@@ -18,6 +18,10 @@ import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 // goes wrong. Each direction also reads the session's own events, so a fixture that stops producing
 // its shape fails here instead of passing for free.
 //
+// #1525 narrowed `state-vs-render`: a canvas that repainted is the screen moving, and a canvas whose
+// paint was not seen makes the rule abstain and name the canvas on the coverage line. "Remember",
+// with no canvas on the page, keeps the defect it must report.
+//
 // The reach cases at the end hold a fifth rule in the same way: a click that no person can make is
 // never `yes` (#1518).
 import { chromium } from 'playwright';
@@ -70,6 +74,9 @@ const SAME_TASK_MS = 2;
 const SAVED_FETCH_REASON = 'saved before Reticle connected';
 const BUILD_PLUGIN = 'build plugin';
 const PUBLISH_QUESTION = 'Publish this profile?';
+const STATE_VS_RENDER = 'state-vs-render';
+const CANVAS_DIGEST = 'canvas.digest';
+const CANVAS_NOTE = 'canvas paint not observed';
 
 const server = await start({ port: TEST_BRIDGE_PORT, mcp: false });
 const reticleRoot = path.join(os.tmpdir(), `reticle-rule-pairs-${process.pid}`, '.reticle');
@@ -229,6 +236,12 @@ if (remember !== undefined) {
   chk(
     'the click moved its quiet store path once, otherwise this proves nothing',
     1 === (await storeMoves(remember.since, 'rulePairsChoice')),
+  );
+  // No canvas is on the page yet, so the store moved and nothing rendered: the defect #1525 keeps.
+  chk('a store change nothing rendered is still reported', kindsOf(remember).includes(STATE_VS_RENDER), why(remember));
+  chk(
+    'no canvas was sampled in its window, otherwise this proves nothing',
+    !(await events(remember.since)).some((e) => CANVAS_DIGEST === e.type),
   );
 }
 
@@ -583,6 +596,51 @@ if (lost !== undefined) {
     'the echo bumped lock_version and returned the old title, otherwise this proves nothing',
     body.includes('"lock_version":4') && body.includes('Old title'),
     body,
+  );
+}
+
+/** The digests of the Rule Pairs canvas: before `since` (the last one) and inside the window. */
+const digests = async (since) => {
+  const all = (await events(0)).filter((e) => CANVAS_DIGEST === e.type);
+  return {
+    before: all.filter((e) => e.t < since).at(-1)?.data?.digest,
+    inWindow: all.filter((e) => e.t >= since).map((e) => e.data?.digest),
+  };
+};
+const storeUntil = (pathName) => ({ kind: 'state', store: 'app', path: pathName, equals: 1 });
+
+console.log('\n=== state-vs-render: a store change that a canvas draws ===');
+await act('rule-pairs-canvas-open', { kind: 'element', query: { by: 'testid', value: 'rule-pairs-canvas' } });
+// The SDK samples each canvas every 500 ms. Wait for one sample, so the canvas has a digest before
+// the click, as any canvas on a page that was open for a moment has.
+await sleep(1200);
+const drawn = await act('rule-pairs-canvas-draw', storeUntil('rulePairsBars'));
+if (drawn !== undefined) {
+  chk('the canvas repaint counts as a render', !kindsOf(drawn).includes(STATE_VS_RENDER), why(drawn));
+  chk('the store change the canvas drew is verified yes', VERIFIED_YES === drawn.verified, why(drawn));
+  chk('the coverage line names no canvas gap', !String(drawn.honesty?.coverage?.note ?? '').includes(CANVAS_NOTE));
+  const { before, inWindow } = await digests(drawn.since);
+  chk(
+    'the canvas had a digest before the click and a different one in its window, otherwise this proves nothing',
+    before !== undefined && inWindow.some((d) => d !== before),
+    `${String(before)} -> ${JSON.stringify(inWindow)}`,
+  );
+}
+
+console.log('\n=== state-vs-render: a store change that the canvas does not draw ===');
+const tally = await act('rule-pairs-canvas-tally', storeUntil('rulePairsTally'));
+if (tally !== undefined) {
+  chk('the rule abstains beside a canvas', !kindsOf(tally).includes(STATE_VS_RENDER), why(tally));
+  chk(
+    'the coverage line says the canvas paint was not observed',
+    String(tally.honesty?.coverage?.note ?? '').includes(CANVAS_NOTE),
+    String(tally.honesty?.coverage?.note),
+  );
+  const { before, inWindow } = await digests(tally.since);
+  chk(
+    'the canvas was sampled in the window and showed what it showed before, otherwise this proves nothing',
+    before !== undefined && 0 < inWindow.length && inWindow.every((d) => d === before),
+    `${String(before)} -> ${JSON.stringify(inWindow)}`,
   );
 }
 

@@ -348,6 +348,11 @@ export const EVENT_PAYLOAD_SCHEMAS = {
      * `poll` when the timer did. Absent from an SDK older than the field.
      */
     trigger: z.nativeEnum(CanvasTrigger).optional(),
+    /**
+     * Whether the canvas had a size and was inside the viewport when it was sampled. A hidden canvas
+     * cannot carry a render the user sees. Absent from an SDK older than the field.
+     */
+    visible: z.boolean().optional(),
   }),
 } satisfies Record<EventType, z.ZodTypeAny>;
 

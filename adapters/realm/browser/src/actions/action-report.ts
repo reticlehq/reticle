@@ -11,6 +11,7 @@ import { ownWords } from '@/dom/query-finders.js';
 import { getAccessibleName, getRole, isSensitiveField } from '@/dom/a11y.js';
 import { identifyComponent } from '@/registry/stores/adapters.js';
 import { isReticleUi } from '@/dom/dom-ignore.js';
+import { isInViewport } from '@/dom/visibility.js';
 
 /**
  * Best-effort evidence of whether/why an action landed, so the agent can separate
@@ -99,23 +100,11 @@ export interface ActionEffect {
 
 const CANVAS_SELECTOR = 'canvas';
 
-/** Canvases with a size, inside the viewport, that are the app's own (not Reticle's UI). */
+/** How many of the app's own canvases (not Reticle's UI) are on screen (`isInViewport`). */
 export function visibleCanvases(doc: Document): number {
-  const width = doc.defaultView?.innerWidth ?? 0;
-  const height = doc.defaultView?.innerHeight ?? 0;
-  let count = 0;
-  for (const canvas of doc.querySelectorAll(CANVAS_SELECTOR)) {
-    if (isReticleUi(canvas)) {
-      continue;
-    }
-    const box = canvas.getBoundingClientRect();
-    const sized = box.width > 0 && box.height > 0;
-    const onScreen = box.bottom > 0 && box.right > 0 && box.top < height && box.left < width;
-    if (sized && onScreen) {
-      count += 1;
-    }
-  }
-  return count;
+  return Array.from(doc.querySelectorAll(CANVAS_SELECTOR)).filter(
+    (canvas) => !isReticleUi(canvas) && isInViewport(canvas),
+  ).length;
 }
 
 export interface ActionResult {

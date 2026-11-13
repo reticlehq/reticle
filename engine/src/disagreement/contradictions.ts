@@ -20,6 +20,8 @@ import {
   isSamePathnameReplace,
   isSteadyCadence,
   appIsSilent,
+  CanvasPaint,
+  canvasPaint,
   liveAlertAfterFailedSend,
   netCall,
   TargetFate,
@@ -52,6 +54,42 @@ export type {
   OwnContradiction,
   ContradictionOptions,
 } from './contradiction-types.js';
+
+/** What the state-vs-render rule makes of a window. See `readStateRender`. */
+export const StateRender = {
+  CLEAR: 'clear',
+  RAISE: 'raise',
+  /** No DOM node moved, and a canvas on screen could hold the render in pixels not seen to change. */
+  CANVAS_UNOBSERVED: 'canvas-unobserved',
+} as const;
+export type StateRender = (typeof StateRender)[keyof typeof StateRender];
+
+/**
+ * The state-vs-render reading of a window, one function for the rule and for the coverage line that
+ * names its abstention, so the two cannot disagree. It fires on an ABSENCE, so it is scoped tightly:
+ * only for a window attributed to an ACTION, only when state moved, only when no DOM node, route or
+ * app-written field moved with it (`screenMoved`), and only when the window carries no network at
+ * all. A request belongs to the rules for failed, ignored and unsettled calls. A canvas that painted
+ * is the screen moving (#1525); a canvas whose paint was not seen makes the rule abstain.
+ */
+export function readStateRender(
+  events: readonly ReticleEvent[],
+  options: Pick<ContradictionOptions, 'actionSince' | 'prior'>,
+): StateRender {
+  if (
+    options.actionSince === undefined ||
+    !events.some(isMeaningfulStateChange) ||
+    events.some((e) => e.type === EventType.NET_REQUEST || e.type === EventType.NET_PENDING) ||
+    events.some(screenMoved)
+  ) {
+    return StateRender.CLEAR;
+  }
+  const paint = canvasPaint(events, options.prior ?? [], options.actionSince);
+  if (CanvasPaint.NONE === paint) {
+    return StateRender.RAISE;
+  }
+  return CanvasPaint.UNOBSERVED === paint ? StateRender.CANVAS_UNOBSERVED : StateRender.CLEAR;
+}
 
 /**
  * The contradiction hunter.
@@ -628,30 +666,18 @@ function findWindowContradictions(
   // ── The store committed and the screen never moved ─────────────────────────────────────────
   //
   // Scoped as tightly as the one below, and for the same reason: it fires on an ABSENCE, which is
-  // the easiest way to build a false positive. Only for a window attributed to an ACTION, only when
-  // state actually moved, only when NO DOM node moved with it, and only when nothing is still in
-  // flight that the render could legitimately be waiting on.
+  // the easiest way to build a false positive. The scoping is in `readStateRender`.
   //
-  // Route movement counts as the screen moving: a navigation IS a render, and a store change that
-  // drives one has been corroborated, and so has a field the app wrote (`screenMoved`).
-  //
-  // And only when the window carries NO NETWORK AT ALL. A request means the app reached for
-  // something, and whether it failed, was ignored or never settled already belongs to three other
-  // rules — firing here as well would report one fact twice, which is exactly the scoping the
-  // signal rule below had to earn. Two existing tests proved it: both describe a window with a
-  // failed call in it, and both were already answered by the rule that owns that fact.
-  if (
-    options.actionSince !== undefined &&
-    events.some(isMeaningfulStateChange) &&
-    !events.some((e) => e.type === EventType.NET_REQUEST || e.type === EventType.NET_PENDING) &&
-    !events.some(screenMoved)
-  ) {
+  // A canvas repaint counts as the screen moving (#1525). When a canvas is on screen and no paint on
+  // it was seen, the rule does not fire: the render can be in pixels this window could not compare.
+  // The act tool names that on its coverage line, so the gap is stated rather than hidden.
+  if (StateRender.RAISE === readStateRender(events, options)) {
     found.push({
       kind: ContradictionKind.STATE_VS_RENDER,
       claim: 'the store committed a change',
       counter:
-        'nothing rendered in the same window: no DOM or app-written field change and no route ' +
-        'movement, with no request still in flight the render could be waiting on',
+        'nothing rendered in the same window: no DOM, canvas or app-written field change and no ' +
+        'route movement, with no request still in flight the render could be waiting on',
       detail:
         'a component that does not re-render on a committed change shows the OLD value while the ' +
         'app is internally consistent, which is why nothing else reports it',

@@ -172,8 +172,15 @@ const MAX_FILES_IMPORTING_CORE = 45;
  * is the type alias the blind-spot check imports to walk the predicate tree. Both cross the
  * engine/core boundary. They join the import `blind-spots.ts` already has, so the file count is
  * unmoved.
+ *
+ * 71 -> 72 for a canvas that changes on its own (#1525).
+ *
+ * `canvasPaint` tells a change the SDK's poll found from one an act's digest found, so a chart on
+ * a timer is not read as the render of a click. The trigger crosses the wire, so it lives in core as
+ * `CanvasTrigger` and rule 3 forbids spelling it here. It joins the import
+ * `contradiction-evidence.ts` already has, so the file count is unmoved.
  */
-const MAX_DISTINCT_SYMBOLS = 71;
+const MAX_DISTINCT_SYMBOLS = 72;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.

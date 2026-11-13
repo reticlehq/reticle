@@ -82,6 +82,10 @@ interface AppState {
   rulePairsClicks: number;
   /** The one store path the Rule Pairs "Remember" button moves. */
   rulePairsChoice: string;
+  /** The bars the Rule Pairs canvas draws. Only the canvas shows it, so no DOM node moves with it. */
+  rulePairsBars: number;
+  /** A count the Rule Pairs canvas panel keeps and does not draw. */
+  rulePairsTally: number;
   /** What the Ack Pairs invite panel recorded about its last invite. */
   ackInvite: AckInvite | null;
   /** What the Ack Pairs order panel shows after its last order. */
@@ -136,6 +140,8 @@ export const useApp = create<AppState>((set, get) => ({
   shipments: { rows: '' },
   rulePairsClicks: 0,
   rulePairsChoice: '',
+  rulePairsBars: 0,
+  rulePairsTally: 0,
   ackInvite: null,
   ackOrder: '',
   ackLogin: null,
