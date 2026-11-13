@@ -480,6 +480,12 @@ export const FLOW_TOOLS: ToolDef[] = [
         .describe(
           'Set when replay waited past the step budget because the start page was still loading. stillLoading is what the tab said the last time replay asked. Absent means the wait stayed inside the budget.',
         ),
+      hydrationWait: z
+        .object({ waitedMs: z.number(), budgetMs: z.number() })
+        .optional()
+        .describe(
+          'Set when the React adapter said the page was not hydrated and replay stopped waiting at budgetMs. Step 1 ran on a page whose handlers may not be attached.',
+        ),
       // Declared here or a validating profile strips it -- the same way `name` was stripped once.
       // A field the handler sets and the schema omits arrives as nothing, silently.
       /*

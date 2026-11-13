@@ -405,6 +405,11 @@ export interface FlowReplayResult {
    */
   startPageWait?: StartPageWait;
   /**
+   * Set when the React adapter said the page was not hydrated, and replay stopped waiting at the
+   * bound. Step 1 then ran on a page whose handlers may not be attached (#1654).
+   */
+  hydrationWait?: HydrationWait;
+  /**
    * Set on an `ok` replay whose flow cannot fail: it asserts no observable consequence, or has no
    * steps at all. The replay genuinely completed, so the status stays `ok` — but a bare `ok` read
    * as proof the feature works is exactly the false confidence `flow-risk.ts` argues against, and
@@ -445,6 +450,14 @@ export interface StartPageWait {
   budgetMs: number;
   /** What the tab said the last time replay asked. True when replay gave up means it gave up at the cap. */
   stillLoading: boolean;
+}
+
+/** How long replay waited for a page that did not hydrate inside the bound. */
+export interface HydrationWait {
+  /** From the start of the wait to replay giving up. */
+  waitedMs: number;
+  /** The bound the wait reached. */
+  budgetMs: number;
 }
 
 /** A concrete, confidence-scored rebind proposed for one drifted step. */
