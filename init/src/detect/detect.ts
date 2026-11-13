@@ -341,7 +341,10 @@ export const FRAMEWORK_SIGNALS: Record<Framework, FrameworkSignals> = {
     deps: ['@tanstack/react-start', '@tanstack/start'],
     configs: [],
   },
-  [Framework.VITE]: { deps: ['vite', 'vinext'], configs: VITE_CONFIGS },
+  /**
+   * `vite-plus` too: a Vite+ app under pnpm may declare only it, and its CLI runs Vite (#2134).
+   */
+  [Framework.VITE]: { deps: ['vite', 'vite-plus', 'vinext'], configs: VITE_CONFIGS },
   /** CRA has no config file at all, so the dependency is the only signal. */
   [Framework.CRA]: { deps: ['react-scripts'], configs: [] },
   /** Nothing identifies plain HTML; it is where the chain below ends. */

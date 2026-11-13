@@ -16,7 +16,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { findWorkspaceApps, workspaceParents } from './workspace-apps.js';
+import { findWorkspaceApps, isWebApp, workspaceParents } from './workspace-apps.js';
 
 describe('where a workspace keeps its packages', () => {
   it('reads pnpm-workspace.yaml, which is the authoritative answer', () => {
@@ -136,5 +136,19 @@ describe('an app is a directory that can be served', () => {
       }),
     );
     expect(apps).toEqual(['apps/web']);
+  });
+
+  // Vite+ (#2134): `vite-plus` is the bundler, and a pnpm app may not declare `vite` at all. Read as
+  // a backend, the app was left out when a backend sat beside it.
+  it('counts a package that declares only vite-plus as an app with a page', () => {
+    const files: Record<string, string> = {
+      'apps/web/package.json': JSON.stringify({
+        name: 'web',
+        devDependencies: { 'vite-plus': '1.5.0' },
+        scripts: { dev: 'vp dev' },
+      }),
+    };
+    const io = { exists: (p: string) => p in files, readFile: (p: string) => files[p] ?? null };
+    expect(isWebApp('apps/web', io)).toBe(true);
   });
 });

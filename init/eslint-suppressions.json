@@ -154,7 +154,7 @@
   },
   "src/patch/brace-scan.ts": {
     "curly": {
-      "count": 3
+      "count": 1
     }
   },
   "src/patch/cra.ts": {

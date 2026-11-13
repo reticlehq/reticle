@@ -8,7 +8,13 @@
  * builder per framework that has its own files to write.
  */
 
-import { newViteConfig, patchViteConfig, VitePatchKind, VITE_IMPORT } from '@/patch/vite-config.js';
+import {
+  DefineConfigSource,
+  newViteConfig,
+  patchViteConfig,
+  VitePatchKind,
+  VITE_IMPORT,
+} from '@/patch/vite-config.js';
 import { viteManual, viteDevModuleFile, VITE_DEV_MODULE_PATH } from '@/patch/snippets.js';
 import { hasOptOut, OPT_OUT_MARKER } from '@/detect/declared/init-opt-out.js';
 import { Framework } from '@/detect/detect.js';
@@ -254,7 +260,15 @@ function viteConfigSteps(input: PlanInput, detail: string, inject = true): Step[
         detail,
         write: {
           path,
-          content: newViteConfig(port, true === input.captureBodies, inject, stampSource),
+          content: newViteConfig(
+            port,
+            true === input.captureBodies,
+            inject,
+            stampSource,
+            undefined === input.detection.dependencies?.[DefineConfigSource.VITE_PLUS]
+              ? DefineConfigSource.VITE
+              : DefineConfigSource.VITE_PLUS,
+          ),
           expect: [VITE_IMPORT, 'reticle('],
         },
         dependsOnInstall: true,

@@ -215,12 +215,32 @@ function safeRelativePath(value: string): string | null {
   return normal;
 }
 
-function isViteCommand(token: string): boolean {
+function isBin(token: string, bin: string): boolean {
   const normal = token.replace(/\\/g, '/');
-  return 'vite' === normal || 'vite.cmd' === normal || normal.endsWith('/node_modules/.bin/vite');
+  return bin === normal || `${bin}.cmd` === normal || normal.endsWith(`/node_modules/.bin/${bin}`);
 }
 
-/** The direct Vite invocation in the selected dev script, if that script has one. */
+const VITE_BIN = 'vite';
+/** Vite+'s CLI. `vp dev` starts Vite's dev server and takes Vite's own flags (#2134). */
+const VITE_PLUS_BIN = 'vp';
+const VITE_PLUS_DEV = 'dev';
+
+/**
+ * Where Vite's own arguments start in a command segment, or undefined when the segment does not run
+ * Vite: after `vite`, or after `vp dev`. Any other `vp` command does not start a dev server.
+ */
+function viteArgsStart(segment: readonly string[], command: number): number | undefined {
+  const token = segment[command] ?? '';
+  if (isBin(token, VITE_BIN)) {
+    return command + 1;
+  }
+  if (isBin(token, VITE_PLUS_BIN) && VITE_PLUS_DEV === segment[command + 1]) {
+    return command + 2;
+  }
+  return undefined;
+}
+
+/** The direct Vite invocation (`vite` or `vp dev`) in the selected dev script, if it has one. */
 function viteInvocation(script: string): ViteInvocation | undefined {
   const tokens = script.match(SHELL_TOKEN) ?? [];
   let start = 0;
@@ -230,8 +250,9 @@ function viteInvocation(script: string): ViteInvocation | undefined {
     const segment = tokens.slice(start, end).map(unquote);
     let command = 0;
     while (command < segment.length && ENV_ASSIGNMENT.test(segment[command] ?? '')) command += 1;
-    if (isViteCommand(segment[command] ?? '')) {
-      const args = segment.slice(command + 1);
+    const argsStart = viteArgsStart(segment, command);
+    if (argsStart !== undefined) {
+      const args = segment.slice(argsStart);
       for (let i = 0; i < args.length; i += 1) {
         const arg = args[i] ?? '';
         const inline = /^(?:--config|-c)=(.*)$/.exec(arg);

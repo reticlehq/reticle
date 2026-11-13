@@ -121,6 +121,8 @@ CMD ["npm", "run", "start"]
     expect(runsDevServer('compose.yaml', 'command: npx next dev -H 0.0.0.0', undefined)).toBe(true);
     expect(runsDevServer('Dockerfile', 'CMD ["npx", "vite", "--host"]', undefined)).toBe(true);
     expect(runsDevServer('Dockerfile', 'CMD ng serve --host 0.0.0.0', undefined)).toBe(true);
+    // Vite+'s CLI (#2134): `vp dev` runs Vite's dev server.
+    expect(runsDevServer('Dockerfile', 'CMD ["npx", "vp", "dev", "--host"]', undefined)).toBe(true);
     // The app's own dev script, whatever it is called on the command line.
     expect(runsDevServer('Dockerfile', 'CMD react-router dev', 'react-router dev')).toBe(true);
   });
