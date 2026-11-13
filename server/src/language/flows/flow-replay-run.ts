@@ -74,6 +74,7 @@ import {
   withStartPageWait,
 } from './flow-start-path.js';
 import { requestSender, type OpenPage } from './steps/page-steps.js';
+import { awaitHydration } from './steps/hydration-wait.js';
 
 export function latestRecordedFlow(
   events: ReticleEvent[],
@@ -338,8 +339,12 @@ export async function replayNamedFlow(
   /** Wraps the session the steps run on, so a caller can watch what they resolved. */
   observe: (session: FlowReplaySession) => FlowReplaySession = (s) => s,
 ): Promise<FlowReplayResult> {
+  const ran: ReplayNotes = {};
   try {
-    return await replayOnce(deps, args, observe);
+    const result = await replayOnce(deps, args, observe, ran);
+    return ran.hydrationWait === undefined
+      ? result
+      : { ...result, hydrationWait: ran.hydrationWait };
   } finally {
     // Where this flow left the tab, so the next flow's reset does not keep its query.
     try {
@@ -350,10 +355,16 @@ export async function replayNamedFlow(
   }
 }
 
+/** What replay noted on its way to a result, for every exit of `replayOnce`. */
+interface ReplayNotes {
+  hydrationWait?: FlowReplayResult['hydrationWait'];
+}
+
 async function replayOnce(
   deps: ToolDeps,
   args: Record<string, unknown>,
   observe: (session: FlowReplaySession) => FlowReplaySession,
+  ran: ReplayNotes,
 ): Promise<FlowReplayResult> {
   const startedAt = deps.now();
   const name = asString(args['flowName']) ?? '';
@@ -539,6 +550,11 @@ async function replayOnce(
       { name: replayable.name, status: ReplayStatus.ERROR, steps: [], error },
       arrival,
     );
+  }
+  // Step 1 needs the handlers that hydration attaches. Wait for them when the page says so (#1654).
+  const hydrationWait = await awaitHydration(session, { now: deps.now, sleep: WALL_CLOCK.sleep });
+  if (hydrationWait !== undefined) {
+    ran.hydrationWait = hydrationWait;
   }
   const unmet = await firstUnmetPrecondition(session, replayable, replayFloor);
   if (unmet !== undefined) {
