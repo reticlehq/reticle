@@ -16,32 +16,29 @@ export function resolveContainers(scope: string | undefined): {
   containers: HTMLElement[];
   scopeMissing: boolean;
 } {
+  let containers: HTMLElement[] = [];
   if (scope === undefined) {
-    return { containers: [document.documentElement], scopeMissing: false };
-  }
-  // An SVG element is a scope too. `look` hands out refs for SVG links, and the action layer drives
-  // them, so refusing one here reported a scope the page plainly has as MISSING - a floor plan whose
-  // rooms are `<a href>` inside an `<svg>` could be clicked but never scoped to (#1122). The locators
-  // below read only what Element has (attributes, children, text), which is also why `elementsUnder`
-  // already walks SVG descendants.
-  const byRef = refs.resolve(scope);
-  if (isActionTarget(byRef)) {
-    return { containers: [byRef], scopeMissing: false };
-  }
-  try {
-    const found: HTMLElement[] = [];
-    for (const el of Array.from(document.querySelectorAll(scope))) {
-      if (isActionTarget(el)) {
-        found.push(el);
+    containers = [document.documentElement];
+  } else {
+    // An SVG element is a scope too. `look` hands out refs for SVG links, and the action layer drives
+    // them, so refusing one here reported a scope the page plainly has as MISSING - a floor plan whose
+    // rooms are `<a href>` inside an `<svg>` could be clicked but never scoped to (#1122). The locators
+    // below read only what Element has (attributes, children, text), which is also why `elementsUnder`
+    // already walks SVG descendants.
+    const byRef = refs.resolve(scope);
+    if (isActionTarget(byRef)) {
+      containers = [byRef];
+    } else {
+      try {
+        containers = Array.from(document.querySelectorAll<HTMLElement>(scope)).filter(
+          isActionTarget,
+        );
+      } catch {
+        // Invalid selector: a given-but-missing scope must not fall back to the page.
       }
     }
-    if (found.length > 0) {
-      return { containers: found, scopeMissing: false };
-    }
-  } catch {
-    // invalid selector - treat as a missing scope, never a whole-page search
   }
-  return { containers: [], scopeMissing: true };
+  return { containers, scopeMissing: 0 === containers.length };
 }
 
 /**
@@ -83,5 +80,5 @@ export function firstListIn<T>(roots: HTMLElement[], find: (root: HTMLElement) =
  * A scoped search names its root explicitly, so nothing is filtered there.
  */
 export function pageContent(el: Element, scope: string | undefined): boolean {
-  return scope !== undefined || null === el.closest('head');
+  return scope !== undefined || !el.closest('head');
 }
