@@ -83,6 +83,7 @@ export const RETICLE_CONNECT_MODULE = '/@reticle-connect';
  */
 import { mergeIgnored, type WatchPattern } from './watch-ignore.js';
 import { isVitestBrowserServer } from './vitest-browser.js';
+import { PRE_ATTACH_ERRORS_SOURCE } from './pre-attach-errors.js';
 
 export function connectModuleUrl(base: string | undefined): string {
   if (undefined === base || !base.startsWith('/')) return RETICLE_CONNECT_MODULE;
@@ -958,6 +959,10 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
       if (!inject || desktop) return [];
       if (true !== options.inject && vitestBrowser) return [];
       return [
+        // Classic and inline for the same reason as the render pre-hook below, and first: it has to
+        // be listening before anything else on the page can load, fail or throw. See
+        // PRE_ATTACH_ERRORS_SOURCE.
+        { tag: 'script', children: PRE_ATTACH_ERRORS_SOURCE, injectTo: 'head-prepend' },
         // A CLASSIC inline script in <head>, and it has to be both.
         //
         // React reads `__REACT_DEVTOOLS_GLOBAL_HOOK__` when its renderer injects — which happens as

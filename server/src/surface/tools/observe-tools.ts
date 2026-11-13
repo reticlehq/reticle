@@ -4,6 +4,7 @@
  */
 import { checkWords, runIdOfCall } from '@/judgement/runs/drive-run.js';
 import { noteEmptyRead } from './gaps/observed-nothing.js';
+import { withPreAttach } from './read/console-pre-attach.js';
 import { z } from 'zod';
 import { aliasParam } from './args/alias-args.js';
 import {
@@ -952,7 +953,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         matched,
         limit ?? DEFAULT_QUERY_LIMIT,
       );
-      const logs = budgeted.map(projectConsoleLog);
+      const logs = budgeted.map((e) => withPreAttach(projectConsoleLog(e), e));
       // Say the look HAPPENED when it found nothing. A quiet page and a dead console observer both
       // produced `{ logs: [] }`, and "no console errors" is the claim agents lean on most — see
       // observed-nothing.ts, whose own header names this exact case and which every other array-

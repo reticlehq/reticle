@@ -1,8 +1,9 @@
-import { EventType, TRANSPORT_LIMITS } from '@reticlehq/core';
+import { CONSOLE_EVENT, EventType, TRANSPORT_LIMITS } from '@reticlehq/core';
 import { observeSafely, type Emit, type Teardown } from './types.js';
 import { safeStringify } from '@/security/serialization.js';
 import { requireCapturedMethod } from '@/util/captured-method.js';
 import { createRepeatLimiter, type ErrorIdentity } from './error-repeats.js';
+import { takePreAttachErrors } from './pre-attach-errors.js';
 
 type ConsoleMethod = 'log' | 'warn' | 'error' | 'info' | 'debug';
 
@@ -53,6 +54,20 @@ export function installConsole(emit: Emit): Teardown {
   const originals = new Map<ConsoleMethod, (...args: unknown[]) => void>();
   const patched = new Map<ConsoleMethod, (...args: unknown[]) => void>();
 
+  const emitConsole = (
+    method: ConsoleMethod,
+    args: unknown[],
+    extra: Record<string, unknown>,
+  ): void => {
+    // Only console.error carries a stack — the diagnosis case; log/warn stay lean.
+    const stack = 'error' === method ? firstErrorStack(args) : undefined;
+    emit(METHOD_EVENT[method], {
+      message: stringifyArgs(args),
+      ...(stack === undefined ? {} : { stack }),
+      ...extra,
+    });
+  };
+
   for (const method of methods) {
     // Store the true original for teardown identity; call through a bound copy. Read as a stored
     // VALUE rather than a method reference — see capturedMethod for why that distinction is the
@@ -66,12 +81,7 @@ export function installConsole(emit: Emit): Teardown {
       // proxy would otherwise throw out of the app's own `console.log` before it had logged anything.
       callOriginal(...args);
       observeSafely(() => {
-        // Only console.error carries a stack — the diagnosis case; log/warn stay lean.
-        const stack = 'error' === method ? firstErrorStack(args) : undefined;
-        emit(METHOD_EVENT[method], {
-          message: stringifyArgs(args),
-          ...(stack === undefined ? {} : { stack }),
-        });
+        emitConsole(method, args, {});
       });
     };
     patched.set(method, wrapper);
@@ -86,18 +96,20 @@ export function installConsole(emit: Emit): Teardown {
    * Emit an uncaught error unless it is a repeat already reported enough times.
    *
    * The payload IS the identity: every field that distinguishes two occurrences is a field the
-   * event already carries, so there is nothing to keep in step between them.
+   * event already carries, so there is nothing to keep in step between them. `extra` is not part of
+   * it: it says WHEN the error was heard (before the SDK attached), not which error it is.
    */
-  const emitError = (payload: ErrorIdentity): void => {
+  const emitError = (payload: ErrorIdentity, extra: Record<string, unknown>): void => {
     const decision = repeats.admit(payload);
     if (!decision.emit) return;
     emit(EventType.ERROR_UNCAUGHT, {
       ...payload,
       ...(undefined === decision.repeats ? {} : { repeats: decision.repeats }),
+      ...extra,
     });
   };
 
-  const onError = (event: Event): void => {
+  const reportError = (event: Event, extra: Record<string, unknown>): void => {
     // A SUBRESOURCE that failed to load — `<img>`, `<script>`, `<link>`, media. The browser writes
     // these to the console and none of them passes through a console method, so patching console
     // cannot see them. They dispatch on the ELEMENT and do not bubble, which is why this listener
@@ -114,7 +126,10 @@ export function installConsole(emit: Emit): Teardown {
       const url = target.getAttribute('src') ?? target.getAttribute('href') ?? '';
       observeSafely(() => {
         const message = `<${tag}> failed to load${0 === url.length ? '' : `: ${url}`}`;
-        emitError({ message, kind: 'resource', ...(0 === url.length ? {} : { source: url }) });
+        emitError(
+          { message, kind: 'resource', ...(0 === url.length ? {} : { source: url }) },
+          extra,
+        );
       });
       return;
     }
@@ -126,19 +141,51 @@ export function installConsole(emit: Emit): Teardown {
         line: event.lineno,
         ...(stack === undefined ? {} : { stack }),
       };
-      emitError(payload);
+      emitError(payload, extra);
     });
   };
-  const onRejection = (event: PromiseRejectionEvent): void => {
+  const onError = (event: Event): void => {
+    reportError(event, {});
+  };
+  const reportRejection = (reason: unknown, extra: Record<string, unknown>): void => {
     observeSafely(() => {
-      const reason: unknown = event.reason;
       const stack = capStack(reason instanceof Error ? reason.stack : undefined);
       const payload = {
         message: reason instanceof Error ? reason.message : String(reason),
         kind: 'unhandledrejection',
         ...(stack === undefined ? {} : { stack }),
       };
-      emitError(payload);
+      emitError(payload, extra);
+    });
+  };
+  const onRejection = (event: PromiseRejectionEvent): void => {
+    reportRejection(event.reason, {});
+  };
+  const reportPreAttach = (): void => {
+    const early = takePreAttachErrors();
+    if (early === undefined) {
+      return;
+    }
+    early.entries.forEach((entry, i) => {
+      // The loss is declared on the first entry: the buffer keeps the first errors, which name the
+      // cause, and counts the rest.
+      const extra: Record<string, unknown> = {
+        [CONSOLE_EVENT.PRE_ATTACH]: true,
+        ...(0 === i && early.dropped > 0
+          ? { [CONSOLE_EVENT.DROPPED_PRE_ATTACH]: early.dropped }
+          : {}),
+      };
+      if ('console' === entry.kind) {
+        observeSafely(() => {
+          emitConsole('error', [...entry.args], extra);
+        });
+        return;
+      }
+      if ('reason' in entry.event) {
+        reportRejection((entry.event as PromiseRejectionEvent).reason, extra);
+        return;
+      }
+      reportError(entry.event, extra);
     });
   };
   /**
@@ -178,6 +225,15 @@ export function installConsole(emit: Emit): Teardown {
   // capture phase alongside the others so a page that stops propagation on `document` cannot hide
   // one from us.
   window.addEventListener(CSP_VIOLATION_EVENT, onViolation, { capture: true, signal });
+
+  // What the page raised before this observer existed: an entry module that 404'd or threw, a
+  // rejection, a `console.error` during start-up (#1540). The build plugin's inline buffer kept it;
+  // it is reported here once, through the same paths as a live error, and marked so the reader knows
+  // it happened before the SDK attached. The listeners above are already installed, so the buffer
+  // is closed with no gap, and nothing it kept is heard twice.
+  observeSafely(() => {
+    reportPreAttach();
+  });
 
   return () => {
     for (const [method, original] of originals) {

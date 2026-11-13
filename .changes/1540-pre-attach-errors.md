@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/vite-plugin`, `@reticlehq/browser` — an app that failed before Reticle attached showed an empty page and an empty console.** An entry module that 404'd, was served as HTML or threw on import, a rejection, or a `console.error` during start-up happened before the SDK listened, so `reticle_look` showed nothing and `reticle_observe { action: "console" }` reported no errors. A blank page could not be told apart from an app that crashed on load. The Vite plugin now injects a small inline buffer ahead of the app's scripts, and the SDK reports what it kept when it attaches, marked `preAttach: true`. An error is reported once: the buffer stops when the SDK starts to listen. Closes [#1540](https://github.com/reticlehq/reticle/issues/1540).

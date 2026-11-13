@@ -54,7 +54,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // +1: connect-args.ts, split out of index.ts (988 lines, against the 1000 cap) with the body cap.
   // +1: stamping.ts, which module ids get a source stamp and the per-file @reticle-ignore opt-out.
   // The grouping this directory still wants is a `stamping/` subdirectory beside svelte-source.ts.
-  'adapters/build/vite/src': 14,
+  // +1: pre-attach-errors.ts, the inline error buffer, split out of index.ts at the 1000-line cap
+  // (#1540).
+  'adapters/build/vite/src': 15,
   // 13 with `render-page.ts`, the in-page step screenshot. It has to be its own module: the command
   // registry imports it lazily, so a page downloads the renderer only when a picture is first drawn.
   // +1: stable-selector.ts, split out of query.ts when that file crossed the 1000-line cap (#1147).
@@ -70,7 +72,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   'adapters/realm/browser/src/actions': 12,
   'adapters/realm/browser/src/dom': 20,
   // +1: error-repeats.ts, the limiter every uncaught-error path in console.ts goes through (#986).
-  'adapters/realm/browser/src/observers': 27,
+  // +1: pre-attach-errors.ts, which reads the build plugin's buffer of errors raised before the SDK
+  // attached; console.ts reports them (#1540).
+  'adapters/realm/browser/src/observers': 28,
   // 17 since the HUD's position primitives left `presenter-drag.ts` for their own leaf: the drag
   // gesture re-syncs the dock layout, and the dock layout reads the HUD's position, so the two files
   // needed each other over primitives that belong to neither.

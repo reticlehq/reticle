@@ -5,7 +5,12 @@ import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 import { transformSync } from '@babel/core';
 import reticleSource from '@reticlehq/babel-plugin';
-import { RETICLE_DEFAULT_PORT, ReticleDir, ReticleEnv } from '@reticlehq/core';
+import {
+  RETICLE_DEFAULT_PORT,
+  RETICLE_PRE_ATTACH_ERRORS,
+  ReticleDir,
+  ReticleEnv,
+} from '@reticlehq/core';
 import {
   reticle,
   RETICLE_VITE_PLUGIN_NAME,
@@ -101,10 +106,14 @@ describe('reticle vite plugin', () => {
     // resolution, so it must be served as a real module via src.
     const plugin = reticle();
     const tags = plugin.transformIndexHtml?.('<html></html>');
-    // Two tags now: the classic pre-hook in <head> (which must run before any module script so React
+    // Three tags now: the classic pre-attach error buffer and pre-hook in <head> (which must run
+    // before any module script: the buffer to hear an entry module that fails, the pre-hook so React
     // finds the devtools hook when it injects) and the module that connects.
-    expect(tags).toHaveLength(2);
-    const [prehook, connect] = tags;
+    expect(tags).toHaveLength(3);
+    const [errors, prehook, connect] = tags;
+    expect(errors?.injectTo).toBe('head-prepend');
+    expect(errors?.attrs).toBeUndefined();
+    expect(String(errors?.children)).toContain(RETICLE_PRE_ATTACH_ERRORS);
     expect(prehook?.injectTo).toBe('head-prepend');
     expect(prehook?.attrs).toBeUndefined();
     expect(String(prehook?.children)).toContain('__REACT_DEVTOOLS_GLOBAL_HOOK__');
