@@ -31,7 +31,8 @@ import {
   pausedOutputShape,
   withControl,
 } from '@/portal/session/control-envelope.js';
-import { asRecord, isAbsenceDerived, isAdvisory } from '@reticlehq/core';
+import { asRecord, asString, isAbsenceDerived, isAdvisory } from '@reticlehq/core';
+import { couldNotEvaluate } from '@reticlehq/engine/evidence/verified.js';
 import { sessionIdFromArgs } from './tools-helpers.js';
 import {
   BURST_MAX_GAP_MS,
@@ -64,7 +65,7 @@ import { gradeOfPredicate } from './assert/assert-grade.js';
 import { describeWaitTarget } from '@reticlehq/engine/evidence/unsettled.js';
 import { sourceOf } from './tools-helpers.js';
 import { confirmedByDeclaration } from './act/act-danger.js';
-import { unreachableTargetNote } from './act/act-observation.js';
+import { diagnoseTimeout, unreachableTargetNote } from './act/act-observation.js';
 
 /**
  * The step's effect record, best-effort.
@@ -117,12 +118,30 @@ interface StepCheck {
   readonly assertion?: string | undefined;
 }
 
-/** Why a step's check decided nothing, when the target was reachable. */
-function whyUndecided(verdict: { observationLost?: boolean; failureReason?: string }): string {
+/**
+ * Why a step's check decided nothing, when the target was reachable.
+ *
+ * A read that could not be evaluated gets the sentence `reticle_act_and_wait` gives for it, with the
+ * same diagnosis of a timed-out read. The plan gave the raw error only, so it named no fix (#2204).
+ */
+function whyUndecided(
+  verdict: { observationLost?: boolean; failureReason?: string; inconclusive?: string | undefined },
+  session: Session,
+): string {
   if (true === verdict.observationLost) {
     return `${verdict.failureReason ?? 'the observation was lost'} (the page left)`;
   }
+  const missing = diagnoseTimeout(verdict.inconclusive, session);
+  if (missing !== undefined) {
+    return couldNotEvaluate(missing);
+  }
   return verdict.failureReason ?? 'the predicate could not be read';
+}
+
+/** The step's action, for the sentence that names a step nobody could judge. */
+function actionOf(step: Record<string, unknown>): { action?: string } {
+  const action = asString(step['action']);
+  return action === undefined ? {} : { action };
 }
 
 /** One step's verdict and its reason. */
@@ -368,6 +387,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
             });
             const error = outcome.error ?? 'the step could not be performed';
             expectations.push({
+              ...actionOf(step),
               declared: undefined !== step['expect'],
               held: false,
               observed: error,
@@ -411,6 +431,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
               .map((c) => c.kind)
               .filter((kind) => !isAdvisory(kind) && isAbsenceDerived(kind));
             expectations.push({
+              ...actionOf(step),
               declared: false,
               settled: true === asRecord(outcome.result)['settled'],
               ...(0 === doubted.length ? {} : { doubted }),
@@ -451,11 +472,12 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
               }),
             );
             expectations.push({
+              ...actionOf(step),
               declared: true,
               held,
               ...(undecided
                 ? {
-                    undecided: unreachable ?? whyUndecided(verdict),
+                    undecided: unreachable ?? whyUndecided(verdict, session),
                   }
                 : {}),
               ...disagreement,
