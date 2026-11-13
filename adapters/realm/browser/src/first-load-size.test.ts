@@ -394,18 +394,7 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * instead of a signal. Measured 267,263 B (every page that loads the SDK pays this, so the year budget is the tightest: ~27%) at 81e046201. Review it once a year, not per change; a
  * sudden jump inside it is still worth a look in review.
  */
-/*
- * Raised by 50 B for #2167: an action whose caller passed `confirmDangerous` answers its own
- * `confirm()` with yes. Main measured 339,899 B at 4f2fc3c47, 101 B under the year budget. This
- * costs 148 B on the way in, so it does not fit, and the reason is written here instead of hidden.
- * What is left is the minimum for the rules the yes must keep: the positive argument's name (the
- * page must read it), one count of the actions in flight (no yes while two overlap), and spending
- * the yes on one `confirm()`. It was cut from 312 B, then 220 B: no `confirmsDialog` from `core`,
- * no consent module of its own (its state lives in the dialog observer, in the same chunk as the
- * action), and no kind constant in the page (a confirm is the dialog declined with `false`).
- * Measured with it: 340,047 B.
- */
-const MAX_FIRST_LOAD_BYTES = 340_050;
+const MAX_FIRST_LOAD_BYTES = 340_000;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The

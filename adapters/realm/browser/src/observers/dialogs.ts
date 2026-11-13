@@ -50,12 +50,10 @@ let yes = false;
  */
 export function actionConsent(step: 1 | -1, given?: unknown): void {
   acts += step;
-  yes = 1 === acts && true === given;
+  yes = acts < 2 && true === given;
 }
 
 type DialogKind = keyof typeof DECLINED;
-
-const KINDS: readonly DialogKind[] = ['alert', 'confirm', 'prompt'];
 
 /**
  * The three slots, typed as plain functions so they can be read and written by name.
@@ -69,30 +67,31 @@ type DialogSlots = Record<DialogKind, (...args: unknown[]) => unknown>;
 
 export function installDialogs(emit: Emit): Teardown {
   const slots = window as unknown as DialogSlots;
-  const originals = new Map<DialogKind, (...args: unknown[]) => unknown>();
-  const patched = new Map<DialogKind, (...args: unknown[]) => unknown>();
+  // Each patched dialog, its original and our wrapper, for the teardown.
+  const installed: [DialogKind, DialogSlots[DialogKind], DialogSlots[DialogKind]][] = [];
 
-  for (const kind of KINDS) {
+  // The keys of `DECLINED` are the dialogs to patch, so the list and the answers cannot drift.
+  for (const kind of Object.keys(DECLINED) as DialogKind[]) {
     const original = slots[kind];
     // A page that has already removed one of these is not a page to patch. Skipping is safer than
     // installing a wrapper with nothing to fall back to for a dialog we decide not to answer.
     if ('function' !== typeof original) {
       continue;
     }
-    originals.set(kind, original);
-    const callOriginal = original.bind(window);
+    const callOriginal = original.bind(slots);
     const wrapper = (...args: unknown[]): unknown => {
       // Not ours: the person opened it, and it behaves exactly as it always did.
       if (!isSyntheticInput()) {
         return callOriginal(...args);
       }
-      let answered: boolean | null | undefined = DECLINED[kind];
-      // Only a `confirm` is declined with false, so this is the confirm, named by its answer.
-      if (false === answered && yes) {
-        yes = false; // spent: one yes answers one confirm()
-        answered = true;
-      }
       const message = args[0];
+      let answered: boolean | null | undefined = DECLINED[kind];
+      // Only a `confirm` is declined with false, so this is the confirm, named by its answer. It
+      // takes the yes, if one is there, and spends it: one yes answers one confirm().
+      if (false === answered) {
+        answered = yes;
+        yes = false;
+      }
       // The answer is what the app is waiting on, so observation cannot be allowed to replace it with
       // a throw: the dialog is being answered whether or not the event lands.
       observeSafely(() => {
@@ -105,15 +104,15 @@ export function installDialogs(emit: Emit): Teardown {
       });
       return answered;
     };
-    patched.set(kind, wrapper);
+    installed.push([kind, original, wrapper]);
     slots[kind] = wrapper;
   }
 
   return () => {
-    for (const [kind, original] of originals) {
+    for (const [kind, original, wrapper] of installed) {
       // Restore only if the slot still holds OUR wrapper — the same rule installConsole follows, so
       // a logging SDK that wrapped these after connect() keeps its instrumentation on teardown.
-      if (slots[kind] === patched.get(kind)) {
+      if (slots[kind] === wrapper) {
         slots[kind] = original;
       }
     }

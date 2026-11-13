@@ -12,8 +12,11 @@
  * such argument and answers no too.
  */
 
-/** Set by the server on an action whose caller passed `confirmDangerous`: a yes to its `confirm()`. */
-export const DIALOG_CONSENT_ARG = 'acceptConfirm';
+/**
+ * Set by the server on an action whose caller passed `confirmDangerous`: a yes to its `confirm()`.
+ * The name is short on purpose: the page must read it, so each character is paid on every page load.
+ */
+export const DIALOG_CONSENT_ARG = 'yes';
 
 /** The `kind` of a native `window.confirm` dialog, the only kind the yes applies to. */
 export const CONFIRM_DIALOG_KIND = 'confirm';
