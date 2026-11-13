@@ -572,24 +572,99 @@ describe('a one-shot verdict waits for its expectation', () => {
       { structuredContent: { pass: false } },
     ]);
     await expectIt(80_000, d.connect);
+    expect(d.calls.map((c) => [c.name, c.args['action'], c.args['timeout_ms']])).toEqual([
+      [ReticleTool.ASSERT, 'wait', 25_000],
+      [ReticleTool.ASSERT, 'wait', 5_000],
+      [ReticleTool.ASSERT, undefined, ASSERT_MAX_WAIT_MS],
+    ]);
+  });
+
+  /*
+   * #2144. The wait went through `reticle_run { tool: "reticle_wait_for" }`, a name that was merged
+   * into `reticle_assert`. A 3.9.0 daemon answered it with "reticle_wait_for was merged into
+   * reticle_assert", so every long `--expect` printed `verified: unknown`.
+   */
+  it('waits through reticle_assert itself, never through a merged name', async () => {
+    const d = scripted([{ structuredContent: { pass: false, resume_ms: 5_000 } }]);
+    await expectIt(80_000, d.connect);
+    const named = d.calls.flatMap((c) => [c.name, c.args['tool']]);
+    expect(named).not.toContain(ReticleTool.WAIT_FOR);
+    expect(named).not.toContain(ReticleTool.RUN);
+  });
+
+  // `reticle_assert` answers in its own shape: a final answer carries `verified`, and only a wait
+  // that the per-call cap stopped carries `resume_ms` without one.
+  it('stops waiting once the wait answers with a verdict', async () => {
+    const d = scripted([{ structuredContent: { verified: 'no', pass: false, resume_ms: 5_000 } }]);
+    await expectIt(80_000, d.connect);
+    expect(d.calls.map((c) => c.args['action'])).toEqual(['wait', undefined]);
+  });
+
+  it('reads a "not yet" that arrived as text', async () => {
+    const d = scripted([
+      { content: [{ type: 'text', text: JSON.stringify({ pass: false, resume_ms: 5_000 }) }] },
+    ]);
+    await expectIt(80_000, d.connect);
+    expect(d.calls.map((c) => [c.args['action'], c.args['timeout_ms']])).toEqual([
+      ['wait', 25_000],
+      ['wait', 5_000],
+      [undefined, ASSERT_MAX_WAIT_MS],
+    ]);
+  });
+
+  // Every surface but the merged one keeps `reticle_wait_for` as a tool of its own, and there
+  // `reticle_assert` has no `action` to take.
+  it('waits through reticle_wait_for on a daemon whose reticle_assert takes no action', async () => {
+    const d = scripted([
+      {
+        isError: true,
+        content: [
+          {
+            type: 'text',
+            text: 'MCP error -32602: Unknown parameter for reticle_assert: action. They were NOT applied.',
+          },
+        ],
+      },
+      { structuredContent: { pass: true, verified: 'yes' } },
+    ]);
+    const result = await expectIt(80_000, d.connect);
     expect(d.calls.map((c) => c.name)).toEqual([
-      ReticleTool.RUN,
+      ReticleTool.ASSERT,
       ReticleTool.RUN,
       ReticleTool.ASSERT,
     ]);
-    expect(
-      d.calls.map((c) => (c.args['args'] as { timeout_ms?: number } | undefined)?.timeout_ms),
-    ).toEqual([25_000, 5_000, undefined]);
-    expect(d.calls[0]?.args['tool']).toBe(ReticleTool.WAIT_FOR);
-    expect(d.calls[2]?.args['timeout_ms']).toBe(ASSERT_MAX_WAIT_MS);
+    expect(d.calls[1]?.args).toEqual({
+      tool: ReticleTool.WAIT_FOR,
+      args: { predicate: { kind: 'net', urlContains: '/api/data' }, timeout_ms: 25_000 },
+    });
+    expect(result.code).toBe(0);
   });
 
-  it('says the refusal when reticle_run answers one as data', async () => {
-    const d = scripted([{ structuredContent: { error: 'timeout_ms must be at most 600000' } }]);
+  it('says the refusal when the wait answers one', async () => {
+    const d = scripted([
+      {
+        isError: true,
+        content: [{ type: 'text', text: 'timeout_ms must be at most 600000' }],
+      },
+    ]);
     const result = await expectIt(700_000, d.connect);
     expect(result.code).toBe(1);
     expect(result.lines).toEqual(['verified: unknown', 'timeout_ms must be at most 600000']);
-    expect(d.calls.map((c) => c.name)).not.toContain(ReticleTool.ASSERT);
+    expect(d.calls).toHaveLength(1);
+  });
+
+  it('says the refusal when reticle_run answers one as data', async () => {
+    const d = scripted([
+      {
+        isError: true,
+        content: [{ type: 'text', text: 'Unknown parameter for reticle_assert: action.' }],
+      },
+      { structuredContent: { error: 'timeout_ms must be at most 600000' } },
+    ]);
+    const result = await expectIt(700_000, d.connect);
+    expect(result.code).toBe(1);
+    expect(result.lines).toEqual(['verified: unknown', 'timeout_ms must be at most 600000']);
+    expect(d.calls.map((c) => c.name)).toEqual([ReticleTool.ASSERT, ReticleTool.RUN]);
   });
 
   it('waits the wait form default when no --timeout is given', async () => {
