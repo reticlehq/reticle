@@ -49,6 +49,14 @@ describe('a flow made ready to replay at save', () => {
     expect(replayability(ready).status).toBe(Replayable.YES);
   });
 
+  // "3 items" is absent. Made word-level, it said that no "<number> items" is on the page, so a
+  // page that shows "5 items" failed on replay while the drive had passed: a false `no`.
+  it('keeps an absent count exact, because any count would then fail it', () => {
+    const absent = { kind: 'text', contains: '3 items', absent: true } as const;
+    const ready = readyForReplay(flowOf([click('tab', absent)]));
+    expect(ready.steps[0]?.expect).toEqual(absent);
+  });
+
   it('keeps a money number exact and says the flow is bound to the data', () => {
     const flow = flowOf([click('send', { kind: 'text', contains: '8 of 10 credits left' })], {
       intent: 'a check takes its price off the credits',
