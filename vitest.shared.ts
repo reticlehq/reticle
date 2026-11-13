@@ -67,10 +67,12 @@ export const MAX_WORKERS = 3;
 /** Spread into a package's `test` block so no package is left on the 5s default. */
 /** Every package's tests run with a temporary HOME: see vitest.temp-home.ts for the incident. */
 const TEMP_HOME_SETUP = fileURLToPath(new URL('./vitest.temp-home.ts', import.meta.url));
+const TEMP_HOME_ROOT = fileURLToPath(new URL('./vitest.temp-home-root.ts', import.meta.url));
 
 export const sharedTestOptions = {
   testTimeout: TEST_TIMEOUT_MS,
   hookTimeout: HOOK_TIMEOUT_MS,
   maxWorkers: MAX_WORKERS,
+  globalSetup: [TEMP_HOME_ROOT],
   setupFiles: [TEMP_HOME_SETUP],
 } as const;
