@@ -47,6 +47,7 @@ export * from './wire/constants/hud-use.js'; // where the HUD sits, for HUD_USED
 export * from './wire/constants/reticle-chrome.js'; // Reticle's own UI, hidden from every capture
 export * from './wire/platform-link.js'; // daemon <-> platform: capabilities, drive spec, tool session
 export * from './wire/constants/match-args.js'; // the arguments of the `match` command
+export * from './wire/constants/render-stats.js'; // the fields of the React adapter's render store
 export * from './wire/constants/discovery.js'; // the call-the-founder invitation, one link for every surface
 export * from './wire/constants/determinism.js'; // the clock and random source of a deterministic lease
 export * from './identity/document-identity.js'; // which document an observation belongs to
