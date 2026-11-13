@@ -569,9 +569,17 @@ describe('teardown saves what a session drove as ONE flow per journey', () => {
   it('does not auto-save a journey proved under network mocks, and says why (#1459)', async () => {
     const recordings = new RecordingStore();
     const mock = NETWORK_MOCK_TOOLS.find((t) => t.name === ReticleTool.NETWORK_MOCK);
+    const tab = { id: 'tab-1', url: 'http://localhost:5173/checkout' };
     const deps = {
-      sessions: { resolve: () => ({ id: 'tab-1', url: 'http://localhost:5173/checkout' }) },
-      pool: { setMocksLease: () => Promise.resolve(true) },
+      sessions: {
+        resolve: () => tab,
+        resolveServing: () => Promise.resolve(tab),
+      },
+      pool: {
+        leaseUrl: () => tab.url,
+        heldBy: () => true,
+        setMocksLease: () => Promise.resolve(true),
+      },
       recordings,
     } as unknown as ToolDeps;
     const proved = (value: string, page: string) => ({
