@@ -7,7 +7,11 @@
  * `confirmDangerous: true`, so a destructive flow behind a confirm could not be driven on a lease.
  */
 import { describe, expect, it } from 'vitest';
+import { EventType, type ReticleEvent } from '@reticlehq/core';
+import { withDeclinedDialog } from '@reticlehq/engine/evidence/verified.js';
 import { BrowserPool } from './browser-pool.js';
+import { makePageErrorJournal, type JournalableSession } from './page-error-journal.js';
+import type { BrowserPoolOptions } from './pool-lease.js';
 import type { Launcher, PooledDialog, PooledPage } from './browser-pool.js';
 import type { RealInputResult } from '@/portal/input/real-input.js';
 
@@ -59,7 +63,10 @@ class DialogPage {
 }
 
 let seq = 0;
-async function leased(fake: DialogPage): Promise<{ pool: BrowserPool; id: string }> {
+async function leased(
+  fake: DialogPage,
+  onDialog?: BrowserPoolOptions['onDialog'],
+): Promise<{ pool: BrowserPool; id: string }> {
   const launch: Launcher = () =>
     Promise.resolve({
       newContext: () =>
@@ -74,6 +81,7 @@ async function leased(fake: DialogPage): Promise<{ pool: BrowserPool; id: string
   const pool = new BrowserPool(launch, {
     maxContexts: 2,
     genSessionId: () => `lease-${String((seq += 1))}`,
+    ...(onDialog === undefined ? {} : { onDialog }),
   });
   const lease = await pool.acquire('http://app.test/');
   return { pool, id: lease.sessionId };
@@ -174,5 +182,57 @@ describe('a native confirm() on a lease', () => {
     await pool.pressLease(id, ENTER, true);
     expect(fake.answers).toEqual(['confirm:dismissed']);
     await pool.shutdown();
+  });
+});
+
+/** The lease's session, as the page-error journal writes to it: only the events it was pushed. */
+function journaledSession(): { session: JournalableSession; events: ReticleEvent[] } {
+  const events: ReticleEvent[] = [];
+  const session: JournalableSession = {
+    id: 'sess-1',
+    pushEvent: (event) => {
+      events.push(event);
+    },
+    eventsSince: () => events,
+    onEvent: () => () => undefined,
+  };
+  return { session, events };
+}
+
+// #2169 journals each pool answer as `dialog.opened`, and a failed verdict with a declined dialog
+// reads `dialog_declined`. A yes from the caller's own flag must not read as a declined dialog.
+describe('a lease confirm, as the verdict reads it', () => {
+  async function pressWith(flag: boolean): Promise<ReticleEvent[]> {
+    const { session, events } = journaledSession();
+    const journal = makePageErrorJournal({
+      resolveSession: () => session,
+      sleep: () => Promise.resolve(),
+    });
+    const fake = new DialogPage();
+    const { pool, id } = await leased(fake, (leaseId, dialog) => {
+      journal.onPoolDialog(leaseId, dialog);
+    });
+    fake.opens = ['confirm'];
+    await pool.pressLease(id, ENTER, flag);
+    await pool.shutdown();
+    return events.filter((e) => e.type === EventType.DIALOG_OPENED);
+  }
+
+  it('is journaled as a yes, and is no declined dialog, when the press carries the flag', async () => {
+    const events = await pressWith(true);
+    expect(events.map((e) => e.data)).toEqual([
+      { kind: 'confirm', message: 'confirm?', answered: true },
+    ]);
+    expect(withDeclinedDialog(events)).toEqual({});
+  });
+
+  it('is journaled as a no, and is the declined dialog, without the flag', async () => {
+    const events = await pressWith(false);
+    expect(events.map((e) => e.data)).toEqual([
+      { kind: 'confirm', message: 'confirm?', answered: false },
+    ]);
+    expect(withDeclinedDialog(events)).toEqual({
+      declinedDialog: { kind: 'confirm', message: 'confirm?' },
+    });
   });
 });

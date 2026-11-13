@@ -201,6 +201,22 @@ describe('a native dialog the leased-tab pool dismissed', () => {
     ]);
   });
 
+  it('journals a confirm the pool accepted as answered yes, and nothing else as yes (#2167)', () => {
+    const session = fakeSession('lease-1');
+    const journal = makePageErrorJournal({ resolveSession: () => session, sleep: immediate });
+
+    journal.onPoolDialog('lease-1', { kind: 'confirm', message: 'Delete?', accepted: true });
+    journal.onPoolDialog('lease-1', { kind: 'confirm', message: 'Again?', accepted: false });
+    journal.onPoolDialog('lease-1', { kind: 'prompt', message: 'Name?', accepted: true });
+
+    const dialogs = session.eventsSince(0).filter((e) => e.type === EventType.DIALOG_OPENED);
+    expect(dialogs.map((e) => e.data)).toEqual([
+      { kind: 'confirm', message: 'Delete?', answered: true },
+      { kind: 'confirm', message: 'Again?', answered: false },
+      { kind: 'prompt', message: 'Name?', answered: null },
+    ]);
+  });
+
   it('is dropped when no session is connected for the lease yet: no window can hold it', () => {
     const journal = makePageErrorJournal({ resolveSession: () => undefined, sleep: immediate });
     expect(() => journal.onPoolDialog('lease-1', { kind: 'confirm', message: 'x' })).not.toThrow();

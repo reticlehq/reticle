@@ -690,8 +690,13 @@ export class BrowserPool {
       // answers a dialog from its own input first; the hook records the pool's answer for the verdict
       // (#1350).
       page.onDialog?.((dialog) => {
-        void dialogs.answer(dialog);
-        this.#pageErrorHooks?.onDialog?.(sessionId, dialog);
+        const accepted = dialogs.answer(dialog);
+        const { kind, message } = dialog;
+        this.#pageErrorHooks?.onDialog?.(sessionId, {
+          message,
+          accepted,
+          ...(kind === undefined ? {} : { kind }),
+        });
       });
       // Listener on BEFORE goto — an import-time throw lands during it (#1966).
       await listenForPageErrors(page, sessionId, this.#pageErrorHooks);

@@ -124,6 +124,11 @@ export interface PooledDialog {
   accept?(): Promise<void>;
 }
 
+/** A native dialog the pool answered: `accepted` when it said yes to a `confirm` (#2167). */
+export type AnsweredDialog = Pick<PooledDialog, 'kind' | 'message'> & {
+  readonly accepted?: boolean;
+};
+
 /**
  * One uncaught error the page threw, as the engine reported it. The message is the exception text
  * without the console's `Uncaught ` prefix; the stack is present when the engine had one.

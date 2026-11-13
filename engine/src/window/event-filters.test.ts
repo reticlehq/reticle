@@ -334,4 +334,15 @@ describe('declinedDialogIn', () => {
     const events = [ev(EventType.DIALOG_OPENED, { kind: 'prompt', answered: null })];
     expect(declinedDialogIn(events)).toEqual({ kind: 'prompt' });
   });
+
+  it('skips a confirm the caller said yes to, and still finds a declined one after it (#2167)', () => {
+    const yes = ev(EventType.DIALOG_OPENED, {
+      kind: 'confirm',
+      message: 'Delete?',
+      answered: true,
+    });
+    expect(declinedDialogIn([yes])).toBeUndefined();
+    const no = ev(EventType.DIALOG_OPENED, { kind: 'confirm', message: 'Again?', answered: false });
+    expect(declinedDialogIn([yes, no])).toEqual({ kind: 'confirm', message: 'Again?' });
+  });
 });

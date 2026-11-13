@@ -59,14 +59,16 @@ export class LeaseDialogs {
    * Accept the dialog when it is a `confirm` the press in flight said yes to, else dismiss it.
    *
    * A page that cannot accept (no `accept`, or no `kind` to tell a `confirm` apart) is dismissed,
-   * and the yes stays unused.
+   * and the yes stays unused. True when it was accepted, so the pool reports a yes, not a no.
    */
-  answer(dialog: PooledDialog): Promise<void> {
+  answer(dialog: PooledDialog): boolean {
     this.lastMessage = dialog.message;
     if (dialog.accept !== undefined && CONFIRM_DIALOG === dialog.kind && this.#take()) {
-      return dialog.accept();
+      void dialog.accept();
+      return true;
     }
-    return dialog.dismiss();
+    void dialog.dismiss();
+    return false;
   }
 
   /** True, once, when the one press in flight carries an unused yes. */
