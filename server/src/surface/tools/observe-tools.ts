@@ -7,6 +7,7 @@ import { noteEmptyRead } from './gaps/observed-nothing.js';
 import { withPreAttach } from './read/console-pre-attach.js';
 import { z } from 'zod';
 import { aliasParam } from './args/alias-args.js';
+import { observeFiltersSchema, readObserveFilters } from './args/observe-filters-arg.js';
 import {
   CONSOLE_ATTACH_NOTE,
   CONSOLE_LEVELS,
@@ -147,14 +148,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         .describe(
           'Keep only events attributed to this action — answers "what did action N cause".',
         ),
-      filters: z
-        .array(z.string())
-        .optional()
-        .describe(
-          'Event type allowlist — the cheapest way to shrink a large timeline. Use a bucket name — ' +
-            'dom | net | route | console | animation | signal | perf | state | storage — or a raw ' +
-            'type (e.g. "net.request"). Omit to return all types.',
-        ),
+      filters: observeFiltersSchema,
       max_events: countSchema
         .optional()
         .describe(
@@ -220,7 +214,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         until: asNumber(args['until']),
         actionId: asString(args['actionId']),
       });
-      const filters = Array.isArray(args['filters']) ? (args['filters'] as string[]) : undefined;
+      const filters = readObserveFilters(args['filters']);
       const filtered =
         filters === undefined ? events : events.filter((e) => eventMatchesFilters(e, filters));
       // Output budget: cap to the most recent N (no silent caps — droppedOldest is surfaced in cost).
