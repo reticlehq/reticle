@@ -39,6 +39,7 @@ import {
   type PromptHookTarget,
 } from './register/prompt-hooks.js';
 import { CRA_ENV_PATH } from './patch/cra.js';
+import { EXPO_ENTRY_CANDIDATES, EXPO_ENV_PATH } from './patch/expo.js';
 import { findNextMountFile } from './patch/next-patch.js';
 import { tanstackStartConnectPath } from './patch/tanstack-start.js';
 import { installedViteMajor } from './patch/vite-owning-config.js';
@@ -495,6 +496,12 @@ export function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown):
       : {}),
     craEntry: craEntryOf(io),
     craEnv: io.readFile(CRA_ENV_PATH),
+    ...(Framework.EXPO === detection.framework
+      ? {
+          expoEntry: firstReadable(io, EXPO_ENTRY_CANDIDATES),
+          expoEnv: io.readFile(EXPO_ENV_PATH),
+        }
+      : {}),
     pairingToken: options.dryRun ? DRY_RUN_PAIRING_TOKEN : io.host.pairingToken(),
     installSource: io.host.installSource(),
     reticleConfigExists: io.exists(RETICLE_CONFIG_FILE),

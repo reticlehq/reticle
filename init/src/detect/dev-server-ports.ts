@@ -44,7 +44,8 @@ export const DEV_SERVER_PORTS: ReadonlySet<number> = new Set([
   4000, // the common Node/GraphQL dev default
   4310, // Reticle's own bench-app, the fixture its agents drive
   6006, // Storybook
-  19006, // Expo web
+  8081, // Expo web on Metro (`expo start --web`)
+  19006, // Expo web on the older webpack bundler
 ]);
 
 /**
@@ -59,6 +60,7 @@ const FRAMEWORK_DEV_PORTS: Readonly<Partial<Record<string, number>>> = {
   [Framework.NEXT]: 3000,
   [Framework.NUXT]: 3000,
   [Framework.CRA]: 3000,
+  [Framework.EXPO]: 8081,
   [Framework.ASTRO]: 4321,
   [Framework.ANGULAR]: 4200,
 };

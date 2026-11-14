@@ -96,10 +96,25 @@ export function craImportPatch(source: string): string | null {
 
 /** Set the token variable, or null when nothing needs to change. */
 export function craEnvPatch(existing: string | null, token: string, url?: string): string | null {
+  return envTokenPatch(existing, TOKEN_VAR, token, URL_VAR, url);
+}
+
+/**
+ * Set a token variable and, when there is one, a url variable in an env file, or null when nothing
+ * needs to change. Shared by every stack whose bundler inlines a prefixed environment variable and
+ * nothing else (CRA's `REACT_APP_*`, Expo's `EXPO_PUBLIC_*`).
+ */
+export function envTokenPatch(
+  existing: string | null,
+  tokenVar: string,
+  token: string,
+  urlVar: string,
+  url?: string,
+): string | null {
   if ('' === token) return null;
   const pairs: readonly (readonly [string, string])[] = [
-    [TOKEN_VAR, token],
-    ...(url !== undefined && url.length > 0 ? [[URL_VAR, url] as const] : []),
+    [tokenVar, token],
+    ...(url !== undefined && url.length > 0 ? [[urlVar, url] as const] : []),
   ];
   let next = null === existing || '' === existing.trim() ? '' : existing;
   for (const [name, value] of pairs) {
