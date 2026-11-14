@@ -522,7 +522,7 @@ The failure side is a set difference: `daemon_started` minus `app_instrumented`,
 | `reason` | string, optional | The classified cause of a failure. Never a raw error or a path. |
 | `stack` | string, optional | The framework that `init` found. |
 | `mcpRegistered` | boolean, optional | The MCP registration step worked. |
-| `confirmation` | `InitConfirmation`, optional | What `init` saw after it wrote files: `connected`, `no_daemon`, `no_session`, `no_page`, or `dev_server_not_started` (the files are written and the app's dev server did not start; `ok` is `true`, because the project is wired). |
+| `confirmation` | `InitConfirmation`, optional | What `init` saw after it wrote files: `connected`, `no_daemon`, `no_session`, `no_page`, or `dev_server_not_started` (the files are written, and the machine kept the dev server from starting: `stop` is `port_busy` or `split_loopback`; `ok` is `true`, because the project is wired). |
 | `stop` | `InitStop`, optional | The step where runtime `init` stopped. With `reason` `app_connection`, or with `confirmation` `dev_server_not_started` (before 3.10.1, `reason` `dev_server`). |
 
 ```json

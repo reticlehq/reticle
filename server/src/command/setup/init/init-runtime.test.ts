@@ -7,7 +7,7 @@ import { SetupPhase } from '../run-setup.js';
 import { bridgeOccupied } from '../bringup/bridge-port.js';
 import { reportInitOutcome } from '@/telemetry/init-telemetry.js';
 import { reportOnboardingStop } from '@/telemetry/onboarding-funnel.js';
-import { OnboardingStop } from '@reticlehq/core/telemetry';
+import { InitStop, OnboardingStop } from '@reticlehq/core/telemetry';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { PortPresence, probePresence } from '@/command/daemon/binding/port-presence.js';
 
@@ -162,11 +162,16 @@ describe('init reports its deferred outcome once, after runtime setup', () => {
    * script, a busy port, a build that exits) left a wired project, and init reported it as a failed
    * install and exited 1. The field data named it the top cause of a failed install.
    */
-  describe('a dev server that does not start', () => {
-    const devServerStop = { ...SUCCESS, ok: false, reachedPhase: SetupPhase.DEV_SERVER };
+  describe('a dev server that the machine kept from starting', () => {
+    const devServerStop = {
+      ...SUCCESS,
+      ok: false,
+      reachedPhase: SetupPhase.DEV_SERVER,
+      stop: InitStop.PORT_BUSY,
+    };
 
     it('reports the project as wired and not yet confirmed, and does not exit 1', async () => {
-      vi.mocked(runSetupCommand).mockResolvedValue({ ...devServerStop, stop: 'port_busy' });
+      vi.mocked(runSetupCommand).mockResolvedValue(devServerStop);
       await continueAfterInit(ARGS, RESULT, IO, '/app');
       // process.exit throws here (beforeEach), so resolving at all means init did not exit.
       expect(reportInitOutcome).toHaveBeenCalledExactlyOnceWith({
@@ -199,6 +204,23 @@ describe('init reports its deferred outcome once, after runtime setup', () => {
       // process.exit throws here (beforeEach), so resolving at all means init did not exit.
     });
   });
+
+  // The break matrix pins these: an app that cannot run is not a working install.
+  it.each([InitStop.DEV_SERVER_EXITED, InitStop.NO_DEV_COMMAND, InitStop.NOT_READY, undefined])(
+    'still fails when the dev server stopped at %s',
+    async (stop) => {
+      vi.mocked(runSetupCommand).mockResolvedValue({
+        ...SUCCESS,
+        ok: false,
+        reachedPhase: SetupPhase.DEV_SERVER,
+        ...(stop === undefined ? {} : { stop }),
+      });
+      await expect(continueAfterInit(ARGS, RESULT, IO, '/app')).rejects.toThrow('exit');
+      expect(reportInitOutcome).toHaveBeenCalledWith(
+        expect.objectContaining({ ok: false, reason: 'dev_server' }),
+      );
+    },
+  );
 
   it('reports a bridge collision without starting the app', async () => {
     vi.mocked(bridgeOccupied).mockReturnValue('port occupied');

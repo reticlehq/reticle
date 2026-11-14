@@ -761,9 +761,10 @@ export const InitConfirmation = {
    */
   NO_PAGE: 'no_page',
   /**
-   * `init` wrote its files, and the app's dev server did not start (no dev script, a busy port, a
-   * build that exited), so no page could connect. Not a failed install: the project is wired, and the
-   * next step is to start the app. `stop` says which step stopped it.
+   * `init` wrote its files, and the machine kept the dev server from starting (its port was taken,
+   * or it answered on one loopback address and not the other), so no page could connect. Not a failed
+   * install: the project is wired and the app is fine. `stop` says which. A dev server that exits,
+   * hangs or does not exist is still a failure (`reason` `dev_server`).
    */
   DEV_SERVER_NOT_STARTED: 'dev_server_not_started',
 } as const;

@@ -10,6 +10,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   InitConfirmation,
+  InitStop,
   OnboardingPhase,
   OnboardingStop,
   RETICLE_DEFAULT_PORT,
@@ -164,6 +165,12 @@ export type AgentsBlockPort = (
   print: (line: string) => void,
   mayWait: boolean,
 ) => () => Promise<void>;
+
+/** The dev-server stops caused by the machine, not the app: the files init wrote are right. */
+const WIRED_WHEN_STOPPED_AT: ReadonlySet<string> = new Set([
+  InitStop.PORT_BUSY,
+  InitStop.SPLIT_LOOPBACK,
+]);
 
 export async function continueAfterInit(
   parsed: InitRuntimeArgs,
@@ -362,10 +369,15 @@ export async function continueAfterInit(
   )
     .then(
       async (outcome) => {
-        // The files are written before the app starts. A dev server that did not start left a wired
-        // project that is not confirmed yet: not a failed install. A failure to connect a running app
-        // is still a failure.
-        const wiredNotStarted = !outcome.ok && outcome.reachedPhase === SetupPhase.DEV_SERVER;
+        // The files are written before the app starts. When the app could not be reached for a reason
+        // of the machine, not of the app (its port was taken, or it answered on one loopback address
+        // and not the other), the project is wired and not confirmed yet: not a failed install.
+        // A dev server that exits, hangs or does not exist, and a failure to connect, still fail.
+        const wiredNotStarted =
+          !outcome.ok &&
+          outcome.reachedPhase === SetupPhase.DEV_SERVER &&
+          undefined !== outcome.stop &&
+          WIRED_WHEN_STOPPED_AT.has(outcome.stop);
         if (result.outcome !== undefined) {
           const init = {
             ...result.outcome,
