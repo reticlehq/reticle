@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -352,8 +352,16 @@ describe('jpegSize', () => {
 const FRAME_BUDGET_TIMEOUT_MS = 60_000;
 
 describe('frames between steps', () => {
+  // A film also ticks itself every FRAME.EVERY_MS. On a slow runner that tick fired inside a test:
+  // the test's own filmNow found the film busy and filmed nothing, and the tick used up a fake
+  // image, so a Windows run saw one frame where two were due. Each test here drives filmNow
+  // itself, so the interval is faked and never fires on its own.
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
+  });
   afterEach(() => {
     for (let i = 0; i <= tabs; i += 1) stopFilming(`s${String(i)}`);
+    vi.useRealTimers();
   });
 
   it('films a driven tab into the run of its last step, and skips a page that did not change', async () => {
