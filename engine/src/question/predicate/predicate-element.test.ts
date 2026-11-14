@@ -388,6 +388,27 @@ it('is inconclusive, never a pass, when the matched text is unreadable', async (
   expect(result.assertion).toBe('element.readable');
 });
 
+it('says how to assert that text faded away when the opacity makes it unreadable', async () => {
+  const faded: PredicateSession = {
+    ...session,
+    command: () =>
+      Promise.resolve({
+        kind: 'command_result',
+        ok: true,
+        id: 'stub',
+        result: {
+          matched: true,
+          count: 1,
+          elements: [{ ref: 'e0', role: 'paragraph', name: '', states: [], visible: true }],
+          unreadable: 'the composed opacity is 0.01',
+        },
+      }),
+  };
+  const result = await evalElement(faded, { text: 'Saved' }, undefined, false, true);
+  expect(result.inconclusive).toContain('absent');
+  expect(result.inconclusive).toContain('state: "visible"');
+});
+
 /**
  * A page that declared its commands and left match out can never answer one (#1990): the session
  * refuses the send, and that refusal used to be read as "zero matches". The refusal now names the

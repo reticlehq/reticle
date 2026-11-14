@@ -36,6 +36,9 @@ import { describeCaseMiss, describeSplitTextMiss } from './split-text-miss.js';
 import { satisfiesProperty, type Baseline, type PropertyAssertion } from './property.js';
 import { describeNameNearMiss } from './name-near-miss.js';
 
+/** The words the browser starts an `unreadable` reason with when the opacity hides the text. */
+const FADED_REASON = 'the composed opacity is';
+
 export const ARIA_HIDDEN_NOTE =
   'text is inside an aria-hidden subtree — drawn on screen but excluded from the accessible tree';
 
@@ -188,9 +191,15 @@ function describeCovered(dialog: string): string {
  * almost the colour behind it, or it is almost transparent. A `yes` here was a false green (#1797).
  */
 function describeUnreadable(why: string): string {
-  return (
+  const reason =
     `the text is on the page, but a user cannot read it (${why}). ` +
-    'Fix the colour or the opacity, then check again'
+    'Fix the colour or the opacity, then check again';
+  if (!why.includes(FADED_REASON)) {
+    return reason;
+  }
+  return (
+    `${reason}. To assert that the text faded away, check that it is absent in ` +
+    `\`state: "${ElementState.VISIBLE}"\``
   );
 }
 

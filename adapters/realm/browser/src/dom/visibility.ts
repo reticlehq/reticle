@@ -55,6 +55,25 @@ export function stalledFade(el: Element): boolean {
   return el.getAnimations().some((a) => 'running' === a.playState || a.pending);
 }
 
+/** Below this composed opacity an element is practically not painted, so it is not visible. */
+export const FAINT_OPACITY = 0.05;
+
+/**
+ * The opacity of `el` and its ancestors, multiplied. A fade that a hidden tab stalled counts as 1:
+ * `stalledFade` explains why. An opacity the browser could not parse counts as 1. Styles come from
+ * the pass memo, so this adds no style resolution.
+ */
+function composedOpacity(el: Element, memo: Map<Element, VisibilityInfo>): number {
+  let opacity = 1;
+  for (let node: Element | null = el; null !== node; node = parentAcrossShadowBoundary(node)) {
+    const alpha = stalledFade(node)
+      ? 1
+      : Number.parseFloat(ownVisibilityInfo(node, memo).style?.opacity ?? '');
+    opacity *= Number.isNaN(alpha) ? 1 : alpha;
+  }
+  return opacity;
+}
+
 /**
  * The attribute an open menu or dialog stamps beside the `aria-hidden` it puts on the rest of the
  * page (the `aria-hidden` package Radix and most kits use). That hides the page from assistive tech
@@ -656,6 +675,7 @@ export function isVisible(el: Element, memo?: Map<Element, boolean>): boolean {
   const result =
     !visibilityHidden(ownVisibilityInfo(el, info).style) &&
     visibleBounds(el, info, undefined, true) !== null &&
+    composedOpacity(el, info) >= FAINT_OPACITY &&
     !collapsed(el, info) &&
     !backfaceHidden(el, info);
   if (memo !== undefined) {
