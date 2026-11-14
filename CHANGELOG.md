@@ -4,6 +4,12 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+## [3.10.1] — 2026-11-14
+
+### Fixed
+
+- **`@reticlehq/server` — `reticle init` reported a failed install when the machine, not the app, kept the dev server from starting.** Init writes its files first, then starts the dev server to confirm that the app connects. When the dev server's port was taken, or the app answered on one loopback address and not the other, init said "setup did not finish" and exited `1`, although the project was wired and the app was fine. Now init says that Reticle is wired and that the connection is not confirmed yet, prints the steps to start the app and run `reticle status`, and exits `0`. `--json` answers `"ok": true, "confirmed": false`. A dev server that exits, hangs or does not exist, and a running app that does not connect, still fail.
+
 ## [3.10.0] — 2026-11-14
 
 ### Added
