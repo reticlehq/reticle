@@ -563,7 +563,10 @@ export async function evalElement(
     }
   }
   if (query.role !== undefined && query.name !== undefined) {
-    const roleOnly = await matchOnce(session, { role: query.role }, state);
+    // The diagnosis looks where the check looked. A check scoped to one cell must not list the
+    // names in every other cell, which can be unrelated user text (#2282).
+    const within = scopeOf(query);
+    const roleOnly = await matchOnce(session, { role: query.role, ...within }, state);
     if (roleOnly.matched) {
       return {
         pass: false,
@@ -584,7 +587,7 @@ export async function evalElement(
     // contenteditable composer is not a `textbox`, a styled div is not a `button` — and the name is
     // the part the agent got right. Name the controls carrying it, with their real roles, so the
     // retry targets what exists instead of guessing again. A diagnosis only: `pass` stays false.
-    const byName = await nearestByName(session, query.name, state);
+    const byName = await nearestByName(session, query.name, state, within);
     if (byName.length > 0) {
       const seen = byName.map(
         (e) =>
@@ -804,6 +807,14 @@ export function withTextProperty(
   };
 }
 
+/** The scope of a query, and `self` with it, to carry into a follow-up query. Empty when unscoped. */
+function scopeOf(query: ElementQuery): Pick<ElementQuery, 'scope' | 'self'> {
+  if (query.scope === undefined) {
+    return {};
+  }
+  return { scope: query.scope, ...(true === query.self ? { self: true } : {}) };
+}
+
 /** How many same-name controls a role miss names. */
 const MAX_BY_NAME = 3;
 
@@ -815,8 +826,12 @@ async function nearestByName(
   session: PredicateSession,
   name: string,
   state: ElementState | undefined,
+  within: Pick<ElementQuery, 'scope' | 'self'>,
 ): Promise<ElementDescriptor[]> {
-  for (const query of [{ label: name }, { placeholder: name }]) {
+  for (const query of [
+    { label: name, ...within },
+    { placeholder: name, ...within },
+  ]) {
     const found = await matchOnce(session, query, state);
     if (found.matched) {
       return found.elements.slice(0, MAX_BY_NAME);
