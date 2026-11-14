@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser` — the destructive-action refusal did not say what it read.** Every refusal was the same sentence, so an agent could not tell why a row menu trigger, a picker button or `press Enter` in a composer was refused. Its only move was `confirmDangerous: true`. The refusal now names each control (role and name, the submit button that Enter presses, the drop target), the matched word, and where the word was: name, own text, `title`, `aria-label`, `href` or form `action`. A control that only opens a popup (`aria-haspopup`, or `aria-expanded` on a control that does not submit) is no longer refused for a money word such as "payment". Destroy words still block it. Closes [#2272](https://github.com/reticlehq/reticle/issues/2272).
