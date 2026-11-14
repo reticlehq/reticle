@@ -1,3 +1,0 @@
-### Added
-
-- **`@reticlehq/engine`, `@reticlehq/server` — an element failure did not name its element, and `reticle verify --timeout` did not show its unit.** A reason such as `element exists but not in state 'visible'` did not say which query failed, so an `allOf` with several clauses was hard to read. Each element failure reason now includes the query, and a state miss includes the ref of the element it found. `--help` now shows `--timeout <ms>`, and a `No app connected` failure after a timeout under 1000 says that the timeout is in milliseconds. Closes [#2063](https://github.com/reticlehq/reticle/issues/2063)

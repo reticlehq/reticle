@@ -1,3 +1,0 @@
-### Added
-
-- **`@reticlehq/server`: a lease can open with a coarse pointer, so touch-only CSS can be given a verdict.** `reticle_lease { action: "acquire", emulate: { pointer: "coarse" | "fine" } }` sets what `@media (pointer: ...)` reports: a rule like `@media (pointer: coarse) { button { min-height: 44px } }` was unreachable before, and every tap-target audit was answered with a mouse. Touch support is a Playwright context option and cannot change on a live context, so `pointer` is set when the lease opens; `reticle_viewport { pointer }` refuses with "acquire a new lease with emulate.pointer" instead of ignoring it. Closes [#1903](https://github.com/reticlehq/reticle/issues/1903).

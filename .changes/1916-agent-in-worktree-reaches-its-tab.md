@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — an agent in a Claude Code worktree was refused on every call with "served from another worktree".** Claude Code starts the MCP server in the folder it was opened in, the main checkout, and then moves the agent into `.claude/worktrees/<name>`. Reticle took the MCP server's folder as the agent's, so it refused the tab of the agent's own worktree until the agent passed `sessionId`. Now, when the MCP server runs in the main checkout and every tab comes from one linked worktree, Reticle drives that tab, and the tab names its `worktree`. Tabs of two or more worktrees, and an MCP server that runs in a linked worktree, are refused as before. Closes [#1916](https://github.com/reticlehq/reticle/issues/1916).

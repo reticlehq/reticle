@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/engine` — a store that records the failed call's HTTP status acknowledges the failure, so the verdict is no longer `no` (`ui-advanced-request-failed`).** A correct app got `no` when every declared clause passed: its store kept a deliberate 429 as `status: 429` beside a retry message. The store value must be exactly the failed call's status, as a number or its string, it must change in that write, and the store must write it after the call was sent. A store that says `sent: true` over a failed write, and a number that is not the failed status, are still `no`. Part of [#2173](https://github.com/reticlehq/reticle/issues/2173).
