@@ -3,7 +3,7 @@ name: reticle
 description: Install, instrument and verify this running web app from the inside (DOM, network, routing, console and framework state) instead of screenshots or guessing. Drives one real flow end to end and returns a verdict with the file:line to fix. Use when the user asks to set up or install Reticle, when a user-facing change needs proving before you call it done, when a test passes but the UI is broken, or when the user types /reticle.
 license: Apache-2.0
 metadata:
-  version: 3.10.1
+  version: 3.10.2
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
   internal: true
@@ -32,7 +32,7 @@ It starts the dev server if the app does not run, opens the app in a Reticle bro
 `init` changes files, so run it only when the user agrees. A request to set up Reticle is that agreement. Run it in the app's folder:
 
 ```bash
-RETICLE_INSTALL_SOURCE=plugin npx @reticlehq/server@3.10.1 init
+RETICLE_INSTALL_SOURCE=plugin npx @reticlehq/server@3.10.2 init
 ```
 
 It registers Reticle with every coding agent it finds. A dev server that was running when `init` ran must be restarted once. If `init` cannot finish alone, read SETUP below.

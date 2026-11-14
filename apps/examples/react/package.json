@@ -1,7 +1,7 @@
 {
   "name": "@reticlehq/example-react",
   "private": true,
-  "version": "3.10.1",
+  "version": "3.10.2",
   "type": "module",
   "description": "Minimal Vite + React app — verifies Reticle integration via the reticle() Vite plugin.",
   "scripts": {

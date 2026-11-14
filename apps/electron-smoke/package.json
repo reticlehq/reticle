@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/electron-smoke",
-  "version": "3.10.1",
+  "version": "3.10.2",
   "private": true,
   "description": "A real Electron app (Vite + React renderer, contextBridge IPC) to smoke-test Reticle on Electron.",
   "type": "module",
