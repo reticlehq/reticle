@@ -19,7 +19,7 @@ import { applySnapshotDelta, SnapshotCache } from './read/snapshot-delta.js';
 import { noteUnmountedRoot } from './read/snapshot-unmounted-note.js';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { countSchema } from './args/numeric-bounds.js';
-import { emptyQueryRefusal, normalizeQueryArgs } from './read/query-shape.js';
+import { emptyQueryRefusal, normalizeQueryArgs, roleTextRefusal } from './read/query-shape.js';
 import { shapeQueryResult } from './read/query-windowed.js';
 import { withUnsettledFind } from './act/unsettled-find.js';
 
@@ -382,7 +382,7 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
         .string()
         .optional()
         .describe(
-          'Exact accessible-name filter - narrows results when `by` is role and the page has many elements of that role. Matches the whole name; use `text` for a partial match.',
+          'Exact accessible-name filter - narrows results when `by` is role and the page has many elements of that role. Matches the whole name. A role find does not take `text`; for a partial match, search by `text` alone.',
         ),
       scope: z
         .string()
@@ -566,6 +566,11 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
         ),
     },
     handler: (deps, rawArgs) => {
+      // Checked on the raw arguments: normalizing turns `{ role, text }` into a text search.
+      const roleText = roleTextRefusal(rawArgs);
+      if (roleText !== undefined) {
+        return Promise.reject(roleText);
+      }
       // Accept the predicate's named-field spelling too — see query-shape.ts.
       const args = normalizeQueryArgs(rawArgs);
       const empty = emptyQueryRefusal(args);

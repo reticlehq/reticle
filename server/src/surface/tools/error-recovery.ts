@@ -29,7 +29,7 @@ import {
   RefusalLead,
 } from '@/features/harness/platform/refusal.js';
 import { BODY_CLAUSE_REFUSAL_OPENING } from '@reticlehq/engine/evidence/body-capture-remedy.js';
-import { EMPTY_FIND_OPENING } from './read/query-shape.js';
+import { EMPTY_FIND_OPENING, ROLE_TEXT_FIND_OPENING } from './read/query-shape.js';
 import { UNKNOWN_FLOW_OPENING } from '@/language/flows/suite-selection.js';
 import {
   ARTIFACT_ROOT_ABSOLUTE_REFUSAL,
@@ -99,6 +99,8 @@ const SELF_RECOVERING: readonly { readonly match: RegExp; readonly reason: Refus
   // A find with nothing to find names the fields to pass; an unknown flow name lists the saved ones.
   // Both are the caller's to fix, and the defect ask on top told an agent to file a bug about them.
   { match: literally(EMPTY_FIND_OPENING), reason: RefusalReason.BAD_ARGS },
+  // A role find with `text` names the field to pass instead (#2326).
+  { match: literally(ROLE_TEXT_FIND_OPENING), reason: RefusalReason.BAD_ARGS },
   { match: literally(UNKNOWN_FLOW_OPENING), reason: RefusalReason.NO_MATCH },
   // A lease `root` naming no directory on disk — relative, or absent — is the caller's to fix, and
   // the message carries the exact path to pass instead. Both sat under the feedback ask, which

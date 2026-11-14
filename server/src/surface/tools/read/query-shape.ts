@@ -16,6 +16,8 @@
  * being replaced by a confident wrong query.
  */
 
+import { QueryBy } from '@reticlehq/core';
+
 /** Most specific first: the order Reticle prefers anchors everywhere else (testid is gold). */
 const FIELD_TO_STRATEGY: readonly (readonly [string, string])[] = [
   ['testid', 'testid'],
@@ -37,6 +39,29 @@ export function normalizeQueryArgs(args: Record<string, unknown>): Record<string
     }
   }
   return args;
+}
+
+/** How the refusal of a role find with `text` opens: the error table recognizes it by these words. */
+export const ROLE_TEXT_FIND_OPENING = 'A role find does not filter by `text`.';
+
+/**
+ * The error for a find that asks for a role and also passes `text`, or `undefined` otherwise.
+ *
+ * A role find narrows only by `name` (#2326). `{ by: "role", value: "button", text: "Save" }`
+ * returned every button, and `{ role: "button", text: "Save" }` became a text search that dropped
+ * the role. Either way the agent got matches it did not ask for, and nothing said so.
+ */
+export function roleTextRefusal(args: Record<string, unknown>): Error | undefined {
+  const isRoleFind = QueryBy.ROLE === args['by'] || 'string' === typeof args['role'];
+  const text = args['text'];
+  if (!isRoleFind || 'string' !== typeof text || 0 === text.length) {
+    return undefined;
+  }
+  return new Error(
+    `${ROLE_TEXT_FIND_OPENING} It would return every element of that role. Pass \`name\` with ` +
+      'the exact accessible name, e.g. { role: "button", name: "Save" }, or search ' +
+      '{ text: "Save" } alone.',
+  );
 }
 
 /** How the refusal of an empty find opens: the error table recognizes it by these words. */
