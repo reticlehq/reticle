@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`: `reticle_act_and_wait` no longer fails with a raw error when the check before the action cannot read the page.** The tool reads the page once before it acts, to tell a consequence the action caused from one that was already true. When that read failed, the caller got the bare read error with no verdict, and the action window stayed open, so later events were attributed to an action that had ended. Now the window is closed, and the result is `verified: unknown` with `verifiedReason: inconclusive`; `because` carries the read error and says the action was not sent. Refs [#2038](https://github.com/reticlehq/reticle/issues/2038).

@@ -5,6 +5,8 @@ import { alreadyTrueHiddenMatch as alreadyTrueHiddenMatchOf } from '@reticlehq/e
 import type { PredicateSession } from '@reticlehq/engine/question/predicate/predicate-session.js';
 import { captureBaselines } from '@reticlehq/engine/evidence/baseline.js';
 import type { Baselines } from '@reticlehq/engine/question/predicate/predicate.js';
+import { couldNotEvaluate } from '@reticlehq/engine/evidence/verified.js';
+import { Verified, VerifiedReason } from '@reticlehq/core';
 
 /** Everything the pre-action check learned, which is three facts about one reading. */
 export interface AlreadyTrueReading {
@@ -68,4 +70,42 @@ export async function readAlreadyTrue(
     alreadyTrueHiddenMatch: alreadyTrueHiddenMatchOf(until, precheck?.evidence),
     ...(precheck?.evidence === undefined ? {} : { alreadyTrueEvidence: precheck.evidence }),
   };
+}
+
+/** The graded result for a pre-action read that threw: `unknown`, and the action was not sent. */
+export interface PrecheckUnknown {
+  unknown: {
+    verified: Verified;
+    verifiedReason: VerifiedReason;
+    because: string;
+    verdict: { pass: false; failureReason: string; inconclusive: string };
+    since: number;
+  };
+}
+
+/** `readAlreadyTrue`, but a read that throws becomes a `PrecheckUnknown` instead of an error. */
+export async function readAlreadyTrueOrUnknown(
+  session: PredicateSession,
+  until: Predicate | undefined,
+  since: number,
+): Promise<AlreadyTrueReading | PrecheckUnknown> {
+  try {
+    return await readAlreadyTrue(session, until, since);
+  } catch (error) {
+    const reason = error instanceof Error ? error.message : String(error);
+    const missing = `the check before the action failed (${reason}); the action was not sent`;
+    return {
+      unknown: {
+        verified: Verified.UNKNOWN,
+        verifiedReason: VerifiedReason.INCONCLUSIVE,
+        because: couldNotEvaluate(missing),
+        verdict: {
+          pass: false,
+          failureReason: reason,
+          inconclusive: `the page did not answer: ${reason}`,
+        },
+        since,
+      },
+    };
+  }
 }
