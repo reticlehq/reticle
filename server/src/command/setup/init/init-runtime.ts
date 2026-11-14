@@ -10,6 +10,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import {
   InitConfirmation,
+  InitStop,
   OnboardingPhase,
   OnboardingStop,
   RETICLE_DEFAULT_PORT,
@@ -164,6 +165,12 @@ export type AgentsBlockPort = (
   print: (line: string) => void,
   mayWait: boolean,
 ) => () => Promise<void>;
+
+/** The dev-server stops caused by the machine, not the app: the files init wrote are right. */
+const WIRED_WHEN_STOPPED_AT: ReadonlySet<string> = new Set([
+  InitStop.PORT_BUSY,
+  InitStop.SPLIT_LOOPBACK,
+]);
 
 export async function continueAfterInit(
   parsed: InitRuntimeArgs,
@@ -362,6 +369,15 @@ export async function continueAfterInit(
   )
     .then(
       async (outcome) => {
+        // The files are written before the app starts. When the app could not be reached for a reason
+        // of the machine, not of the app (its port was taken, or it answered on one loopback address
+        // and not the other), the project is wired and not confirmed yet: not a failed install.
+        // A dev server that exits, hangs or does not exist, and a failure to connect, still fail.
+        const wiredNotStarted =
+          !outcome.ok &&
+          outcome.reachedPhase === SetupPhase.DEV_SERVER &&
+          undefined !== outcome.stop &&
+          WIRED_WHEN_STOPPED_AT.has(outcome.stop);
         if (result.outcome !== undefined) {
           const init = {
             ...result.outcome,
@@ -370,6 +386,13 @@ export async function continueAfterInit(
           if (outcome.ok) {
             delete init.reason;
             init.confirmation = InitConfirmation.CONNECTED;
+          } else if (wiredNotStarted) {
+            init.ok = true;
+            delete init.reason;
+            init.confirmation = InitConfirmation.DEV_SERVER_NOT_STARTED;
+            if (outcome.stop !== undefined) {
+              init.stop = outcome.stop;
+            }
           } else {
             // A failed startup does not establish whether a daemon or instrumented page exists.
             // Keep the watcher's no_daemon/no_session/no_page classifications for observed facts.
@@ -386,7 +409,11 @@ export async function continueAfterInit(
         }
         // One object, so an agent reads a result instead of interpreting a report.
         if (true === parsed.json) {
-          process.stdout.write(`${JSON.stringify(outcome, null, 2)}\n`);
+          const answer = wiredNotStarted ? { ...outcome, ok: true, confirmed: false } : outcome;
+          process.stdout.write(`${JSON.stringify(answer, null, 2)}\n`);
+          if (wiredNotStarted) {
+            return;
+          }
           if (!outcome.ok) {
             stop();
           }
@@ -443,6 +470,20 @@ export async function continueAfterInit(
           );
           ask();
           io.print(COMMUNITY_HINT);
+          return;
+        }
+        if (wiredNotStarted) {
+          io.print(
+            '✓ Reticle is wired into this app. Its dev server did not start, so the connection is not ' +
+              'confirmed yet. To confirm it:',
+          );
+          for (const [i, step] of outcome.fallback.entries()) {
+            io.print(`   ${String(i + 1)}. ${step}`);
+          }
+          io.print(
+            `   ${String(outcome.fallback.length + 1)}. Run \`reticle status\`: it lists the app when it connects.`,
+          );
+          ask();
           return;
         }
         // A run that produced no verdict did not succeed, and the exit code is the one place a caller
