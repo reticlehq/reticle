@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/server",
-  "version": "3.10.0",
+  "version": "3.10.1",
   "mcpName": "io.github.reticlehq/reticle",
   "description": "Reticle CLI, bridge and MCP server: a coding agent drives your running web app from the inside and gets a verdict with evidence, for change verification, access control, accessibility, performance and SEO checks.",
   "type": "module",
@@ -75,11 +75,8 @@
     "cli"
   ],
   "reticle": {
-    "changelog": "3.10.0 checks every change against what worked before. reticle compare and verify --against list what users would see change between two builds, and reticle grade grades a finished run from the app's stored data. Several false verdicts are fixed, most of them text checks that answered no for text that was on the page. An agent in a Claude Code worktree now reaches its own tab. Update the CLI and the SDK in your app.",
-    "breakingChanges": [
-      "The commands kill, login, link, project, whoami, push, regression, share, issues and memory are removed. Each prints the command that replaces it and exits 1. See MIGRATION.md.",
-      "The MCP tools reticle_explore and reticle_replay left the tool surface. Use reticle_look { action: \"page\", mode: \"interactive\" } and reticle_record { action: \"replay\" }."
-    ]
+    "changelog": "3.10.1 fixes reticle init on a busy machine. When the dev server could not start because its port was taken, or the app answered on one loopback address only, init reported a failed install although the project was wired. Now it says Reticle is wired, prints the steps to confirm the connection, and exits 0.",
+    "breakingChanges": []
   },
   "publishConfig": {
     "access": "public"
