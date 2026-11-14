@@ -438,7 +438,7 @@ async function evaluatePredicateRaw(
       );
     }
     case PredicateKind.NET: {
-      const result = evalNet(events, predicate, session.sdkVersion);
+      const result = evalNet(events, predicate, session.sdkVersion, session.elapsed());
       if (result.pass || keepsAnswers || result.inconclusive !== undefined) {
         return result;
       }
@@ -451,8 +451,10 @@ async function evaluatePredicateRaw(
       ) {
         return result;
       }
+      // A replaced page's answer could have satisfied the predicate, so this miss is not final.
+      const { decided: _decided, ...unfinal } = result;
       return {
-        ...result,
+        ...unfinal,
         failureReason: ANSWERED_BEFORE_NAVIGATION,
         inconclusive: ANSWERED_BEFORE_NAVIGATION,
       };

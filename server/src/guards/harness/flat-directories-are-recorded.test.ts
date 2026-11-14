@@ -215,7 +215,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // page's SDK version (#2031), split from `predicate-eval.ts` at its line cap for the same reason.
   // 25 with `predicate-animation.ts`, split from `predicate.ts` so the live-animation snapshot
   // fallback can stay beside the other predicate evaluators without growing the dispatcher.
-  'engine/src/question/predicate': 25,
+  // 26 with `net-status-miss.ts`: when a `net` miss on `status` is final (#1656), split from
+  // `predicate-eval.ts` at its line cap, and free of the core contract like `net-blind-spots.ts`.
+  'engine/src/question/predicate': 26,
   /*
    * Crossed ten when the fast-drive budget and a portable byte counter landed. The guard asks for
    * grouping rather than recording at this moment, and grouping is the wrong move HERE specifically:

@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine` — a `net` check that expected one status and saw another was never final.** A check expected `POST /api/auth/login` to answer 401, and it answered 500. The `net` clause said "no matching call" and the wait continued. When another clause of the same `allOf` then timed out on a slow page, the verdict was `unknown`, although the evidence showed the wrong status. Now the clause is decided false when every call to that method and URL answered another status, no call to it is in flight, and no call to it started for 1.5 s after the last answer. The verdict is `no`, and it names the status that came. A retry that starts more than 1.5 s after the last answer is not waited for. Closes [#1656](https://github.com/reticlehq/reticle/issues/1656).

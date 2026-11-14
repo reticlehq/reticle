@@ -98,6 +98,8 @@ const PINNED: readonly PublicSurface[] = [
       // What the net channel cannot see, split from predicate-eval.ts at its line cap.
       'question/predicate/net-blind-spots.ts',
       'question/predicate/net-evidence.ts',
+      // When a `net` miss on `status` is final (#1656), split from predicate-eval.ts at its line cap.
+      'question/predicate/net-status-miss.ts',
       'question/predicate/observed-in-window.ts',
       // New public entry point: animation predicate evidence now has a live page snapshot fallback,
       // split from predicate.ts so the rule can grow without pushing the dispatcher past its cap.
