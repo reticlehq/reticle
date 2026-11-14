@@ -5,10 +5,11 @@ import { findContradictions } from './contradictions.js';
 /**
  * `response-ignored` stood down on an app that ignored its response (#2115).
  *
- * The rule fires only when nothing on the client moved. The acted control's `disabled` or
- * `aria-busy` changing before the write was answered counted as movement. That is the control saying "wait"
- * while the request runs. It does not answer the write, and the rule went silent on an app that
- * ignored a 2xx.
+ * The rule fires only when nothing on the client moved. The acted control becoming `disabled` or
+ * `aria-busy` after the write was sent counted as movement. That is the control saying "wait" while
+ * the request runs. It does not answer the write, and the rule went silent on an app that ignored a
+ * 2xx. A change before the send is not about the write at all. A change after the send that stops
+ * the waiting still counts: the app can only do that once it heard back.
  *
  * The order is the page's own sequence number, so these windows hold no time at all.
  */
@@ -21,8 +22,8 @@ function ev(type: EventType, data: Record<string, unknown> = {}, ref?: string): 
   return { t: seq, seq, type, sessionId: 's', data, ...(ref === undefined ? {} : { ref }) };
 }
 
-const sent = (id: string, url = SAVE_URL): ReticleEvent =>
-  ev(EventType.NET_PENDING, { id, method: 'POST', url, initiator: NetInitiator.FETCH });
+const sent = (id: string, url = SAVE_URL, extra: Record<string, unknown> = {}): ReticleEvent =>
+  ev(EventType.NET_PENDING, { id, method: 'POST', url, initiator: NetInitiator.FETCH, ...extra });
 const answered = (id: string, url = SAVE_URL, extra: Record<string, unknown> = {}): ReticleEvent =>
   ev(EventType.NET_REQUEST, {
     id,
@@ -50,7 +51,7 @@ describe('response-ignored: the acted control waiting is not an answer', () => {
 
   // The shape of the failed merge-queue run, as far as its summary shows it: one write, one 2xx,
   // no store, signal or route change, and a DOM change the filtered summary hid.
-  it('fires when the control was enabled before the answer and nothing else moves', () => {
+  it('fires when the control was enabled before the send and nothing else moves', () => {
     expect(kinds([enabled(), sent('n1'), answered('n1')])).toEqual([
       ContradictionKind.RESPONSE_IGNORED,
     ]);
@@ -89,7 +90,7 @@ describe('response-ignored: the acted control waiting is not an answer', () => {
     ).toEqual([]);
   });
 
-  it('stays silent when a change between two answers can answer the first write', () => {
+  it('fires when the button is disabled between two answers', () => {
     expect(
       kinds([
         sent('n1'),
@@ -98,10 +99,62 @@ describe('response-ignored: the acted control waiting is not an answer', () => {
         disabled(),
         answered('n2', '/api/audit'),
       ]),
+    ).toEqual([ContradictionKind.RESPONSE_IGNORED]);
+  });
+
+  it('stays silent when the button is enabled between two answers', () => {
+    expect(
+      kinds([
+        sent('n1'),
+        disabled(),
+        sent('n2', '/api/audit'),
+        answered('n1'),
+        enabled(),
+        answered('n2', '/api/audit'),
+      ]),
     ).toEqual([]);
   });
 
-  // Only `disabled` on the acted control. Anything else can be an optimistic update.
+  // An XHR answer is recorded on `loadend`, after the app's `load` handler and after axios's. A
+  // form that enables Save again in its response handler has that change recorded before the answer.
+  it('stays silent when the button is enabled again before the answer is recorded', () => {
+    expect(kinds([sent('n1'), disabled(), enabled(), answered('n1')])).toEqual([]);
+  });
+
+  it('stays silent when an XHR form enables its button in the load handler', () => {
+    expect(
+      kinds([
+        sent('n1', SAVE_URL, { initiator: NetInitiator.XHR }),
+        disabled(),
+        enabled(),
+        answered('n1', SAVE_URL, { initiator: NetInitiator.XHR }),
+      ]),
+    ).toEqual([]);
+  });
+
+  it('stays silent when the button stops being busy before the answer is recorded', () => {
+    expect(
+      kinds([
+        sent('n1'),
+        ev(EventType.DOM_ATTR, { attr: 'aria-busy', value: 'true' }, BUTTON),
+        ev(EventType.DOM_ATTR, { attr: 'aria-busy', value: 'false', old: 'true' }, BUTTON),
+        answered('n1'),
+      ]),
+    ).toEqual([]);
+  });
+
+  it('fires when the button was disabled before the send and nothing else moves', () => {
+    expect(kinds([disabled(), sent('n1'), answered('n1')])).toEqual([
+      ContradictionKind.RESPONSE_IGNORED,
+    ]);
+  });
+
+  // Without the send, nothing says which change came after it.
+  it('keeps every change when the window does not hold the send', () => {
+    expect(kinds([disabled(), answered('n1')])).toEqual([]);
+  });
+
+  // Only `disabled` and `aria-busy` on the acted control. Anything else can be an optimistic update.
   it('stays silent when another element is disabled before the answer', () => {
     expect(kinds([sent('n1'), disabled('e99'), answered('n1')])).toEqual([]);
   });
