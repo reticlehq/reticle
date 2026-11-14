@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   OutwardAction,
+  dangerousActionWord,
+  dangerousNavigationReason,
+  destructiveActionWord,
   isDangerousActionText,
   isDangerousNavigation,
   isLocalPage,
@@ -306,5 +309,34 @@ describe('withoutFilenameTokens strips filenames whose extension contains a digi
 
   it('still leaves a token whose digit extension is not a known one', () => {
     expect(withoutFilenameTokens('clip-remove.mp5')).toBe('clip-remove.mp5');
+  });
+});
+
+/** A refusal names the word the guard read (#2272), so the helpers return it, not only a boolean. */
+describe('dangerousActionWord, destructiveActionWord and dangerousNavigationReason', () => {
+  it('returns the matched word, lower-cased', () => {
+    expect(dangerousActionWord('Actions for Payment successful')).toBe('payment');
+    expect(dangerousActionWord('Delete_account')).toBe('delete');
+    expect(dangerousActionWord('Place Order')).toBe('place order');
+    expect(dangerousActionWord('Save')).toBeUndefined();
+  });
+
+  it('returns nothing for a value picker, like isDangerousActionText', () => {
+    expect(dangerousActionWord('Refund', 'radio')).toBeUndefined();
+    expect(isDangerousActionText('Refund', 'radio')).toBe(false);
+  });
+
+  it('keeps only the destroy words for destructiveActionWord', () => {
+    expect(destructiveActionWord('Actions for Payment successful')).toBeUndefined();
+    expect(destructiveActionWord('Remove payment method')).toBe('remove');
+  });
+
+  it('says why a navigation is destructive', () => {
+    expect(dangerousNavigationReason('/account/delete')).toBe('delete');
+    expect(dangerousNavigationReason('https://checkout.stripe.com/c/pay/x')).toBe(
+      'payment provider',
+    );
+    expect(dangerousNavigationReason('/billing/payment')).toBeUndefined();
+    expect(isDangerousNavigation('/billing/payment')).toBe(false);
   });
 });

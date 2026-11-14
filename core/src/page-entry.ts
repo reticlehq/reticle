@@ -38,6 +38,9 @@ export { PredicateKind } from './verdict/consequence.js';
 export { SESSION_REF } from './verdict/predicate-tree.js';
 export {
   OutwardAction,
+  dangerousActionWord,
+  dangerousNavigationReason,
+  destructiveActionWord,
   isDangerousActionText,
   isDangerousNavigation,
   isInertHref,

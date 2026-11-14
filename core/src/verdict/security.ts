@@ -240,10 +240,32 @@ export function withoutFilenameTokens(text: string): string {
  * role (a tool name, a click with no role on the descriptor) omit it and the text decides.
  */
 export function isDangerousActionText(text: string, role?: string): boolean {
+  return dangerousActionWord(text, role) !== undefined;
+}
+
+/**
+ * The word that makes `text` read as destructive or money-moving, lower-cased; undefined when none.
+ *
+ * Same rule as `isDangerousActionText`. A refusal that names this word tells the agent WHAT the guard
+ * read: "payment" in a menu trigger's name is a different problem from "delete" on a submit button.
+ */
+export function dangerousActionWord(text: string, role?: string): string | undefined {
+  return firstMatch(DANGEROUS_ACTION, text, role);
+}
+
+/**
+ * Only the words that destroy something. A control that only opens a menu or a dialog moves no
+ * money, so a money word in its name ("Actions for Payment successful") is not a reason to refuse it.
+ */
+export function destructiveActionWord(text: string, role?: string): string | undefined {
+  return firstMatch(DESTROY_ACTION, text, role);
+}
+
+function firstMatch(pattern: RegExp, text: string, role?: string): string | undefined {
   if (role !== undefined && VALUE_PICKER_ROLES.has(role.trim().toLowerCase())) {
-    return false;
+    return undefined;
   }
-  return DANGEROUS_ACTION.test(text.replace(WORD_JOINERS, ' '));
+  return pattern.exec(text.replace(WORD_JOINERS, ' '))?.[1]?.toLowerCase();
 }
 
 /**
@@ -259,7 +281,15 @@ export function isInertHref(href: string): boolean {
 }
 
 export function isDangerousNavigation(href: string): boolean {
-  return isPaymentProviderUrl(href) || DESTROY_ACTION.test(href.replace(WORD_JOINERS, ' '));
+  return dangerousNavigationReason(href) !== undefined;
+}
+
+/** Why following `href` is destructive: the destroy word in it, or `payment provider`; else undefined. */
+export function dangerousNavigationReason(href: string): string | undefined {
+  if (isPaymentProviderUrl(href)) {
+    return 'payment provider';
+  }
+  return DESTROY_ACTION.exec(href.replace(WORD_JOINERS, ' '))?.[1]?.toLowerCase();
 }
 
 // ── What the Harness may press ────────────────────────────────────────────────────────────────

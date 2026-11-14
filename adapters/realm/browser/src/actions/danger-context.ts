@@ -17,8 +17,9 @@
 
 import {
   OutwardAction,
-  isDangerousActionText,
-  isDangerousNavigation,
+  dangerousActionWord,
+  dangerousNavigationReason,
+  destructiveActionWord,
   isInertHref,
   isPaymentField,
   outwardActionOf,
@@ -78,11 +79,21 @@ function navigatingHref(el: ActionTarget): string | undefined {
   return null === href || isInertHref(href) ? undefined : href;
 }
 
-export function dangerousActionContext(el: ActionTarget): string {
-  const href = navigatingHref(el);
-  if (href !== undefined) {
-    return href;
-  }
+/** Where a piece of classified text came from. A refusal names it, so the agent knows what to fix. */
+export const DangerSource = {
+  NAME: 'name',
+  OWN_TEXT: 'own text',
+  TITLE: 'title',
+  ARIA_LABEL: 'aria-label',
+  HREF: 'href',
+  FORM_ACTION: 'form action',
+  /** A phrase ("close account") that only matches once two of the surfaces above are joined. */
+  JOINED: 'joined text',
+} as const;
+export type DangerSource = (typeof DangerSource)[keyof typeof DangerSource];
+
+/** Every surface the guard reads, each with where it came from. */
+function labelledSurfaces(el: ActionTarget): readonly (readonly [DangerSource, string])[] {
   const form = el.closest('form');
   // The label surfaces only, when the content is the user's own. The accessible NAME still counts:
   // that is the prompt beside the field, and "Type DELETE to remove this account" is exactly the
@@ -91,13 +102,83 @@ export function dangerousActionContext(el: ActionTarget): string {
     ? ['', '']
     : [el.textContent ?? '', el.getAttribute('value') ?? ''];
   return [
-    withoutFilenameTokens(getAccessibleName(el)),
-    withoutFilenameTokens(ownText.join(' ')),
-    withoutFilenameTokens(el.getAttribute('title') ?? ''),
-    withoutFilenameTokens(el.getAttribute('aria-label') ?? ''),
-    el.getAttribute('href') ?? '',
-    form?.getAttribute('action') ?? '',
-  ].join(' ');
+    [DangerSource.NAME, withoutFilenameTokens(getAccessibleName(el))],
+    [DangerSource.OWN_TEXT, withoutFilenameTokens(ownText.join(' '))],
+    [DangerSource.TITLE, withoutFilenameTokens(el.getAttribute('title') ?? '')],
+    [DangerSource.ARIA_LABEL, withoutFilenameTokens(el.getAttribute('aria-label') ?? '')],
+    [DangerSource.HREF, el.getAttribute('href') ?? ''],
+    [DangerSource.FORM_ACTION, form?.getAttribute('action') ?? ''],
+  ];
+}
+
+export function dangerousActionContext(el: ActionTarget): string {
+  const href = navigatingHref(el);
+  if (href !== undefined) {
+    return href;
+  }
+  return labelledSurfaces(el)
+    .map(([, text]) => text)
+    .join(' ');
+}
+
+/**
+ * Does this control only OPEN something — a menu, a listbox, a dialog, a disclosure? Then pressing it
+ * moves no money, whatever its name says. "Actions for Payment successful" opens a row menu; a
+ * "Model" button opens a picker. A submit button is never one: it submits, whatever else it says.
+ */
+function opensPopupOnly(el: ActionTarget): boolean {
+  if (null !== el.closest('form') && el.matches(SUBMIT_CONTROL_SELECTOR)) {
+    return false;
+  }
+  const hasPopup = el.getAttribute('aria-haspopup');
+  if (null !== hasPopup && 'false' !== hasPopup.trim().toLowerCase()) {
+    return true;
+  }
+  return el.hasAttribute('aria-expanded');
+}
+
+/** What the guard read on one control: the control, the word, and where the word was. */
+export interface DangerCause {
+  readonly role: string;
+  readonly name: string;
+  readonly word: string;
+  readonly source: DangerSource;
+}
+
+/**
+ * Why acting on this control needs `confirmDangerous`; undefined when it does not.
+ *
+ * A link that navigates is judged by where it goes. Every other control is judged by the text it
+ * shows, one surface at a time so the refusal can say which one matched.
+ */
+export function dangerCause(el: ActionTarget): DangerCause | undefined {
+  const role = getRole(el);
+  const control = { role, name: getAccessibleName(el) };
+  const href = navigatingHref(el);
+  if (href !== undefined) {
+    const reason = dangerousNavigationReason(href);
+    return reason === undefined
+      ? undefined
+      : { ...control, word: reason, source: DangerSource.HREF };
+  }
+  const wordIn = opensPopupOnly(el) ? destructiveActionWord : dangerousActionWord;
+  const surfaces = labelledSurfaces(el);
+  for (const [source, text] of surfaces) {
+    const word = wordIn(text, role);
+    if (word !== undefined) {
+      return { ...control, word, source };
+    }
+  }
+  const joined = wordIn(surfaces.map(([, text]) => text).join(' '), role);
+  return joined === undefined
+    ? undefined
+    : { ...control, word: joined, source: DangerSource.JOINED };
+}
+
+/** One control in a refusal: `button "Delete account" ("delete" in its name)`. */
+function describeDangerCause(cause: DangerCause): string {
+  const control = '' === cause.name ? cause.role : `${cause.role} "${cause.name}"`;
+  return `${control} ("${cause.word}" in its ${cause.source})`;
 }
 
 /**
@@ -119,16 +200,35 @@ export function submitControlFor(el: ActionTarget): HTMLElement | null {
   return isHtmlElement(found) ? found : null;
 }
 
+/** Why a refusal names a control: it is the target, or what the action also presses or drops on. */
+const DangerRole = {
+  TARGET: '',
+  SUBMITTER: 'the submit button Enter presses: ',
+  DROP_TARGET: 'the drop target: ',
+} as const;
+type DangerRole = (typeof DangerRole)[keyof typeof DangerRole];
+
+/** One control's part of a refusal, or undefined when that control is not destructive. */
+function describedCause(el: ActionTarget | null, which: DangerRole): string | undefined {
+  const cause = null === el ? undefined : dangerCause(el);
+  return cause === undefined ? undefined : `${which}${describeDangerCause(cause)}`;
+}
+
 /**
- * Does acting on this control need `confirmDangerous`? A link that navigates is judged by where it
- * goes (`isDangerousNavigation`). Every other control is judged by the text it shows.
+ * What a destructive-action refusal names: each control that needs `confirmDangerous`, with its
+ * word and where the word was. Undefined when no control does, and the action may run.
  */
-export function requiresDangerousConfirmation(el: ActionTarget): boolean {
-  const href = navigatingHref(el);
-  if (href !== undefined) {
-    return isDangerousNavigation(href);
-  }
-  return isDangerousActionText(dangerousActionContext(el), getRole(el));
+export function dangerCauses(
+  el: ActionTarget,
+  submitter: ActionTarget | null,
+  dropTarget: ActionTarget | null,
+): string | undefined {
+  const causes = [
+    describedCause(el, DangerRole.TARGET),
+    describedCause(submitter, DangerRole.SUBMITTER),
+    describedCause(dropTarget, DangerRole.DROP_TARGET),
+  ].filter((cause): cause is string => cause !== undefined);
+  return 0 === causes.length ? undefined : causes.join('; ');
 }
 
 /** The outward actions the Harness command being run may take; undefined: not gated. */
