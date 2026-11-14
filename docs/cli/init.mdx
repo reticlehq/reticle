@@ -122,8 +122,8 @@ In the two captures above, the punctuation that separates the two halves of the 
 
 | Code | Meaning |
 | --- | --- |
-| `0` | The app connected. Steps marked `⚠` still need a hand, and do not change the code |
-| `1` | No session connected, init failed, an unknown flag was passed, or several apps were found and none was chosen |
+| `0` | The app connected. Or the files are written and the app's dev server did not start: init prints the steps to start it and confirm the connection (`--json` answers `"confirmed": false`). Steps marked `⚠` still need a hand, and do not change the code |
+| `1` | A running app did not connect, init failed, an unknown flag was passed, or several apps were found and none was chosen |
 
 An unknown flag is rejected by name: `reticle init --bogus` prints `unknown argument '--bogus'`, then the short usage (`reticle --help`), and exits `1`.
 

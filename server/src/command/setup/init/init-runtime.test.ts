@@ -143,32 +143,60 @@ describe('init reports its deferred outcome once, after runtime setup', () => {
     });
   });
 
-  it.each([
-    [SetupPhase.DEV_SERVER, 'dev_server'],
-    [SetupPhase.CONNECT, 'app_connection'],
-  ])('classifies failure in %s before exiting', async (reachedPhase, reason) => {
-    vi.mocked(runSetupCommand).mockResolvedValue({ ...SUCCESS, ok: false, reachedPhase });
-    await expect(continueAfterInit(ARGS, RESULT, IO, '/app')).rejects.toThrow('exit');
-    expect(reportInitOutcome).toHaveBeenCalledExactlyOnceWith({
-      ...RESULT.outcome,
-      ok: false,
-      reason,
-    });
-  });
-
-  it('carries the step setup stopped at, so the failure says which one', async () => {
+  it('classifies a failure while connecting the app before exiting', async () => {
     vi.mocked(runSetupCommand).mockResolvedValue({
       ...SUCCESS,
       ok: false,
-      reachedPhase: SetupPhase.DEV_SERVER,
-      stop: 'port_busy',
+      reachedPhase: SetupPhase.CONNECT,
     });
     await expect(continueAfterInit(ARGS, RESULT, IO, '/app')).rejects.toThrow('exit');
     expect(reportInitOutcome).toHaveBeenCalledExactlyOnceWith({
       ...RESULT.outcome,
       ok: false,
-      reason: 'dev_server',
-      stop: 'port_busy',
+      reason: 'app_connection',
+    });
+  });
+
+  /*
+   * The files are written before the dev server starts. A dev server that does not start (no dev
+   * script, a busy port, a build that exits) left a wired project, and init reported it as a failed
+   * install and exited 1. The field data named it the top cause of a failed install.
+   */
+  describe('a dev server that does not start', () => {
+    const devServerStop = { ...SUCCESS, ok: false, reachedPhase: SetupPhase.DEV_SERVER };
+
+    it('reports the project as wired and not yet confirmed, and does not exit 1', async () => {
+      vi.mocked(runSetupCommand).mockResolvedValue({ ...devServerStop, stop: 'port_busy' });
+      await continueAfterInit(ARGS, RESULT, IO, '/app');
+      // process.exit throws here (beforeEach), so resolving at all means init did not exit.
+      expect(reportInitOutcome).toHaveBeenCalledExactlyOnceWith({
+        ...RESULT.outcome,
+        ok: true,
+        confirmation: 'dev_server_not_started',
+        stop: 'port_busy',
+      });
+    });
+
+    it('says the files are written and prints the steps to confirm it', async () => {
+      vi.mocked(runSetupCommand).mockResolvedValue({
+        ...devServerStop,
+        fallback: ['Start your dev server: npm run dev'],
+      });
+      const print = vi.fn();
+      await continueAfterInit(ARGS, RESULT, { print }, '/app');
+      const said = print.mock.calls.flat().join('\n');
+      expect(said).toContain('Reticle is wired into this app');
+      expect(said).toContain('Start your dev server: npm run dev');
+      expect(said).not.toContain('setup did not finish');
+    });
+
+    it('answers ok with confirmed: false in --json, and does not exit 1', async () => {
+      vi.mocked(runSetupCommand).mockResolvedValue(devServerStop);
+      const write = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+      await continueAfterInit({ ...ARGS, json: true }, RESULT, IO, '/app');
+      const printed = JSON.parse(String(write.mock.calls.at(-1)?.[0])) as Record<string, unknown>;
+      expect(printed).toMatchObject({ ok: true, confirmed: false });
+      // process.exit throws here (beforeEach), so resolving at all means init did not exit.
     });
   });
 

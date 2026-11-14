@@ -760,6 +760,12 @@ export const InitConfirmation = {
    * already followed. They need to open the app.
    */
   NO_PAGE: 'no_page',
+  /**
+   * `init` wrote its files, and the app's dev server did not start (no dev script, a busy port, a
+   * build that exited), so no page could connect. Not a failed install: the project is wired, and the
+   * next step is to start the app. `stop` says which step stopped it.
+   */
+  DEV_SERVER_NOT_STARTED: 'dev_server_not_started',
 } as const;
 export type InitConfirmation = (typeof InitConfirmation)[keyof typeof InitConfirmation];
 

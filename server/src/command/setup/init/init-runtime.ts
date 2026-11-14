@@ -362,6 +362,10 @@ export async function continueAfterInit(
   )
     .then(
       async (outcome) => {
+        // The files are written before the app starts. A dev server that did not start left a wired
+        // project that is not confirmed yet: not a failed install. A failure to connect a running app
+        // is still a failure.
+        const wiredNotStarted = !outcome.ok && outcome.reachedPhase === SetupPhase.DEV_SERVER;
         if (result.outcome !== undefined) {
           const init = {
             ...result.outcome,
@@ -370,6 +374,13 @@ export async function continueAfterInit(
           if (outcome.ok) {
             delete init.reason;
             init.confirmation = InitConfirmation.CONNECTED;
+          } else if (wiredNotStarted) {
+            init.ok = true;
+            delete init.reason;
+            init.confirmation = InitConfirmation.DEV_SERVER_NOT_STARTED;
+            if (outcome.stop !== undefined) {
+              init.stop = outcome.stop;
+            }
           } else {
             // A failed startup does not establish whether a daemon or instrumented page exists.
             // Keep the watcher's no_daemon/no_session/no_page classifications for observed facts.
@@ -386,7 +397,11 @@ export async function continueAfterInit(
         }
         // One object, so an agent reads a result instead of interpreting a report.
         if (true === parsed.json) {
-          process.stdout.write(`${JSON.stringify(outcome, null, 2)}\n`);
+          const answer = wiredNotStarted ? { ...outcome, ok: true, confirmed: false } : outcome;
+          process.stdout.write(`${JSON.stringify(answer, null, 2)}\n`);
+          if (wiredNotStarted) {
+            return;
+          }
           if (!outcome.ok) {
             stop();
           }
@@ -443,6 +458,20 @@ export async function continueAfterInit(
           );
           ask();
           io.print(COMMUNITY_HINT);
+          return;
+        }
+        if (wiredNotStarted) {
+          io.print(
+            '✓ Reticle is wired into this app. Its dev server did not start, so the connection is not ' +
+              'confirmed yet. To confirm it:',
+          );
+          for (const [i, step] of outcome.fallback.entries()) {
+            io.print(`   ${String(i + 1)}. ${step}`);
+          }
+          io.print(
+            `   ${String(outcome.fallback.length + 1)}. Run \`reticle status\`: it lists the app when it connects.`,
+          );
+          ask();
           return;
         }
         // A run that produced no verdict did not succeed, and the exit code is the one place a caller

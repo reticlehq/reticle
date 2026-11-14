@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — `reticle init` reported a failed install when only the app's dev server did not start.** Init writes its files first, then starts the dev server to confirm that the app connects. When the dev server did not start (no dev script, a busy port, a build that exited), init said "setup did not finish" and exited `1`, although the project was wired. Now init says that Reticle is wired and that the connection is not confirmed yet, prints the steps to start the app and run `reticle status`, and exits `0`. `--json` answers `"ok": true, "confirmed": false`. A running app that does not connect is still a failure.
