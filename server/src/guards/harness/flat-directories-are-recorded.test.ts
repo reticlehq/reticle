@@ -353,6 +353,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 13 with `lease-page-error.ts` (#1966): the lease's listener install + release report, split out
   // of browser-pool.ts at the 1000-line cap, beside its test.
   // 15 with `determinism.ts`: the page script and step of a deterministic lease, set on its context.
+  // 16 with `code-fetch-tracker.ts` (#2155): the document, script and stylesheet requests that a
+  // pool page or the page that `verify` drives still has open. It says a page whose dev server
+  // compiles a dynamically imported module is still loading.
   'server/src/portal/pool': 16,
   // 22 since `session-verdict-facts.ts` was extracted (the count is source files, not tests): both
   // verdict-producing tools were threading the same session facts into `decideVerified` with the
@@ -388,6 +391,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // suite verdict and the suite selection, which all live here.
   // +1: flow-start-path.ts, replay's start-page arrival split out of flow-replay-run.ts at the 1000-line cap (#1705).
   // +1: flow-lease.ts, the leased-context helpers split out of flow-tools.ts at the 1000-line cap (#1705).
+  // +1: start-page-loading.ts, which page tells replay that the start page is still loading: the
+  // lease, or the tab that `verify` drives (#2155).
   'server/src/language/flows': 40,
   // 12 since `drive-flow.ts`: the rule that turns a session's ambient tape into a flow per journey,
   // and the gate that refuses to save one asserting nothing. It sits beside `session-end.ts` because
