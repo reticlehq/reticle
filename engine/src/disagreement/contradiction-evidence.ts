@@ -857,12 +857,16 @@ export const movesUi = (e: ReticleEvent): boolean =>
  * applies the write, so neither is an optimistic update. The browser observer records `disabled`
  * today and not `aria-busy`; a realm that records it gets the same reading.
  */
-const WAITING_ATTRS: ReadonlySet<string> = new Set(['disabled', 'aria-busy']);
+const DISABLED_ATTR = 'disabled';
+const ARIA_BUSY_ATTR = 'aria-busy';
+/** The `aria-busy` value that marks a control as busy. Any other value, or none, clears it. */
+const ARIA_BUSY_ON = 'true';
+const WAITING_ATTRS: ReadonlySet<string> = new Set([DISABLED_ATTR, ARIA_BUSY_ATTR]);
 
 /** Whether this change puts the control into its waiting state, rather than taking it out. */
 function setsWaiting(e: ReticleEvent): boolean {
   const value = asString(e.data['value']);
-  return 'aria-busy' === asString(e.data['attr']) ? 'true' === value : value !== undefined;
+  return ARIA_BUSY_ATTR === asString(e.data['attr']) ? ARIA_BUSY_ON === value : value !== undefined;
 }
 
 /**
@@ -873,7 +877,7 @@ function setsWaiting(e: ReticleEvent): boolean {
  * the rule stood down on an app that ignored its response. A change of those attributes before the
  * send, such as a fill enabling its submit button, is not about the write at all.
  *
- * Every change that takes the control out of its waiting state still counts, wherever it is. The
+ * After the send, every change that takes the control out of its waiting state still counts. The
  * limit is the send and not the answer, because the answer can be recorded after the app's own
  * handler ran: over XHR on `loadend`, after the `load` handler and axios's, and with body capture
  * after the body was read. A settings form that enables Save again in its response handler is
