@@ -39,6 +39,9 @@ import { describeNameNearMiss } from './name-near-miss.js';
 export const ARIA_HIDDEN_NOTE =
   'text is inside an aria-hidden subtree — drawn on screen but excluded from the accessible tree';
 
+export const ARIA_HIDDEN_STATE_NOTE =
+  'the element is painted on screen but hidden from assistive technology by aria-hidden="true" — use state: "painted" to assert only that it renders';
+
 /**
  * HTML tag names mapped to the ARIA role that `getRole` gives them. A query like `{ role: "iframe" }`
  * always returns zero results because `iframe` is a tag, not a role. The map names the correct role
@@ -340,6 +343,7 @@ const ELEMENT_STATE_SINCE: Readonly<Partial<Record<ElementState, string>>> = {
   // The key is checked against ElementState by the Record type, so a misspelt state cannot compile.
   pressed: '3.4.0',
   receivesPointer: '3.10.0',
+  painted: '3.10.0',
 };
 
 /** The state, when the page's SDK is older than the first release that answers it. */
@@ -553,12 +557,13 @@ export async function evalElement(
   if (state !== undefined) {
     const relaxed = await matchOnce(session, query, undefined);
     if (relaxed.matched) {
+      const ariaNote = true === match.hint?.ariaHiddenState ? ` — ${ARIA_HIDDEN_STATE_NOTE}` : '';
       return {
         pass: false,
-        failureReason: `element matching ${subject} exists${describeRef(relaxed.elements[0])} but not in state '${state}'`,
+        failureReason: `element matching ${subject} exists${describeRef(relaxed.elements[0])} but not in state '${state}'${ariaNote}`,
         observed: `element matching ${subject} is present, states: ${
           relaxed.elements[0]?.states.join(', ') ?? 'unknown'
-        }`,
+        }${ariaNote}`,
         expected: `element matching ${subject} in state '${state}'`,
         assertion: 'element.state',
         evidence: { nearMiss: relaxed.elements },
@@ -623,12 +628,14 @@ export async function evalElement(
   const nearMiss = describeNameNearMiss(match.hint?.nameNearMiss, query.name, nearMissRole);
   const caseMiss = describeCaseMiss(match.hint?.caseMiss);
   const ariaNote = true === match.hint?.ariaHiddenMatch ? ARIA_HIDDEN_NOTE : undefined;
+  const ariaStateNote = true === match.hint?.ariaHiddenState ? ARIA_HIDDEN_STATE_NOTE : undefined;
   const unreachableRole = describeUnreachableRole(nearMissRole);
   const clause =
     caseMiss ??
     splitText ??
     nearMiss ??
     ariaNote ??
+    ariaStateNote ??
     unreachableRole ??
     (alsoHere === undefined || '' === alsoHere ? undefined : alsoHere);
   const suffix = clause === undefined ? '' : ` — ${clause}`;

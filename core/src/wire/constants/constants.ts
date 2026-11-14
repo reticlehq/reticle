@@ -844,6 +844,8 @@ export interface ComponentStateResult {
 /** Element states the assertion engine can check. */
 export const ElementState = {
   VISIBLE: 'visible',
+  /** Rendered on screen (not CSS-hidden), regardless of aria-hidden (#1648). */
+  PAINTED: 'painted',
   HIDDEN: 'hidden',
   ENABLED: 'enabled',
   DISABLED: 'disabled',
@@ -964,20 +966,18 @@ export const MessageKind = {
 export type MessageKind = (typeof MessageKind)[keyof typeof MessageKind];
 
 /**
- * WHY a lease came back `ready: false`. Each reason wants a different next action — check the
- * install, recover a wedged tab, or bring a hidden one to the front — so they get names rather
- * than sharing a bare `false`.
+ * Why a lease returned `ready: false`. Names each distinct recovery action rather than a bare false.
  */
 export const LeaseNotReadyReason = {
-  /** No SDK dialled in within the wait. The install is the thing to look at. */
+  /** No SDK dialled in within the wait. */
   SDK_NEVER_DIALLED: 'sdk_never_dialled',
-  /** One dialled in and stopped answering: the tab is attached but wedged. */
+  /** SDK dialled in and stopped answering; tab is wedged. */
   SDK_STOPPED_ANSWERING: 'sdk_stopped_answering',
-  /** The SDK answers, but its tab is hidden: timers and rAF are throttled, so nothing on it verifies. */
+  /** SDK answers but tab is hidden; timers and rAF are throttled. */
   TAB_HIDDEN: 'tab_hidden',
-  /** The page is not an HTML document (an `.svg`, for example), so the zero-install reader did not run. */
+  /** Non-HTML document; zero-install reader did not run. */
   NOT_HTML_DOCUMENT: 'not_html_document',
-  /** The zero-install reader failed, for example because the tab closed during setup. */
+  /** Zero-install reader failed. */
   READER_FAILED: 'reader_failed',
 } as const;
 export type LeaseNotReadyReason = (typeof LeaseNotReadyReason)[keyof typeof LeaseNotReadyReason];
