@@ -1,5 +1,15 @@
 # Upgrading to Reticle v3
 
+## From 3.9 to 3.10
+
+Most projects have nothing to do. Check your scripts and CI for these command names:
+
+| If you… | Now |
+| --- | --- |
+| Run `kill`, `login`, `link`, `project`, `whoami`, `push`, `regression`, `share`, `issues` or `memory` | These names are removed. Each one prints the command that replaces it and exits `1`. Use `stop --force`, `connect`, `connect --project <name\|id>`, `status`, `sync`, and `runs regression\|share\|issues\|memory`. |
+| Run `affected`, `license`, `rollback` or `restart` | They still work in 3.10 and print the new spelling: `gate --list`, `status`, `update --rollback` and `serve --restart`. Change your scripts now. These names go in a later release. |
+| Call the MCP tool `reticle_explore` or `reticle_replay` | They are no longer on the tool surface. Use `reticle_look { action: "page", mode: "interactive" }` with `reticle_observe { action: "console" }`, and `reticle_record { action: "replay" }`. A call to an old name answers with the call that replaces it. |
+
 ## From 3.7 to 3.8
 
 Most projects have nothing to do. Check these three changes:
