@@ -17,7 +17,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: reticlehq/reticle/action@v3.10.1
+      - uses: reticlehq/reticle/action@v3.10.2
         with:
           api-key: ${{ secrets.RETICLE_API_KEY }}
           # Only for a Vercel preview behind Deployment Protection.
@@ -34,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       # Start or deploy your app first. The action needs a URL that answers.
-      - uses: reticlehq/reticle/action@v3.10.1
+      - uses: reticlehq/reticle/action@v3.10.2
         with:
           url: https://preview.example.com
           api-key: ${{ secrets.RETICLE_API_KEY }}

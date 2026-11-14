@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/server",
-  "version": "3.10.1",
+  "version": "3.10.2",
   "mcpName": "io.github.reticlehq/reticle",
   "description": "Reticle CLI, bridge and MCP server: a coding agent drives your running web app from the inside and gets a verdict with evidence, for change verification, access control, accessibility, performance and SEO checks.",
   "type": "module",
@@ -75,7 +75,7 @@
     "cli"
   ],
   "reticle": {
-    "changelog": "3.10.1 fixes reticle init on a busy machine. When the dev server could not start because its port was taken, or the app answered on one loopback address only, init reported a failed install although the project was wired. Now it says Reticle is wired, prints the steps to confirm the connection, and exits 0.",
+    "changelog": "3.10.2 fixes a false verdict: a settled check never passed on a page where an attribute was written again with the same value. Such a write changes nothing, so it no longer counts as activity.",
     "breakingChanges": []
   },
   "publishConfig": {
