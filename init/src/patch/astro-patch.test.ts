@@ -40,7 +40,9 @@ describe('patchAstroConfig', () => {
   it('adds the raised build target to the common shape, and does not put the token in define', () => {
     const patch = patchAstroConfig(PLAIN_CONFIG);
     expect(patch.kind).toBe(PatchKind.APPLY);
-    if (patch.kind !== PatchKind.APPLY) return;
+    if (patch.kind !== PatchKind.APPLY) {
+      return;
+    }
     // #1008: vite.define no longer reaches the Astro client pipeline.
     expect(patch.code).not.toContain('__RETICLE_TOKEN__');
     expect(patch.code).toContain('reticle-vite-owning');
@@ -52,7 +54,9 @@ describe('patchAstroConfig', () => {
 
   it('is idempotent — a second init reports ALREADY rather than defining the token twice', () => {
     const once = patchAstroConfig(PLAIN_CONFIG);
-    if (once.kind !== PatchKind.APPLY) throw new Error('expected a patch');
+    if (once.kind !== PatchKind.APPLY) {
+      throw new Error('expected a patch');
+    }
     expect(patchAstroConfig(once.code).kind).toBe(PatchKind.ALREADY);
   });
 
@@ -73,11 +77,38 @@ export default defineConfig({
 `;
     const patch = patchAstroConfig(withVite);
     expect(patch.kind).toBe(PatchKind.APPLY);
-    if (patch.kind !== PatchKind.APPLY) return;
+    if (patch.kind !== PatchKind.APPLY) {
+      return;
+    }
     expect(patch.code).toContain('reticle-vite-owning');
     expect(patch.code).not.toContain('__RETICLE_TOKEN__');
     // The app's own setting survives — we add, never replace.
     expect(patch.code).toContain("target: 'es2018'");
+  });
+
+  it('merges into existing nested keys without duplicating target, watch or esbuildOptions (#2334)', () => {
+    const withNested = `import { defineConfig } from 'astro/config';
+export default defineConfig({
+  vite: {
+    build: { target: 'es2020', sourcemap: true },
+    optimizeDeps: { esbuildOptions: { define: { global: 'window' } } },
+    server: { watch: { usePolling: true } },
+  },
+});
+`;
+    const patch = patchAstroConfig(withNested);
+    expect(patch.kind).toBe(PatchKind.APPLY);
+    if (patch.kind !== PatchKind.APPLY) {
+      return;
+    }
+    expect(patch.code.match(/target\s*:/g)?.length ?? 0).toBe(2); // build.target (es2020) + esbuildOptions.target (es2022)
+    expect(patch.code).toContain("target: 'es2020'");
+    expect(patch.code).toContain("target: 'es2022'");
+    expect(patch.code.match(/watch\s*:/g)?.length ?? 0).toBe(1);
+    expect(patch.code).toContain('usePolling: true');
+    expect(patch.code).toContain('ignored:');
+    expect(patch.code.match(/esbuildOptions\s*:/g)?.length ?? 0).toBe(1);
+    expect(patch.code).toContain("define: { global: 'window' }");
   });
 
   it('refuses a config shape it does not recognise', () => {
@@ -90,7 +121,9 @@ describe('patchAstroLayout', () => {
   it('inserts the pairing-token meta and a static ReticleDev import before </body>', () => {
     const patch = patchAstroLayout(PLAIN_LAYOUT, 'src/layouts/Layout.astro');
     expect(patch.kind).toBe(PatchKind.APPLY);
-    if (patch.kind !== PatchKind.APPLY) return;
+    if (patch.kind !== PatchKind.APPLY) {
+      return;
+    }
     expect(patch.code).toContain('connectReticle');
     expect(patch.code).toContain("from '../components/ReticleDev'");
     expect(patch.code).toContain('reticle-pairing-token');
@@ -111,13 +144,17 @@ describe('patchAstroLayout', () => {
 
   it('resolves the module from a page the same way as from a layout', () => {
     const patch = patchAstroLayout(PLAIN_LAYOUT, 'src/pages/index.astro');
-    if (patch.kind !== PatchKind.APPLY) throw new Error('expected a patch');
+    if (patch.kind !== PatchKind.APPLY) {
+      throw new Error('expected a patch');
+    }
     expect(patch.code).toContain("from '../components/ReticleDev'");
   });
 
   it('is idempotent — a layout already carrying a connect reports ALREADY', () => {
     const once = patchAstroLayout(PLAIN_LAYOUT);
-    if (once.kind !== PatchKind.APPLY) throw new Error('expected a patch');
+    if (once.kind !== PatchKind.APPLY) {
+      throw new Error('expected a patch');
+    }
     expect(patchAstroLayout(once.code).kind).toBe(PatchKind.ALREADY);
   });
 
@@ -275,14 +312,18 @@ export default defineConfig({
 describe('the SDK is pre-declared so the first load is not lost to a dep-optimization', () => {
   it('declares the SDK in optimizeDeps.include on the common shape', () => {
     const patch = patchAstroConfig(PLAIN_CONFIG);
-    if (patch.kind !== PatchKind.APPLY) throw new Error('expected a patch');
+    if (patch.kind !== PatchKind.APPLY) {
+      throw new Error('expected a patch');
+    }
     expect(patch.code).toContain("include: ['@reticlehq/react']");
   });
 
   it('declares it when the app already has a vite block without optimizeDeps', () => {
     const source = `import { defineConfig } from 'astro/config';\nexport default defineConfig({\n  vite: {\n    server: { port: 4321 },\n  },\n});\n`;
     const patch = patchAstroConfig(source);
-    if (patch.kind !== PatchKind.APPLY) throw new Error('expected a patch');
+    if (patch.kind !== PatchKind.APPLY) {
+      throw new Error('expected a patch');
+    }
     expect(patch.code).toContain("include: ['@reticlehq/react']");
     // The port survives; it is no longer contiguous with `server: {` because the watcher ignore
     // merges into that same object.
@@ -292,7 +333,9 @@ describe('the SDK is pre-declared so the first load is not lost to a dep-optimiz
   it('adds the SDK to an optimizeDeps.include the app already has, rather than shadowing it', () => {
     const source = `import { defineConfig } from 'astro/config';\nexport default defineConfig({\n  vite: {\n    optimizeDeps: { include: ['their-dep'] },\n  },\n});\n`;
     const patch = patchAstroConfig(source);
-    if (patch.kind !== PatchKind.APPLY) throw new Error('expected a patch');
+    if (patch.kind !== PatchKind.APPLY) {
+      throw new Error('expected a patch');
+    }
     // A SECOND `include:` key in the same object literal is not a merge — the last one wins and one
     // of the two silently disappears. Exactly how `build.target` was lost while init reported OK.
     expect(patch.code).toContain('their-dep');
@@ -319,7 +362,9 @@ const emittedWatchMatcher = (code: string): RegExp => {
   // Greedy on purpose: the pattern contains `/` inside a character class, so a lazy match stops
   // inside it and produces an unterminated expression.
   const literal = /ignored:\s*\[\/(.+)\/\]/.exec(code);
-  if (literal?.[1] === undefined) throw new Error(`no regex literal in: ${code}`);
+  if (literal?.[1] === undefined) {
+    throw new Error(`no regex literal in: ${code}`);
+  }
   return new RegExp(literal[1]);
 };
 
@@ -327,7 +372,9 @@ describe('patchAstroEnvDts (#677)', () => {
   it('creates src/env.d.ts when the file is absent', () => {
     const patch = patchAstroEnvDts(null);
     expect(patch.kind).toBe(PatchKind.APPLY);
-    if (patch.kind !== PatchKind.APPLY) return;
+    if (patch.kind !== PatchKind.APPLY) {
+      return;
+    }
     expect(patch.code).toBe(ASTRO_ENV_DTS_DECLARES);
   });
 
@@ -335,7 +382,9 @@ describe('patchAstroEnvDts (#677)', () => {
     const existing = '/// <reference path="../.astro/types.d.ts" />\n';
     const patch = patchAstroEnvDts(existing);
     expect(patch.kind).toBe(PatchKind.APPLY);
-    if (patch.kind !== PatchKind.APPLY) return;
+    if (patch.kind !== PatchKind.APPLY) {
+      return;
+    }
     expect(patch.code).toContain('reference path');
     expect(patch.code).toContain('__RETICLE_TOKEN__');
     expect(patch.code).toContain('__RETICLE_ROOT__');
@@ -349,7 +398,9 @@ describe('patchAstroEnvDts (#677)', () => {
 describe('the daemon journal does not drive the dev server', () => {
   it('excludes the journal directory from the watcher', () => {
     const patch = patchAstroConfig(PLAIN_CONFIG);
-    if (patch.kind !== PatchKind.APPLY) throw new Error('expected a patch');
+    if (patch.kind !== PatchKind.APPLY) {
+      throw new Error('expected a patch');
+    }
     const matcher = emittedWatchMatcher(patch.code);
     expect(matcher.test(`${ReticleDir.ROOT}/ambient.json`)).toBe(true);
     expect(matcher.test(`src/${ReticleDir.ROOT}/sessions/a/events.jsonl`)).toBe(true);
@@ -361,7 +412,9 @@ describe('the daemon journal does not drive the dev server', () => {
   it('merges into a server block the app already has, rather than shadowing it', () => {
     const source = `import { defineConfig } from 'astro/config';\nexport default defineConfig({\n  vite: {\n    server: { port: 4321 },\n  },\n});\n`;
     const patch = patchAstroConfig(source);
-    if (patch.kind !== PatchKind.APPLY) throw new Error('expected a patch');
+    if (patch.kind !== PatchKind.APPLY) {
+      throw new Error('expected a patch');
+    }
     expect(patch.code).toContain('port: 4321');
     expect(emittedWatchMatcher(patch.code).test(`${ReticleDir.ROOT}/ambient.json`)).toBe(true);
     // A second `server:` key in the same object literal is not a merge — the last one wins.
