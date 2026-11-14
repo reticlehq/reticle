@@ -99,6 +99,9 @@ describe('escapeJobViaWmi', () => {
   });
 });
 
+/** The error Windows gives for a folder a running process still holds. */
+const LOCKED = 'EBUSY';
+
 describe('JOB_ESCAPE_LAUNCHER', () => {
   let home: string;
 
@@ -108,7 +111,15 @@ describe('JOB_ESCAPE_LAUNCHER', () => {
 
   afterEach(() => {
     // The detached child can still hold the log on Windows just after its write: retry the delete.
-    rmSync(home, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
+    // A child that holds it past the retries fails the cleanup, not the behaviour under test, and
+    // failed the merge queue (#2158). Leave that folder to the OS temp cleanup.
+    try {
+      rmSync(home, { recursive: true, force: true, maxRetries: 8, retryDelay: 250 });
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== LOCKED) {
+        throw err;
+      }
+    }
   });
 
   it('has no double quote or backslash, so it passes as one Windows argument', () => {
