@@ -11,6 +11,35 @@ Reticle is a verification layer that runs a dev-only SDK inside your running web
 
 Most of these were hit while writing these docs. The diagnostics quoted are real output.
 
+## Quick fixes
+
+| What you see | Why | Fix |
+| --- | --- | --- |
+| Agent says the `reticle_*` tools do not exist | It read its tool list before Reticle was installed | Restart the agent once. Mid-conversation: `reticle init --relaunch` prints the resume command |
+| "no browser session connected" | The dev server was already running when `init` edited the build config, so it serves a bundle without the SDK | Restart the dev server and hard-reload the tab |
+| Browser console: `[Reticle] this page could not open a websocket to …` | The app and Reticle disagree on the port | `RETICLE_PORT=4400 npm run dev` (Vite plugin), `reticle({ port: 4400 })` in `vite.config`, or `reticle.connect({ url: 'ws://localhost:4400/reticle' })` by hand |
+| `init` stops with "Several apps found" | A monorepo | Rerun with the `reticle init --app <dir>` line it printed |
+| Codex does not see the tools | The `codex` command was not on PATH, so the installer could not run `codex mcp add` | `codex mcp add reticle -- npx @reticlehq/server mcp`, or add the block from [Manual install](/install-manual#codex-cli) to `~/.codex/config.toml` |
+| `reticle: command not found` | npm's global bin is not on your PATH | `export PATH="$(npm prefix -g)/bin:$PATH"`, or use `npx @reticlehq/server …` |
+| Anything else |  | `reticle doctor` checks the browser, the background service and the port in one go, and names the fix |
+
+Still stuck? `reticle feedback "what happened"` reaches us directly and prints exactly what it sends. Or ask in [Discord](https://discord.gg/BwAbzv9ZRz).
+
+<details>
+<summary><b>Installing with an AI agent? The rules it should follow</b></summary>
+
+<br />
+
+The full agent guide is [SKILL.md](https://github.com/reticlehq/reticle/blob/main/SKILL.md). These are the rules that matter most during install:
+
+- `init` changes the user's files. Run it only when the user asked to set up Reticle, or agreed when you offered. Run it in the app's folder. Use `reticle init --json`, so you read one object instead of parsing text. Add `--app <dir>` in a monorepo, and `--env KEY=VALUE` for anything the app needs to start.
+- If the dev server was already running when `init` ran, restart it and reload the tab. Until you do, the app serves a bundle without the SDK.
+- Run `reticle connect` only if the user asked for the dashboard. A person must approve the sign-in in a browser.
+- If the `reticle_*` tools are not in your client, ask the user to run the installer and restart the client. Then stop. If the tools were registered while you were running, `reticle init --relaunch` prints the command that resumes this conversation with them loaded.
+- A session listed means the SDK reached the page. Setup is finished when the first run returns a verdict.
+- `unknown` is not a pass. Report it as "cannot tell", with the reason Reticle gives.
+- Stuck? Run `reticle doctor` and report what it says. To report a problem with Reticle, run `reticle feedback --agent --kind bug "…"`.
+
 ## Start here
 
 ```bash
