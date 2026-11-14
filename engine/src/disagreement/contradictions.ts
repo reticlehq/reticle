@@ -9,11 +9,9 @@ import {
 } from '@reticlehq/core';
 import { describeSuperseded } from '@/question/predicate/observed-in-window.js';
 import {
-  answersWrites,
   declareFailureHint,
   describe,
   didNothing,
-  movesUi,
   RETICLE_SIGNAL_NAMESPACE,
   groupByIdentity,
   identityOf,
@@ -38,6 +36,7 @@ import {
   UNNAMED_SIGNAL,
   type WriteIdentity,
 } from './contradiction-evidence.js';
+import { answersWrites, movesUi } from '../write-answer.js';
 import { findStaleResponses } from './stale-response.js';
 import { findBodyFailures } from './body-failures.js';
 import { findEchoMismatches } from './echo-mismatch.js';
