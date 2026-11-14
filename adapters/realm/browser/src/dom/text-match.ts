@@ -1,6 +1,6 @@
 import type { ElementQuery } from '@reticlehq/core';
 import { parentAcrossShadowBoundary } from './shadow-registry.js';
-import { stalledFade } from './visibility.js';
+import { FAINT_OPACITY, stalledFade } from './visibility.js';
 
 /**
  * Match user-visible prose the way the public query API has always promised: trim and collapse
@@ -80,9 +80,6 @@ export function paintedCase(el: Element, text: string): string | undefined {
  * limit (4.5:1): text at 2:1 is hard to read but readable, and calling it missing is a false red.
  */
 export const UNREADABLE_CONTRAST = 1.5;
-
-/** Below this composed opacity the text is practically not painted. */
-export const UNREADABLE_OPACITY = 0.05;
 
 type Rgba = readonly [number, number, number, number];
 
@@ -172,7 +169,7 @@ export function unreadableText(el: Element): string | undefined {
     }
     opaque = fill[3] >= 1;
   }
-  if (opacity < UNREADABLE_OPACITY) {
+  if (opacity < FAINT_OPACITY) {
     return `the composed opacity is ${opacity.toFixed(2)}`;
   }
   const back = layers.reduceRight((under, top) => over(top, under), CANVAS);
