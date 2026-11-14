@@ -103,14 +103,20 @@ export const READABLE_FLOW_VERSIONS: ReadonlySet<number> = new Set([
  * the older reader a file it could have read.
  */
 export function flowFileVersionFor(flow: { readonly version: number }): number {
-  if (usesCompare(flow)) return COMPARE_FLOW_FILE_VERSION;
+  if (usesCompare(flow)) {
+    return COMPARE_FLOW_FILE_VERSION;
+  }
   // A file whose compare was edited away drops back; any other version is left as it was written.
   return COMPARE_FLOW_FILE_VERSION === flow.version ? FLOW_FILE_VERSION : flow.version;
 }
 
 function usesCompare(value: unknown): boolean {
-  if (null === value || 'object' !== typeof value) return false;
-  if (Array.isArray(value)) return value.some(usesCompare);
+  if (null === value || 'object' !== typeof value) {
+    return false;
+  }
+  if (Array.isArray(value)) {
+    return value.some(usesCompare);
+  }
   const record = value as Record<string, unknown>;
   return PredicateKind.COMPARE === record['kind'] || Object.values(record).some(usesCompare);
 }
@@ -131,6 +137,28 @@ export type AnchorKind = (typeof AnchorKind)[keyof typeof AnchorKind];
  * here" marker that a human/self-healing pass re-binds. Satisfies the anchor min(1).
  */
 export const DEGRADED_ANCHOR_ROLE = 'unresolved';
+
+/**
+ * The roles of a field that takes typed text. Which one a field has is the input type, a detail of
+ * the build: "the field labelled Max clicks:" is a `spinbutton` with `type="number"` and a `textbox`
+ * with `type="text"`. A flow that names one of them fails every build that chose another (#2058).
+ */
+export const TEXT_ENTRY_ROLES: readonly string[] = ['textbox', 'spinbutton', 'searchbox'];
+
+/**
+ * The `alsoRoles` of a recorded anchor for a text field: the other text-entry roles. Nothing for a
+ * role that is not a text field, and nothing for an anchor with a position, because a position
+ * counts the controls of one role. `combobox` is left out: it also chooses from a list.
+ */
+export function textEntryAlsoRoles(
+  role: string,
+  among: { nth?: number },
+): { alsoRoles?: string[] } {
+  if (!TEXT_ENTRY_ROLES.includes(role) || among.nth !== undefined) {
+    return {};
+  }
+  return { alsoRoles: TEXT_ENTRY_ROLES.filter((other) => other !== role) };
+}
 
 /**
  * The role a document-key press (Escape, Tab, a modifier shortcut) is saved under (#1559).

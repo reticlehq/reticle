@@ -9,11 +9,6 @@
       "count": 9
     }
   },
-  "src/artifacts/flow-constants.ts": {
-    "curly": {
-      "count": 3
-    }
-  },
   "src/artifacts/flow-expect-flat.test.ts": {
     "curly": {
       "count": 1

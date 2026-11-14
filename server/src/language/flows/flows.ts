@@ -1,11 +1,4 @@
 import {
-  asFlowName,
-  asProjectId,
-  type FlowName,
-  type Predicate,
-  type ProjectId,
-} from '@reticlehq/core';
-import {
   REDACTED_FILL,
   SECRET_FIELD_ARG,
   SECRET_NAME_ARG,
@@ -31,6 +24,12 @@ import {
   REDACTED_VALUE,
   isCredentialFieldName,
   isGlobalPressCall,
+  textEntryAlsoRoles,
+  asFlowName,
+  asProjectId,
+  type FlowName,
+  type Predicate,
+  type ProjectId,
 } from '@reticlehq/core';
 import type {
   ActionType,
@@ -179,8 +178,9 @@ export function anchorForStep(args: Record<string, unknown>): {
     if (name !== undefined && name.length > 0) {
       // The nearest containers' roles: where a replay looks when a correct build renamed it.
       const within = Array.isArray(args['within']) ? { within: args['within'].map(String) } : {};
+      const also = textEntryAlsoRoles(value, among);
       return {
-        anchor: { kind: AnchorKind.ROLE, role: value, name, ...among, ...within },
+        anchor: { kind: AnchorKind.ROLE, role: value, name, ...among, ...within, ...also },
         degraded: false,
       };
     }
