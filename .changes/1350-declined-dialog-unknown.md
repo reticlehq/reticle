@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/engine`, `@reticlehq/server`: a `confirm()` that Reticle declined made the verdict `no`.** Reticle answers a `confirm` or `prompt` "no" during a driven action, so that the tab cannot wedge. The `until` that needed "yes" then failed as `assertion_failed`, and the result did not mention the dialog. It read as an app defect. Now a failed verdict whose window holds a dialog that Reticle declined is `unknown`, with the new `verifiedReason` `dialog_declined`. The `because` names the dialog kind and quotes its message. A pass stays a pass. A leased tab records each native dialog that the pool dismisses as the same `dialog.opened` event, so the same rule applies there. Part of [#1350](https://github.com/reticlehq/reticle/issues/1350).

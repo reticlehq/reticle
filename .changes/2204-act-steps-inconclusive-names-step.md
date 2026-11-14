@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — an inconclusive `reticle_act { steps }` plan names the step and the missing evidence.** The plan answered "a step could not be judged" and the raw error. It did not say which step, and it left out the diagnosis that `reticle_act_and_wait` gives for the same read. `because` now names the step by its number and action, then the missing evidence in the words of `reticle_act_and_wait`: `step 2 (click) could not be judged: the assertion could not be evaluated: …`. A read that timed out names the budget and `timeout_ms`, or a page SDK that is older than the daemon.

@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/browser`: a visible-text absence check timed out on a page with many hidden editors.** A check such as `{ kind: "text", contains: "…", visible: true, absent: true }` must read every candidate and prove that none is visible. The matcher resolved the style of each node inside every hidden editor, and the page holds far more hidden nodes than visible ones. It now skips a node whose ancestor is already known hidden, and the text reader skips a hidden subtree whole. The `visible` and `hidden` state filters also stop building every other element state for a hidden candidate. The verdict is the same: absent when the text is only inside hidden editors, present when it is in a visible element.

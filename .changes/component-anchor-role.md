@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/browser`, `@reticlehq/server` — a recorded click on a nameless control with no own text survives a correct change that moves its line.** Such a control, for example a clickable `<div role="none">` that holds an icon, was saved as a component and source-line anchor only. On another correct layout that line held other elements, and the replay matched them. A saved component anchor now keeps the control's role, and a component query with a role keeps only the elements with that role, at the recorded line or, when that line has none, by component name. The recorded position is counted with the same role. An older SDK ignores the role on a component query and answers as before.

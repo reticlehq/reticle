@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/engine` — a `net` check on a media file graded `no` when the load was recorded before the check's window.** The network observer reports only the first resource timing entry for a URL. When a `<video>` or `<audio>` load landed before `since`, a repeat load inside the window left no record, the window read empty, and the check failed as if the file had never loaded — although it played. The miss now grades `unknown` and says why, when a media entry that matches the filter was recorded before the window. Closes [#2069](https://github.com/reticlehq/reticle/issues/2069).

@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/browser` \u2014 the theme inspector resolves design tokens on the inspected element, so a palette scoped to a subtree reads on-theme.** The palette behind `reticle_look`'s theme report resolved every token against `<body>`. When an app redefines a token on a subtree (`.admin { --primary: ... }`), an element inside it was compared with the root value and reported `offTheme: true` with a low `tokenCount` though it wore the scoped token. Token values now resolve from the inspected element's own computed style, which carries the custom properties it inherits. Closes [#1682](https://github.com/reticlehq/reticle/issues/1682).

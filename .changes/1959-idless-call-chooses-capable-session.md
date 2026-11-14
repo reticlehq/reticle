@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — with a lease open, `reticle_viewport` and `reticle_screenshot` without a `sessionId` chose your own tab and refused.** The call chose the session by focus and recency only. Your own tab has no CDP, so the call refused with `no-cdp-provider` or `no-visual-provider`, and told you to open the lease that was already open. An id-less screenshot also never tried a lease at all. Now, when exactly one session in scope can serve the call, the call uses it. When more than one can serve it and the usual choice cannot, the call refuses and names the sessions that can. Only your own leases count: another agent's lease is never chosen. Closes [#1959](https://github.com/reticlehq/reticle/issues/1959).

@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/browser`, `@reticlehq/core`, `@reticlehq/server` — a recorded click on one item of a list replays on that item.** A list renders every item from one line of code, so a click on one item was saved as a component and source anchor that matched every item, and a replay could not tell them apart. The act result now carries the element's position among the elements that anchor matches (`componentNth`, `componentOf`), a saved component anchor keeps it as `nth`/`of`, and replay acts on that position while the page has as many matches as when the flow was recorded. A replayed single step with such a position also acts on it: it used to pass the ambiguity check and then click the first match.

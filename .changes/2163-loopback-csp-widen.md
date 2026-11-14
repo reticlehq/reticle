@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — a lease on a loopback page with a strict Content-Security-Policy never connected.** A page on `127.0.0.1` with `connect-src 'self'` blocks the daemon's WebSocket, which is a different origin, and the lease answered `sdk_never_dialled`. The CSP widening of [#2016](https://github.com/reticlehq/reticle/issues/2016) ran only off loopback. Acquire now probes a loopback page once, and adds the daemon to its `connect-src` only when the page's CSP (header or meta tag) would block it, and the lease says `cspWidenedFor`. A loopback page with no such CSP gets no route, so a dev server pays nothing. Refs [#2163](https://github.com/reticlehq/reticle/issues/2163).
