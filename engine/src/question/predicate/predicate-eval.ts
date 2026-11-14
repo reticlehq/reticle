@@ -704,6 +704,21 @@ const SETTLE_ACTIVITY: ReadonlySet<EventType> = new Set([
 /** An app-scoped settle: the default's activity, and every framework render commit. */
 const APP_ACTIVITY: ReadonlySet<EventType> = new Set([...SETTLE_ACTIVITY, EventType.RENDER_COMMIT]);
 
+/**
+ * An attribute written with the value it already had. Nothing on the page changed, so it is not
+ * activity. A page with a hidden input whose inline style was written again, unchanged, every 1-3 s
+ * never read as settled, on a page that had stopped. Both values must be present: an SDK that does
+ * not send `old` keeps every write as activity, so a real change is never hidden.
+ */
+export function isUnchangedAttrWrite(e: ReticleEvent): boolean {
+  if (EventType.DOM_ATTR !== e.type) {
+    return false;
+  }
+  const value = e.data['value'];
+  const old = e.data['old'];
+  return 'string' === typeof value && 'string' === typeof old && value === old;
+}
+
 /** The quiet window of a network-scoped settle: a completed request is the only activity. */
 const NETWORK_ACTIVITY: ReadonlySet<EventType> = new Set([EventType.NET_REQUEST]);
 
@@ -940,7 +955,7 @@ export function evalSettled(
   let lastT = -1;
   let lastType: EventType | undefined;
   for (const e of events) {
-    if (activity.has(e.type) && e.t > lastT) {
+    if (activity.has(e.type) && !isUnchangedAttrWrite(e) && e.t > lastT) {
       lastT = e.t;
       lastType = e.type;
     }

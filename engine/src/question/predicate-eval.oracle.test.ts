@@ -142,3 +142,32 @@ describe('matchValue — an operator-less object does not vacuously match everyt
     expect(matchValue('*', '*') || matchValue('anything', '*')).toBe(true); // `*` presence unaffected
   });
 });
+
+/*
+ * An attribute set to the value it already had changes nothing on the page. A page with a hidden
+ * input whose inline style was written again, unchanged, every 1-3 s never read as settled: the
+ * agent got "not settled: last activity (dom.attr)" on a page that had stopped (reported from the
+ * field). A write that changes the value is still activity.
+ */
+describe('evalSettled — an attribute written with the value it had is not activity', () => {
+  const quiet = { kind: 'settled', quietMs: 800 } as const;
+  const write = (value: string, old: string, t: number): ReticleEvent =>
+    ev(EventType.DOM_ATTR, { attr: 'style', value, old }, t);
+
+  it('is settled when the only recent writes leave the attribute as it was', () => {
+    const same = 'position: absolute; opacity: 0;';
+    const events = [
+      ev(EventType.DOM_ADDED, {}, 1_000),
+      write(same, same, 9_500),
+      write(same, same, 9_650),
+    ];
+    expect(evalSettled(events, quiet, 10_000).pass).toBe(true);
+  });
+
+  it('is not settled when a recent write changed the attribute', () => {
+    const events = [write('opacity: 1;', 'opacity: 0;', 9_500)];
+    const r = evalSettled(events, quiet, 10_000);
+    expect(r.pass).toBe(false);
+    expect(r.failureReason).toContain('dom.attr');
+  });
+});
