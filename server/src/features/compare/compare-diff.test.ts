@@ -55,6 +55,24 @@ describe('compareReadings', () => {
     expect(result.ignored).toBe(2);
   });
 
+  // The cut line of a large state source carries a digest of the rows past the cap. Where `compare`
+  // decides: a digest that only the candidate changes is a difference, and one that the two
+  // reference runs disagree on is noise.
+  it('reports a cut-rows digest that only the candidate changes', () => {
+    const cut = (digest: string) => `state rows cut: big: kept 1000 of 2040, rest ${digest}`;
+    const ref = [read(0, 0, [cut('aaaaaaaaaaaaaaaa')])];
+    const cand = [read(0, 0, [cut('bbbbbbbbbbbbbbbb')])];
+    expect(compareReadings(ref, ref, cand).differences).toHaveLength(1);
+  });
+
+  it('ignores a cut-rows digest that differs between the two reference runs', () => {
+    const cut = (digest: string) => `state rows cut: big: kept 1000 of 2040, rest ${digest}`;
+    const ref = [read(0, 0, [cut('aaaaaaaaaaaaaaaa')])];
+    const again = [read(0, 0, [cut('bbbbbbbbbbbbbbbb')])];
+    const cand = [read(0, 0, [cut('cccccccccccccccc')])];
+    expect(compareReadings(ref, again, cand).differences).toEqual([]);
+  });
+
   it('gives one id to the same lines seen at many steps, and counts them', () => {
     const ref = [read(0, 0, ['save']), read(0, 1, ['save', 'saved']), read(1, 0, ['save'])];
     const cand = [read(0, 0, ['store']), read(0, 1, ['store', 'saved']), read(1, 0, ['store'])];

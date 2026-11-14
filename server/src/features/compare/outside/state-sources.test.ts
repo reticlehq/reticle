@@ -135,7 +135,9 @@ describe('readStateSources', () => {
     );
     expect(lines.filter((l) => l.startsWith('state big 0'))).toHaveLength(STATE_ROW_CAP);
     expect(lines.at(-1)).toMatch(
-      new RegExp(`^state rows cut: big: kept ${String(STATE_ROW_CAP)} of ${String(total)}, rest `),
+      new RegExp(
+        `^state rows cut: big: kept ${String(STATE_ROW_CAP)} of ${String(total)}, rest [0-9a-f]{16}$`,
+      ),
     );
   });
 
