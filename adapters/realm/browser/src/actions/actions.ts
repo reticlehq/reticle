@@ -18,7 +18,7 @@ import { isReticleUi, isUnobserved } from '@/dom/dom-ignore.js';
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
 import { echoRef, refs } from '@/dom/addressing/refs.js';
 import {
-  requiresDangerousConfirmation,
+  dangerCauses,
   assertOutwardAllowed,
   assertPaymentEntryAllowed,
   submitControlFor,
@@ -222,18 +222,15 @@ function assertActionAllowed(
   if (action === ActionType.FILL || action === ActionType.TYPE) {
     assertPaymentEntryAllowed(el);
   }
-  const sourceDangerous =
-    requiresDangerousConfirmation(el) ||
-    (submitter !== null && requiresDangerousConfirmation(submitter));
-  const targetDangerous = isActionTarget(dragTarget) && requiresDangerousConfirmation(dragTarget);
-  if (
-    canTrigger &&
-    (sourceDangerous || targetDangerous) &&
-    args[DANGEROUS_ACTION_CONFIRM_ARG] !== true
-  ) {
-    throw new Error(
-      `potentially destructive action blocked; retry with args.${DANGEROUS_ACTION_CONFIRM_ARG}=true`,
-    );
+  if (canTrigger && args[DANGEROUS_ACTION_CONFIRM_ARG] !== true) {
+    // Name what the guard read. A bare "blocked" left the agent one move, confirmDangerous: true,
+    // and an agent taught to pass it everywhere has switched the guard off (#2272).
+    const causes = dangerCauses(el, submitter, isActionTarget(dragTarget) ? dragTarget : null);
+    if (causes !== undefined) {
+      throw new Error(
+        `potentially destructive action blocked: ${causes}; retry with args.${DANGEROUS_ACTION_CONFIRM_ARG}=true`,
+      );
+    }
   }
   if (CLICK_LIKE.has(action) && el instanceof HTMLElement && isHiddenNativeOption(el)) {
     throw new Error(
