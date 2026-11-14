@@ -11,6 +11,7 @@ import {
   HelloScope,
   SessionState,
   ReticleCommand,
+  DIALOG_CONSENT_ARG,
 } from '@reticlehq/core';
 import type { CommandResult } from '@reticlehq/core';
 import { asRecord } from '@reticlehq/core';
@@ -844,6 +845,36 @@ describe('keyboard on a lease', () => {
     expect(res.inputMode).toBe(InputMode.REAL);
     expect(pressed).toEqual([{ text: 'Tab' }]);
     expect(state.actCalls).toBe(0);
+  });
+
+  it('gives the lease the yes to a confirm() only when the press carries confirmDangerous (#2167)', async () => {
+    // Enter on a lease is a trusted key, so the SDK never sees the confirm() it opens: the pool
+    // answers it, and the pool can only say yes when the press hands it the caller's yes.
+    const accepted: unknown[] = [];
+    const state: FakeSessionState = { actCalls: 0, inspectRefs: [], focusableRef: 'e1' };
+    const deps = fakeDeps(undefined, state);
+    deps.pool = {
+      hasKeyboard: () => true,
+      pressLease: (_id: string, _args: Record<string, unknown>, acceptConfirm: unknown) => {
+        accepted.push(acceptConfirm);
+        return Promise.resolve({ performed: true, inputMode: InputMode.REAL });
+      },
+    } as unknown as BrowserPool;
+    await runAct(deps, { ref: 'e1', action: 'press', args: { text: 'Enter' } });
+    await runAct(deps, {
+      ref: 'e1',
+      action: 'press',
+      args: { text: 'Enter', confirmDangerous: true },
+    });
+
+    // A consent the caller wrote itself, without the flag, is dropped (#2167 review): no.
+    await runAct(deps, {
+      ref: 'e1',
+      action: 'press',
+      args: { text: 'Enter', [DIALOG_CONSENT_ARG]: true },
+    });
+
+    expect(accepted).toEqual([false, true, false]);
   });
 
   it('focuses the named control first, then presses Enter on it with the real keyboard', async () => {

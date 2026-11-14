@@ -24,8 +24,14 @@
  * first, the SDK's right after — can still journal both; the SDK's own event is authoritative and
  * only the redundant second copy is cost, not wrong evidence.
  */
-import { CONSOLE_EVENT, EventType, RETICLE_URL_PARAM, type ReticleEvent } from '@reticlehq/core';
-import type { PooledDialog, PooledPageError } from './pool-contract.js';
+import {
+  CONFIRM_DIALOG_KIND,
+  CONSOLE_EVENT,
+  EventType,
+  RETICLE_URL_PARAM,
+  type ReticleEvent,
+} from '@reticlehq/core';
+import type { AnsweredDialog, PooledPageError } from './pool-contract.js';
 
 /**
  * What a dismissal answers, per dialog kind the wire knows. The same replies the SDK gives
@@ -68,10 +74,11 @@ export interface PageErrorJournal {
   onSessionEnd(sessionId: string): void;
   /**
    * The pool's dialog sink — hand it to `BrowserPoolOptions.onDialog`. Journals the dismissal as
-   * `dialog.opened` on the lease's session, so a verdict reads it as the SDK's own answer. A dialog
-   * before the session connects is dropped: no action window can hold it.
+   * `dialog.opened` on the lease's session, so a verdict reads it as the SDK's own answer. A
+   * `confirm` the pool accepted is journaled with `answered: true`, as the SDK journals its own yes
+   * (#2167). A dialog before the session connects is dropped: no action window can hold it.
    */
-  onPoolDialog(leaseId: string, dialog: Pick<PooledDialog, 'kind' | 'message'>): void;
+  onPoolDialog(leaseId: string, dialog: AnsweredDialog): void;
 }
 
 /**
@@ -245,10 +252,13 @@ export function makePageErrorJournal(deps: {
     onPoolDialog(leaseId, dialog) {
       // An own key only: an inherited name such as `toString` is not a dialog kind.
       const kind = dialog.kind;
-      const answer =
+      let answer =
         kind !== undefined && Object.hasOwn(DISMISSED_ANSWER, kind)
           ? DISMISSED_ANSWER[kind]
           : undefined;
+      if (true === dialog.accepted && CONFIRM_DIALOG_KIND === kind) {
+        answer = { answered: true }; // the caller's own yes, as the SDK records it (#2167)
+      }
       const session = deps.resolveSession(leaseId);
       if (answer === undefined || session === undefined) {
         return;

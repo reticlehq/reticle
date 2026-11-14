@@ -14,6 +14,7 @@ import {
 } from '@reticlehq/core';
 import {
   DANGEROUS_ACTION_CONFIRM_ARG,
+  DIALOG_CONSENT_ARG,
   DOCUMENT_ANCHOR_ROLE,
   ReticleCommand,
   QueryBy,
@@ -102,6 +103,8 @@ export function replayActionArgs(
 ): Record<string, unknown> {
   const args = { ...asRecord(value) };
   delete args[DANGEROUS_ACTION_CONFIRM_ARG];
+  // A replay never answers the app's confirm() yes, whatever the recording carried (#2167).
+  delete args[DIALOG_CONSENT_ARG];
   const key = field === undefined ? undefined : secretKeyForFill(args, field);
   delete args[SECRET_NAME_ARG];
   delete args[SECRET_FIELD_ARG];

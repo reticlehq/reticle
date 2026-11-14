@@ -75,11 +75,13 @@ interface PreAttachBuffer {
   ) => void;
 }
 
+type ConsoleFn = (...args: unknown[]) => void;
+
 /** Patch console.{log,warn,error} and window error events. Reversible. */
 export function installConsole(emit: Emit): Teardown {
   const methods: ConsoleMethod[] = ['log', 'warn', 'error', 'info', 'debug'];
-  const originals = new Map<ConsoleMethod, (...args: unknown[]) => void>();
-  const patched = new Map<ConsoleMethod, (...args: unknown[]) => void>();
+  // Each patched method, its original and Reticle's wrapper, for the teardown.
+  const installed: [ConsoleMethod, ConsoleFn, ConsoleFn][] = [];
   // The pre-attach fields (#1540): set only while the buffer hands its entries over, and spread
   // FIRST, so they can never replace a field of the event itself.
   let marks: Record<string, unknown> = {};
@@ -100,7 +102,6 @@ export function installConsole(emit: Emit): Teardown {
     // VALUE rather than a method reference — see capturedMethod for why that distinction is the
     // honest way to say "I am detaching this deliberately and putting it back".
     const original = requireCapturedMethod<(...args: unknown[]) => void>(console, method);
-    originals.set(method, original);
     const callOriginal = original.bind(console);
     const wrapper = (...args: unknown[]): void => {
       // The message reaches the console FIRST, outside the guard — storage.ts's ordering, and for the
@@ -109,7 +110,7 @@ export function installConsole(emit: Emit): Teardown {
       callOriginal(...args);
       report(method, args);
     };
-    patched.set(method, wrapper);
+    installed.push([method, original, wrapper]);
     console[method] = wrapper;
   }
 
@@ -235,10 +236,10 @@ export function installConsole(emit: Emit): Teardown {
   marks = {};
 
   return () => {
-    for (const [method, original] of originals) {
+    for (const [method, original, wrapper] of installed) {
       // Restore only if console[method] still holds Reticle's wrapper — a logging SDK (Sentry, LogRocket)
       // that wrapped console AFTER connect() must keep its instrumentation on teardown.
-      if (console[method] === patched.get(method)) {
+      if (console[method] === wrapper) {
         console[method] = original as typeof console.log;
       }
     }

@@ -8,6 +8,7 @@ import {
   clickInputProblem,
   DRAG_TO_POINT_ARG,
   DANGEROUS_ACTION_CONFIRM_ARG,
+  DIALOG_CONSENT_ARG,
   ElementState,
   NATIVE_INPUT_ARG,
   SettleReason,
@@ -16,6 +17,7 @@ import { isHiddenNativeOption } from '@/dom/query-finders.js';
 import { isReticleUi, isUnobserved } from '@/dom/dom-ignore.js';
 
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
+import { actionConsent } from '@/observers/dialogs.js';
 import { echoRef, refs } from '@/dom/addressing/refs.js';
 import {
   requiresDangerousConfirmation,
@@ -149,6 +151,7 @@ function dragTargetRef(args: Record<string, unknown>): string {
 const UPLOAD_ARG_KEYS: ReadonlySet<string> = new Set(['content', 'name', 'type', '__base64']);
 const GENERIC_ACTION_ARG_KEYS: ReadonlySet<string> = new Set([
   DANGEROUS_ACTION_CONFIRM_ARG,
+  DIALOG_CONSENT_ARG,
   NATIVE_INPUT_ARG,
   'holdMs',
 ]);
@@ -830,10 +833,13 @@ export async function executeAction(
   let settled = false;
   let settleReason: SettleReason | null = null;
   try {
+    // The server's positive consent, from the caller's own flag: a yes to this dispatch's confirm().
+    actionConsent(1, args[DIALOG_CONSENT_ARG]);
     const outcome = await dispatchFor(el, action, args);
     defaultPrevented = outcome.prevented;
     heldMs = outcome.heldMs;
   } finally {
+    actionConsent(-1); // first: the yes ends with the dispatch, before the settle below
     // bounded settle — microtask + one BOUNDED frame so React's commit (and the resulting DOM
     // mutations → dom.added/dom.text/dom.attr events) flush before we return, landing inside
     // observe({ since }). Bounded so a throttled/background tab never hangs; a settle timeout NEVER

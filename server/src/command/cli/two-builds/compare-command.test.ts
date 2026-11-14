@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { ReticleTool } from '@reticlehq/core';
+import { DIALOG_CONSENT_ARG, ReticleTool } from '@reticlehq/core';
+import { withOwnDialogConsent } from '@/surface/tools/act/act-danger.js';
 import { DriverLostError } from '@/features/compare/build-readings.js';
 import { leasedPage, runCompareCommand } from './compare-command.js';
 import type { ToolCaller } from '../daemon-link/daemon-client.js';
@@ -61,9 +62,10 @@ describe('leasedPage', () => {
       'http://127.0.0.1:4310/',
       's1',
     ).act('e1', 'click');
-    expect((local[0] as { args: { args: Record<string, unknown> } }).args.args).toEqual({
-      confirmDangerous: true,
-    });
+    const sent = (local[0] as { args: { args: Record<string, unknown> } }).args.args;
+    expect(sent).toEqual({ confirmDangerous: true, [DIALOG_CONSENT_ARG]: false });
+    // #2167 review: the press goes through, but the act tool sends the page no yes to its confirm().
+    expect(withOwnDialogConsent(sent)).toEqual({ confirmDangerous: true });
     const preview: unknown[] = [];
     await leasedPage(
       caller({ [ReticleTool.ACT]: text({ dispatched: true }) }, preview),

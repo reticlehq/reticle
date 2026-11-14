@@ -9,6 +9,7 @@
  */
 import {
   ActionType,
+  DIALOG_CONSENT_ARG,
   isLocalhostSubdomain,
   isLoopbackHostname,
   ReticleTool,
@@ -117,7 +118,11 @@ function actArgs(
 /** One leased tab as the compare driver. Every call goes through `reticle_run` on that tab. */
 export function leasedPage(caller: ToolCaller, url: string, sessionId: string): OpenedPage {
   let id = sessionId;
-  const guarded = isDisposableBuild(url) ? { confirmDangerous: true } : {};
+  // The flag lets every press on a disposable build through. It is not a person's yes to the app's
+  // confirm(), so the consent is held back (#2167): the compare drives the path a "no" takes.
+  const guarded = isDisposableBuild(url)
+    ? { confirmDangerous: true, [DIALOG_CONSENT_ARG]: false }
+    : {};
   const run = async (
     tool: string,
     args: Record<string, unknown>,

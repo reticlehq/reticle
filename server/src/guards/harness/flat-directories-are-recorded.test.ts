@@ -150,7 +150,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 13 with `determinism.ts`: the names a deterministic lease shares with the SDK in its page.
   // 14 with `console-event.ts`: the console payload fields and the pre-attach error buffer's global,
   // split out of `constants.ts` at its 1000-line cap (#1540).
-  'core/src/wire/constants': 14,
+  // 15 with `dialog-consent.ts` (#2167): which `confirmDangerous` answers a `confirm()` yes, read by
+  // the SDK and by a leased tab. `constants.ts` is at the 1000-line cap.
+  'core/src/wire/constants': 15,
   // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
   // things on the Node side read back, and its parser was living beside the MCP tool handlers — so
   // every other reader imported from the tool surface to parse a string the tool surface does not
@@ -353,7 +355,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 13 with `lease-page-error.ts` (#1966): the lease's listener install + release report, split out
   // of browser-pool.ts at the 1000-line cap, beside its test.
   // 15 with `determinism.ts`: the page script and step of a deterministic lease, set on its context.
-  'server/src/portal/pool': 15,
+  // 16 with `lease-dialogs.ts` (#2167): how a leased page answers its native dialogs, and the yes
+  // a press with `confirmDangerous` gives one `confirm`. Split out of browser-pool.ts at the cap.
+  'server/src/portal/pool': 16,
   // 22 since `session-verdict-facts.ts` was extracted (the count is source files, not tests): both
   // verdict-producing tools were threading the same session facts into `decideVerified` with the
   // same conditional-spread idiom, and a third fact would have been a third copy. Raised on
