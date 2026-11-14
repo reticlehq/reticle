@@ -68,13 +68,33 @@ export function sessionLostReason(loss: SessionLoss): string {
   );
 }
 
+/** Why the app did not come back: the session dropped in `lostIn`, and reopening did not help. */
+function stayedLost(lostIn: string, loss: SessionLoss): string {
+  return (
+    `${NO_SESSION_AFTER_NAVIGATION}: the session dropped in flow "${lostIn}" ` +
+    `${whereLost(loss)}, and opening the start URL again did not bring a session back.`
+  );
+}
+
 /** The reason for a later flow, when opening the app again did not bring a session back. */
 export function notRunAfterLossReason(lostIn: string, loss: SessionLoss): string {
-  return (
-    `not run, ${NO_SESSION_AFTER_NAVIGATION}: the session dropped in flow "${lostIn}" ` +
-    `${whereLost(loss)}, and opening the start URL again did not bring a session back. ` +
-    'Nothing was proved for this flow.'
-  );
+  return `not run, ${stayedLost(lostIn, loss)} Nothing was proved for this flow.`;
+}
+
+/** The words before the reason that a flow's replay gave, when a session-loss reason comes first. */
+export const REPLAY_REASON_LEAD = 'The replay of this flow said:';
+
+/** `lead`, then the reason the replay gave when it gave one. Rule 11: the replay's reason stays. */
+function keepReplayReason(lead: string, own: string | undefined): string {
+  return own === undefined ? lead : `${lead} ${REPLAY_REASON_LEAD} ${own}`;
+}
+
+/**
+ * The reason for the flow that tried once after the app was opened again, and got no session. It
+ * starts with what the run saw, and keeps the reason the replay gave.
+ */
+export function triedAfterLossReason(lostIn: string, loss: SessionLoss, own?: string): string {
+  return keepReplayReason(stayedLost(lostIn, loss), own);
 }
 
 /** The live capabilities ReticleRunner needs. Injected so tests pass fakes (no CDP, no session). */
@@ -92,8 +112,11 @@ export interface RunnerPort {
    * session is connected. Optional: a port without it behaves as before.
    */
   sessionLost?(): Promise<SessionLoss | undefined>;
-  /** Open the run's start URL again and wait for a session. True when a session came back. */
-  reopen?(): Promise<boolean>;
+  /**
+   * Open the run's start URL again. It does not wait for a session: the next flow's replay waits
+   * for its start page, as every replay does. That wait also covers a slow dev server (#2155).
+   */
+  reopen?(): Promise<void>;
 }
 
 /**
@@ -138,22 +161,30 @@ function replayThatCouldNotRun(name: string, error: unknown): FlowReplayResult {
   };
 }
 /**
- * The replay of a flow during which the session was lost. A flow that was not proved gets the
- * reason that names where the session was lost. A pass or a failure keeps its own verdict: it was
- * graded before the session dropped.
+ * A flow that was not proved, with `lead` before the reason its replay gave. The replay's reason is
+ * kept (rule 11): the session loss is added to it, not put in its place. A pass or a failure keeps
+ * its own verdict: it was graded before the session dropped.
  */
-function withSessionLoss(replay: FlowReplayResult, loss: SessionLoss): FlowReplayResult {
+function withLossReason(
+  replay: FlowReplayResult,
+  lead: (own?: string) => string,
+): FlowReplayResult {
   if (replay.status !== ReplayStatus.UNVERIFIABLE && replay.unverifiable === undefined) {
     return replay;
   }
   return {
     ...replay,
     status: ReplayStatus.UNVERIFIABLE,
-    unverifiable: { reason: sessionLostReason(loss) },
+    unverifiable: { reason: lead(replay.unverifiable?.reason) },
   };
 }
 
-/** The flow in which the session was lost, when opening the app again did not bring it back. */
+/** The reason of a flow during which the session was lost, with the replay's own reason after it. */
+function sessionLostWith(loss: SessionLoss): (own?: string) => string {
+  return (own) => keepReplayReason(sessionLostReason(loss), own);
+}
+
+/** The flow in which the session was lost, and that the next flow tries to recover from. */
 interface LostSession {
   flow: string;
   loss: SessionLoss;
@@ -178,15 +209,19 @@ export class ReticleRunner {
 
   /**
    * Replay one flow, then look at the session. A flow that leaves the app on a page with no SDK
-   * ends the session. That flow's reason names the URL, and the app is opened again for the next
-   * flow. When the app does not come back, the later flows are not replayed: with no session, a
-   * replay only waits and then blames the port (#2060).
+   * ends the session. That flow's reason names the URL, and the app is opened again. The next flow
+   * then tries once, and its replay waits for its start page as every replay does (#2155). When
+   * that flow also ends with no session and ran no step, the app did not come back: `gone` is set,
+   * and the later flows are not replayed. With no session, a replay only waits (#2060).
+   *
+   * `retrying` is the loss that the app was opened again for, before this flow.
    */
   async #replayOne(
     runId: RunId,
     name: string,
     more: boolean,
-  ): Promise<{ replay: FlowReplayResult; gone?: LostSession }> {
+    retrying: LostSession | undefined,
+  ): Promise<{ replay: FlowReplayResult; lost?: LostSession; gone?: LostSession }> {
     const replay = await withShotRun(runId, () => this.#port.replayFlow(name)).catch(
       (error: unknown) => replayThatCouldNotRun(name, error),
     );
@@ -194,12 +229,17 @@ export class ReticleRunner {
     if (loss === undefined) {
       return { replay };
     }
-    const lost = withSessionLoss(replay, loss);
+    if (retrying !== undefined && 0 === replay.steps.length) {
+      const { flow, loss: first } = retrying;
+      const tried = withLossReason(replay, (own) => triedAfterLossReason(flow, first, own));
+      return { replay: tried, gone: retrying };
+    }
+    const lost = withLossReason(replay, sessionLostWith(loss));
     if (!more) {
       return { replay: lost };
     }
-    const back = await (this.#port.reopen?.() ?? Promise.resolve(false)).catch(() => false);
-    return back ? { replay: lost } : { replay: lost, gone: { flow: name, loss } };
+    await (this.#port.reopen?.() ?? Promise.resolve()).catch(() => undefined);
+    return { replay: lost, lost: { flow: name, loss } };
   }
 
   /**
@@ -228,6 +268,7 @@ export class ReticleRunner {
 
     // Minted first, so each replayed step's screenshot is filed under the run it belongs to.
     const runId = this.#port.newRunId();
+    let retrying: LostSession | undefined;
     let gone: LostSession | undefined;
     const replays = [];
     const flows = [];
@@ -242,8 +283,9 @@ export class ReticleRunner {
       });
       let replay: FlowReplayResult;
       if (gone === undefined) {
-        const outcome = await this.#replayOne(runId, name, index < total - 1);
+        const outcome = await this.#replayOne(runId, name, index < total - 1, retrying);
         replay = outcome.replay;
+        retrying = outcome.lost;
         gone = outcome.gone;
       } else {
         replay = notRunAfterLoss(name, gone.flow, gone.loss);
