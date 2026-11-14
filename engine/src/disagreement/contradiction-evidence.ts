@@ -775,12 +775,12 @@ export const UNNAMED_SIGNAL = 'signal';
 const nameOf = (e: ReticleEvent): string => asString(e.data['name']) ?? UNNAMED_SIGNAL;
 
 /** Whether `a` was emitted before `b`. The sequence number is exact; the clock can tie. */
-function emittedBefore(a: ReticleEvent, b: ReticleEvent): boolean {
+export function emittedBefore(a: ReticleEvent, b: ReticleEvent): boolean {
   return a.seq !== undefined && b.seq !== undefined ? a.seq < b.seq : a.t < b.t;
 }
 
-/** The event that recorded when this failed call was SENT, if the window holds it. */
-function sendOf(events: readonly ReticleEvent[], call: NetCall): ReticleEvent | undefined {
+/** The event that recorded when this call was SENT, if the window holds it. */
+export function sendOf(events: readonly ReticleEvent[], call: NetCall): ReticleEvent | undefined {
   const answer = events.find((e) => {
     if (e.type !== EventType.NET_REQUEST || e.t !== call.t) {
       return false;
