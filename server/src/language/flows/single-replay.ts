@@ -9,6 +9,7 @@ import { rootForTarget, safeSessionTarget } from '@/memory/project/session-root.
 import { replayResult, resultField } from '@/surface/tools/reticle-result.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { replaySeededOrNot } from './flow-learning.js';
+import { withReplayReason } from './flow-result.js';
 
 export function replayOneFlow(
   deps: ToolDeps,
@@ -17,7 +18,8 @@ export function replayOneFlow(
 ): Promise<FlowReplayResult> {
   return withShotRun(defaultRunId(), async (): Promise<FlowReplayResult> => {
     const start = deps.now();
-    const replay = await replaySeededOrNot(deps, args, appUrl);
+    // Every exit of the replay gets its reason here, so no path can answer without one (#2205).
+    const replay = withReplayReason(await replaySeededOrNot(deps, args, appUrl));
     const durationMs = deps.now() - start;
     const target = safeSessionTarget(deps, asString(args['sessionId']));
     // Written down as a run, and named in the answer: the platform's Re-verify ties its check to

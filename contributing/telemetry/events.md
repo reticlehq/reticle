@@ -285,7 +285,7 @@ The block is `session`, a `SessionSummary`. Every count is windowed: it counts o
 | `driven` | `VerificationDriver`, optional | `harness` when Reticle's own drive produced the verdict. |
 | `sdkVersion` | string, optional | The page SDK version from its handshake: our release number, or `other`. Compare it with the envelope `version` to find verdicts on a page that is older than the daemon. |
 
-> **Trap:** split the producers before you count. `browser: headless` with `via: reticle_flow_verify` is the spec runner. `driven: harness` is the Harness. A replay carries no `reason`. A scripted client can send thousands of verdicts in a day from one machine, so report verdict machines next to verdict rows.
+> **Trap:** split the producers before you count. `browser: headless` with `via: reticle_flow_verify` is the spec runner. `driven: harness` is the Harness. A `reticle_flow_replay` verdict carries a `reason` from this version on (older rows have none, so segment by version); a suite verdict carries none. A scripted client can send thousands of verdicts in a day from one machine, so report verdict machines next to verdict rows.
 
 ```json
 {
