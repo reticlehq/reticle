@@ -43,6 +43,12 @@ const clientCall = (id: number): string =>
 
 /** Long enough that a flush of the stale queue would have posted. A settle, not a deadline. */
 const SETTLE_MS = 1_500;
+/**
+ * How long a reconnect may take. vi.waitFor gives up after 1 s by default, and a loaded Windows CI
+ * runner took longer to reconnect the proxy's stream, so the queue failed on a correct proxy.
+ * A bound, not a duration (AGENTS.md rule 15).
+ */
+const RECONNECT_BOUND = { timeout: 15_000 };
 const settle = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
 
 interface FakeDaemon {
@@ -145,10 +151,10 @@ describe('a settled request is never posted', () => {
     // The barrier. A post only lands once the proxy has processed stream 0's `endpoint` frame, so
     // reaching it proves the session is live rather than merely opened.
     stdin.write(clientCall(1));
-    await vi.waitFor(() => expect(daemon.posts.length).toBe(1));
+    await vi.waitFor(() => expect(daemon.posts.length).toBe(1), RECONNECT_BOUND);
 
     daemon.streams[0]?.end();
-    await vi.waitFor(() => expect(daemon.streams.length).toBe(2));
+    await vi.waitFor(() => expect(daemon.streams.length).toBe(2), RECONNECT_BOUND);
 
     // Stream 1 hands over no endpoint, so this queues. It is now in the queue AND in `pending`.
     stdin.write(clientCall(2));
@@ -160,7 +166,7 @@ describe('a settled request is never posted', () => {
 
     // Stream 2 is a healthy session. Before the fix, its endpoint frame flushed the stale queue and
     // handed the daemon a request the client had already been answered for.
-    await vi.waitFor(() => expect(daemon.streams.length).toBe(3));
+    await vi.waitFor(() => expect(daemon.streams.length).toBe(3), RECONNECT_BOUND);
     await settle();
 
     expect(
