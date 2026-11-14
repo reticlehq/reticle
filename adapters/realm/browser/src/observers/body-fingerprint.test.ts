@@ -17,6 +17,21 @@ describe('fingerprintTextBody', () => {
     );
   });
 
+  it('separates two sends that differ only in a timestamp or a request id', async () => {
+    // The accuracy trade the maintainer asked to see stated (review of 2026-11-11):
+    // a double submit whose second send carries a fresh client timestamp, request id
+    // or idempotency key is NOT reported as a duplicate, because every value is part
+    // of the fingerprint. Before this change the shape fingerprint grouped the two
+    // sends as one write fired twice. The rule now reports a duplicate only when the
+    // two bodies are the same payload, which is the case a command bus needs told
+    // apart from two different commands to one endpoint (#1521).
+    const { fingerprintTextBody } = await import('./body-fingerprint.js');
+    const first = JSON.stringify({ cmd: 'save', ts: 1731415200000, requestId: 'req-1' });
+    const second = JSON.stringify({ cmd: 'save', ts: 1731415200500, requestId: 'req-2' });
+    expect(fingerprintTextBody(first)).not.toBe(fingerprintTextBody(second));
+    expect(fingerprintTextBody(first)).toBe(fingerprintTextBody(first));
+  });
+
   it('cannot be reproduced from the payload without the page salt', async () => {
     vi.resetModules();
     const first = await import('./body-fingerprint.js');
