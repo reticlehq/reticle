@@ -173,6 +173,10 @@ export interface RealInputProvider {
    * and the frozen clock). Returns true when a page matched, false otherwise. Optional.
    */
   setViewport?(sessionUrl: string, size: { width: number; height: number }): Promise<boolean>;
+  /** The URL of the driven page now. It can be a page that has no session (#2060). */
+  pageUrl?(): string | undefined;
+  /** Load the start URL again in the driven page. True when the page loaded. */
+  reopen?(): Promise<boolean>;
 }
 
 /**
@@ -710,6 +714,11 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
         .then((cdp) => attachDownloadCapture(cdp as unknown as CdpLike, sink, () => page.url()))
         .catch(() => undefined);
     }
+    await this.#open(page);
+  }
+
+  /** Load the drive URL in `page` and give it a session. Throws a DriveError when the load fails. */
+  async #open(page: Page): Promise<void> {
     try {
       // Same navigation rule as the pool, and for the same measured reason: Playwright's default
       // waits for `load`, which an app with one never-finishing subresource never fires — 30s of
@@ -726,6 +735,20 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     }
     await this.#supplyReader(page);
     await this.#tryInjectConnect(page);
+  }
+
+  pageUrl(): string | undefined {
+    return this.#livePage()?.url();
+  }
+
+  reopen(): Promise<boolean> {
+    const page = this.#livePage();
+    return page === undefined
+      ? Promise.resolve(false)
+      : this.#open(page).then(
+          () => true,
+          () => false,
+        );
   }
 
   /**
