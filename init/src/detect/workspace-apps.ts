@@ -76,11 +76,15 @@ function fromPnpm(yaml: string): string[] {
       inPackages = true;
       continue;
     }
-    if (inPackages && /^\S/.test(line)) break;
+    if (inPackages && /^\S/.test(line)) {
+      break;
+    }
     const item = /^\s*-\s*(.+)$/.exec(line);
     if (inPackages && item?.[1] !== undefined) {
       const base = globBase(item[1]);
-      if (base !== undefined) out.push(base);
+      if (base !== undefined) {
+        out.push(base);
+      }
     }
   }
   return out;
@@ -92,7 +96,9 @@ function fromPkg(workspaces: unknown): string[] {
     : 'object' === typeof workspaces && workspaces !== null
       ? (workspaces as { packages?: unknown }).packages
       : undefined;
-  if (!Array.isArray(list)) return [];
+  if (!Array.isArray(list)) {
+    return [];
+  }
   return list
     .filter((p): p is string => 'string' === typeof p)
     .map(globBase)
@@ -127,7 +133,9 @@ function hasDevScript(pkgRaw: string): boolean {
       'object' === typeof parsed && parsed !== null
         ? (parsed as { scripts?: unknown }).scripts
         : undefined;
-    if ('object' !== typeof scripts || null === scripts) return false;
+    if ('object' !== typeof scripts || null === scripts) {
+      return false;
+    }
     const named = scripts as Record<string, unknown>;
     return DEV_SCRIPT_NAMES.some((n) => 'string' === typeof named[n] && '' !== named[n]);
   } catch {
@@ -149,7 +157,7 @@ type AppSignal = (typeof AppSignal)[keyof typeof AppSignal];
 /** The pages a package can serve without any framework to say so. */
 const OWN_PAGES = ['index.html', 'public/index.html', 'src/index.html'];
 
-function parsedManifest(pkgRaw: string): Record<string, unknown> {
+export function parsedManifest(pkgRaw: string): Record<string, unknown> {
   try {
     const parsed: unknown = JSON.parse(pkgRaw);
     return 'object' === typeof parsed && parsed !== null ? (parsed as Record<string, unknown>) : {};
@@ -168,28 +176,38 @@ function hasPage(dir: string, pkgRaw: string, io: Pick<InitIo, 'exists'>): boole
     configFiles: new Set(),
     lockfiles: new Set(),
   });
-  if (Framework.HTML !== found.framework || UiLibrary.UNKNOWN !== found.uiLibrary) return true;
+  if (Framework.HTML !== found.framework || UiLibrary.UNKNOWN !== found.uiLibrary) {
+    return true;
+  }
   return OWN_PAGES.some((page) => io.exists(`${dir}/${page}`));
 }
 
 function appSignal(dir: string, io: Pick<InitIo, 'exists' | 'readFile'>): AppSignal {
   const pkgRaw = io.readFile(`${dir}/${PACKAGE_JSON}`);
-  if (null === pkgRaw) return AppSignal.NONE;
+  if (null === pkgRaw) {
+    return AppSignal.NONE;
+  }
   const configs = [
     ...VITE_CONFIG_CANDIDATES,
     ...ELECTRON_VITE_CONFIG_CANDIDATES,
     ...NEXT_CONFIG_CANDIDATES,
   ];
-  if (configs.some((c) => io.exists(`${dir}/${c}`))) return AppSignal.UI;
+  if (configs.some((c) => io.exists(`${dir}/${c}`))) {
+    return AppSignal.UI;
+  }
   // `next.config` is optional in Next, so the dependency list is the other half of the signal.
-  if (APP_DEPS.some((d) => pkgRaw.includes(`"${d}"`))) return AppSignal.UI;
+  if (APP_DEPS.some((d) => pkgRaw.includes(`"${d}"`))) {
+    return AppSignal.UI;
+  }
   // And the honest third: an app somebody can SERVE. Asking only for a bundler missed every app
   // built on anything else — Remix, Astro, a plain node server — and in a monorepo missing it means
   // init never redirects, wires the ROOT, and reports ✓ for files nothing compiles.
   //
   // A monorepo root has no dev script by design, and a package that can only be BUILT is not the app
   // somebody is working in, so this stays a filter rather than matching every directory.
-  if (!hasDevScript(pkgRaw)) return AppSignal.NONE;
+  if (!hasDevScript(pkgRaw)) {
+    return AppSignal.NONE;
+  }
   // But a dev script alone is also what an API package has, and counting it made every workspace
   // with a backend beside its web app "ambiguous" (#1148): the root refused, and its hint named the
   // backend. A package with a dev script and no page is only a candidate when nothing else is.
@@ -240,12 +258,18 @@ export function findWorkspaceApps(io: Pick<InitIo, 'exists' | 'readFile' | 'list
   const served: string[] = [];
   const consider = (dir: string): void => {
     const signal = appSignal(dir, io);
-    if (AppSignal.UI === signal) found.push(dir);
-    if (AppSignal.SERVED === signal) served.push(dir);
+    if (AppSignal.UI === signal) {
+      found.push(dir);
+    }
+    if (AppSignal.SERVED === signal) {
+      served.push(dir);
+    }
   };
   for (const parent of parents) {
     consider(parent);
-    for (const name of io.listDirs(parent)) consider(`${parent}/${name}`);
+    for (const name of io.listDirs(parent)) {
+      consider(`${parent}/${name}`);
+    }
   }
   // A backend is still the app when it is the only thing that can be served — a server-rendered
   // app is exactly that — so it is demoted, never dropped.
@@ -286,7 +310,9 @@ export function findAppsBelow(io: Pick<InitIo, 'exists' | 'readFile' | 'listDirs
   for (let depth = 1; depth <= SEARCH_DEPTH && level.length > 0 && read < SEARCH_BUDGET; depth++) {
     const next: string[] = [];
     for (const dir of level) {
-      if (++read > SEARCH_BUDGET) break;
+      if (++read > SEARCH_BUDGET) {
+        break;
+      }
       if (AppSignal.UI === appSignal(dir, io)) {
         apps.push(dir);
         continue;
@@ -363,7 +389,9 @@ export function enclosingWorkspaceRoot(
       return member ? dir : undefined;
     }
     const parent = dirname(dir);
-    if (parent === dir) return undefined;
+    if (parent === dir) {
+      return undefined;
+    }
     dir = parent;
   }
   return undefined;

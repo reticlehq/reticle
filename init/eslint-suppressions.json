@@ -19,11 +19,6 @@
       "count": 14
     }
   },
-  "src/detect/dev-script.ts": {
-    "curly": {
-      "count": 19
-    }
-  },
   "src/detect/dev-server-ports.test.ts": {
     "curly": {
       "count": 1
@@ -45,9 +40,6 @@
     }
   },
   "src/detect/workspace-apps.ts": {
-    "curly": {
-      "count": 14
-    },
     "no-nested-ternary": {
       "count": 1
     }
@@ -357,9 +349,6 @@
     }
   },
   "src/run.ts": {
-    "curly": {
-      "count": 24
-    },
     "no-nested-ternary": {
       "count": 1
     }

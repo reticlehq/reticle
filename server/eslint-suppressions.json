@@ -534,9 +534,6 @@
     }
   },
   "src/command/setup/run-setup.ts": {
-    "curly": {
-      "count": 11
-    },
     "no-nested-ternary": {
       "count": 3
     }
