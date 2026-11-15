@@ -111,6 +111,47 @@ export default defineConfig({
     expect(patch.code).toContain("define: { global: 'window' }");
   });
 
+  // The same keys, written on one line. The reviewer's run of the first version found these: it
+  // only matched a key that started a line, so `watch` was duplicated and the app's won.
+  it('merges into nested keys written on one line (#2334)', () => {
+    const oneLine = `import { defineConfig } from 'astro/config';
+export default defineConfig({
+  vite: { server: { port: 4321, watch: { usePolling: true } }, optimizeDeps: { include: ['x'], esbuildOptions: { define: { global: 'window' } } } },
+});
+`;
+    const patch = patchAstroConfig(oneLine);
+    expect(patch.kind).toBe(PatchKind.APPLY);
+    if (patch.kind !== PatchKind.APPLY) {
+      return;
+    }
+    expect(patch.code.match(/watch\s*:/g)?.length ?? 0).toBe(1);
+    expect(patch.code).toContain('usePolling: true');
+    // one `ignored`, inside their `watch`, and their own option still there
+    expect(patch.code.match(/ignored\s*:/g)?.length ?? 0).toBe(1);
+    expect(patch.code.indexOf('ignored:')).toBeLessThan(patch.code.indexOf('usePolling: true'));
+    expect(patch.code.match(/esbuildOptions\s*:/g)?.length ?? 0).toBe(1);
+    expect(patch.code.match(/include\s*:/g)?.length ?? 0).toBe(1);
+    expect(patch.code).toContain("include: ['@reticlehq/react', 'x']");
+    expect(patch.code.match(/target\s*:/g)?.length ?? 0).toBe(2); // optimizeDeps target + build target
+  });
+
+  // `ssr.build` is not `vite.build`. The first version searched every depth, so this config got no
+  // `vite.build.target` at all (main put it inside `ssr.build`, which is worse).
+  it('matches only depth-0 keys, so ssr.build is not mistaken for build (#2334)', () => {
+    const nested = `import { defineConfig } from 'astro/config';
+export default defineConfig({
+  vite: { ssr: { build: { target: 'node18' } } },
+});
+`;
+    const patch = patchAstroConfig(nested);
+    expect(patch.kind).toBe(PatchKind.APPLY);
+    if (patch.kind !== PatchKind.APPLY) {
+      return;
+    }
+    expect(patch.code).toContain("build: { target: 'es2022' }");
+    expect(patch.code).toContain("ssr: { build: { target: 'node18' } }");
+  });
+
   it('refuses a config shape it does not recognise', () => {
     const patch = patchAstroConfig('export default {};\n');
     expect(patch.kind).toBe(PatchKind.MANUAL);

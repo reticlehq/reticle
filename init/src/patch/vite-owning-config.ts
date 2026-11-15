@@ -17,7 +17,7 @@
 
 import { ReticleDir } from '@reticlehq/core';
 import { parseMajor } from '@/detect/detect.js';
-import { blockAfter } from './brace-scan.js';
+import { blockAfter, maskStringsAndComments } from './brace-scan.js';
 import { PatchKind, type SourcePatch } from './patch-kind.js';
 
 /** What differs between one Vite-owning framework and the next. */
@@ -124,13 +124,6 @@ function sdkInclude(config: ViteOwningConfig): string {
  */
 const WATCH_IGNORE_LITERAL = `/(^|[\\\\/])\\.${ReticleDir.ROOT.slice(1)}([\\\\/]|$)/`;
 
-/**
- * An `include:` the app already declared — ours joins that array instead of adding a second key.
- * Deliberately not anchored to a newline: `optimizeDeps: { include: ['x'] }` on one line is the
- * common way to write it, and requiring a line break made the merge miss it and duplicate the key.
- */
-const EXISTING_INCLUDE = /(\s*include\s*:\s*\[)/;
-
 /** A `vite:` key whose value is an object LITERAL — the one shape we can merge into safely. */
 const VITE_OBJECT_KEY = /(^\s*vite\s*:\s*\{)/m;
 /** Any `vite:` key at all. One that is not an object literal (a spread, an imported config) is ours to refuse. */
@@ -148,26 +141,76 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 `;
 
-function hasProperty(content: string, prop: string): boolean {
-  return new RegExp(`(?:^|\\n|\\s|,)\\s*${prop}\\s*:`).test(content);
+/** True when `at` begins a property name: at the block's start, or after `{` or `,`. */
+function isPropertyStart(masked: string, at: number): boolean {
+  for (let i = at - 1; i >= 0; i -= 1) {
+    const c = masked[i] ?? '';
+    if (!/\s/.test(c)) {
+      return '{' === c || ',' === c;
+    }
+  }
+  return true;
 }
 
+/**
+ * The property `key` at depth 0 of the object literal whose inner start is `braceAt`.
+ *
+ * Depth 0 only: a `build` under `ssr: { build: … }` is a different key, and matching it put our
+ * target in the wrong object. The scan is on the masked copy, so a `build:` in a string or comment
+ * is not a property, and keys written on one line (`server: { port, watch }`) are found — the old
+ * line-start regex needed the key to begin a line and duplicated `watch` on that shape.
+ */
 function findKeyInBlock(
   source: string,
   braceAt: number,
   key: string,
 ): { start: number; at: number; isObject: boolean } | null {
-  const content = blockAfter(source, braceAt);
-  const match = new RegExp(`(?:^|\\n)(\\s*${key}\\s*:\\s*)([\\{A-Za-z_])`).exec(content);
-  if (null === match || undefined === match[1] || undefined === match[2]) {
+  const masked = maskStringsAndComments(blockAfter(source, braceAt));
+  if (null === masked) {
     return null;
   }
-  const leadingNewline = match[0].startsWith('\n') ? 1 : 0;
-  const start = braceAt + match.index + leadingNewline;
-  const isObject = '{' === match[2];
-  const at = start + match[1].length + 1;
-  return { start, at, isObject };
+  let depth = 0;
+  for (let i = 0; i < masked.length; i += 1) {
+    const c = masked[i] ?? '';
+    if ('{' === c) {
+      depth += 1;
+      continue;
+    }
+    if ('}' === c) {
+      depth -= 1;
+      continue;
+    }
+    if (0 !== depth || c !== key[0] || !masked.startsWith(key, i) || !isPropertyStart(masked, i)) {
+      continue;
+    }
+    const colon = /^\s*:\s*/.exec(masked.slice(i + key.length));
+    if (null === colon) {
+      continue;
+    }
+    const valueAt = i + key.length + colon[0].length;
+    return {
+      start: braceAt + i,
+      at: braceAt + valueAt + 1,
+      isObject: '{' === masked[valueAt],
+    };
+  }
+  return null;
 }
+
+/** Whether the object literal at `braceAt` declares `prop` at its own depth. */
+function hasProperty(source: string, braceAt: number, prop: string): boolean {
+  return null !== findKeyInBlock(source, braceAt, prop);
+}
+
+/**
+ * Each of the keys we add inside `vite:` is merged INTO what the app already set, never duplicated
+ * beside it.
+ *
+ * The real astro-nanostores config has `build: { chunkSizeWarningLimit }`; inserting our own `build`
+ * beside it gave the object two, and the last one wins — so `target: 'es2022'` was silently
+ * discarded while init reported success. Losing that target is not cosmetic: Astro's default
+ * down-levels the modern SDK bundle and dies on a destructuring transform.
+ */
 
 function mergeBuild(source: string, braceAt: number): string | null {
   const existing = findKeyInBlock(source, braceAt, 'build');
@@ -177,8 +220,7 @@ function mergeBuild(source: string, braceAt: number): string | null {
   if (!existing.isObject) {
     return null;
   }
-  const content = blockAfter(source, existing.at);
-  if (hasProperty(content, 'target')) {
+  if (hasProperty(source, existing.at, 'target')) {
     return source;
   }
   return insertAt(source, existing.at, `\n      target: 'es2022',`);
@@ -207,13 +249,12 @@ function mergeServer(source: string, braceAt: number): string | null {
   if (watchContent.includes(WATCH_IGNORE_LITERAL)) {
     return source;
   }
-  const existingIgnored = /(\s*ignored\s*:\s*\[)/.exec(watchContent);
-  if (existingIgnored?.index !== undefined) {
-    return insertAt(
-      source,
-      watch.at + existingIgnored.index + existingIgnored[0].length,
-      `${WATCH_IGNORE_LITERAL}, `,
-    );
+  const ignored = findKeyInBlock(source, watch.at, 'ignored');
+  if (ignored) {
+    if (ignored.isObject || '[' !== source[ignored.at - 1]) {
+      return null;
+    }
+    return insertAt(source, ignored.at, `${WATCH_IGNORE_LITERAL}, `);
   }
   return insertAt(source, watch.at, `\n        ignored: [${WATCH_IGNORE_LITERAL}],`);
 }
@@ -240,8 +281,7 @@ function mergeOptimizeDeps(
       if (!esbuild.isObject) {
         return null;
       }
-      const esbuildContent = blockAfter(out, esbuild.at);
-      if (!hasProperty(esbuildContent, 'target')) {
+      if (!hasProperty(out, esbuild.at, 'target')) {
         out = insertAt(out, esbuild.at, `\n        target: 'es2022',`);
       }
     } else {
@@ -249,18 +289,14 @@ function mergeOptimizeDeps(
     }
   }
 
-  const optContent = blockAfter(out, existing.at);
-  if (!optContent.includes(sdkInclude(config))) {
-    const existingInclude = EXISTING_INCLUDE.exec(optContent);
-    if (existingInclude?.index !== undefined) {
-      out = insertAt(
-        out,
-        existing.at + existingInclude.index + existingInclude[0].length,
-        `${sdkInclude(config)}, `,
-      );
-    } else {
-      out = insertAt(out, existing.at, `\n      include: [${sdkInclude(config)}],`);
+  if (!blockAfter(out, existing.at).includes(sdkInclude(config))) {
+    const include = findKeyInBlock(out, existing.at, 'include');
+    if (include && !include.isObject && '[' !== out[include.at - 1]) {
+      return null;
     }
+    out = include
+      ? insertAt(out, include.at, `${sdkInclude(config)}, `)
+      : insertAt(out, existing.at, `\n      include: [${sdkInclude(config)}],`);
   }
 
   if (needsEsbuildOptionInsert) {
