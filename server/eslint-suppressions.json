@@ -1319,14 +1319,6 @@
       "count": 5
     }
   },
-  "src/language/flows/decision.ts": {
-    "curly": {
-      "count": 12
-    },
-    "no-nested-ternary": {
-      "count": 4
-    }
-  },
   "src/language/flows/document-key-press.test.ts": {
     "curly": {
       "count": 1

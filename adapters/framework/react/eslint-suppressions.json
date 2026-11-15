@@ -49,11 +49,6 @@
       "count": 1
     }
   },
-  "src/index.ts": {
-    "curly": {
-      "count": 25
-    }
-  },
   "src/relative-to-root.test.ts": {
     "curly": {
       "count": 2
