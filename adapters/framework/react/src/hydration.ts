@@ -56,15 +56,23 @@ export function createHydrationTracker(
     if (read !== undefined) {
       const now = read(roots);
       unreadable = HydrationState.UNKNOWN === now;
+      if (unreadable) {
+        roots.length = 0;
+      }
       if (HydrationState.DONE !== now) {
         return;
       }
     }
+    roots.length = 0;
     hydrated = true;
     onHydrated();
   };
   return {
     onCommit: (root?: unknown): void => {
+      // Once the answer is fixed, no root is read again, so none is kept.
+      if (hydrated || unreadable) {
+        return;
+      }
       if (null !== root && 'object' === typeof root && !roots.includes(root)) {
         roots.push(root);
       }
