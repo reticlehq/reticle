@@ -64,11 +64,10 @@ export interface PooledPage {
   /** Set prefers-color-scheme and prefers-reduced-motion. OPTIONAL: without it the media stay. */
   emulateMedia?(media: LeaseMedia): Promise<void>;
   /**
-   * Whether the page still fetches its code: a document, script or stylesheet request is open, or
-   * one ended a moment ago (see `trackCodeFetches`). OPTIONAL: without it only the document's
-   * `readyState` says whether the page is loading.
+   * Whether the page has a request in flight, or one ended a moment ago (see `trackPageRequests`).
+   * OPTIONAL: without it only the document's `readyState` says whether the page is loading.
    */
-  fetchingCode?(): boolean;
+  fetching?(): boolean;
   /** Evaluate a script in the page's current document. OPTIONAL: without it no reader is injected. */
   evaluate?(script: string): Promise<unknown>;
   /** Add an init script to run after document creation but before any page scripts run. */
@@ -171,7 +170,8 @@ export interface PooledMockRule {
 
 /** An isolated browsing context (cookies/storage). Real Playwright `BrowserContext` satisfies this. */
 export interface PooledContext {
-  newPage(): Promise<PooledPage>;
+  /** `now` is the pool's clock, for the page's request tracker. */
+  newPage(opts: { now: () => number }): Promise<PooledPage>;
   close(): Promise<void>;
   addCookies?(cookies: PooledCookie[]): Promise<void>;
   /**

@@ -68,6 +68,7 @@ import { projectForRoot } from '@/memory/project/project-for-root.js';
 import { CROSS_STEP_INDEX, crossStepOnly, declaredIn } from './flow-cross-step.js';
 import {
   arriveAtStartPath,
+  loadingLostHint,
   navigateAndAwait,
   noteReplayEnded,
   routeClaimsWhereTheTabIs,
@@ -455,6 +456,8 @@ async function replayOnce(
   let live = session;
   let liveFloor = replayFloor;
   const openPage: OpenPage<FlowReplaySession> = async (url) => {
+    // The page this step opens can compile as long as a start page does (#2155).
+    const loading = await startPageLoadingProbe(deps.pool, deps.realInput, live);
     const outcome = await navigateAndAwait(
       deps.sessions,
       live,
@@ -462,7 +465,7 @@ async function replayOnce(
       pathOfUrl(url),
       startPathBudgetMs(loaded.value),
       undefined,
-      { acceptRedirect: true },
+      { acceptRedirect: true, ...(loading === undefined ? {} : { stillLoading: loading }) },
     );
     if ('arrived' === outcome.kind || 'redirected' === outcome.kind) {
       live = outcome.session;
@@ -475,7 +478,9 @@ async function replayOnce(
     return {
       error:
         `no page of this app answered in ${String(outcome.waitedMs)} ms after opening ${url}; ` +
-        'the page may have left the app, which a flow cannot follow',
+        [loadingLostHint(outcome), 'the page may have left the app, which a flow cannot follow']
+          .filter((why): why is string => why !== undefined)
+          .join('. '),
     };
   };
   // An upload path becomes bytes once, before step 1, against the app's project (#1769).

@@ -1,5 +1,6 @@
 /**
- * How replay asks whether the start page is still loading, past the step budget (#1705, #2155).
+ * How replay asks whether the page it opens is still loading, past the step budget (#1705, #2155).
+ * Replay asks it for the start page and for the page that a `navigate` step opens.
  *
  * A pool lease answers for its own page. Any other tab is the one `reticle verify` drives, and the
  * provider that opened it answers. Without that second probe, a dev server that compiled the start
@@ -32,7 +33,7 @@ export async function startPageLoadingProbe(
     return undefined;
   }
   // Asked before the navigation: after it, the tab has a new URL and the session has not caught up.
-  const drivesThisTab = await realInput.isAvailableFor(url).catch(() => false);
+  const drivesThisTab = await realInput.isAvailableFor(url);
   if (!drivesThisTab) {
     return undefined;
   }

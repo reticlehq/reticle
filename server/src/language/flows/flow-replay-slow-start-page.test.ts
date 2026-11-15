@@ -4,7 +4,8 @@
  * Replay navigates that tab to the flow's start page. On a dev server that compiles the module that
  * dials Reticle for about 12 s, the SDK connects after the 5 s step budget. Replay asked only a pool
  * lease whether its page was still loading, so the driven tab had no probe, and replay stopped at
- * 5 s with "no page was connected". Nothing ran.
+ * 5 s with "no page was connected". Nothing ran. A `navigate` step in the middle of a flow had the
+ * same wait, with no probe on any tab.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { mkdtempSync, mkdirSync, realpathSync } from 'node:fs';
@@ -14,6 +15,7 @@ import {
   ActionType,
   AnchorKind,
   FLOW_FILE_VERSION,
+  FlowStepTool,
   ReticleCommand,
   ReticleTool,
   asRef,
@@ -36,6 +38,7 @@ const ORIGIN = 'http://localhost:14792';
 /** When the dev server answers the module that dials, after the navigation. */
 const COMPILE_MS = 12_000;
 const LOST = 'no page was connected';
+const NO_PAGE_ANSWERED = 'no page of this app answered';
 /** Fake time moves in this step while real I/O (the flow file read) gets a turn. */
 const TICK_MS = 50;
 /** A generous ceiling for the whole test: real I/O runs between the fake ticks. */
@@ -46,18 +49,33 @@ const QUERY_RESULT = {
   hint: { route: '/builder', presentTestids: [], knownEmptyState: false },
 };
 
+const CLICK_GO = {
+  tool: ReticleTool.ACT,
+  // A role anchor: only a testid or component lets replay start on another page.
+  anchor: { kind: AnchorKind.ROLE, role: 'button', name: BUTTON },
+  action: ActionType.CLICK,
+};
+
 const flow: FlowFile = {
   version: FLOW_FILE_VERSION,
   name: FLOW_NAME,
   createdAt: 0,
   startPath: '/builder',
+  steps: [CLICK_GO],
+};
+
+/** The same journey with no start page: a `navigate` step opens `/builder` first. */
+const navigateFlow: FlowFile = {
+  version: FLOW_FILE_VERSION,
+  name: 'open-builder',
+  createdAt: 0,
   steps: [
     {
-      tool: ReticleTool.ACT,
-      // A role anchor: only a testid or component lets replay start on another page.
-      anchor: { kind: AnchorKind.ROLE, role: 'button', name: BUTTON },
-      action: ActionType.CLICK,
+      tool: FlowStepTool.NAVIGATE,
+      anchor: { kind: AnchorKind.TESTID, value: '/builder' },
+      navigate: '/builder',
     },
+    CLICK_GO,
   ],
 };
 
@@ -102,55 +120,82 @@ async function onFakeTime<T>(work: Promise<T>): Promise<T> {
   return settled;
 }
 
+/**
+ * Replay `saved` on the tab that `verify` drives. The tab leaves `/` when replay navigates it, and
+ * the page it opens connects `COMPILE_MS` later. Until then its document is complete, and the driven
+ * tab says that it is still loading: the module that dials is still open.
+ */
+async function replayOnDrivenTab(
+  saved: FlowFile,
+): Promise<{ result: Awaited<ReturnType<typeof replayNamedFlow>>; acts: string[] }> {
+  const fs = createNodeFileSystem();
+  const root = join(base, '.reticle');
+  await new FlowStore(fs, root, { now: () => 0 }).saveFlow(saved);
+
+  let navigatedAt: number | undefined;
+  const acts: string[] = [];
+  const record = (name: string): void => {
+    if (ReticleCommand.NAVIGATE === name) {
+      navigatedAt = Date.now();
+    }
+    if (ReticleCommand.ACT === name) {
+      acts.push(name);
+    }
+  };
+  const home = tab('home', `${ORIGIN}/`, record);
+  const builder = tab('builder', `${ORIGIN}/builder`, record);
+  const compiled = (): boolean =>
+    navigatedAt !== undefined && COMPILE_MS <= Date.now() - navigatedAt;
+  const sessions: Partial<SessionManager> = {
+    count: () => 1,
+    resolve: () => (compiled() ? builder : home) as Session,
+  };
+  const realInput = {
+    isAvailableFor: () => Promise.resolve(true),
+    perform: () => Promise.resolve({ ok: true }),
+    drivenPageLoading: () => Promise.resolve(navigatedAt !== undefined && !compiled()),
+  } as unknown as RealInputProvider;
+  const deps = {
+    fs,
+    now: () => Date.now(),
+    reticleRoot: join(base, 'daemon'),
+    flows: new FlowStore(fs, join(base, 'daemon'), { now: () => 0 }),
+    sessions: sessions as SessionManager,
+    realInput,
+    artifactRootFor: () => ({ root, reason: ArtifactRootReason.MATCHED_PROJECT }),
+  } as unknown as ToolDeps;
+
+  const result = await onFakeTime(replayNamedFlow(deps, { flowName: saved.name }));
+  return { result, acts };
+}
+
 describe('replay on the tab that reticle verify drives (#2155)', () => {
   it(
     'waits for a start page whose dev server compiles past the step budget',
     async () => {
-      const fs = createNodeFileSystem();
-      const root = join(base, '.reticle');
-      await new FlowStore(fs, root, { now: () => 0 }).saveFlow(flow);
-
-      let navigatedAt: number | undefined;
-      const acts: string[] = [];
-      const record = (name: string): void => {
-        if (ReticleCommand.NAVIGATE === name) {
-          navigatedAt = Date.now();
-        }
-        if (ReticleCommand.ACT === name) {
-          acts.push(name);
-        }
-      };
-      const home = tab('home', `${ORIGIN}/`, record);
-      const builder = tab('builder', `${ORIGIN}/builder`, record);
-      const compiled = (): boolean =>
-        navigatedAt !== undefined && COMPILE_MS <= Date.now() - navigatedAt;
-      const sessions: Partial<SessionManager> = {
-        count: () => 1,
-        resolve: () => (compiled() ? builder : home) as Session,
-      };
-      // The driven tab: its document is complete, and the module that dials is still open.
-      const realInput = {
-        isAvailableFor: () => Promise.resolve(true),
-        perform: () => Promise.resolve({ ok: true }),
-        drivenPageLoading: () => Promise.resolve(navigatedAt !== undefined && !compiled()),
-      } as unknown as RealInputProvider;
-      const deps = {
-        fs,
-        now: () => Date.now(),
-        reticleRoot: join(base, 'daemon'),
-        flows: new FlowStore(fs, join(base, 'daemon'), { now: () => 0 }),
-        sessions: sessions as SessionManager,
-        realInput,
-        artifactRootFor: () => ({ root, reason: ArtifactRootReason.MATCHED_PROJECT }),
-      } as unknown as ToolDeps;
-
-      const result = await onFakeTime(replayNamedFlow(deps, { flowName: FLOW_NAME }));
+      const { result, acts } = await replayOnDrivenTab(flow);
 
       expect(result.unverifiable?.reason ?? '').not.toContain(LOST);
       expect(result.startPageWait?.stillLoading).toBe(true);
       // A bound, not a duration: past the 5 s budget, and under the 30 s cap.
       expect(result.startPageWait?.waitedMs).toBeGreaterThan(result.startPageWait?.budgetMs ?? 0);
       expect(result.startPageWait?.waitedMs).toBeLessThan(30_000);
+      expect(acts).toHaveLength(1);
+    },
+    REPLAY_TIMEOUT_MS,
+  );
+
+  /*
+   * A `navigate` step in the middle of the journey opens a page the same way, and the same compile
+   * holds it. Without the probe, the step failed at the budget: "no page of this app answered".
+   */
+  it(
+    'waits for the page that a navigate step opens, while its dev server compiles',
+    async () => {
+      const { result, acts } = await replayOnDrivenTab(navigateFlow);
+
+      expect(result.steps[0]?.error ?? '').not.toContain(NO_PAGE_ANSWERED);
+      expect(result.steps[0]?.ok).toBe(true);
       expect(acts).toHaveLength(1);
     },
     REPLAY_TIMEOUT_MS,

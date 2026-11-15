@@ -32,6 +32,7 @@ import {
 } from '@reticlehq/engine/question/predicate/predicate-route.js';
 import type { ArrivalClock } from '@/surface/tools/act/navigation/navigate-arrival.js';
 import { carryReticleIdentity } from '@/surface/tools/lease-tools.js';
+import { answerWithin, PAGE_ANSWER_MS } from '@/surface/tools/lease-readiness.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { Session } from '@/portal/session/session.js';
 import { anchorPrecondition, anchorQueryArgs } from './flow-step-runners.js';
@@ -110,13 +111,56 @@ const START_PATH_POLL_MS = 100;
  */
 const START_PATH_LOADING_CAP_MS = 30_000;
 
-/** A probe that fails counts as loaded, so it can only end the wait, never stretch it. */
-async function pageStillLoading(probe: () => Promise<boolean>): Promise<boolean> {
-  try {
-    return true === (await probe());
-  } catch {
-    return false;
+/** What a page said when replay asked whether it is still loading. */
+const LoadAnswer = {
+  LOADING: 'loading',
+  LOADED: 'loaded',
+  /** It did not answer in time. A script can block the page (#2155). */
+  NO_ANSWER: 'no-answer',
+} as const;
+type LoadAnswer = (typeof LoadAnswer)[keyof typeof LoadAnswer];
+
+/**
+ * Ask the page whether it is still loading, for one `PAGE_ANSWER_MS` at most.
+ *
+ * Bounded, because a page that runs an endless loop never answers `page.evaluate`, and an unbounded
+ * question held replay forever. No answer is not "loaded": the page can be busy while it runs the
+ * modules it just fetched. So replay keeps waiting, up to its loading cap, and then says that the
+ * page did not answer. A probe that fails (a closed page) counts as loaded, so it can only end the
+ * wait, never stretch it (#1705).
+ */
+async function askLoading(probe: () => Promise<boolean>): Promise<LoadAnswer> {
+  const asked = Promise.resolve()
+    .then(probe)
+    .then(
+      (loading): LoadAnswer => (true === loading ? LoadAnswer.LOADING : LoadAnswer.LOADED),
+      (): LoadAnswer => LoadAnswer.LOADED,
+    );
+  return answerWithin(asked, PAGE_ANSWER_MS, LoadAnswer.NO_ANSWER);
+}
+
+/**
+ * Why no page connected, when the page's loading is the reason; undefined when it is not. The hint
+ * names the flow-file knob that raises the wait: past the loading cap, only a longer budget helps.
+ */
+export function loadingLostHint(outcome: {
+  stillLoading: boolean;
+  unanswered: boolean;
+}): string | undefined {
+  if (outcome.unanswered) {
+    return (
+      'The page did not answer when replay asked whether it was still loading, so a script can ' +
+      'block it (an endless loop). Fix the page, then replay'
+    );
   }
+  if (outcome.stillLoading) {
+    return (
+      'The page was still loading when replay stopped waiting. A dev server that compiles for a ' +
+      'long time needs a longer wait: raise `signalTimeoutMs` in the flow file, or `timeoutMs` on ' +
+      'step 1, above the time the page takes to load, then replay'
+    );
+  }
+  return undefined;
 }
 
 const REAL_ARRIVAL_CLOCK: ArrivalClock = {
@@ -282,7 +326,7 @@ export async function arriveAtStartPath(
   flow: FlowFile,
   timeoutMs: number = startPathBudgetMs(flow),
   clock: ArrivalClock = REAL_ARRIVAL_CLOCK,
-  /** Whether the tab is still loading. Replay passes one for a pool lease, the only tab it can ask. */
+  /** Whether the tab is still loading: see `startPageLoadingProbe`. Absent: replay cannot ask. */
   stillLoading?: () => Promise<boolean>,
   loadingCapMs: number = START_PATH_LOADING_CAP_MS,
 ): Promise<StartPathArrival> {
@@ -382,9 +426,9 @@ async function moveTo(
     },
   );
   if ('lost' === outcome.kind) {
-    const why = outcome.stillLoading
-      ? 'The page was still loading when replay stopped waiting: check that the app finishes loading, then replay'
-      : 'A dev server that compiles on the first load can take longer than that: raise the wait with ' +
+    const why =
+      loadingLostHint(outcome) ??
+      'A dev server that compiles on the first load can take longer than that: raise the wait with ' +
         '`timeoutMs` on step 1 or `signalTimeoutMs` in the flow file, then replay. A backgrounded tab ' +
         'can also be slow: bring it to the front';
     return {
@@ -595,7 +639,14 @@ export type NavigateOutcome =
   | { kind: 'arrived'; session: Session; wait?: StartPageWait }
   | { kind: 'redirected'; session: Session; wait?: StartPageWait }
   | { kind: 'refused' }
-  | { kind: 'lost'; waitedMs: number; stillLoading: boolean; wait?: StartPageWait };
+  | {
+      kind: 'lost';
+      waitedMs: number;
+      stillLoading: boolean;
+      /** The page did not answer whether it was still loading. */
+      unanswered: boolean;
+      wait?: StartPageWait;
+    };
 
 /**
  * Whether assigning `to` from `from` is a jump within the same document. That is the case when the
@@ -673,6 +724,7 @@ export async function navigateAndAwait(
   const deadline = start + timeoutMs;
   const cap = start + Math.max(timeoutMs, loadingCapMs);
   let loading = false;
+  let unanswered = false;
   let extended = false;
   const extendedWait = (): { wait?: StartPageWait } =>
     extended
@@ -691,14 +743,19 @@ export async function navigateAndAwait(
       if (arrived !== undefined) {
         return { kind: 'redirected', session: arrived.session, ...extendedWait() };
       }
-      // Past the budget, only a page that says it is still loading earns more time (#1705).
-      loading = stillLoading !== undefined && (await pageStillLoading(stillLoading));
-      extended ||= loading;
-      if (!loading || clock.now() >= cap) {
+      // Past the budget, only a page that says it is still loading earns more time (#1705), or one
+      // that does not answer: it can be busy running what it loaded (#2155). The cap ends both.
+      const answer =
+        stillLoading === undefined ? LoadAnswer.LOADED : await askLoading(stillLoading);
+      loading = LoadAnswer.LOADING === answer;
+      unanswered = LoadAnswer.NO_ANSWER === answer;
+      extended ||= LoadAnswer.LOADED !== answer;
+      if (LoadAnswer.LOADED === answer || clock.now() >= cap) {
         return {
           kind: 'lost',
           waitedMs: clock.now() - start,
           stillLoading: loading,
+          unanswered,
           ...extendedWait(),
         };
       }

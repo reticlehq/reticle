@@ -75,6 +75,7 @@ describe('the driven provider closes the tabs a flow opened', () => {
     const others = [tab('logout'), tab('help')];
     const own = {
       ...tab('own'),
+      on: () => undefined,
       addInitScript: () => Promise.resolve(),
       goto: () => Promise.resolve(null),
       context: () => ({ pages: () => [own, ...others] }),

@@ -448,8 +448,8 @@ describe('BrowserPool', () => {
       b.newContext = async (): Promise<PooledContext> => {
         const c = await realNewContext();
         const realNewPage = c.newPage.bind(c);
-        c.newPage = async (): Promise<PooledPage> => {
-          const p = await realNewPage();
+        c.newPage = async (opts): Promise<PooledPage> => {
+          const p = await realNewPage(opts);
           const realGoto = p.goto.bind(p);
           p.goto = (url: string): Promise<unknown> => {
             if (crashDuringGoto) {
