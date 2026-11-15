@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/server",
-  "version": "3.10.5",
+  "version": "3.10.6",
   "mcpName": "io.github.reticlehq/reticle",
   "description": "Reticle CLI, bridge and MCP server: a coding agent drives your running web app from the inside and gets a verdict with evidence, for change verification, access control, accessibility, performance and SEO checks.",
   "type": "module",
@@ -75,7 +75,7 @@
     "cli"
   ],
   "reticle": {
-    "changelog": "3.10.5 fixes a refusal on Windows: the agent's MCP server could take the user's own running daemon for another process and refuse every tool call. A /status that gets no answer is now asked once more, on a fresh connection, before the port counts as a stranger's.",
+    "changelog": "3.10.6 fixes init in a workspace whose root dev script also starts an API: init now waits for the URL that serves the app's page, instead of checking the API and failing with \"the SDK is NOT in the page\".",
     "breakingChanges": []
   },
   "publishConfig": {
