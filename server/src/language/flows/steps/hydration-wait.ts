@@ -17,6 +17,7 @@
 import { z } from 'zod';
 import {
   EventType,
+  FlowStepTool,
   HydrationState,
   RETICLE_HYDRATION_SIGNAL,
   RETICLE_RENDERS_STORE,
@@ -157,6 +158,12 @@ export async function awaitHydration(
   }
 }
 
+/** Steps that reach past the page (`page-steps.ts`): they do not click the page's controls. */
+const PAGE_LEVEL_TOOLS: ReadonlySet<string> = new Set([
+  FlowStepTool.NAVIGATE,
+  FlowStepTool.REQUEST,
+]);
+
 /** What a failed step says when it carries no reason of its own. */
 const STEP_DID_NOT_PASS = 'the step did not pass';
 
@@ -209,14 +216,20 @@ export class ReplayHydration {
    * The step started on a pending page when the live page was still `pending` at the last read:
    * the wait's end, or the read after the step before. While the page is pending, this reads it
    * again, so the next step has its own answer. Hydration does not go back, so the reads stop at
-   * the first answer that is not `pending`.
+   * the first definite answer that nothing waits (`NO_WAIT`). A read that times out is no answer:
+   * a busy page is still the page that said `pending`, so the state stays.
+   *
+   * A `navigate` or `request` step does not use the page's event handlers. Its failure is judged
+   * as it is, and never as a step on a page that was not hydrated.
    */
   async noteStep(result: FlowStepResult, live: HydrationSession): Promise<void> {
     const startedPending = this.#pending;
     if (this.#failed === undefined && (!result.ok || result.drift !== undefined)) {
-      this.#failed = startedPending === undefined ? {} : { unhydrated: startedPending };
+      const usesHandlers = !PAGE_LEVEL_TOOLS.has(result.tool ?? '');
+      this.#failed =
+        startedPending === undefined || !usesHandlers ? {} : { unhydrated: startedPending };
     }
-    if (startedPending !== undefined && HydrationRead.PENDING !== (await readHydration(live))) {
+    if (startedPending !== undefined && HydrationRead.NO_WAIT === (await readHydration(live))) {
       this.#pending = undefined;
     }
   }
