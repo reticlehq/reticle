@@ -46,6 +46,8 @@ function fakePage(state: FakePageState): unknown {
       return Promise.resolve();
     },
     unroute: () => Promise.resolve(),
+    // The driven page's request events: this fake sends none.
+    on: () => undefined,
     goto: (url: string) => {
       state.gotoCalls.push(url);
       if (true === state.gotoThrows) return Promise.reject(new Error('goto boom'));

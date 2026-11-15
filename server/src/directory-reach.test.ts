@@ -530,6 +530,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'tools',
     // Every replayed step leaves a screenshot, taken by the same function every action uses.
     'visual',
+    // Replay asks whether the page it opens is still loading. The answer (`PageLoad`) is defined
+    // once, beside the probe in the pool that gives it. `pool` reaches nothing in `flows` (#2155).
+    'pool',
   ],
   // `project` for where this project's work stands with the platform, shown beside Sync now.
   impact: ['cloud', 'project', 'session'],

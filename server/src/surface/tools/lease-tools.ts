@@ -554,7 +554,7 @@ export const LEASE_ACQUIRE_TOOL: ToolDef = {
         const reload = await reconnectHeldLease(
           (ms) => pool.gotoLease(existing, carryReticleIdentity(pool.leaseUrl(existing), url), ms),
           async () => (await pool.viewportOfLease(existing)) !== undefined,
-          () => pool.leaseLoading(existing),
+          async () => (await pool.leaseLoading(existing)).loading,
           () => resolveLeasedSessionId(deps.sessions, existing) !== undefined,
           deps.now() + (asNumber(args['timeout_ms']) ?? LEASE_READY_TIMEOUT_MS),
           deps.now,

@@ -210,7 +210,7 @@ export interface ActiveLease {
 }
 
 /** Whether the page's document has not finished loading. A page that cannot be asked counts as loaded. */
-export async function pageLoading(page: PooledPage): Promise<boolean> {
+export async function pageLoading(page: Pick<PooledPage, 'evaluate'>): Promise<boolean> {
   if (page.evaluate === undefined) {
     return false;
   }

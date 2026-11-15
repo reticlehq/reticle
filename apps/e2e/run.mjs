@@ -131,6 +131,9 @@ const ORDER = [
   // the act budget expires while the navigation is in flight, and the verdict used to read the
   // pre-navigation route as a failure (#2009). Serves its own page, like the specs above.
   'lease-instrumented-navigation-test',
+  // A parallel flow suite whose start page the dev server compiles past the step budget (#2155).
+  // Each flow runs on its own lease. Serves its own pages, like the specs above.
+  'lease-slow-start-page-replay-test',
   // Bare `reticle` in an unwired app folder: one smoke verdict, a pass and a fail. Writes its own app.
   'first-verdict-test',
   // `reticle verify <candidate> --against <reference>` through the built CLI, on three builds it
@@ -225,7 +228,7 @@ if (specs.length === 0) {
 // So the size is recorded, and shrinking the battery costs a deliberate edit to a number a
 // reviewer can see. Growing it costs the same edit, which is the point: both directions are a
 // decision. Measured 2026-09-11.
-const EXPECTED_SPECS = desktop ? 3 : 59;
+const EXPECTED_SPECS = desktop ? 3 : 60;
 // The WHOLE battery is counted, not this shard's slice of it: a shard is a third of the list by
 // design, and the question here is whether the list itself shrank.
 if (listed.length !== EXPECTED_SPECS) {
