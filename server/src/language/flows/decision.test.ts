@@ -448,3 +448,44 @@ describe('buildDecision — the business outcome first, the mechanism underneath
     expect(d.summary).toContain('no intent declared');
   });
 });
+
+/*
+ * #1654 audit: `reticle_verify { action: "flows" }` is the path the issue names, and it built its rows
+ * without the replay's `hydrationWait`. A step that ran on a page that was not hydrated was then
+ * invisible in the suite verdict and in `reticle verify`, which prints it (rule 11).
+ */
+describe('buildSuiteVerdict — a replay that stopped waiting for hydration', () => {
+  const wait = { waitedMs: 10_000, budgetMs: 10_000, stillPending: true };
+  const step: FlowStepResult = { step: 0, tool: ReticleTool.ACT, anchor: 'reveal', ok: true };
+
+  it('keeps the wait from every run, a pass and an unverifiable flow alike', () => {
+    const verdict = buildSuiteVerdict([
+      { replay: { name: 'fine', status: ReplayStatus.OK, steps: [step] } },
+      { replay: { name: 'lucky', status: ReplayStatus.OK, steps: [step], hydrationWait: wait } },
+      {
+        replay: {
+          name: 'slow',
+          status: ReplayStatus.UNVERIFIABLE,
+          steps: [{ ...step, ok: false }],
+          unverifiable: { reason: 'the page still waited for React to hydrate' },
+          hydrationWait: wait,
+        },
+      },
+    ]);
+
+    expect(verdict.hydrationWaits).toEqual([
+      { flow: 'lucky', ...wait },
+      { flow: 'slow', ...wait },
+    ]);
+    expect(verdict.summary).toContain('lucky, slow');
+  });
+
+  it('adds nothing when no wait reached its bound', () => {
+    const verdict = buildSuiteVerdict([
+      { replay: { name: 'fine', status: ReplayStatus.OK, steps: [step] } },
+    ]);
+
+    expect(verdict.hydrationWaits).toBeUndefined();
+    expect(verdict.summary).not.toContain('hydrat');
+  });
+});

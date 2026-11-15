@@ -1,5 +1,6 @@
 import { CALL_SECRETS_ARG, callSecretsArg } from './fields/flow-secret-field.js';
 import { REPLAYABILITY_OUTPUT, SKIP_WRITES_ARG } from './flow-replayable.js';
+import { HYDRATION_WAIT_OUTPUT, SUITE_HYDRATION_WAITS_OUTPUT } from './steps/hydration-wait.js';
 import { flowAuthor } from './flow-author.js';
 import { FLOW_MUTATE_TOOL } from './flow-mutate-tools.js';
 import { seedSchema, workerCountSchema } from '@/surface/tools/args/numeric-bounds.js';
@@ -493,12 +494,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         .describe(
           'Set when replay waited past the step budget because the start page was still loading. stillLoading is what the tab said the last time replay asked. Absent means the wait stayed inside the budget.',
         ),
-      hydrationWait: z
-        .object({ waitedMs: z.number(), budgetMs: z.number() })
-        .optional()
-        .describe(
-          'Set when the React adapter said the page was not hydrated and replay stopped waiting at budgetMs. Step 1 ran on a page whose handlers may not be attached.',
-        ),
+      hydrationWait: HYDRATION_WAIT_OUTPUT,
       // Declared here or a validating profile strips it -- the same way `name` was stripped once.
       // A field the handler sets and the schema omits arrives as nothing, silently.
       /*
@@ -654,6 +650,7 @@ export const FLOW_TOOLS: ToolDef[] = [
           'Flows whose prerequisite is not in this run — filtered out by a label, quarantined, or never saved. They did NOT run, because failing them would report the wrong thing.',
         ),
       replayability: REPLAYABILITY_OUTPUT,
+      hydrationWaits: SUITE_HYDRATION_WAITS_OUTPUT,
       skippedWrites: z.array(z.string()).optional().describe('Flows held back by skipWrites.'),
       // Session-EXEMPT, so it does not inherit `sessionEnvelopeShape` — declare the one-shot human
       // feedback ask here or a validating profile strips it off the suite verdict.

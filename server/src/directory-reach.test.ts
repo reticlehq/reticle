@@ -701,6 +701,12 @@ const REACHES_FOR: Record<string, readonly string[]> = {
    */
   timing: [],
   /**
+   * Replay steps that reach past one page. The hydration wait (#1654) keeps waiting on a page that
+   * does not answer in time and stops on a page that went away. It catches only those two errors,
+   * so it needs their types: `CommandTimeoutError` and `isDocumentGoneError`. Both are leaves.
+   */
+  steps: ['facts', 'page-commands'],
+  /**
    * What a caller may pass. Two files that import nothing at all: the spellings one tool accepts
    * from the tool next door, and the bounds a numeric input has to sit inside. Nine directories
    * reach them, which is the argument for a name rather than against one.
