@@ -44,7 +44,7 @@ import {
   handedOverUrl,
   stopHandedOver,
 } from './bringup/dev-server-files.js';
-import { listSessions, OwnedDevServer, probePage } from './node-effects.js';
+import { devServerEnv, listSessions, OwnedDevServer, probePage } from './node-effects.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { daemonSkew, summarizeStatus } from '@/command/cli/launch/cli-launch.js';
 import {
@@ -397,7 +397,7 @@ export async function runSetupCommand(
           `signing the dev build as ${String(signing[SigningEnv.IDENTITY])}, so macOS does not ask for the keychain password`,
         );
       }
-      server.start(command, cwd, { ...input.env, ...signing });
+      server.start(command, cwd, devServerEnv(input.appDir, cwd, { ...input.env, ...signing }));
       return Promise.resolve();
     },
     // Asked before the dev script is spawned: a listener on one loopback only is not this
