@@ -80,6 +80,53 @@ function carryState(from: Element, to: Element): void {
   }
 }
 
+/** Keyframe keys that are not CSS properties. */
+const NOT_A_PROPERTY = new Set(['offset', 'easing', 'composite', 'computedOffset']);
+
+/**
+ * Write the frame the page shows now onto the clone, and stop its motion there.
+ *
+ * An SVG image starts every animation again at its first keyframe, so a row that fades in from
+ * `opacity: 0` is drawn blank. Each animated property gets its current computed value inline.
+ */
+function freezeMotion(from: Element, to: Element, animations: readonly Animation[]): void {
+  const view = from.ownerDocument.defaultView;
+  if (null === view || !(to instanceof HTMLElement || to instanceof SVGElement)) {
+    return;
+  }
+  const computed = view.getComputedStyle(from);
+  for (const animation of animations) {
+    const effect = animation.effect as KeyframeEffect | null;
+    for (const frame of effect?.getKeyframes() ?? []) {
+      for (const key of Object.keys(frame)) {
+        if (NOT_A_PROPERTY.has(key)) {
+          continue;
+        }
+        const name = key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+        to.style.setProperty(name, computed.getPropertyValue(name));
+      }
+    }
+  }
+  to.style.setProperty('animation', 'none');
+  to.style.setProperty('transition', 'none');
+}
+
+/** Every element that has an animation now, with its animations. One call, not one per element. */
+function animationsByElement(doc: Document): Map<Element, Animation[]> {
+  const byElement = new Map<Element, Animation[]>();
+  if (typeof doc.getAnimations !== 'function') {
+    return byElement;
+  }
+  for (const animation of doc.getAnimations()) {
+    const target = (animation.effect as KeyframeEffect | null)?.target ?? null;
+    if (null === target) {
+      continue;
+    }
+    byElement.set(target, [...(byElement.get(target) ?? []), animation]);
+  }
+  return byElement;
+}
+
 /** Every stylesheet the page can read, as text. A cross-origin sheet throws and is left out. */
 function readableCss(doc: Document): string {
   const sheets = [...Array.from(doc.styleSheets), ...(doc.adoptedStyleSheets ?? [])];
@@ -97,7 +144,7 @@ function readableCss(doc: Document): string {
 }
 
 /**
- * The document, ready to draw: live form state carried over, secrets masked, scripts and Reticle's
+ * The document, ready to draw: live form state and the current animation frame carried over, secrets masked, scripts and Reticle's
  * own UI removed, and every readable stylesheet inlined into one `<style>` (a linked sheet would not
  * load inside an SVG image).
  */
@@ -107,10 +154,15 @@ export function cloneForRender(doc: Document): HTMLElement {
   // Same tree, same order: walk both together before anything is removed from the clone.
   const live = root.querySelectorAll('*');
   const copied = clone.querySelectorAll('*');
+  const moving = animationsByElement(doc);
   live.forEach((el, i) => {
     const twin = copied[i];
     if (twin !== undefined) {
       carryState(el, twin);
+      const animations = moving.get(el);
+      if (animations !== undefined) {
+        freezeMotion(el, twin, animations);
+      }
     }
   });
   const dropped = [RETICLE_OVERLAY, 'script', 'noscript', 'link[rel~="stylesheet"]', 'style'];
