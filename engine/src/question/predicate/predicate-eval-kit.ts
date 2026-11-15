@@ -54,6 +54,16 @@ export interface EvalResult {
    */
   observationLost?: boolean;
   /**
+   * The exact message of a page read that threw, when that throw is why this result is
+   * inconclusive.
+   *
+   * A composite reads each clause on its own, so a clause that throws no longer rejects the whole
+   * composite (#1656). This field keeps what the rejection used to say. The wait ends on it, as it
+   * ended on the rejection, and the pre-check before an action throws it again. Absent when a
+   * clause failed or passed, because then the composite has an answer.
+   */
+  readError?: string;
+  /**
    * The failure, structured — what was seen, what was required, and which oracle judged it.
    *
    * `failureReason` says the same thing in prose, and prose is the WRONG shape for this: measured on
