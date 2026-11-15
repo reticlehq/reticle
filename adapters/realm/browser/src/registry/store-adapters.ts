@@ -1,5 +1,6 @@
 import { nativeWarn } from '@/timers/console/native-console.js';
 import { markAdapterSource, type StoreLike, type StoreSubscribe } from './stores.js';
+import { errorText } from '@/util/error-text.js';
 
 /**
  * Adapters that give non-`{getState, subscribe}` state libraries the shape `registerStore` wants.
@@ -329,7 +330,7 @@ function projectLoadable(loadable: RecoilLoadableLike): RecoilAtomSnapshot {
     return {
       status: loadable.state,
       value: null,
-      error: contents instanceof Error ? contents.message : String(contents),
+      error: errorText(contents),
     };
   }
   // A LOADING loadable's `contents` is the pending promise. Sending it would serialize to `{}` and

@@ -9,11 +9,14 @@ import { observeSafely, type Emit, type Teardown } from './types.js';
 import { safeStringify } from '@/security/serialization.js';
 import { requireCapturedMethod } from '@/util/captured-method.js';
 import { createRepeatLimiter, type ErrorIdentity } from './error-repeats.js';
+import { errorText } from '@/util/error-text.js';
 
 type ConsoleMethod = 'log' | 'warn' | 'error' | 'info' | 'debug';
 
 /** The DOM event a CSP violation arrives as, and the `kind` it is reported under. */
 const CSP_VIOLATION_EVENT = 'securitypolicyviolation';
+/** The window event for a rejected promise nobody awaited; also the `kind` of the error it reports. */
+const REJECTION_EVENT = 'unhandledrejection';
 /** `disposition` of a report-only policy: the browser reported the resource and did not block it. */
 const REPORT_ONLY = 'report';
 
@@ -167,12 +170,22 @@ export function installConsole(emit: Emit): Teardown {
       });
     });
   };
-  const onRejection = (event: PromiseRejectionEvent): void => {
+  /**
+   * Decided AFTER the whole dispatch, not in this listener. A page that handles the rejection calls
+   * `preventDefault()`, and then the browser logs nothing: Next.js does this for `NEXT_REDIRECT` and
+   * navigates. Read here, `defaultPrevented` is still false when the page's listener runs after ours,
+   * so the verdict showed an error no person sees. A microtask is too early: for a browser-dispatched
+   * event, microtasks run between listeners. A zero-delay timer runs after the last one.
+   */
+  const reportRejection = (event: PromiseRejectionEvent): void => {
+    if (signal.aborted || event.defaultPrevented) {
+      return;
+    }
     observeSafely(() => {
       const reason: unknown = event.reason;
       emitError({
-        message: reason instanceof Error ? reason.message : String(reason),
-        kind: 'unhandledrejection',
+        message: errorText(reason),
+        kind: REJECTION_EVENT,
         ...stackOf(reason),
       });
     });
@@ -209,7 +222,10 @@ export function installConsole(emit: Emit): Teardown {
   const listeners = new AbortController();
   const { signal } = listeners;
   window.addEventListener('error', onError, { capture: true, signal });
-  window.addEventListener('unhandledrejection', onRejection, { signal });
+  // `reportRejection` runs after the whole dispatch, so the page's own listeners have run: see there.
+  window.addEventListener(REJECTION_EVENT, (event) => setTimeout(reportRejection, 0, event), {
+    signal,
+  });
   // Dispatched on `document` and it bubbles, so a window listener sees it; registered in the
   // capture phase alongside the others so a page that stops propagation on `document` cannot hide
   // one from us.
@@ -227,7 +243,7 @@ export function installConsole(emit: Emit): Teardown {
     marks = mark;
     (globalThis as unknown as Record<string, PreAttachBuffer | undefined>)[
       RETICLE_PRE_ATTACH_ERRORS
-    ]?.drain(onError, onRejection, report, (count) => {
+    ]?.drain(onError, reportRejection, report, (count) => {
       mark[DROPPED_PRE_ATTACH_FIELD] = Number.isInteger(count) && count > 0 ? count : undefined;
     });
   });

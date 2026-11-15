@@ -254,3 +254,57 @@ describe('CSP violations reach the console channel', () => {
     expect(events.filter((e) => e.type === EventType.CONSOLE_ERROR)).toHaveLength(0);
   });
 });
+
+/**
+ * Reported from the field: Reticle reported `NEXT_REDIRECT` as an uncaught error after a Next.js
+ * server action that redirects. Next.js's own `unhandledrejection` listener calls `preventDefault()`
+ * and navigates, so the browser logs nothing. The observer recorded the rejection before that
+ * listener ran, and the agent changed correct code to clear a console error nobody could see.
+ */
+describe('a promise rejection the page handles', () => {
+  let teardown: Teardown | undefined;
+  afterEach(() => {
+    teardown?.();
+    teardown = undefined;
+  });
+
+  /** jsdom has no PromiseRejectionEvent: the same event type, cancelable, with a `reason`. */
+  function rejection(reason: unknown): Event {
+    const event = new Event('unhandledrejection', { cancelable: true });
+    Object.defineProperty(event, 'reason', { value: reason });
+    return event;
+  }
+  const afterDispatch = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+  const uncaught = (events: Emitted[]): Emitted[] =>
+    events.filter((e) => e.type === EventType.ERROR_UNCAUGHT);
+
+  it('reports nothing when a page listener after ours calls preventDefault', async () => {
+    const { emit, events } = collect();
+    teardown = installConsole(emit);
+    const handle = (e: Event): void => e.preventDefault();
+    window.addEventListener('unhandledrejection', handle);
+    window.dispatchEvent(rejection(new Error('NEXT_REDIRECT')));
+    window.removeEventListener('unhandledrejection', handle);
+    await afterDispatch();
+    expect(uncaught(events)).toEqual([]);
+  });
+
+  it('still reports a rejection nobody handles', async () => {
+    const { emit, events } = collect();
+    teardown = installConsole(emit);
+    window.dispatchEvent(rejection(new Error('boom')));
+    await afterDispatch();
+    expect(uncaught(events)).toHaveLength(1);
+    expect(uncaught(events)[0]?.data['message']).toBe('boom');
+    expect(uncaught(events)[0]?.data['kind']).toBe('unhandledrejection');
+  });
+
+  it('reports nothing after teardown for a rejection dispatched before it', async () => {
+    const { emit, events } = collect();
+    const stop = installConsole(emit);
+    window.dispatchEvent(rejection(new Error('late')));
+    stop();
+    await afterDispatch();
+    expect(uncaught(events)).toEqual([]);
+  });
+});

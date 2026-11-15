@@ -14,6 +14,7 @@
  */
 import { isSensitiveKey, STEP_SCREENSHOT } from '@reticlehq/core';
 import { RETICLE_OVERLAY } from './dom-ignore.js';
+import { errorText } from '@/util/error-text.js';
 
 /** What a masked field shows instead of its value. */
 export const MASK = '••••••••';
@@ -40,7 +41,9 @@ export type RenderResult =
 
 /** A field whose value is a secret: by type, or by what its name, id or autocomplete says. */
 function isSecretField(el: HTMLInputElement | HTMLTextAreaElement): boolean {
-  if (el instanceof HTMLInputElement && 'password' === el.type) return true;
+  if (el instanceof HTMLInputElement && 'password' === el.type) {
+    return true;
+  }
   return [el.name, el.id, el.getAttribute('autocomplete') ?? ''].some(
     (key) => key.length > 0 && isSensitiveKey(key),
   );
@@ -55,16 +58,25 @@ function isSecretField(el: HTMLInputElement | HTMLTextAreaElement): boolean {
 function carryState(from: Element, to: Element): void {
   if (from instanceof HTMLInputElement || from instanceof HTMLTextAreaElement) {
     const value = isSecretField(from) && from.value.length > 0 ? MASK : from.value;
-    if (from instanceof HTMLTextAreaElement) to.textContent = value;
-    else to.setAttribute('value', value);
+    if (from instanceof HTMLTextAreaElement) {
+      to.textContent = value;
+    } else {
+      to.setAttribute('value', value);
+    }
   }
   if (from instanceof HTMLInputElement) {
-    if (from.checked) to.setAttribute('checked', '');
-    else to.removeAttribute('checked');
+    if (from.checked) {
+      to.setAttribute('checked', '');
+    } else {
+      to.removeAttribute('checked');
+    }
   }
   if (from instanceof HTMLOptionElement) {
-    if (from.selected) to.setAttribute('selected', '');
-    else to.removeAttribute('selected');
+    if (from.selected) {
+      to.setAttribute('selected', '');
+    } else {
+      to.removeAttribute('selected');
+    }
   }
 }
 
@@ -74,7 +86,9 @@ function readableCss(doc: Document): string {
   const parts: string[] = [];
   for (const sheet of sheets) {
     try {
-      for (const rule of Array.from(sheet.cssRules)) parts.push(rule.cssText);
+      for (const rule of Array.from(sheet.cssRules)) {
+        parts.push(rule.cssText);
+      }
     } catch {
       // Cross-origin: the browser will not let the page read it, so the image goes without it.
     }
@@ -95,7 +109,9 @@ export function cloneForRender(doc: Document): HTMLElement {
   const copied = clone.querySelectorAll('*');
   live.forEach((el, i) => {
     const twin = copied[i];
-    if (twin !== undefined) carryState(el, twin);
+    if (twin !== undefined) {
+      carryState(el, twin);
+    }
   });
   const dropped = [RETICLE_OVERLAY, 'script', 'noscript', 'link[rel~="stylesheet"]', 'style'];
   clone.querySelectorAll(dropped.join(',')).forEach((el) => el.remove());
@@ -109,10 +125,13 @@ export function cloneForRender(doc: Document): HTMLElement {
 function backgroundOf(doc: Document): string {
   const view = doc.defaultView;
   for (const el of [doc.body, doc.documentElement]) {
-    if (null === view || null === el) continue;
+    if (null === view || null === el) {
+      continue;
+    }
     const colour = view.getComputedStyle(el).backgroundColor;
-    if (colour.length > 0 && 'transparent' !== colour && 'rgba(0, 0, 0, 0)' !== colour)
+    if (colour.length > 0 && 'transparent' !== colour && 'rgba(0, 0, 0, 0)' !== colour) {
       return colour;
+    }
   }
   return FALLBACK_BACKGROUND;
 }
@@ -139,7 +158,9 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 /** Split base64 into strings the transport carries whole. */
 function chunked(base64: string): string[] {
   const out: string[] = [];
-  for (let i = 0; i < base64.length; i += CHUNK_CHARS) out.push(base64.slice(i, i + CHUNK_CHARS));
+  for (let i = 0; i < base64.length; i += CHUNK_CHARS) {
+    out.push(base64.slice(i, i + CHUNK_CHARS));
+  }
   return out;
 }
 
@@ -163,7 +184,9 @@ export async function renderPage(): Promise<RenderResult> {
       canvas.width = Math.max(1, Math.round(width * scale));
       canvas.height = Math.max(1, Math.round(height * scale));
       const ctx = canvas.getContext('2d');
-      if (null === ctx) return { ok: false, reason: 'this page has no 2D canvas to draw into' };
+      if (null === ctx) {
+        return { ok: false, reason: 'this page has no 2D canvas to draw into' };
+      }
       ctx.fillStyle = background;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -177,6 +200,6 @@ export async function renderPage(): Promise<RenderResult> {
     }
     return { ok: false, reason: 'the rendered page was too large to send, even scaled down' };
   } catch (error) {
-    return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+    return { ok: false, reason: errorText(error) };
   }
 }
