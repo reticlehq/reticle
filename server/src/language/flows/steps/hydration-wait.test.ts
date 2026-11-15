@@ -60,6 +60,10 @@ interface SlowPageOptions {
   busyReads?: number;
   /** The click after which the page hydrates, as a page does while a failed step waits. */
   hydratesAfterAct?: number;
+  /** The click after which every store read times out, as on a main thread that got busy. */
+  busyAfterAct?: number;
+  /** True: the page refuses a navigation, so a `navigate` step fails at once. */
+  refusesNavigate?: boolean;
   /** Where the page is. */
   url?: string;
 }
@@ -103,7 +107,9 @@ class SlowPage {
         if (ReticleCommand.STATE_READ === name) {
           this.timeouts.push(timeoutMs);
           this.reads += 1;
-          if (this.busy > 0) {
+          const busyNow =
+            this.options.busyAfterAct !== undefined && this.acts >= this.options.busyAfterAct;
+          if (busyNow || this.busy > 0) {
             this.busy -= 1;
             return Promise.reject(new CommandTimeoutError(BUSY));
           }
@@ -160,7 +166,7 @@ class SlowPage {
       return { matched: this.revealed, count: elements.length, elements };
     }
     if (ReticleCommand.NAVIGATE === name) {
-      return { ok: true };
+      return { ok: true !== this.options.refusesNavigate };
     }
     return {};
   }
@@ -534,5 +540,40 @@ describe('flow replay on a page that is not hydrated yet', { timeout: REPLAY_TIM
 
     expect(result.steps[1]?.ok).toBe(false);
     expect(result.status).toBe(ReplayStatus.DRIFT);
+  });
+
+  // #2269 review probe: the read after a passed step timed out, and that cleared "pending". Step 2
+  // then failed on a page that had never said anything else, and the replay was a false `drift`.
+  it('keeps a page pending when the read after a step does not answer', async () => {
+    const page = new SlowPage({ busyAfterAct: 1 });
+    const twoClicks: FlowFile = { ...flow, steps: [bareClick, clickStep] };
+
+    const result = await replayOn(page, twoClicks, racingClock());
+
+    expect(result.steps[0]?.ok).toBe(true);
+    expect(result.steps[1]?.ok).toBe(false);
+    expect(result.status).toBe(ReplayStatus.UNVERIFIABLE);
+  });
+
+  // A `navigate` or `request` step does not click the page's controls, so a page that is not
+  // hydrated does not explain its failure.
+  it('keeps the failure of a navigate step on a pending page as it is', async () => {
+    const page = new SlowPage({ refusesNavigate: true });
+    const away: FlowFile = {
+      ...flow,
+      steps: [
+        {
+          tool: FlowStepTool.NAVIGATE,
+          anchor: { kind: AnchorKind.TESTID, value: '/next' },
+          navigate: '/next',
+        },
+      ],
+    };
+
+    const result = await replayOn(page, away, racingClock());
+
+    expect(result.steps[0]?.ok).toBe(false);
+    expect(result.hydrationWait?.stillPending).toBe(true);
+    expect(result.status).not.toBe(ReplayStatus.UNVERIFIABLE);
   });
 });
