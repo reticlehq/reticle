@@ -310,3 +310,37 @@ describe('a page that runs an endless loop after it loads (#2155)', () => {
     TEST_TIMEOUT_MS,
   );
 });
+
+describe('a page whose renderer crashed (#2155)', () => {
+  /*
+   * A crashed page is not closed, and every question to it fails ("Target crashed"). Read as a
+   * navigation, it kept replay waiting to the 30 s cap with the reason "its document did not finish
+   * loading", which is false. It loads nothing, and the probe says that it crashed.
+   */
+  it(
+    'does not count as loading, and says that it crashed',
+    async () => {
+      const { provider, pages } = drivenOn(`?${HOLD_PARAM}=${NO_HOLD}`);
+      try {
+        await provider.navigate();
+        const page = pages[0];
+        if (page === undefined) {
+          throw new Error('the provider opened no page');
+        }
+        await expect.poll(() => page.evaluate('globalThis.heldLoaded === true'), poll).toBe(true);
+        await new Promise((resolve) => setTimeout(resolve, PAST_QUIET_MS));
+        const cdp = await page.context().newCDPSession(page);
+        // `Page.crash` does not answer: the renderer it would answer from is gone.
+        void cdp.send('Page.crash').catch(() => undefined);
+        await expect
+          .poll(async () => (await provider.drivenPageLoading()).crashed, poll)
+          .toBe(true);
+        expect(page.isClosed()).toBe(false);
+        expect(await provider.drivenPageLoading()).toEqual({ loading: false, crashed: true });
+      } finally {
+        await provider.dispose();
+      }
+    },
+    TEST_TIMEOUT_MS,
+  );
+});

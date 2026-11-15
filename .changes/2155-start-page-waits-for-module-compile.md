@@ -11,7 +11,7 @@
 
   When the page is still loading at the cap, the result names the request that was still open, by method and path. A long poll or a stream keeps a page loading. The older reason follows, and it names `signalTimeoutMs`. Raise it in the flow file to wait longer.
 
-  A failed question to an open page now counts as loading, because a navigation causes it. A closed page counts as loaded.
+  A failed question to an open page now counts as loading, because usually a navigation causes it. A closed page counts as loaded. On the tab that `reticle verify` drives, a page whose renderer crashed counts as not loading, and the result says that the page crashed. A lease whose page crashes is released, as before.
 
   Each question to the page now has a 250 ms limit. A page that runs an endless loop never answers. Replay then waits up to the 30 s cap, and says that the page did not answer. Before, replay on a lease waited forever.
 

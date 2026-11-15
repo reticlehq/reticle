@@ -189,6 +189,7 @@ function wrapBrowser(browser: Browser, headless: boolean): PooledBrowser {
             close: () => page.close(),
             fetching: () => requests.fetching(),
             openRequest: () => requests.openRequest(),
+            crashed: () => requests.crashed(),
             isClosed: () => page.isClosed(),
             evaluate: (script) => page.evaluate(script),
             // Playwright returns a Buffer; Uint8Array is what the visual store and differ take.

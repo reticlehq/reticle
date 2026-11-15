@@ -127,4 +127,28 @@ describe('pageLoadingOrFetching', () => {
     const page = { evaluate: () => Promise.reject(new Error('no answer')) };
     await expect(pageLoadingOrFetching(page)).rejects.toThrow('no answer');
   });
+
+  /*
+   * A crashed page is not closed, and every question to it fails ("Target crashed"). Read as a
+   * navigation, it held replay to the cap with a false reason. It loads nothing.
+   */
+  it('counts a crashed page as not loading, and says that it crashed', async () => {
+    const page = {
+      crashed: () => true,
+      openRequest: () => 'GET /src/dial.js',
+      evaluate: () => Promise.reject(new Error('Target crashed')),
+      isClosed: () => false,
+    };
+    expect(await pageLoadingOrFetching(page)).toEqual({ loading: false, crashed: true });
+  });
+});
+
+describe('a tracked page whose renderer crashed', () => {
+  it('drops its open requests, and stays crashed', () => {
+    const tracker = trackPageRequests(clock().now);
+    tracker.started({}, 'script', 'GET /src/dial.js');
+    tracker.crash();
+    expect(tracker.crashed()).toBe(true);
+    expect(tracker.openRequest()).toBeUndefined();
+  });
 });

@@ -33,7 +33,7 @@ import {
 import type { ArrivalClock } from '@/surface/tools/act/navigation/navigate-arrival.js';
 import { carryReticleIdentity } from '@/surface/tools/lease-tools.js';
 import { answerWithin, PAGE_ANSWER_MS } from '@/surface/tools/lease-readiness.js';
-import type { PageLoad } from './start-page-loading.js';
+import type { PageLoad } from '@/portal/pool/page-requests.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { Session } from '@/portal/session/session.js';
 import { anchorPrecondition, anchorQueryArgs } from './flow-step-runners.js';
@@ -132,6 +132,8 @@ interface Asked {
   answer: LoadAnswer;
   /** The method and path of the request that keeps the page loading, when the probe names one. */
   openRequest?: string;
+  /** The page's renderer crashed: it loads nothing, and replay stops waiting for it. */
+  crashed?: true;
 }
 
 const NO_ANSWER: Asked = { answer: LoadAnswer.NO_ANSWER };
@@ -148,7 +150,10 @@ function askPage(probe: LoadingProbe): Promise<Asked> {
     .then(probe)
     .then(
       (said): Asked => {
-        const state = 'boolean' === typeof said ? { loading: said } : said;
+        const state: PageLoad = 'boolean' === typeof said ? { loading: said } : said;
+        if (true === state.crashed) {
+          return { answer: LoadAnswer.LOADED, crashed: true };
+        }
         if (!state.loading) {
           return { answer: LoadAnswer.LOADED };
         }
@@ -168,12 +173,13 @@ export function loadingLostHint(outcome: {
   stillLoading: boolean;
   unanswered: boolean;
   openRequest?: string;
+  crashed?: true;
 }): string | undefined {
+  if (true === outcome.crashed) {
+    return PAGE_CRASHED_REASON;
+  }
   if (outcome.unanswered) {
-    return (
-      'The page did not answer when replay asked whether it was still loading, so a script can ' +
-      'block it (an endless loop). Fix the page, then replay'
-    );
+    return PAGE_UNANSWERED_REASON;
   }
   if (!outcome.stillLoading) {
     return undefined;
@@ -187,6 +193,16 @@ export function loadingLostHint(outcome: {
     'a page loading, and that page may never connect'
   );
 }
+
+/** Why a page whose renderer crashed did not connect. The older reasons do not apply to it. */
+const PAGE_CRASHED_REASON =
+  'The page crashed: its renderer stopped, and a crashed page does not recover. Start the ' +
+  'command that opened the browser again, then replay';
+
+/** Why the wait ended on a page that did not answer the last question in time. */
+const PAGE_UNANSWERED_REASON =
+  'The page did not answer in time when replay asked whether it was still loading. A busy page ' +
+  'can answer late, and a script in an endless loop never answers';
 
 /** The older reason for a start page that did not connect: a slow first compile, or a slow tab. */
 const SLOW_START_REASON =
@@ -457,9 +473,9 @@ async function moveTo(
     },
   );
   if ('lost' === outcome.kind) {
-    // The new reason first, then the older one. A page that does not answer is not slow.
+    // The new reason first, then the older one. A crashed page is not slow.
     const hint = loadingLostHint(outcome);
-    const reasons = outcome.unanswered ? [hint] : [hint, SLOW_START_REASON];
+    const reasons = true === outcome.crashed ? [hint] : [hint, SLOW_START_REASON];
     const why = reasons.filter((reason): reason is string => reason !== undefined).join('. ');
     return {
       lost:
@@ -677,6 +693,8 @@ export type NavigateOutcome =
       unanswered: boolean;
       /** The request that kept the page loading, when the probe named one. */
       openRequest?: string;
+      /** The page's renderer crashed. */
+      crashed?: true;
       wait?: StartPageWait;
     };
 
@@ -797,6 +815,7 @@ export async function navigateAndAwait(
           stillLoading: loading,
           unanswered,
           ...(said.openRequest === undefined ? {} : { openRequest: said.openRequest }),
+          ...(true === said.crashed ? { crashed: true } : {}),
           ...extendedWait(),
         };
       }

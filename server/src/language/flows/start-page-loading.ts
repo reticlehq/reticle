@@ -7,14 +7,7 @@
  * page for longer than the budget made replay stop at 5 s on exactly the tab `verify` uses.
  */
 
-/** What a page says when replay asks whether it is still loading (see `pageLoadingOrFetching`). */
-export interface PageLoad {
-  loading: boolean;
-  /** The method and path of the oldest open request. */
-  openRequest?: string;
-}
-
-const PAGE_LOADED: PageLoad = { loading: false };
+import { PAGE_LOADED, type PageLoad } from '@/portal/pool/page-requests.js';
 
 /** The slice of the browser pool that knows its leases. */
 interface LeaseLoading {
