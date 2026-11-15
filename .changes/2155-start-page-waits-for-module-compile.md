@@ -9,7 +9,9 @@
 
   Now a page counts as loading while any request is open, or ended less than 1 s ago. An `EventSource` or a WebSocket does not count. Replay waits up to its 30 s loading cap, with no change to the flow file. A `navigate` step in a flow uses the same wait.
 
-  When the page is still loading at the cap, the result names `signalTimeoutMs`. Raise it in the flow file to wait longer.
+  When the page is still loading at the cap, the result names the request that was still open, by method and path. A long poll or a stream keeps a page loading. The older reason follows, and it names `signalTimeoutMs`. Raise it in the flow file to wait longer.
+
+  A failed question to an open page now counts as loading, because a navigation causes it. A closed page counts as loaded.
 
   Each question to the page now has a 250 ms limit. A page that runs an endless loop never answers. Replay then waits up to the 30 s cap, and says that the page did not answer. Before, replay on a lease waited forever.
 
