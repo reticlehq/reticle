@@ -3,13 +3,21 @@
  *
  * Next installs the adapter in a `useEffect`, after the shell committed. The signal used to wait for
  * the next commit, which never came on a quiet page, and it fired on a commit that left a slow
- * Suspense boundary without handlers. Replay reads `hydrated` from the store to know what to wait for.
+ * Suspense boundary without handlers. Replay reads `hydration` from the store to know what to wait
+ * for, and waits only while it says `pending`.
+ *
+ * `commit()` below calls the hook by hand. `render-meter-react-hook.live.test.ts` lets React call it.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { act, createElement, Suspense, use, type ReactNode } from 'react';
 import { createRoot, hydrateRoot } from 'react-dom/client';
 import { renderToString } from 'react-dom/server';
-import { RETICLE_HYDRATION_SIGNAL, RETICLE_RENDERS_STORE, RenderStatsField } from '@reticlehq/core';
+import {
+  HydrationState,
+  RETICLE_HYDRATION_SIGNAL,
+  RETICLE_RENDERS_STORE,
+  RenderStatsField,
+} from '@reticlehq/core';
 import { readStores } from '@reticlehq/browser';
 import { getRenderStats, installRenderMeter, resetRenderMeterForTest } from './render-meter.js';
 
@@ -30,9 +38,9 @@ function app(gate: Promise<void> | undefined): ReactNode {
   );
 }
 
-function hydratedInStore(): unknown {
+function hydrationInStore(): unknown {
   const stores = readStores(RETICLE_RENDERS_STORE) as Record<string, Record<string, unknown>>;
-  return stores[RETICLE_RENDERS_STORE]?.[RenderStatsField.HYDRATED];
+  return stores[RETICLE_RENDERS_STORE]?.[RenderStatsField.HYDRATION];
 }
 
 /** What React's commit hook does, so the test does not depend on when React reads the hook. */
@@ -65,8 +73,20 @@ describe('render meter hydration over a real React tree', () => {
     installRenderMeter({ discoverStores: false });
 
     expect(signal).toHaveBeenCalledWith(RETICLE_HYDRATION_SIGNAL);
-    expect(getRenderStats().hydrated).toBe(true);
-    expect(hydratedInStore()).toBe(true);
+    expect(getRenderStats().hydration).toBe(HydrationState.DONE);
+    expect(hydrationInStore()).toBe(HydrationState.DONE);
+  });
+
+  // #1654 audit: the adapter is installed on pages with no React tree (a Preact app, an Astro page
+  // without a React island, a static entry of a Vite app). The store said `hydrated: false` there
+  // for ever, so replay waited its whole bound on every flow.
+  it('says NONE, and does not signal, on a page with no React tree', () => {
+    document.body.innerHTML = '<main><button>plain</button></main>';
+
+    installRenderMeter({ discoverStores: false });
+
+    expect(signal).not.toHaveBeenCalled();
+    expect(hydrationInStore()).toBe(HydrationState.NONE);
   });
 
   it('waits for a dehydrated Suspense boundary, and signals on the commit that hydrates it', async () => {
@@ -83,7 +103,7 @@ describe('render meter hydration over a real React tree', () => {
     installRenderMeter({ discoverStores: false });
     commit();
     expect(signal).not.toHaveBeenCalled();
-    expect(hydratedInStore()).toBe(false);
+    expect(hydrationInStore()).toBe(HydrationState.PENDING);
 
     await act(async () => {
       open();
@@ -91,6 +111,6 @@ describe('render meter hydration over a real React tree', () => {
     });
     commit();
     expect(signal).toHaveBeenCalledTimes(1);
-    expect(hydratedInStore()).toBe(true);
+    expect(hydrationInStore()).toBe(HydrationState.DONE);
   });
 });

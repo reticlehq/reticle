@@ -49,9 +49,13 @@ function toPosix(path: string): string {
  */
 export function relativeToRoot(file: string): string {
   const root = (globalThis as Record<string, unknown>)[RETICLE_ROOT_GLOBAL];
-  if (typeof root !== 'string' || 0 === root.length) return file;
+  if (typeof root !== 'string' || 0 === root.length) {
+    return file;
+  }
   const normalizedRoot = toPosix(root).replace(/\/+$/, '');
-  if (0 === normalizedRoot.length) return file;
+  if (0 === normalizedRoot.length) {
+    return file;
+  }
   const normalizedFile = toPosix(file);
   const prefix = `${normalizedRoot}/`;
   const matches =
@@ -118,7 +122,9 @@ function isFrameworkNoise(name: string): boolean {
  */
 function currentFiber(fiber: Fiber): Fiber {
   const alternate = fiber.alternate;
-  if (alternate === undefined || null === alternate) return fiber;
+  if (alternate === undefined || null === alternate) {
+    return fiber;
+  }
   let top = fiber;
   let depth = 0;
   while (top.return !== null && depth < MAX_DEPTH) {
@@ -126,17 +132,25 @@ function currentFiber(fiber: Fiber): Fiber {
     depth += 1;
   }
   const fiberRoot = top.stateNode;
-  if (typeof fiberRoot !== 'object' || null === fiberRoot) return fiber;
+  if (typeof fiberRoot !== 'object' || null === fiberRoot) {
+    return fiber;
+  }
   const committed = (fiberRoot as { current?: unknown }).current;
-  if (typeof committed !== 'object' || null === committed) return fiber;
+  if (typeof committed !== 'object' || null === committed) {
+    return fiber;
+  }
   return committed === top ? fiber : alternate;
 }
 
 function getFiber(el: Element): Fiber | null {
   const key = Object.keys(el).find((k) => FIBER_PREFIXES.some((p) => k.startsWith(p)));
-  if (key === undefined) return null;
+  if (key === undefined) {
+    return null;
+  }
   const value = (el as unknown as Record<string, unknown>)[key];
-  if (value === undefined || null === value) return null;
+  if (value === undefined || null === value) {
+    return null;
+  }
   return currentFiber(value as Fiber);
 }
 
@@ -144,7 +158,9 @@ function getFiber(el: Element): Fiber | null {
 function componentName(type: unknown): string | null {
   if ('function' === typeof type) {
     const fn = type as { displayName?: string; name?: string };
-    if (fn.displayName !== undefined && fn.displayName.length > 0) return fn.displayName;
+    if (fn.displayName !== undefined && fn.displayName.length > 0) {
+      return fn.displayName;
+    }
     return fn.name !== undefined && fn.name.length > 0 ? fn.name : null;
   }
   if ('object' === typeof type && type !== null) {
@@ -167,7 +183,9 @@ export function identify(el: Element): ComponentInfo | null {
     const name = componentName(fiber.elementType ?? fiber.type);
     if (name !== null && rawStack[rawStack.length - 1] !== name) {
       rawStack.push(name);
-      if (!isFrameworkNoise(name) && stack[stack.length - 1] !== name) stack.push(name);
+      if (!isFrameworkNoise(name) && stack[stack.length - 1] !== name) {
+        stack.push(name);
+      }
     }
     // `identify()` is on the ACT path as well as the inspect path, so one null fiber anywhere in
     // this walk takes out reticle_act / reticle_act_and_wait / reticle_inspect for the whole app —
@@ -178,7 +196,9 @@ export function identify(el: Element): ComponentInfo | null {
     if (source === undefined && debugSource !== undefined && debugSource !== null) {
       source = { file: relativeToRoot(debugSource.fileName), line: debugSource.lineNumber };
       const column = debugSource.columnNumber;
-      if (column !== undefined && column !== null) source.column = column;
+      if (column !== undefined && column !== null) {
+        source.column = column;
+      }
     }
     fiber = fiber.return;
   }
@@ -191,20 +211,30 @@ export function identify(el: Element): ComponentInfo | null {
 
   // Prefer the de-noised stack; fall back to the nearest raw name if filtering left nothing.
   const componentStack = stack.length > 0 ? stack : rawStack.slice(0, 1);
-  if (0 === componentStack.length && source === undefined) return null;
+  if (0 === componentStack.length && source === undefined) {
+    return null;
+  }
   const info: ComponentInfo = { componentStack };
-  if (source !== undefined) info.source = source;
+  if (source !== undefined) {
+    info.source = source;
+  }
   return info;
 }
 
 function sourceFromAttribute(el: Element): ComponentSource | undefined {
   const stamped = el.closest(`[${DATA_RETICLE_SOURCE_ATTR}]`);
   const raw = stamped?.getAttribute(DATA_RETICLE_SOURCE_ATTR);
-  if (null === raw || raw === undefined) return undefined;
+  if (null === raw || raw === undefined) {
+    return undefined;
+  }
   const match = /^(.*):(\d+):(\d+)$/.exec(raw);
-  if (null === match) return undefined;
+  if (null === match) {
+    return undefined;
+  }
   const [, file, line, column] = match;
-  if (file === undefined || line === undefined || column === undefined) return undefined;
+  if (file === undefined || line === undefined || column === undefined) {
+    return undefined;
+  }
   return { file, line: Number(line), column: Number(column) };
 }
 
@@ -214,7 +244,9 @@ function nearestComponentFiber(el: Element): Fiber | null {
   let depth = 0;
   while (fiber !== null && depth < MAX_DEPTH) {
     depth += 1;
-    if ('function' === typeof fiber.type || 'function' === typeof fiber.elementType) return fiber;
+    if ('function' === typeof fiber.type || 'function' === typeof fiber.elementType) {
+      return fiber;
+    }
     fiber = fiber.return;
   }
   return null;
@@ -227,14 +259,26 @@ function nearestComponentFiber(el: Element): Fiber | null {
  * serializing those un-guarded can cause hangs. Never throws.
  */
 function safeValue(value: unknown, depth: number, seen: WeakSet<object>): unknown {
-  if (null === value) return null;
+  if (null === value) {
+    return null;
+  }
   const t = typeof value;
-  if ('string' === t || 'number' === t || 'boolean' === t) return value;
-  if ('undefined' === t || 'function' === t || 'symbol' === t || 'bigint' === t) return null;
-  if (typeof Node !== 'undefined' && value instanceof Node) return DOM_NODE_MARKER;
-  if (depth >= MAX_SERIALIZE_DEPTH) return null;
+  if ('string' === t || 'number' === t || 'boolean' === t) {
+    return value;
+  }
+  if ('undefined' === t || 'function' === t || 'symbol' === t || 'bigint' === t) {
+    return null;
+  }
+  if (typeof Node !== 'undefined' && value instanceof Node) {
+    return DOM_NODE_MARKER;
+  }
+  if (depth >= MAX_SERIALIZE_DEPTH) {
+    return null;
+  }
   const obj = value as object;
-  if (seen.has(obj)) return null;
+  if (seen.has(obj)) {
+    return null;
+  }
   seen.add(obj);
   if (Array.isArray(value)) {
     const out = value.slice(0, MAX_SERIALIZE_ITEMS).map((v) => safeValue(v, depth + 1, seen));
@@ -279,7 +323,9 @@ export function readState(el: Element): ComponentStateResult {
     while ('object' === typeof hook && i < MAX_HOOKS) {
       hooks.push(safeValue(hook.memoizedState, 0, seen));
       const next = hook.next;
-      if (null === next || typeof next !== 'object') break;
+      if (null === next || typeof next !== 'object') {
+        break;
+      }
       hook = next;
       i += 1;
     }
@@ -304,7 +350,9 @@ const HOVER_HANDLER_KEYS = [
 export function hasHoverHandlers(el: Element): boolean {
   const fiber = getFiber(el);
   const props = fiber?.memoizedProps;
-  if (typeof props !== 'object' || null === props) return false;
+  if (typeof props !== 'object' || null === props) {
+    return false;
+  }
   const p = props as Record<string, unknown>;
   return HOVER_HANDLER_KEYS.some((k) => 'function' === typeof p[k]);
 }
@@ -346,7 +394,9 @@ export interface InstallOptions {
  * silence, indistinguishable from an idle page.
  */
 export function install(options?: InstallOptions): void {
-  if (installed) return;
+  if (installed) {
+    return;
+  }
   installed = true;
   registerAdapter({ name: 'react', identify, readState, hasHoverHandlers });
   installRenderMeter({ discoverStores: false !== options?.discoverStores });
@@ -361,6 +411,7 @@ export {
 export {
   HYDRATION_COMPLETE_SIGNAL,
   createHydrationTracker,
+  type HydrationRead,
   type HydrationTracker,
 } from './hydration.js';
 export {

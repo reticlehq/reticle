@@ -194,12 +194,12 @@ export function buildDecision(
           'has — rather than rebinding it; nothing here says the element was renamed or removed.',
       };
     }
-    const fix =
-      drift.nearest !== null && drift.ambiguous !== true
-        ? `rebind the anchor to "${drift.nearest}" (closest survivor)`
-        : drift.nearest !== null
-          ? `candidates exist (e.g. "${drift.nearest}") but are ambiguous — choose deliberately`
-          : undefined;
+    let fix: string | undefined;
+    if (drift.nearest !== null && drift.ambiguous !== true) {
+      fix = `rebind the anchor to "${drift.nearest}" (closest survivor)`;
+    } else if (drift.nearest !== null) {
+      fix = `candidates exist (e.g. "${drift.nearest}") but are ambiguous — choose deliberately`;
+    }
     return {
       verdict: 'drift',
       summary: withIntent(`"${name}" drifted at step ${step.step} (${step.anchor}).`, intentSaid),
@@ -233,7 +233,9 @@ export function buildDecision(
 
 /** Map a replay status to the suite verdict's three-state outcome. */
 function suiteVerdictOf(status: ReplayStatus): 'pass' | 'drift' | 'fail' {
-  if (status === ReplayStatus.OK) return 'pass';
+  if (status === ReplayStatus.OK) {
+    return 'pass';
+  }
   return status === ReplayStatus.DRIFT ? 'drift' : 'fail';
 }
 
@@ -263,12 +265,16 @@ export function unverifiableReason(
    */
   invoked: ReadonlyMap<string, FlowFile> = new Map(),
 ): string | undefined {
-  if (flow === undefined) return undefined;
+  if (flow === undefined) {
+    return undefined;
+  }
   if (0 === flow.steps.length) {
     return 'the flow has no steps — it replays green whatever the app does. Record it again, or add steps with reticle_run { tool: "reticle_annotate" }.';
   }
   const c = classifyFlowAssertions(flow, invoked);
-  if (c.grade !== FlowAssertionGrade.ASSERTION_FREE) return undefined;
+  if (c.grade !== FlowAssertionGrade.ASSERTION_FREE) {
+    return undefined;
+  }
   return (
     c.warning ??
     'the flow asserts no observable consequence, so it passes even when the feature is broken.'
@@ -312,8 +318,11 @@ export function buildSuiteVerdict(
       const reason = replay.unverifiable?.reason ?? unverifiableReason(flow);
       // A green that cannot go red is not a pass. Counted apart, so `passed` stays a count of things
       // actually verified rather than of replays that merely completed.
-      if (reason !== undefined) unverifiable.push({ flow: replay.name, reason });
-      else passed += 1;
+      if (reason !== undefined) {
+        unverifiable.push({ flow: replay.name, reason });
+      } else {
+        passed += 1;
+      }
       continue;
     }
     const decision = replay.decision ?? buildDecision(replay, flow);
@@ -324,9 +333,15 @@ export function buildSuiteVerdict(
     // never reaches here. Both arrive as ReplayStatus.ERROR, so without this the suite cannot tell
     // "the app broke" from "Reticle could not run this" — and the bug metric reported the second as
     // the first, 8 times in one sweep.
-    if (0 === replay.steps.length && replay.error !== undefined) row.couldNotRun = true;
-    if (decision.whatChanged !== undefined) row.whatChanged = decision.whatChanged;
-    if (decision.whereInSource !== undefined) row.whereInSource = decision.whereInSource;
+    if (0 === replay.steps.length && replay.error !== undefined) {
+      row.couldNotRun = true;
+    }
+    if (decision.whatChanged !== undefined) {
+      row.whatChanged = decision.whatChanged;
+    }
+    if (decision.whereInSource !== undefined) {
+      row.whereInSource = decision.whereInSource;
+    }
     row.nextAction = decision.nextAction;
     failures.push(row);
   }
@@ -349,6 +364,14 @@ export function buildSuiteVerdict(
       contradictions.push({ flow: replay.name, step: -1, ...found });
     }
   }
+  // From every run, as the contradictions above: a pass on a page that was not hydrated is luck (#1654).
+  const hydrationWaits = runs.flatMap(({ replay }) =>
+    replay.hydrationWait === undefined ? [] : [{ flow: replay.name, ...replay.hydrationWait }],
+  );
+  const notHydrated =
+    0 === hydrationWaits.length
+      ? ''
+      : ` — ${String(hydrationWaits.length)} flow(s) ran a step before the page hydrated: ${hydrationWaits.map((w) => w.flow).join(', ')}`;
   const disagreed =
     0 === contradictions.length
       ? ''
@@ -362,17 +385,17 @@ export function buildSuiteVerdict(
   // which meant `reticle verify` went green on every project that had not written a flow yet, and on
   // any project where the flows directory failed to resolve. Found by the adversarial MCP sweep; it
   // was the only invented answer in 994 calls.
-  const status: SuiteVerdict['status'] =
-    failed > 0
-      ? 'fail'
-      : /*
-         * A green run with a contradiction is not a `pass`. Nothing the flow DECLARED went unproved,
-         * so calling it `fail` would say the wrong thing — but a suite whose channels disagree is
-         * exactly a green that cannot be trusted, which is what `unverifiable` already means here.
-         */
-        unverifiable.length > 0 || contradictions.length > 0 || 0 === total
-        ? 'unverifiable'
-        : 'pass';
+  let status: SuiteVerdict['status'] = 'pass';
+  if (failed > 0) {
+    status = 'fail';
+  } else if (unverifiable.length > 0 || contradictions.length > 0 || 0 === total) {
+    /*
+     * A green run with a contradiction is not a `pass`. Nothing the flow DECLARED went unproved,
+     * so calling it `fail` would say the wrong thing — but a suite whose channels disagree is
+     * exactly a green that cannot be trusted, which is what `unverifiable` already means here.
+     */
+    status = 'unverifiable';
+  }
   const cannotFail =
     0 === unverifiable.length
       ? ''
@@ -395,14 +418,16 @@ export function buildSuiteVerdict(
     0 === unreached.length
       ? ''
       : ` — ${String(unreached.length)} known route(s) never opened: ${unreached.join(', ')}`;
-  const summary =
-    0 === total
-      ? `no flows to verify — nothing was checked. ${RECORD_A_FLOW}`
-      : 0 === failed
-        ? 0 === unverifiable.length
-          ? `all ${total} flow${1 === total ? '' : 's'} pass`
-          : `${String(passed)}/${String(total)} flows verified${cannotFail}`
-        : `${passed}/${total} flows pass — ${failed} need attention: ${failures.map((f) => f.flow).join(', ')}${cannotFail}`;
+  let summary: string;
+  if (0 === total) {
+    summary = `no flows to verify — nothing was checked. ${RECORD_A_FLOW}`;
+  } else if (0 < failed) {
+    summary = `${passed}/${total} flows pass — ${failed} need attention: ${failures.map((f) => f.flow).join(', ')}${cannotFail}`;
+  } else if (0 === unverifiable.length) {
+    summary = `all ${total} flow${1 === total ? '' : 's'} pass`;
+  } else {
+    summary = `${String(passed)}/${String(total)} flows verified${cannotFail}`;
+  }
   /*
    * A shared-session pass can be inherited, so the count is not comparable with a leased one.
    *
@@ -416,7 +441,9 @@ export function buildSuiteVerdict(
       ? ' — these flows shared one session and ran in order, so a pass here may rest on state an earlier flow left behind; replay with `parallel` to give each its own context'
       : '';
   const notAsSaved = runs.flatMap(({ replay, flow }) => {
-    if (flow === undefined) return [];
+    if (flow === undefined) {
+      return [];
+    }
     const report = replayability(flow);
     return replaysAsSaved(report) ? [] : [{ flow: replay.name, ...report }];
   });
@@ -440,13 +467,15 @@ export function buildSuiteVerdict(
     total,
     passed,
     failed,
-    summary: summary + silentSteps + neverOpened + disagreed + sharedState + asSaved + anyNumber,
+    summary:
+      summary + silentSteps + neverOpened + disagreed + notHydrated + sharedState + asSaved + anyNumber,
     failures,
     ...(isolation === undefined ? {} : { isolation }),
     ...(unverifiable.length > 0 ? { unverifiable } : {}),
     ...(coverage === undefined ? {} : { coverage }),
     ...(0 === unreached.length ? {} : { unreached }),
     ...(0 === contradictions.length ? {} : { contradictions }),
+    ...(0 === hydrationWaits.length ? {} : { hydrationWaits }),
     ...(0 === notAsSaved.length ? {} : { replayability: notAsSaved }),
   };
 }
@@ -468,7 +497,9 @@ function suiteCoverage(
   runs: ReadonlyArray<{ flow?: FlowFile }>,
 ): { steps: number; declared: number } | undefined {
   const flows = runs.map((run) => run.flow).filter((flow): flow is FlowFile => flow !== undefined);
-  if (0 === flows.length) return undefined;
+  if (0 === flows.length) {
+    return undefined;
+  }
   let steps = 0;
   let declared = 0;
   const walk = (list: readonly FlowStep[]): void => {
@@ -478,9 +509,13 @@ function suiteCoverage(
         continue;
       }
       steps += 1;
-      if (step.expect !== undefined) declared += 1;
+      if (step.expect !== undefined) {
+        declared += 1;
+      }
     }
   };
-  for (const flow of flows) walk(flow.steps);
+  for (const flow of flows) {
+    walk(flow.steps);
+  }
   return { steps, declared };
 }

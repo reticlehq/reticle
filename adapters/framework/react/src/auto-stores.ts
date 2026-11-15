@@ -40,7 +40,7 @@ const FIBER_PREFIXES = ['__reactFiber$', '__reactInternalInstance$'];
 /** How many elements to look at before concluding this is not a React page. A root is near the top. */
 const MAX_HOST_SCAN = 200;
 /** Fibers visited in one walk. A cap, not a budget — real trees finish far inside it. */
-export const MAX_FIBER_NODES = 20000;
+const MAX_FIBER_NODES = 20000;
 
 /** React 18 renders a provider whose `type` carries this; React 19 uses the context object itself. */
 const PROVIDER_TYPE = Symbol.for('react.provider');
@@ -58,7 +58,7 @@ interface DiscoveredStore {
   source: object;
 }
 
-export interface FiberNode {
+interface FiberNode {
   return?: FiberNode | null;
   child?: FiberNode | null;
   sibling?: FiberNode | null;

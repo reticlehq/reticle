@@ -6,32 +6,50 @@
  * on it does nothing. React keeps such a boundary in the tree as a "dehydrated" fiber, so a walk of
  * the committed tree can say which part still waits.
  *
- * HOST-SAFE: an unknown fiber shape gives DONE, which is what the adapter said before this existed.
+ * A read that cannot be sure says UNKNOWN, never DONE. A wrong DONE sends replay into a page without
+ * handlers, which is the defect this exists for.
+ *
+ * HOST-SAFE: nothing here throws into the app. A fiber shape this module does not know gives UNKNOWN.
  */
-import { MAX_FIBER_NODES, findFiber, topOf, type FiberNode } from './auto-stores.js';
+import { HydrationState } from '@reticlehq/core';
+import { findFiber, topOf } from './auto-stores.js';
 
-export const HydrationState = {
-  /** React has not put a fiber on the page yet. */
-  NONE: 'none',
-  /** React rendered, and a server-rendered part still has no event handlers. */
-  PENDING: 'pending',
-  /** React rendered, and nothing waits for hydration. */
-  DONE: 'done',
-} as const;
-export type HydrationState = (typeof HydrationState)[keyof typeof HydrationState];
-
-/** React's fiber tags that can hold a dehydrated part (react-reconciler `ReactWorkTags`). */
+/** React's fiber tags that this module reads (react-reconciler `ReactWorkTags`). */
 const FiberTag = {
+  HOST_ROOT: 3,
   SUSPENSE: 13,
   DEHYDRATED_FRAGMENT: 18,
   ACTIVITY: 31,
 } as const;
 
-interface StatefulFiber extends FiberNode {
-  tag?: unknown;
-  stateNode?: unknown;
-  memoizedState?: unknown;
-}
+/** The fields of React's internals that this module reads. */
+const FiberField = {
+  /** `FiberRoot.current`: the HostRoot fiber of the committed tree. */
+  CURRENT: 'current',
+  /** `FiberRoot.containerInfo`: the node the root renders into. Only a FiberRoot has it. */
+  CONTAINER_INFO: 'containerInfo',
+  /** `Fiber.stateNode`: for a HostRoot fiber, its FiberRoot. */
+  STATE_NODE: 'stateNode',
+  /** `Fiber.memoizedState`: the committed state of a root or a boundary. */
+  MEMOIZED_STATE: 'memoizedState',
+  /** `SuspenseState.dehydrated` and `ActivityState.dehydrated`: server HTML not hydrated yet. */
+  DEHYDRATED: 'dehydrated',
+  /** `RootState.isDehydrated`: a `hydrateRoot` root before its first commit. */
+  IS_DEHYDRATED: 'isDehydrated',
+  TAG: 'tag',
+  CHILD: 'child',
+  SIBLING: 'sibling',
+} as const;
+
+/** React marks the node it renders into (for Next, the document) with its HostRoot fiber. */
+const CONTAINER_PREFIX = '__reactContainer$';
+/** How many elements to look at for a root container. A root is near the top of most pages. */
+const MAX_CONTAINER_SCAN = 200;
+/**
+ * The most fibers one read visits, over all roots. A cap so that a strange fiber graph cannot hang
+ * the app. It is ten times the store-discovery walk, because here a walk cut short cannot answer.
+ */
+export const MAX_HYDRATION_WALK = 200_000;
 
 function fieldOf(value: unknown, key: string): unknown {
   return null !== value && 'object' === typeof value
@@ -39,97 +57,142 @@ function fieldOf(value: unknown, key: string): unknown {
     : undefined;
 }
 
-/** The committed root fiber. A fiber found on the page can belong to the tree in progress. */
-function committedRoot(top: StatefulFiber): StatefulFiber {
-  const current = fieldOf(top.stateNode, 'current');
-  return null !== current && 'object' === typeof current ? current : top;
+function isObject(value: unknown): value is object {
+  return null !== value && 'object' === typeof value;
 }
 
-function isDehydrated(fiber: StatefulFiber): boolean {
-  if (FiberTag.DEHYDRATED_FRAGMENT === fiber.tag) {
-    return true;
+/** The FiberRoot of a value: a FiberRoot itself, or any fiber of its tree. */
+function fiberRootOf(value: unknown): object | null {
+  if (!isObject(value)) {
+    return null;
   }
-  if (FiberTag.SUSPENSE !== fiber.tag && FiberTag.ACTIVITY !== fiber.tag) {
-    return false;
+  if (
+    isObject(fieldOf(value, FiberField.CURRENT)) &&
+    undefined !== fieldOf(value, FiberField.CONTAINER_INFO)
+  ) {
+    return value;
   }
-  const dehydrated = fieldOf(fiber.memoizedState, 'dehydrated');
-  return null !== dehydrated && undefined !== dehydrated;
+  const top = topOf(value);
+  if (FiberTag.HOST_ROOT !== fieldOf(top, FiberField.TAG)) {
+    return null;
+  }
+  const root = fieldOf(top, FiberField.STATE_NODE);
+  return isObject(root) && isObject(fieldOf(root, FiberField.CURRENT)) ? root : null;
 }
 
-function anyDehydrated(root: StatefulFiber): boolean {
-  const stack: StatefulFiber[] = [root];
-  let visited = 0;
-  while (stack.length > 0 && visited < MAX_FIBER_NODES) {
-    const fiber = stack.pop();
-    if (undefined === fiber) {
-      continue;
-    }
-    visited += 1;
-    if (isDehydrated(fiber)) {
-      return true;
-    }
-    const { sibling, child } = fiber;
-    if (null !== sibling && undefined !== sibling) {
-      stack.push(sibling);
-    }
-    if (null !== child && undefined !== child) {
-      stack.push(child);
-    }
-  }
-  return false;
-}
-
-/** React marks the node it renders into (for Next, the document) with its root fiber. */
-const CONTAINER_PREFIX = '__reactContainer$';
-/** How many elements to look at for a root container. A root is near the top. */
-const MAX_CONTAINER_SCAN = 200;
-
-function containerFiber(node: unknown): FiberNode | null {
-  if (null === node || 'object' !== typeof node) {
+function containerFiber(node: unknown): unknown {
+  if (!isObject(node)) {
     return null;
   }
   for (const key of Object.keys(node)) {
-    const fiber = (node as Record<string, unknown>)[key];
-    if (key.startsWith(CONTAINER_PREFIX) && null !== fiber && 'object' === typeof fiber) {
-      return fiber;
+    if (key.startsWith(CONTAINER_PREFIX)) {
+      return (node as Record<string, unknown>)[key];
     }
   }
   return null;
 }
 
 /**
- * A fiber of the React tree on `doc`. The root container comes first: when every element on the page
- * is in a dehydrated boundary, no element carries a fiber, and the page still waits for hydration.
+ * The React roots that `doc` shows: every root container among the document and its first elements.
+ * When none is there, the root of the first element that carries a fiber.
  */
-function entryFiber(doc: Document): FiberNode | null {
-  const elements = doc.querySelectorAll('*');
+function rootsOnPage(doc: Document): object[] {
   const nodes: unknown[] = [doc];
+  const elements = doc.querySelectorAll('*');
   for (let i = 0; i < Math.min(elements.length, MAX_CONTAINER_SCAN); i += 1) {
     nodes.push(elements[i]);
   }
+  const roots: object[] = [];
   for (const node of nodes) {
-    const fiber = containerFiber(node);
-    if (null !== fiber) {
-      return fiber;
+    const root = fiberRootOf(containerFiber(node));
+    if (null !== root) {
+      roots.push(root);
     }
   }
-  return findFiber(doc);
+  if (0 === roots.length) {
+    const root = fiberRootOf(findFiber(doc));
+    if (null !== root) {
+      roots.push(root);
+    }
+  }
+  return roots;
 }
 
-/** The hydration state of the React tree on `doc`. */
-export function readHydrationState(doc: Document): HydrationState {
+function isDehydrated(fiber: unknown): boolean {
+  const tag = fieldOf(fiber, FiberField.TAG);
+  if (FiberTag.DEHYDRATED_FRAGMENT === tag) {
+    return true;
+  }
+  if (FiberTag.SUSPENSE !== tag && FiberTag.ACTIVITY !== tag) {
+    return false;
+  }
+  const dehydrated = fieldOf(fieldOf(fiber, FiberField.MEMOIZED_STATE), FiberField.DEHYDRATED);
+  return null !== dehydrated && undefined !== dehydrated;
+}
+
+/** What one walk found, and how many fibers it may still visit. */
+interface Walk {
+  state: HydrationState;
+  left: number;
+}
+
+/** Walk the committed tree of one root, down to the first dehydrated part. */
+function readRoot(root: object, budget: number): Walk {
+  const current = fieldOf(root, FiberField.CURRENT);
+  if (true === fieldOf(fieldOf(current, FiberField.MEMOIZED_STATE), FiberField.IS_DEHYDRATED)) {
+    return { state: HydrationState.PENDING, left: budget };
+  }
+  const stack: unknown[] = [current];
+  let left = budget;
+  while (stack.length > 0) {
+    if (0 === left) {
+      return { state: HydrationState.UNKNOWN, left };
+    }
+    const fiber = stack.pop();
+    left -= 1;
+    if (isDehydrated(fiber)) {
+      return { state: HydrationState.PENDING, left };
+    }
+    for (const next of [fieldOf(fiber, FiberField.SIBLING), fieldOf(fiber, FiberField.CHILD)]) {
+      if (isObject(next)) {
+        stack.push(next);
+      }
+    }
+  }
+  return { state: HydrationState.DONE, left };
+}
+
+/**
+ * The hydration state of the React trees on `doc`.
+ *
+ * @param known FiberRoots the commit hook named. They count wherever their container is on the
+ *   page, so a root the page scan does not reach is still read.
+ */
+export function readHydrationState(doc: Document, known: Iterable<unknown> = []): HydrationState {
   try {
-    const entry = entryFiber(doc);
-    if (null === entry) {
+    const roots = new Set<object>();
+    for (const value of [...known, ...rootsOnPage(doc)]) {
+      const root = fiberRootOf(value);
+      if (null !== root) {
+        roots.add(root);
+      }
+    }
+    if (0 === roots.size) {
       return HydrationState.NONE;
     }
-    const root = committedRoot(topOf(entry));
-    // A root that `hydrateRoot` created stays dehydrated until its first commit.
-    if (true === fieldOf(root.memoizedState, 'isDehydrated')) {
-      return HydrationState.PENDING;
+    let left = MAX_HYDRATION_WALK;
+    let unsure = false;
+    for (const root of roots) {
+      const walk = readRoot(root, left);
+      if (HydrationState.PENDING === walk.state) {
+        return HydrationState.PENDING;
+      }
+      unsure = unsure || HydrationState.UNKNOWN === walk.state;
+      left = walk.left;
     }
-    return anyDehydrated(root) ? HydrationState.PENDING : HydrationState.DONE;
+    return unsure ? HydrationState.UNKNOWN : HydrationState.DONE;
   } catch {
-    return HydrationState.DONE;
+    // A fiber shape this module does not know. Say so; never claim DONE on it.
+    return HydrationState.UNKNOWN;
   }
 }
