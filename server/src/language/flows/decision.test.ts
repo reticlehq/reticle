@@ -477,7 +477,9 @@ describe('buildSuiteVerdict — a replay that stopped waiting for hydration', ()
       { flow: 'lucky', ...wait },
       { flow: 'slow', ...wait },
     ]);
-    expect(verdict.summary).toContain('lucky, slow');
+    expect(verdict.summary).toContain(
+      '2 flow(s) stopped waiting for the page to hydrate: lucky, slow',
+    );
   });
 
   it('adds nothing when no wait reached its bound', () => {

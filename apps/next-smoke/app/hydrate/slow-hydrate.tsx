@@ -2,14 +2,23 @@
 import { use, type ReactNode } from 'react';
 
 const DELAY_PARAM = 'delay';
+/** `?delay=click`: hold until the first click anywhere, so the page hydrates just after a click. */
+const UNTIL_CLICK = 'click';
 let gate: Promise<void> | undefined;
 
-/** The client's hold on hydration, from `?delay=<ms>`. The server never holds. */
+/** The client's hold on hydration, from `?delay=<ms>` or `?delay=click`. The server never holds. */
 function clientGate(): Promise<void> | undefined {
   if (typeof window === 'undefined') {
     return undefined;
   }
-  const delay = Number(new URLSearchParams(window.location.search).get(DELAY_PARAM) ?? '0');
+  const param = new URLSearchParams(window.location.search).get(DELAY_PARAM);
+  if (param === UNTIL_CLICK) {
+    gate ??= new Promise((resolve) => {
+      document.addEventListener('click', () => resolve(), { once: true, capture: true });
+    });
+    return gate;
+  }
+  const delay = Number(param ?? '0');
   if (!Number.isFinite(delay) || delay <= 0) {
     return undefined;
   }

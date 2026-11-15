@@ -191,6 +191,30 @@ try {
   );
   await navPage.close();
 
+  // 2c. A `navigate` step opens a page that is still pending at the bound, and the page hydrates
+  // just after the click (`?delay=click` holds hydration until the first click). The click started
+  // on a button with no handler, so the replay is `unverifiable`. Judged after the failure, the
+  // page read `done`, and this was a false `drift`.
+  const lateUrl = '/hydrate?delay=click&session=hydrate-navlate';
+  const navLate = revealFlow('hydrate-navlate', '/?session=hydrate-navlate', 'reveal', 'revealed');
+  navLate.steps.unshift({
+    tool: 'reticle_navigate',
+    anchor: { kind: 'testid', value: lateUrl },
+    navigate: lateUrl,
+  });
+  await flows.saveFlow(navLate);
+  const navLatePage = await open(NEXT_ORIGIN, navLate.startPath, 'hydrate-navlate');
+  const navLateRun = await T('reticle_flow_replay', {
+    flowName: navLate.name,
+    sessionId: 'hydrate-navlate',
+  });
+  chk(
+    'a click on a navigated page that was pending at the bound is unverifiable, not drift',
+    'unverifiable' === navLateRun.status && true === navLateRun.hydrationWait?.stillPending,
+    `${String(navLateRun.status)}: ${String(navLateRun.unverifiable?.reason ?? '').slice(0, 160)} ${JSON.stringify(navLateRun.hydrationWait ?? null)}`,
+  );
+  await navLatePage.close();
+
   // 3. The React adapter on a page with no React tree.
   const plain = revealFlow(
     'static-page',
