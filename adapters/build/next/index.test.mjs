@@ -178,6 +178,131 @@ describe('withReticle', () => {
     expect(sawUserHook).toBe(true);
   });
 
+  describe('watch ignore for the .reticle state folder (#2281)', () => {
+    // The glob form is the only one webpack 5 accepts inside an array, so match it with a real glob
+    // engine (the one Next ships) and not with a regex the test wrote to agree with the code.
+    const nextRequire = createRequire(
+      fileURLToPath(new URL('../../../apps/next-smoke/package.json', import.meta.url)),
+    );
+    const picomatch = nextRequire('next/dist/compiled/picomatch');
+    const STATE_FILE = '/work/app/.reticle/ambient.json';
+    const STATE_TMP_FILE = '/work/app/.reticle/ambient.json.tmp';
+    const SOURCE_FILE = '/work/app/src/app/page.tsx';
+
+    /** Does webpack's `watchOptions.ignored`, in any legal shape, ignore this path? */
+    function ignores(ignored, file) {
+      if (ignored instanceof RegExp) {
+        return ignored.test(file);
+      }
+      const globs = typeof ignored === 'string' ? [ignored] : ignored;
+      return picomatch(globs, { dot: true })(file);
+    }
+
+    /** Run the webpack hook the way `next dev` does and return the resulting watch options. */
+    function watchIgnored(userConfig, options) {
+      process.env.NODE_ENV = 'development';
+      const out = withReticle(userConfig, options).webpack(
+        { module: { rules: [] }, watchOptions: userConfig.__watchOptions },
+        { dev: true },
+      );
+      return out.watchOptions?.ignored;
+    }
+
+    it('ignores the state folder when the app set no watch options', () => {
+      const ignored = watchIgnored({});
+      expect(ignores(ignored, STATE_FILE)).toBe(true);
+      expect(ignores(ignored, STATE_TMP_FILE)).toBe(true);
+      expect(ignores(ignored, SOURCE_FILE)).toBe(false);
+    });
+
+    it('ignores the state folder on Windows paths too', () => {
+      const ignored = watchIgnored({});
+      expect(ignores(ignored, 'C:\\work\\app\\.reticle\\ambient.json')).toBe(true);
+    });
+
+    it('does not ignore a file that only ends in ".reticle"', () => {
+      const ignored = watchIgnored({});
+      expect(ignores(ignored, '/work/app/src/not.reticle')).toBe(false);
+      expect(ignores(ignored, '/work/app/src/my.reticle/file.ts')).toBe(false);
+    });
+
+    it("keeps Next's own default RegExp and adds the state folder", () => {
+      // What Next sets: one RegExp, frozen inside a frozen options object.
+      const nextDefault =
+        /^((?:[^/]*(?:\/|$))*)(\.(git|next)|node_modules)(\/((?:[^/]*(?:\/|$))*)(?:$|\/))?/;
+      const frozen = Object.freeze({ aggregateTimeout: 5, ignored: nextDefault });
+      const ignored = watchIgnored({ __watchOptions: frozen });
+      expect(ignores(ignored, STATE_FILE)).toBe(true);
+      expect(ignores(ignored, '/work/app/.next/server/app.js')).toBe(true);
+      expect(ignores(ignored, '/work/app/node_modules/react/index.js')).toBe(true);
+      expect(ignores(ignored, SOURCE_FILE)).toBe(false);
+      expect(frozen.ignored).toBe(nextDefault);
+    });
+
+    it('keeps every pattern in an array the app set', () => {
+      const ignored = watchIgnored({
+        __watchOptions: { ignored: ['**/generated/**', '**/*.log'] },
+      });
+      expect(ignores(ignored, STATE_FILE)).toBe(true);
+      expect(ignores(ignored, '/work/app/generated/api.ts')).toBe(true);
+      expect(ignores(ignored, '/work/app/debug.log')).toBe(true);
+      expect(ignores(ignored, SOURCE_FILE)).toBe(false);
+    });
+
+    it('keeps a single glob string the app set, and does not split it into characters', () => {
+      const ignored = watchIgnored({ __watchOptions: { ignored: '**/generated/**' } });
+      expect(ignores(ignored, STATE_FILE)).toBe(true);
+      expect(ignores(ignored, '/work/app/generated/api.ts')).toBe(true);
+      expect(ignored.every((pattern) => pattern.length > 1)).toBe(true);
+    });
+
+    it('keeps a RegExp the app set', () => {
+      const ignored = watchIgnored({ __watchOptions: { ignored: /[\\/]generated[\\/]/ } });
+      expect(ignores(ignored, STATE_FILE)).toBe(true);
+      expect(ignores(ignored, '/work/app/generated/api.ts')).toBe(true);
+      expect(ignores(ignored, SOURCE_FILE)).toBe(false);
+    });
+
+    it('adds no empty pattern, which webpack rejects in a list', () => {
+      const ignored = watchIgnored({ __watchOptions: { ignored: ['', '**/generated/**'] } });
+      expect(ignored).not.toContain('');
+    });
+
+    it('still ignores the state folder when sourceMapping is off', () => {
+      const ignored = watchIgnored({}, { sourceMapping: false });
+      expect(ignores(ignored, STATE_FILE)).toBe(true);
+    });
+
+    it('leaves watch options alone outside a dev build', () => {
+      process.env.NODE_ENV = 'development';
+      const out = withReticle({}).webpack({ module: { rules: [] } }, { dev: false });
+      expect(out.watchOptions).toBeUndefined();
+    });
+
+    it('does not change other watch options', () => {
+      process.env.NODE_ENV = 'development';
+      const out = withReticle({}).webpack(
+        { module: { rules: [] }, watchOptions: { aggregateTimeout: 5, poll: 1000 } },
+        { dev: true },
+      );
+      expect(out.watchOptions.aggregateTimeout).toBe(5);
+      expect(out.watchOptions.poll).toBe(1000);
+    });
+
+    it('passes the watch options to the app webpack hook', () => {
+      process.env.NODE_ENV = 'development';
+      let seen;
+      const config = withReticle({
+        webpack(c) {
+          seen = c.watchOptions.ignored;
+          return c;
+        },
+      });
+      config.webpack({ module: { rules: [] } }, { dev: true });
+      expect(ignores(seen, STATE_FILE)).toBe(true);
+    });
+  });
+
   it('installs no Turbopack loader when sourceMapping is off (#1248)', () => {
     process.env.NODE_ENV = 'development';
     const config = withReticle({}, { sourceMapping: false });
