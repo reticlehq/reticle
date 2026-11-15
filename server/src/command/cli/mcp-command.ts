@@ -26,14 +26,15 @@ import {
   reportWakeRefused,
 } from '@/surface/mcp/mcp-proxy.js';
 import { installProxyResilience } from '@/command/daemon/daemon-resilience.js';
-import { readProjectId, readProjectPort } from './ports/resolve/cli-port.js';
+import { findProjectConfigDir, readProjectId, readProjectPort } from './ports/resolve/cli-port.js';
 import {
   resolveMcpPort,
   daemonProjectAt,
+  readDaemonRegistry,
   relocationReason,
 } from '@/command/daemon/daemon-resolve.js';
 import { daemonSpawnArgs } from './daemon-start-options.js';
-import { WakeAction, decideWake } from '@/command/daemon/wake-decision.js';
+import { WakeAction, decideWake, otherProjectRefusal } from '@/command/daemon/wake-decision.js';
 import { runKill, stopWedgedDaemon } from './cli-kill.js';
 import { pickDaemonPortToBind } from '@/command/daemon/binding/free-port.js';
 import { fetchStatus, summarizeStatus } from '@/command/daemon/binding/daemon-status-probe.js';
@@ -245,8 +246,13 @@ export async function handleMcp(opts: {
       );
       throw new Error(
         PortPresence.DAEMON === presence
-          ? `the daemon on port ${String(port)} belongs to a different project, so this one will ` +
-              'not adopt it. Stop it, or start this project on its own port.'
+          ? otherProjectRefusal({
+              port,
+              callerProjectId: projectId,
+              callerConfigDir: findProjectConfigDir(process.cwd()),
+              daemonProjectId: daemonProjectAt(port, reticleStateHome()),
+              daemonCwd: readDaemonRegistry(reticleStateHome()).find((e) => e.port === port)?.cwd,
+            })
           : describePortState(presence, port),
       );
     }

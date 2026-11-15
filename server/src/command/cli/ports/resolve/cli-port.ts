@@ -67,7 +67,7 @@ function configDirInMainCheckout(cwd: string): string | undefined {
 }
 
 /** The directory holding the nearest `.reticle.json` at or above `cwd`, by the same walk. */
-function findProjectConfigDir(cwd: string): string | undefined {
+export function findProjectConfigDir(cwd: string): string | undefined {
   let dir = resolve(cwd);
   for (let depth = 0; depth <= MAX_CONFIG_SEARCH_DEPTH; depth += 1) {
     if (readConfigAt(dir) !== undefined) return dir;
