@@ -4,6 +4,19 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+## [3.10.3] — 2026-11-15
+
+### Changed
+
+- **`@reticlehq/browser` — every page that loads the SDK downloads 119 KB less.** The SDK's first load was 339,995 B, and about 95 KB of it was zod. A page parses two messages on the way in, but a schema anywhere on the first load brought most of zod with it. The SDK now reads a new zod-free entry, `@reticlehq/core/page`, and checks a command and an element query with hand-written functions. A property test keeps those functions in step with the zod schemas. zod now loads only with the panels and tools that a page fetches later. The first load is about 221 KB. Closes [#2369](https://github.com/reticlehq/reticle/issues/2369).
+
+### Fixed
+
+- **`@reticlehq/browser` — a Next.js redirect was reported as an uncaught error.** After a Next.js server action that redirects, Reticle reported `NEXT_REDIRECT` as an error. Next.js handles that rejection itself: its listener calls `preventDefault()` and navigates, and the browser console stays clean. Reticle read the rejection before the page's listener ran, so a clean-console check failed on correct code. Reticle now decides after every listener has run, and skips a rejection that the page cancelled and that carries a Next.js control-flow `digest` (`redirect()`, `notFound()`). Every other rejection is still reported, including a real failure that a page cancels to keep its console clean.
+- **`reticle init` — in a monorepo, init started only the app's own dev script.** For an app in `apps/web`, init ran that app's `vite`. The root `dev` script, which also starts the API, did not run, so every `/api` call from the page failed with `ECONNREFUSED`. Init now runs the root `dev` script from the root when that script starts this app: it runs every workspace package (`turbo`, `nx run-many`, `pnpm -r`), or it names this app. A root script that skips the app leaves the app's own script in place. When the root script is turbo, init also sets `TURBO_ENV_MODE=loose` for that run, unless you set it, so the values from `init --env` and the `RETICLE_*` variables reach the app as they did before: turbo 2 passes a task only the variables its `turbo.json` declares.
+- **`reticle mcp` — at a monorepo root, the agent did not use the daemon of an app in its own repository.** When `init` in `apps/web` replaced the daemon, an agent session at the root still read an older root `.reticle.json` with a different project id. The proxy refused every call, or moved to an empty daemon of its own that no app connected to. The proxy now uses a daemon that runs inside its project folder when the root config names no workspace app. A root config that points at one app still never attaches the agent to a different app. A session that runs an older proxy gets this after you update Reticle and restart the agent session.
+- **`@reticlehq/server` — an agent whose project config named another app was refused with no way forward.** In a monorepo, `init` wired an app, and the agent's MCP server at the repo root refused every call with "the daemon on port 4400 belongs to a different project ... start this project on its own port". The root's `.reticle.json` named a different project than the app's daemon. The refusal was right, and it named neither side, so the agent wrote its own client to get past it. The refusal now names both projects, the folder the daemon serves and the config file, and gives the two ways out: run the agent from the app's folder, or copy the app's `.reticle.json` to the config the agent reads.
+
 ## [3.10.2] — 2026-11-14
 
 ### Fixed
