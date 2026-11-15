@@ -113,4 +113,12 @@ describe('a control that only opens a popup is not judged by money words', () =>
     const message = await refusal('#s', 'click');
     expect(message).toContain('"place order" in its name');
   });
+
+  it('still refuses a submit button outside its form that names the form with form=', async () => {
+    // The `form` attribute ties the button to the form, so it submits like one inside it.
+    document.body.innerHTML =
+      '<form id="checkout"></form><button id="s" form="checkout" aria-expanded="false">Place order</button>';
+    const message = await refusal('#s', 'click');
+    expect(message).toContain('"place order" in its name');
+  });
 });

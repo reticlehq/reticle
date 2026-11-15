@@ -127,7 +127,9 @@ export function dangerousActionContext(el: ActionTarget): string {
  * "Model" button opens a picker. A submit button is never one: it submits, whatever else it says.
  */
 function opensPopupOnly(el: ActionTarget): boolean {
-  if (null !== el.closest('form') && el.matches(SUBMIT_CONTROL_SELECTOR)) {
+  // `form="id"` ties a button outside the form to it, so it submits like one inside it.
+  const inForm = null !== el.closest('form') || el.hasAttribute('form');
+  if (inForm && el.matches(SUBMIT_CONTROL_SELECTOR)) {
     return false;
   }
   const hasPopup = el.getAttribute('aria-haspopup');
