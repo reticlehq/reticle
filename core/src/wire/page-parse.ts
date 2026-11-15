@@ -61,13 +61,8 @@ function isPlainFields(value: unknown): value is Fields {
  * enumerable keys. `__proto__` is skipped, as zod skips it, so a key cannot replace the prototype.
  */
 function copyRecord(input: Fields): Fields {
-  const out: Fields = {};
-  for (const key of Object.keys(input)) {
-    if (PROTO_KEY !== key) {
-      out[key] = input[key];
-    }
-  }
-  return out;
+  // `fromEntries` defines data properties and never calls a setter, so no key can reach a prototype.
+  return Object.fromEntries(Object.entries(input).filter(([key]) => PROTO_KEY !== key));
 }
 
 function refuse<T>(error: string): PageParse<T> {

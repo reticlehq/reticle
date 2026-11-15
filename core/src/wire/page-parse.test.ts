@@ -114,6 +114,21 @@ describe('the page reads a command as CommandMessageSchema does', () => {
     );
   });
 
+  it('drops a `__proto__` key in `args`, as zod does, and keeps a plain prototype', () => {
+    const input: unknown = JSON.parse(
+      '{"kind":"command","id":"1","name":"look","args":{"__proto__":{"polluted":true},"a":1}}',
+    );
+    const zod = CommandMessageSchema.safeParse(input);
+    const page = parseCommandMessage(input);
+    expect(page.ok && zod.success).toBe(true);
+    if (page.ok && zod.success) {
+      expect(page.value).toStrictEqual(zod.data);
+      expect(page.value.args).toStrictEqual({ a: 1 });
+      expect(Object.getPrototypeOf(page.value.args)).toBe(Object.prototype);
+      expect(({} as Record<string, unknown>)['polluted']).toBeUndefined();
+    }
+  });
+
   it('says why it refused', () => {
     const page = parseCommandMessage({ kind: MessageKind.COMMAND, id: '', name: 'look' });
     expect(page.ok).toBe(false);
