@@ -170,8 +170,11 @@ export interface PooledMockRule {
 
 /** An isolated browsing context (cookies/storage). Real Playwright `BrowserContext` satisfies this. */
 export interface PooledContext {
-  /** `now` is the pool's clock, for the page's request tracker. */
-  newPage(opts: { now: () => number }): Promise<PooledPage>;
+  /**
+   * `now` is the pool's clock, for the page's request tracker. Optional, so that a wrapper that
+   * calls `newPage()` keeps working: the page then uses the wall clock.
+   */
+  newPage(opts?: { now: () => number }): Promise<PooledPage>;
   close(): Promise<void>;
   addCookies?(cookies: PooledCookie[]): Promise<void>;
   /**
