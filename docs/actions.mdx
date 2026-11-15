@@ -80,6 +80,16 @@ This is often misdiagnosed as "synthetic events don't reach the app". That is th
 
 That bug is fixed, and the reason it is written down here is that it is the exact shape of failure Reticle exists to catch. An action that reports success while doing something else.
 
+## Scrolling by fraction
+
+Set `fraction` (`0` to `1`) to move vertically to `scrollTop = scrollHeight * fraction`, using full content height including padding so values near `1` clamp at the bottom:
+
+```json
+{ "action": "scroll", "args": { "fraction": 0.5 } }
+```
+
+Pass a `ref` or a `target` to scroll the element or its nearest scrollable ancestor, or omit both to scroll the document page. A value of `0.5` puts the top of the view at half the content. Reticle ignores `dy` and `dx` when `fraction` is set, and throws `RangeError` for values outside `0` to `1`. Use `fraction` to go to a known position or bisect a long list in fewer calls.
+
 ## Batching
 
 Several actions in one round trip:
