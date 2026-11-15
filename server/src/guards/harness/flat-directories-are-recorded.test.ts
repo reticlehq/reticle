@@ -73,7 +73,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   'adapters/realm/browser/src/actions': 13,
   'adapters/realm/browser/src/dom': 20,
   // +1: error-repeats.ts, the limiter every uncaught-error path in console.ts goes through (#986).
-  'adapters/realm/browser/src/observers': 27,
+  // +1: body-fingerprint.ts, the salted fingerprint of a text request body, which is how
+  // duplicate-request tells two writes to one endpoint apart (#1521).
+  'adapters/realm/browser/src/observers': 28,
   // 17 since the HUD's position primitives left `presenter-drag.ts` for their own leaf: the drag
   // gesture re-syncs the dock layout, and the dock layout reads the HUD's position, so the two files
   // needed each other over primitives that belong to neither.
