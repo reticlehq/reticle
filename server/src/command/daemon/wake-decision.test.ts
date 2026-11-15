@@ -12,6 +12,7 @@
  * green wearing a valid session.
  */
 
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PortPresence } from './binding/port-presence.js';
 import { WakeAction, decideWake, otherProjectRefusal } from './wake-decision.js';
@@ -73,7 +74,8 @@ describe('otherProjectRefusal', () => {
     expect(said).toContain('/repo/apps/web');
     expect(said).toContain('"shop-root-1a2b"');
     expect(said).toContain('run the agent from /repo/apps/web');
-    expect(said).toContain('/repo/.reticle.json');
+    // Built with the OS separator, as the message builds it (a backslash on Windows).
+    expect(said).toContain(join('/repo', '.reticle.json'));
   });
 
   it('still refuses in words when the daemon left no registry entry', () => {
