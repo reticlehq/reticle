@@ -13,6 +13,7 @@
  */
 
 import { PortPresence } from './binding/port-presence.js';
+import { join } from 'node:path';
 import { adoptable } from './daemon-resolve.js';
 
 export const WakeAction = {
@@ -45,4 +46,47 @@ export function decideWake(
     return WakeAction.REFUSE;
   }
   return adoptable(daemonProjectId, callerProjectId) ? WakeAction.USE : WakeAction.REFUSE;
+}
+
+/** What the refusal knows about the two sides. */
+export interface OtherProjectSides {
+  port: number;
+  /** The project the agent's `.reticle.json` names. */
+  callerProjectId: string | undefined;
+  /** The folder that holds that `.reticle.json`, when it was found. */
+  callerConfigDir?: string | undefined;
+  /** The project the daemon on the port serves, and the folder it was started for. */
+  daemonProjectId?: string | undefined;
+  daemonCwd?: string | undefined;
+}
+
+/**
+ * Why a proxy will not use the daemon on its port, with both sides named and the two ways out.
+ *
+ * Reported from the field: after `init` wired a monorepo app, the agent's proxies at the repo root
+ * refused every call with "belongs to a different project ... start this project on its own port".
+ * The root's `.reticle.json` named another project. The refusal was right, and it named neither
+ * side, so the agent wrote its own HTTP client to get past it.
+ */
+export function otherProjectRefusal(sides: OtherProjectSides): string {
+  const mine =
+    sides.callerProjectId === undefined ? 'another project' : `"${sides.callerProjectId}"`;
+  const config =
+    sides.callerConfigDir === undefined
+      ? '.reticle.json'
+      : join(sides.callerConfigDir, '.reticle.json');
+  if (sides.daemonProjectId === undefined || sides.daemonCwd === undefined) {
+    return (
+      `the daemon on port ${String(sides.port)} serves a different project than ${config} names (${mine}), ` +
+      'so this agent will not use it: its tabs are another app. Stop it with `reticle stop`, or start ' +
+      'this project on its own port.'
+    );
+  }
+  return (
+    `the daemon on port ${String(sides.port)} serves project "${sides.daemonProjectId}" (started for ` +
+    `${sides.daemonCwd}), and ${config} names project ${mine}. This agent will not use it: its tabs ` +
+    `are another app. To verify that app, run the agent from ${sides.daemonCwd}, or copy ` +
+    `${join(sides.daemonCwd, '.reticle.json')} to ${config}. To keep ${mine}, stop that daemon with ` +
+    '`reticle stop`, or give one of the apps its own port.'
+  );
 }

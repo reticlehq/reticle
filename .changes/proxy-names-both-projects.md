@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — an agent whose project config named another app was refused with no way forward.** In a monorepo, `init` wired an app, and the agent's MCP server at the repo root refused every call with "the daemon on port 4400 belongs to a different project ... start this project on its own port". The root's `.reticle.json` named a different project than the app's daemon. The refusal was right, and it named neither side, so the agent wrote its own client to get past it. The refusal now names both projects, the folder the daemon serves and the config file, and gives the two ways out: run the agent from the app's folder, or copy the app's `.reticle.json` to the config the agent reads.
