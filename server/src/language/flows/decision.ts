@@ -364,14 +364,18 @@ export function buildSuiteVerdict(
       contradictions.push({ flow: replay.name, step: -1, ...found });
     }
   }
-  // From every run, as the contradictions above: a pass on a page that was not hydrated is luck (#1654).
+  /*
+   * From every run, as the contradictions above (#1654). A wait that reached its bound does not
+   * always mean the page was pending: `stillPending` is false when the page did not answer. So the
+   * clause says only what is true of both: replay stopped waiting.
+   */
   const hydrationWaits = runs.flatMap(({ replay }) =>
     replay.hydrationWait === undefined ? [] : [{ flow: replay.name, ...replay.hydrationWait }],
   );
   const notHydrated =
     0 === hydrationWaits.length
       ? ''
-      : ` — ${String(hydrationWaits.length)} flow(s) ran a step before the page hydrated: ${hydrationWaits.map((w) => w.flow).join(', ')}`;
+      : ` — ${String(hydrationWaits.length)} flow(s) stopped waiting for the page to hydrate: ${hydrationWaits.map((w) => w.flow).join(', ')}`;
   const disagreed =
     0 === contradictions.length
       ? ''
