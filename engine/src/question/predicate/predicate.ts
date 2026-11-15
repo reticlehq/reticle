@@ -334,6 +334,42 @@ function failureRestsOnSeeing(predicate: Predicate): boolean {
   return 'count' in predicate && 0 === predicate.count;
 }
 
+/** The start of the `inconclusive` sentence for a read that threw. See `unansweredRead`. */
+const PAGE_DID_NOT_ANSWER = 'the page did not answer: ';
+
+/**
+ * A read that threw never looked at the app: the page did not answer, or went away. That is "could
+ * not tell", not "looked and it was false", so it is inconclusive, which the verdict rule turns into
+ * unknown. As a plain false it was graded assertion_failed: a command timeout on a live, throttled
+ * tab came back verified:no against a page that was never read.
+ */
+function unansweredRead(error: unknown): EvalResult {
+  const reason = error instanceof Error ? error.message : String(error);
+  return { pass: false, failureReason: reason, inconclusive: `${PAGE_DID_NOT_ANSWER}${reason}` };
+}
+
+/**
+ * Each clause of an `allOf` or `anyOf`, read on its own.
+ *
+ * A clause whose read throws gives the same result that the wait gives a lone predicate that
+ * throws: inconclusive, with the reason kept. With `Promise.all`, one throw rejected the whole
+ * composite. The other clauses' answers were lost, and the wait graded all of it unknown (#1656).
+ * Now the composite's own rules decide: a clause that failed outranks one nobody could read.
+ */
+function evaluateClauses(
+  session: PredicateSession,
+  clauses: readonly Predicate[],
+  since: number,
+  diagnose: boolean,
+  baselines: Baselines | undefined,
+): Promise<EvalResult[]> {
+  return Promise.all(
+    clauses.map((p) =>
+      evaluatePredicate(session, p, since, diagnose, baselines).catch(unansweredRead),
+    ),
+  );
+}
+
 export async function evaluatePredicate(
   session: PredicateSession,
   predicate: Predicate,
@@ -488,11 +524,7 @@ async function evaluatePredicateRaw(
     case PredicateKind.ALL_OF: {
       const results = clearStarvedWhenSiblingsSaw(
         predicate.predicates,
-        await Promise.all(
-          predicate.predicates.map((p) =>
-            evaluatePredicate(session, p, since, diagnose, baselines),
-          ),
-        ),
+        await evaluateClauses(session, predicate.predicates, since, diagnose, baselines),
       );
       // A clause that genuinely failed OUTRANKS one nobody could read. Softening a real failure to
       // UNKNOWN would hide the defect the agent came for, which is the more expensive of the two
@@ -522,11 +554,7 @@ async function evaluatePredicateRaw(
     case PredicateKind.ANY_OF: {
       const results = clearStarvedWhenSiblingsSaw(
         predicate.predicates,
-        await Promise.all(
-          predicate.predicates.map((p) =>
-            evaluatePredicate(session, p, since, diagnose, baselines),
-          ),
-        ),
+        await evaluateClauses(session, predicate.predicates, since, diagnose, baselines),
       );
       const passed = results.find((r) => r.pass);
       if (passed !== undefined) {
@@ -684,18 +712,6 @@ export function waitForPredicate(
     // Released in `finish`, on every exit path. Without it a flood inside the window can evict the
     // event the predicate is armed on, and the verdict blames the app (#668).
     const releaseWindow = session.protectWindow?.(since);
-    // A read that threw never looked at the app: the page did not answer, or went away. That is
-    // "could not tell", not "looked and it was false", so it is inconclusive, which the verdict rule
-    // turns into unknown. As a plain false it was graded assertion_failed: a command timeout on a
-    // live, throttled tab came back verified:no against a page that was never read.
-    const failed = (error: unknown): EvalResult => {
-      const reason = error instanceof Error ? error.message : String(error);
-      return {
-        pass: false,
-        failureReason: reason,
-        inconclusive: `the page did not answer: ${reason}`,
-      };
-    };
     let cooldownTimer: ReturnType<typeof setTimeout> | undefined;
     /** One-shot re-check timed to when a time-based predicate could first pass. See retryAfterMs. */
     let hintTimer: ReturnType<typeof setTimeout> | undefined;
@@ -712,7 +728,7 @@ export function waitForPredicate(
         error: error instanceof Error ? error.message : String(error),
       });
       finish({
-        ...failed(error),
+        ...unansweredRead(error),
         failureReason:
           'the wait could not be evaluated and was ended rather than left pending: ' +
           (error instanceof Error ? error.message : String(error)),
@@ -801,7 +817,7 @@ export function waitForPredicate(
             void evaluatePredicate(reader, predicate, since, true, baselines)
               .then(finish)
               .catch((error: unknown) => {
-                finish(failed(error));
+                finish(unansweredRead(error));
               });
           };
           if (!holdsForAbsence) {
@@ -827,7 +843,7 @@ export function waitForPredicate(
           confirmTimer = setTimeout(holdUntilQuiet, ABSENCE_HOLD_MS);
         })
         .catch((error: unknown) => {
-          finish(failed(error));
+          finish(unansweredRead(error));
         })
         .finally(() => {
           inFlight = false;
@@ -917,7 +933,7 @@ export function waitForPredicate(
           );
         })
         .catch((error: unknown) => {
-          finish(failed(error));
+          finish(unansweredRead(error));
         });
     }, timeoutMs);
     check();
