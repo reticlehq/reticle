@@ -59,7 +59,7 @@ describe('isPresenceOnlyAssertion', () => {
     expect(gradeOfPredicate(predicate)).toBe(HonestyGrade.PRESENCE);
   });
 
-  it.each([ElementState.PRESENT, ElementState.VISIBLE, ElementState.HIDDEN])(
+  it.each([ElementState.PRESENT, ElementState.VISIBLE, ElementState.PAINTED, ElementState.HIDDEN])(
     'still advises presence-only for element state %s (#1686)',
     (state) => {
       const predicate: Predicate = { kind: 'element', query: { role: 'button' }, state };
