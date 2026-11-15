@@ -3,11 +3,12 @@
  * plan (pure), optionally write the apply-steps, and print a human-readable report. All filesystem
  * access goes through `InitIo` so the orchestration is unit-testable with an in-memory IO.
  */
+import { join, relative, sep } from 'node:path';
 import { OnboardingPhase, OnboardingStepStatus } from '@reticlehq/core/telemetry';
 import type { InitOptions, InitIo, InitResult, InitContext } from './run-types.js';
 import { explainInstallFailure } from './diagnose/install-retries.js';
 import { preflight } from './plan/preflight.js';
-import { devCommandFrom } from './detect/dev-script.js';
+import { desktopLaunch, devCommandFrom, workspaceDevCommand } from './detect/dev-script.js';
 import { restartHint, COMMUNITY_HINT, FEEDBACK_HINT } from './diagnose/closing-hint.js';
 import { projectIdOf, rememberProjectOnDisk } from './project/remember-project.js';
 import type { PackageManager } from './detect/detect.js';
@@ -16,7 +17,8 @@ import { sdkPackagesDeclared, sdkPackagesPresent } from './sdk-packages.js';
 import { wasMcpRegistered } from './register/mcp-registered.js';
 import { PACKAGE_JSON } from './detect/workspace-apps.js';
 import { redirectToWorkspaceApp } from './detect/workspace-redirect.js';
-import { appsAt, enclosingWorkspaceRoot } from './detect/workspace-apps.js';
+import { appsAt, enclosingWorkspaceRoot, parsedManifest } from './detect/workspace-apps.js';
+import { packageName } from './project/project-id.js';
 import { isConnectStep, isViteConfigStep } from './plan/connect-steps.js';
 import { formatGeneratedSource } from './patch/format-generated.js';
 import {
@@ -55,8 +57,12 @@ function resolvedStatus(
   skipped: ReadonlySet<string>,
 ): StepStatus | undefined {
   const step = plan.steps.find((s) => s.target === target);
-  if (step === undefined) return undefined;
-  if (failed.has(target) || skipped.has(target)) return StepStatus.MANUAL;
+  if (step === undefined) {
+    return undefined;
+  }
+  if (failed.has(target) || skipped.has(target)) {
+    return StepStatus.MANUAL;
+  }
   return step.status;
 }
 
@@ -124,8 +130,9 @@ function report(
   // The agent files go where the AGENT is, which after a redirect is not where the app is. Said out
   // loud because it changes where `/reticle` will exist, and a reader who assumes one directory for
   // everything goes looking in the wrong one (#318).
-  if (agentRoot !== undefined)
+  if (agentRoot !== undefined) {
     io.print(`  agent files in ${agentRoot} (where /reticle will exist)`);
+  }
   io.print('');
   let applied = 0;
   let manual = 0;
@@ -141,7 +148,9 @@ function report(
     if (note !== undefined) {
       // Applied, but not the way it was asked for. A NOTICE, not work — the install did happen.
       io.print(`  [${STATUS_SYMBOL[StepStatus.NOTICE]}] ${s.title} → ${s.target}`);
-      for (const line of note.split('\n')) io.print(`      ${line}`);
+      for (const line of note.split('\n')) {
+        io.print(`      ${line}`);
+      }
       applied++;
       continue;
     }
@@ -153,17 +162,23 @@ function report(
         ? (why.get(s.target) ?? `step failed — run manually: ${s.exec.fallback}`)
         : s.detail;
     io.print(`  [${STATUS_SYMBOL[status]}] ${s.title} → ${s.target}`);
-    if (status === StepStatus.APPLY) applied++;
+    if (status === StepStatus.APPLY) {
+      applied++;
+    }
     if (status === StepStatus.MANUAL || status === StepStatus.NOTICE) {
       // A notice prints in full like a manual step — it is worth reading — but is NOT counted as work.
       if (status === StepStatus.MANUAL) {
         manual++;
-        if (isConnectStep(s.title)) connectPending = true;
+        if (isConnectStep(s.title)) {
+          connectPending = true;
+        }
         if (s.target !== MCP_TARGET && s.title.startsWith(MCP_CLIENT_TITLE_PREFIX)) {
           manualClients.push(s.title);
         }
       }
-      for (const line of detail.split('\n')) io.print(`      ${line}`);
+      for (const line of detail.split('\n')) {
+        io.print(`      ${line}`);
+      }
     }
     // Everything else gets its row and nothing more. The detail on a step that needs no decision
     // restates its own title — "reticle already registered with Cursor" under
@@ -214,7 +229,9 @@ function applyEffects(plan: Plan, io: InitIo, packageManager: PackageManager): E
   const degraded = new Map<string, string>();
   let installFailed = false;
   for (const s of plan.steps) {
-    if (s.status !== StepStatus.APPLY) continue;
+    if (s.status !== StepStatus.APPLY) {
+      continue;
+    }
     if (installFailed && true === s.dependsOnInstall) {
       skipped.add(s.target);
       continue;
@@ -235,12 +252,16 @@ function applyEffects(plan: Plan, io: InitIo, packageManager: PackageManager): E
         } catch {
           return false; // a throw is the loud version of the same failure
         }
-        if (!io.exists(write.path)) return false;
+        if (!io.exists(write.path)) {
+          return false;
+        }
         // A PATCH is only applied if what it was supposed to add is there to read back. A generated
         // file we own is proved by existing; a config we edited is not, and a patcher that quietly
         // no-ops returns the source unchanged, which writes and exists exactly like a success.
         const expect = write.expect;
-        if (undefined === expect) return true;
+        if (undefined === expect) {
+          return true;
+        }
         const after = io.readFile(write.path) ?? '';
         return expect.every((needle) => after.includes(needle));
       });
@@ -285,14 +306,18 @@ function applyEffects(plan: Plan, io: InitIo, packageManager: PackageManager): E
       // packages happened to resolve, init printed success, and the manifest never gained them.
       const present =
         s.target === DEPS_TARGET && sdkPackagesPresent(plan.framework, plan.uiLibrary, io);
-      if (present && sdkPackagesDeclared(plan.framework, plan.uiLibrary, io)) continue;
+      if (present && sdkPackagesDeclared(plan.framework, plan.uiLibrary, io)) {
+        continue;
+      }
       failed.add(s.target);
       // A failed install only blocks the wiring when the packages are genuinely ABSENT. See
       // sdkPackagesPresent: the guard protects "the import resolves", not "our subprocess exited 0".
       if (s.target === DEPS_TARGET) {
         installFailed = !present;
         const explained = explainInstallFailure(io, packageManager, exec, s.detail);
-        if (explained !== undefined) why.set(s.target, explained);
+        if (explained !== undefined) {
+          why.set(s.target, explained);
+        }
       }
     }
   }
@@ -327,8 +352,12 @@ interface Effects {
  * work" with nothing to tell them apart.
  */
 function classifyInitFailure(failed: ReadonlySet<string>): string {
-  if (failed.has(DEPS_TARGET)) return InitFailure.DEPENDENCY_INSTALL;
-  if (failed.has(MCP_TARGET)) return InitFailure.MCP_REGISTRATION;
+  if (failed.has(DEPS_TARGET)) {
+    return InitFailure.DEPENDENCY_INSTALL;
+  }
+  if (failed.has(MCP_TARGET)) {
+    return InitFailure.MCP_REGISTRATION;
+  }
   return InitFailure.OTHER;
 }
 
@@ -339,10 +368,40 @@ function classifyInitFailure(failed: ReadonlySet<string>): string {
  * leave the root in one state — a pointer config and the agent files an agent opened there reads.
  */
 function withWorkspaceRoot(options: InitOptions, io: InitIo): InitOptions {
-  if (options.agentRoot !== undefined || true === options.redirected) return options;
+  if (options.agentRoot !== undefined || true === options.redirected) {
+    return options;
+  }
   const root = enclosingWorkspaceRoot(options.cwd, io);
-  if (root === undefined) return options;
+  if (root === undefined) {
+    return options;
+  }
   return { ...options, agentRoot: root, severalApps: 1 < appsAt(root, io).length };
+}
+
+/**
+ * The workspace root's dev command and folder, when the app is a workspace package and the root's
+ * `dev` script starts it too (see `workspaceDevCommand`). A desktop app keeps its own launcher.
+ */
+function rootDevCommand(
+  options: InitOptions,
+  io: InitIo,
+  appPkg: unknown,
+  packageManagerCommand: string,
+): { command: string; dir: string } | undefined {
+  const root = agentRootOf(options);
+  if (root === undefined || desktopLaunch(appPkg) !== undefined) {
+    return undefined;
+  }
+  const rootPkgRaw = io.readFile(join(root, PACKAGE_JSON));
+  if (null === rootPkgRaw) {
+    return undefined;
+  }
+  const command = workspaceDevCommand(
+    parsedManifest(rootPkgRaw),
+    { name: packageName(appPkg), dir: relative(root, options.cwd).split(sep).join('/') },
+    packageManagerCommand,
+  );
+  return command === undefined ? undefined : { command, dir: root };
 }
 
 export function runInit(options: InitOptions, io: InitIo): InitResult {
@@ -382,7 +441,9 @@ export function runInit(options: InitOptions, io: InitIo): InitResult {
  */
 function readManifest(io: InitIo): { pkg: unknown } | { error: string } {
   const raw = io.readFile(PACKAGE_JSON);
-  if (null === raw) return { pkg: null };
+  if (null === raw) {
+    return { pkg: null };
+  }
   try {
     return { pkg: JSON.parse(raw) };
   } catch (err) {
@@ -400,8 +461,9 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
         'framework, the dev script and the package manager from it, and will not guess at any of ' +
         'them from a file it cannot read.',
     );
-    if (!options.dryRun)
+    if (!options.dryRun) {
       io.host.reportOutcome({ ok: false, reason: InitFailure.MALFORMED_PACKAGE_JSON });
+    }
     return { ok: false, applied: 0, manual: 0 };
   }
   const pkgRaw = manifest.pkg;
@@ -416,10 +478,15 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
   // workspaces); it was simply unreachable. `'{}'`: a directory with no manifest is not the app.
   const redirectedEarly = redirectToWorkspaceApp(options, io, pkgRaw ?? {}, runInit);
   // Listing the apps below still counts as "no app here", in the same series as before.
-  if (true === redirectedEarly?.listedAppsBelow && !options.dryRun)
+  if (true === redirectedEarly?.listedAppsBelow && !options.dryRun) {
     io.host.reportOutcome({ ok: false, reason: InitFailure.NO_PACKAGE_JSON });
-  if (redirectedEarly !== null) return redirectedEarly;
-  if (null === pkgRaw) return initWithoutPackageJson(options, io);
+  }
+  if (redirectedEarly !== null) {
+    return redirectedEarly;
+  }
+  if (null === pkgRaw) {
+    return initWithoutPackageJson(options, io);
+  }
 
   // Init is the flow a user experiences the wait of personally, and the fixture gate measures it at
   // 1–6s per app with no explanation of the spread. These three spans split that number into detect
@@ -441,7 +508,9 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
   });
   if (resolved.refusal !== undefined) {
     io.print(resolved.refusal);
-    if (!options.dryRun) io.host.reportOutcome({ ok: false, reason: InitFailure.PREFLIGHT });
+    if (!options.dryRun) {
+      io.host.reportOutcome({ ok: false, reason: InitFailure.PREFLIGHT });
+    }
     return { ok: false, applied: 0, manual: 1 };
   }
   // The prefix that can actually run it on THIS machine — `pnpm`, or `corepack pnpm` where preflight
@@ -473,7 +542,9 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
     true === options.continuesToRuntime,
   );
   // A dry run is a preview, not an outcome — reporting it would inflate both success and failure.
-  if (options.dryRun) return result;
+  if (options.dryRun) {
+    return result;
+  }
   const outcome: InitOutcome = {
     ok: result.ok,
     ...(result.ok ? {} : { reason: classifyInitFailure(failed) }),
@@ -487,11 +558,13 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
       isViteConfigStep(s.title) &&
       (StepStatus.MANUAL === s.status || failed.has(s.target) || skipped.has(s.target)),
   )?.target;
+  const rootDev = rootDevCommand(options, io, pkgRaw, packageManagerCommand);
   const context: InitContext = {
     appDir: options.cwd,
     framework: plan.framework,
     packageManager: planInput.detection.packageManager,
-    ...(undefined === devCommand ? {} : { devCommand }),
+    ...(undefined === rootDev ? {} : { devCommand: rootDev.command, devCommandDir: rootDev.dir }),
+    ...(undefined === devCommand || undefined !== rootDev ? {} : { devCommand }),
     ...(true === options.redirected ? { redirectedTo: options.cwd } : {}),
     ...(undefined === pendingViteConfig ? {} : { pendingViteConfig }),
   };
@@ -549,7 +622,9 @@ function runInitSteps(options: InitOptions, io: InitIo): InitResult {
   // without a context the runtime stops at this report, rather than starting the dev server and
   // diagnosing an SDK that was never installed as a dev server that needs restarting.
   const handover = failed.has(DEPS_TARGET) ? {} : { context };
-  if (true === options.deferOutcome) return { ...result, ...handover, outcome };
+  if (true === options.deferOutcome) {
+    return { ...result, ...handover, outcome };
+  }
   io.host.reportOutcome(outcome);
   return { ...result, ...handover };
 }
