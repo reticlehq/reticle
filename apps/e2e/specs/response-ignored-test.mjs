@@ -168,6 +168,14 @@ async function runPolarity(label, url, sessionId) {
     filters: ['net', 'state', 'signal', 'route'],
   });
 
+  // The filters above hide the DOM, and the DOM decides the rule. When the broken polarity is not
+  // flagged, print the whole window, so the log names the event that stood the rule down (#2115).
+  let unfiltered = [];
+  const kinds = (observed.contradictions ?? []).map((c) => c.kind);
+  if (label === 'broken' && !kinds.includes('response-ignored')) {
+    unfiltered = (await T(sessionId, 'reticle_observe', { since: postSince })).events ?? [];
+  }
+
   // Keep page alive briefly for polarity A confirmation.
   await sleep(100);
 
@@ -192,6 +200,7 @@ async function runPolarity(label, url, sessionId) {
     because: observed.summary ? JSON.stringify(observed.summary) : '',
     since: clicked.since,
     postLanded,
+    unfiltered,
   };
   return { result, since: clicked.since };
 }
@@ -251,6 +260,9 @@ if (brokenResult !== null) {
     contradictionKinds.includes('response-ignored'),
     `verified=${String(brokenResult.verified)} contradictions=[${contradictionKinds.join(', ')}] because=${String(brokenResult.because ?? '').slice(0, 120)}`,
   );
+  for (const e of brokenResult.unfiltered) {
+    console.log(`      t=${String(e.t)} seq=${String(e.seq)} ${e.type} ${e.ref ?? ''} ${JSON.stringify(e.data ?? {}).slice(0, 160)}`);
+  }
 }
 
 console.log(
