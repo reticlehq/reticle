@@ -23,6 +23,7 @@ import {
   RenderStatsField,
   ReticleCommand,
   asString,
+  isSameDocument,
   type CommandResult,
   type FlowStepResult,
   type HydrationWait,
@@ -68,6 +69,8 @@ export type HydrationRead = (typeof HydrationRead)[keyof typeof HydrationRead];
 export interface HydrationSession {
   command(name: string, args?: Record<string, unknown>, timeoutMs?: number): Promise<CommandResult>;
   eventsSince(cursor: number): ReticleEvent[];
+  /** The document of the latest event. A signal from an older document says nothing about this one. */
+  readonly currentDocumentId?: string | undefined;
 }
 
 interface Clock {
@@ -76,12 +79,14 @@ interface Clock {
 }
 
 function signalled(session: HydrationSession): boolean {
+  const current = session.currentDocumentId;
   return session
     .eventsSince(0)
     .some(
       (event) =>
         EventType.SIGNAL === event.type &&
-        RETICLE_HYDRATION_SIGNAL === asString(event.data['name']),
+        RETICLE_HYDRATION_SIGNAL === asString(event.data['name']) &&
+        isSameDocument(event.documentId, current),
     );
 }
 
@@ -152,9 +157,12 @@ export async function awaitHydration(
   }
 }
 
+/** What a failed step says when it carries no reason of its own. */
+const STEP_DID_NOT_PASS = 'the step did not pass';
+
 /** The reason a failed step is not a verdict: it ran on a page that was not hydrated. */
 export function notHydratedReason(wait: HydrationWait, step: FlowStepResult): string {
-  const said = step.drift?.reason ?? step.error ?? 'the step did not pass';
+  const said = step.drift?.reason ?? step.error ?? STEP_DID_NOT_PASS;
   return (
     `the page still waited for React to hydrate after ${String(wait.waitedMs)} ms ` +
     `(the bound is ${String(wait.budgetMs)} ms). Step ${String(step.step)} ran before React ` +
@@ -167,15 +175,18 @@ export function notHydratedReason(wait: HydrationWait, step: FlowStepResult): st
 /**
  * The hydration side of one replay: a wait on each page that loads, and what the first failed step
  * means when the page it ran on was known not to be hydrated.
+ *
+ * "Known not hydrated" is judged when a step STARTS, not when it fails. A page can hydrate while a
+ * failed step waits for its `expect`, so a read after the failure can say `done` about a click that
+ * did nothing. Nothing acts between the end of one step and the start of the next, so the read
+ * after a step is the state at the start of the next one.
  */
 export class ReplayHydration {
-  /** The wait on the live page, when it reached its bound. */
-  #onPage: HydrationWait | undefined;
   /** The most recent wait that reached its bound, on any page of this replay. */
   #last: HydrationWait | undefined;
-  /** Step results reported on the live page. */
-  #reported = 0;
-  /** Set at the first failed step: the wait of its page, when that page was known not hydrated. */
+  /** The wait on the live page, while that page is known to be `pending`. */
+  #pending: HydrationWait | undefined;
+  /** Set at the first failed step: the wait of its page, when it started on a pending page. */
   #failed: { unhydrated?: HydrationWait } | undefined;
 
   constructor(
@@ -185,32 +196,28 @@ export class ReplayHydration {
 
   /** Wait for a page that just loaded, before a step acts on it. */
   async arrive(session: HydrationSession): Promise<void> {
-    this.#onPage = await awaitHydration(session, this.clock, this.budgetMs);
-    this.#reported = 0;
-    if (this.#onPage !== undefined) {
-      this.#last = this.#onPage;
+    const wait = await awaitHydration(session, this.clock, this.budgetMs);
+    if (wait !== undefined) {
+      this.#last = wait;
     }
+    this.#pending = true === wait?.stillPending ? wait : undefined;
   }
 
   /**
    * Note a reported step result, before the next step runs. `live` is the page it ran on.
    *
-   * A failed step ran on a page known not to be hydrated when the wait on that page ended `pending`
-   * and either the step was the first to run there, or the page still says `pending` now.
+   * The step started on a pending page when the live page was still `pending` at the last read:
+   * the wait's end, or the read after the step before. While the page is pending, this reads it
+   * again, so the next step has its own answer. Hydration does not go back, so the reads stop at
+   * the first answer that is not `pending`.
    */
   async noteStep(result: FlowStepResult, live: HydrationSession): Promise<void> {
-    const first = 0 === this.#reported;
-    this.#reported += 1;
-    if (this.#failed !== undefined || (result.ok && result.drift === undefined)) {
-      return;
+    const startedPending = this.#pending;
+    if (this.#failed === undefined && (!result.ok || result.drift !== undefined)) {
+      this.#failed = startedPending === undefined ? {} : { unhydrated: startedPending };
     }
-    const wait = this.#onPage;
-    this.#failed = {};
-    if (wait?.stillPending !== true) {
-      return;
-    }
-    if (first || HydrationRead.PENDING === (await readHydration(live))) {
-      this.#failed = { unhydrated: wait };
+    if (startedPending !== undefined && HydrationRead.PENDING !== (await readHydration(live))) {
+      this.#pending = undefined;
     }
   }
 
