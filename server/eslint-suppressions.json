@@ -1885,16 +1885,6 @@
       "count": 5
     }
   },
-  "src/memory/intent/intent-subject.ts": {
-    "curly": {
-      "count": 12
-    }
-  },
-  "src/memory/intent/intent-tools.ts": {
-    "curly": {
-      "count": 10
-    }
-  },
   "src/memory/intent/intent-wrong-project-write.test.ts": {
     "curly": {
       "count": 1

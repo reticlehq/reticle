@@ -26,6 +26,12 @@
 /** Where an intent goes when nothing about it says where it belongs. Deliberately obvious. */
 export const UNSORTED_SUBJECT = 'unsorted';
 
+/**
+ * Where an intent about the home page goes. The route `/` is a page, not the absence of a route:
+ * filing it as unsorted answered `noSubject` and asked for the `surface.route` that was sent (#2306).
+ */
+export const HOME_SUBJECT = 'home';
+
 /** The longest a subject may be. It is a filename, and it is read in a directory listing. */
 const MAX_SUBJECT = 40;
 
@@ -54,7 +60,9 @@ const firstSegment = (path: string): string | undefined => {
   const clean = path.split(/[?#]/)[0] ?? '';
   for (const part of clean.split('/')) {
     // Skip empties, the API version prefix, and anything that is plainly an id rather than a name.
-    if ('' === part || /^v\d+$/i.test(part) || /^\d+$/.test(part)) continue;
+    if ('' === part || /^v\d+$/i.test(part) || /^\d+$/.test(part)) {
+      continue;
+    }
     /*
      * A QUERY FRAGMENT is not a path segment.
      *
@@ -66,26 +74,74 @@ const firstSegment = (path: string): string | undefined => {
      * Skipped rather than aborting the walk, so a binding that asserts a filter AND a route still
      * finds the route.
      */
-    if (part.includes('=') || part.includes('&')) continue;
+    if (part.includes('=') || part.includes('&')) {
+      continue;
+    }
     return part;
   }
   return undefined;
 };
 
+/** `scheme://host` at the start of a full URL. */
+const URL_ORIGIN = /^[a-z][a-z0-9+.-]*:\/\/[^/?#]*/i;
+
+/**
+ * A route without its origin. Agents copy the address bar, and `http://localhost:3000/settings`
+ * was filed under `http`, the first segment of the scheme.
+ */
+const withoutOrigin = (route: string): string => route.replace(URL_ORIGIN, '');
+
+/**
+ * The route a hash router keeps after `#`, as in `/#/settings` or `#!/settings`. Undefined for a
+ * plain anchor such as `#top`, which is a place on a page and not a page.
+ */
+const hashRoute = (path: string): string | undefined => {
+  const at = path.indexOf('#');
+  if (at < 0) {
+    return undefined;
+  }
+  const fragment = path.slice(at + 1).replace(/^!/, '');
+  return fragment.startsWith('/') ? fragment : undefined;
+};
+
+/** The segment a route names: its path first, then its hash route when the path names nothing. */
+const routeSegment = (route: string): string | undefined => {
+  const path = withoutOrigin(route);
+  const hash = hashRoute(path);
+  return firstSegment(path) ?? (hash === undefined ? undefined : firstSegment(hash));
+};
+
+/** A path with no segment at all. An id or a version is a segment here: `/123` is not home. */
+const isRootPath = (path: string): boolean =>
+  '' === (path.split(/[?#]/)[0] ?? '').replace(/\//g, '');
+
+/** The home page: the path has no segment, and neither does its hash route, if it has one. */
+const isHomeRoute = (route: string): boolean => {
+  const path = withoutOrigin(route);
+  const hash = hashRoute(path);
+  return isRootPath(path) && (hash === undefined || isRootPath(hash));
+};
+
 /** Walk a binding predicate tree for the first route or URL it mentions. */
 const fromBinding = (binding: unknown): string | undefined => {
-  if (typeof binding !== 'object' || null === binding) return undefined;
+  if (typeof binding !== 'object' || null === binding) {
+    return undefined;
+  }
   const node = binding as Record<string, unknown>;
   const direct = node['pathname'] ?? node['urlContains'] ?? node['path'];
   if ('string' === typeof direct) {
     const seg = firstSegment(direct);
-    if (seg !== undefined) return seg;
+    if (seg !== undefined) {
+      return seg;
+    }
   }
   const nested = node['predicates'] ?? node['of'];
   if (Array.isArray(nested)) {
     for (const child of nested) {
       const found = fromBinding(child);
-      if (found !== undefined) return found;
+      if (found !== undefined) {
+        return found;
+      }
     }
   }
   return undefined;
@@ -140,7 +196,9 @@ const featureOfFile = (file: string): string | undefined => {
   // The last part is the filename, never a feature.
   for (let i = parts.length - 2; i >= 0; i--) {
     const dir = parts[i];
-    if (dir === undefined || GENERIC_DIRS.has(dir.toLowerCase())) continue;
+    if (dir === undefined || GENERIC_DIRS.has(dir.toLowerCase())) {
+      continue;
+    }
     return dir;
   }
   return undefined;
@@ -154,15 +212,24 @@ const featureOfFile = (file: string): string | undefined => {
  */
 export const subjectFor = (evidence: SubjectEvidence): string => {
   const explicit = evidence.subject;
-  if ('string' === typeof explicit && explicit.trim() !== '') return slugifySubject(explicit);
+  if ('string' === typeof explicit && explicit.trim() !== '') {
+    return slugifySubject(explicit);
+  }
 
   const flow = evidence.surface?.flow;
-  if ('string' === typeof flow && flow.trim() !== '') return slugifySubject(flow);
+  if ('string' === typeof flow && flow.trim() !== '') {
+    return slugifySubject(flow);
+  }
 
   const route = evidence.surface?.route;
-  if ('string' === typeof route) {
-    const seg = firstSegment(route);
-    if (seg !== undefined) return slugifySubject(seg);
+  if ('string' === typeof route && '' !== route.trim()) {
+    const seg = routeSegment(route);
+    if (seg !== undefined) {
+      return slugifySubject(seg);
+    }
+    if (isHomeRoute(route)) {
+      return HOME_SUBJECT;
+    }
   }
 
   /*
@@ -172,14 +239,20 @@ export const subjectFor = (evidence: SubjectEvidence): string => {
   const files = evidence.surface?.files;
   if (Array.isArray(files)) {
     for (const file of files) {
-      if ('string' !== typeof file || '' === file) continue;
+      if ('string' !== typeof file || '' === file) {
+        continue;
+      }
       const feature = featureOfFile(file);
-      if (feature !== undefined) return slugifySubject(feature);
+      if (feature !== undefined) {
+        return slugifySubject(feature);
+      }
     }
   }
 
   const bound = fromBinding(evidence.binding);
-  if (bound !== undefined) return slugifySubject(bound);
+  if (bound !== undefined) {
+    return slugifySubject(bound);
+  }
 
   return UNSORTED_SUBJECT;
 };
