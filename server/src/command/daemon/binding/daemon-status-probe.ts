@@ -36,22 +36,21 @@ const ReticleStatusSchema = z
   .passthrough();
 
 /**
- * GET the daemon's /status JSON. Resolves to the parsed body, or undefined on any failure —
- * including a body that is not a Reticle daemon's, so every caller reads a stranger as absent and
- * `probePresence` calls the port FOREIGN.
- *
- * `host` defaults to loopback, which is every caller's actual target — except `bootSession`
- * (reticlehq/reticle#1165 review), whose Bridge can bind a non-default host via `RETICLE_HOST`.
- * Hardcoding loopback here made that preflight check the wrong address.
+ * How long the second `/status` attempt waits. A daemon that is busy (starting a browser, under load
+ * on a slow machine) can take longer than the first limit, and must not be read as a stranger.
  */
-export function fetchStatus(
+const STATUS_RETRY_TIMEOUT_MS = 5000;
+
+/** One `/status` request. `failed`: no answer (error or timeout); `body`: what an answer parsed to. */
+type StatusAttempt = { readonly failed: true } | { readonly failed: false; readonly body: unknown };
+
+function askStatus(
   port: number,
-  host: string = LOOPBACK_HOST,
-  /** Also tell the daemon a setup run is waiting on it, so it does not idle out mid-wait. */
-  hold = false,
-  /** A longer limit, for a caller that must not mistake a busy daemon for a stuck one. */
-  timeoutMs: number = STATUS_PROBE_TIMEOUT_MS,
-): Promise<unknown> {
+  host: string,
+  hold: boolean,
+  timeoutMs: number,
+  agent: http.Agent | false,
+): Promise<StatusAttempt> {
   return new Promise((resolve) => {
     const req = http.get(
       {
@@ -59,9 +58,7 @@ export function fetchStatus(
         port,
         path: hold ? `${STATUS_PATH}?${STATUS_HOLD_QUERY}=1` : STATUS_PATH,
         timeout: timeoutMs,
-        // Shares the proxy's keep-alive agent: the proxy calls this on every reconnect, and a socket
-        // per probe is the same churn the POST leg was fixed for.
-        agent: loopbackAgent,
+        agent,
       },
       (res) => {
         let body = '';
@@ -70,19 +67,58 @@ export function fetchStatus(
         res.on('end', () => {
           try {
             const parsed = ReticleStatusSchema.safeParse(JSON.parse(body));
-            resolve(parsed.success ? parsed.data : undefined);
+            resolve({ failed: false, body: parsed.success ? parsed.data : undefined });
           } catch {
-            resolve(undefined);
+            resolve({ failed: false, body: undefined });
           }
         });
       },
     );
-    req.on('error', () => resolve(undefined));
+    req.on('error', () => resolve({ failed: true }));
     req.on('timeout', () => {
       req.destroy();
-      resolve(undefined);
+      resolve({ failed: true });
     });
   });
+}
+
+/**
+ * GET the daemon's /status JSON. Resolves to the parsed body, or undefined on any failure —
+ * including a body that is not a Reticle daemon's, so every caller reads a stranger as absent and
+ * `probePresence` calls the port FOREIGN.
+ *
+ * A request that gets NO answer (an error or a timeout) is asked once more, on a fresh socket and
+ * with a longer limit. Reported from the field: on Windows a proxy refused the user's own daemon, of
+ * the same version and running, as a stranger's port. Either `/status` took longer than the first
+ * limit, or the request went out on a pooled keep-alive socket that a restarted daemon had closed.
+ * A port that answers with a body that is not a daemon's is not asked again: that is a stranger.
+ *
+ * `host` defaults to loopback, which is every caller's actual target — except `bootSession`
+ * (reticlehq/reticle#1165 review), whose Bridge can bind a non-default host via `RETICLE_HOST`.
+ * Hardcoding loopback here made that preflight check the wrong address.
+ */
+export async function fetchStatus(
+  port: number,
+  host: string = LOOPBACK_HOST,
+  /** Also tell the daemon a setup run is waiting on it, so it does not idle out mid-wait. */
+  hold = false,
+  /** A longer limit, for a caller that must not mistake a busy daemon for a stuck one. */
+  timeoutMs: number = STATUS_PROBE_TIMEOUT_MS,
+): Promise<unknown> {
+  // Shares the proxy's keep-alive agent: the proxy calls this on every reconnect, and a socket per
+  // probe is the same churn the POST leg was fixed for. The second attempt does not.
+  const first = await askStatus(port, host, hold, timeoutMs, loopbackAgent);
+  if (!first.failed) {
+    return first.body;
+  }
+  const second = await askStatus(
+    port,
+    host,
+    hold,
+    Math.max(timeoutMs, STATUS_RETRY_TIMEOUT_MS),
+    false,
+  );
+  return second.failed ? undefined : second.body;
 }
 
 /** One connected tab as `reticle status` reports it — the at-a-glance health line. */
