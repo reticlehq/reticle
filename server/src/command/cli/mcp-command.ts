@@ -26,9 +26,15 @@ import {
   reportWakeRefused,
 } from '@/surface/mcp/mcp-proxy.js';
 import { installProxyResilience } from '@/command/daemon/daemon-resilience.js';
-import { findProjectConfigDir, readProjectId, readProjectPort } from './ports/resolve/cli-port.js';
+import {
+  findProjectConfigDir,
+  namesWorkspaceApp,
+  readProjectId,
+  readProjectPort,
+} from './ports/resolve/cli-port.js';
 import {
   resolveMcpPort,
+  daemonInsideProject,
   daemonProjectAt,
   readDaemonRegistry,
   relocationReason,
@@ -136,6 +142,11 @@ export async function handleMcp(opts: {
   }
 
   const projectId = readProjectId(process.cwd());
+  const projectDir = findProjectConfigDir(process.cwd());
+  // A daemon below this folder runs in a package of this workspace, so it is this project's to use.
+  // Not when the root config points at one app: a daemon of another app is then the wrong app.
+  const adoptsBelow =
+    projectDir === undefined || namesWorkspaceApp(projectDir) ? undefined : projectDir;
   const resolvePort = (): Promise<number> =>
     resolveMcpPort(
       opts.port,
@@ -148,6 +159,7 @@ export async function handleMcp(opts: {
         pickPort: (p: number): Promise<number> => pickDaemonPortToBind(p),
       },
       readProjectPort(process.cwd()),
+      adoptsBelow,
     );
   const noteRelocated = (to: number): void => {
     log('reticle_mcp_port_relocated', {
@@ -213,7 +225,12 @@ export async function handleMcp(opts: {
     // straight onto it. The agent then drives, asserts and reports a verdict about a DIFFERENT
     // APPLICATION. That is worse than the disconnect it was reintroduced under the cover of, because
     // a disconnect is visible and this is a false green wearing a valid session.
-    const wake = decideWake(presence, daemonProjectAt(port, reticleStateHome()), projectId);
+    const wake = decideWake(
+      presence,
+      daemonProjectAt(port, reticleStateHome()),
+      projectId,
+      daemonInsideProject(port, reticleStateHome(), adoptsBelow),
+    );
     if (WakeAction.USE === wake) {
       // A proxy from a newer release stops an older daemon that nobody is using, and starts its own.
       // Otherwise every tool refused on the skew until a person ran `reticle restart`.
@@ -249,7 +266,7 @@ export async function handleMcp(opts: {
           ? otherProjectRefusal({
               port,
               callerProjectId: projectId,
-              callerConfigDir: findProjectConfigDir(process.cwd()),
+              callerConfigDir: projectDir,
               daemonProjectId: daemonProjectAt(port, reticleStateHome()),
               daemonCwd: readDaemonRegistry(reticleStateHome()).find((e) => e.port === port)?.cwd,
             })
