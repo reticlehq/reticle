@@ -51,6 +51,9 @@ const ORDER = [
   'blind-spot-reset-test',
   'next-smoke-test',
   'next-blur-clock-test',
+  // Flow replay against a real React hydration: a Next Suspense boundary that hydrates late, and a
+  // bench-app page with the React adapter and no React tree (#1654). Needs next-smoke and bench-app.
+  'replay-hydration-test',
   // The other half of insertText: the unit tests drive a mock DOM, so only a real ProseMirror editor
   // can show that the library's OWN document took the text rather than only its textContent.
   'insert-text-rich-editor-test',
@@ -230,8 +233,8 @@ if (specs.length === 0) {
 //
 // So the size is recorded, and shrinking the battery costs a deliberate edit to a number a
 // reviewer can see. Growing it costs the same edit, which is the point: both directions are a
-// decision. Measured 2026-11-22: 61 web specs, with lease-slow-start-page-replay-test (#2155).
-const EXPECTED_SPECS = desktop ? 3 : 61;
+// decision. Measured 2026-11-24: 62 web specs, with replay-hydration-test (#1654).
+const EXPECTED_SPECS = desktop ? 3 : 62;
 // The WHOLE battery is counted, not this shard's slice of it: a shard is a third of the list by
 // design, and the question here is whether the list itself shrank.
 if (listed.length !== EXPECTED_SPECS) {
