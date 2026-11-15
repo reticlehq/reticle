@@ -230,8 +230,8 @@ if (specs.length === 0) {
 //
 // So the size is recorded, and shrinking the battery costs a deliberate edit to a number a
 // reviewer can see. Growing it costs the same edit, which is the point: both directions are a
-// decision. Measured 2026-11-15: 60 web specs, with verify-session-lost-test (#2060).
-const EXPECTED_SPECS = desktop ? 3 : 60;
+// decision. Measured 2026-11-22: 61 web specs, with lease-slow-start-page-replay-test (#2155).
+const EXPECTED_SPECS = desktop ? 3 : 61;
 // The WHOLE battery is counted, not this shard's slice of it: a shard is a third of the list by
 // design, and the question here is whether the list itself shrank.
 if (listed.length !== EXPECTED_SPECS) {
