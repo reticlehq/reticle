@@ -1,3 +1,4 @@
+import { type HarnessDrive, type PresenterTone } from '@reticlehq/core';
 import {
   ActionType,
   HudCorner,
@@ -9,9 +10,7 @@ import {
   SessionState,
   isPresenterTone,
   isSessionState,
-  type HarnessDrive,
-  type PresenterTone,
-} from '@reticlehq/core';
+} from '@reticlehq/core/page';
 import { refs } from '@/dom/addressing/refs.js';
 import { UNREACHABLE_HEADLINE, unreachableMessage } from '@/transport/unreachable-message.js';
 import { actionVerb } from './chrome/presenter-verbs.js';

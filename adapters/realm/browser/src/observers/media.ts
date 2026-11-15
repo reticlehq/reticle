@@ -1,4 +1,4 @@
-import { EventType, MediaEvent } from '@reticlehq/core';
+import { EventType, MediaEvent } from '@reticlehq/core/page';
 import { refs } from '@/dom/addressing/refs.js';
 import { observeSafely, type Emit, type Teardown } from './types.js';
 

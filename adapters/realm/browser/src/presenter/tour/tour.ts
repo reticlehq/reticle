@@ -33,7 +33,7 @@ import {
   tourSlides,
 } from './tour-view.js';
 import { TourAnchor } from '@reticlehq/core/tour';
-import { RETICLE_URL_PARAM } from '@reticlehq/core';
+import { RETICLE_URL_PARAM } from '@reticlehq/core/page';
 import { appModalOpen } from '@/dom/dom-ignore.js';
 import { TOUR_SEEN_KEY_PREFIX } from '@/storage-keys.js';
 

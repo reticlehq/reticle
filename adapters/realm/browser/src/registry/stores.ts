@@ -1,4 +1,4 @@
-import { RETICLE_RENDERS_STORE } from '@reticlehq/core';
+import { RETICLE_RENDERS_STORE } from '@reticlehq/core/page';
 import { nativeWarn } from '@/timers/console/native-console.js';
 import { sanitizeWithReport, type TruncationReport } from '@/security/serialization.js';
 import { errorText } from '@/util/error-text.js';

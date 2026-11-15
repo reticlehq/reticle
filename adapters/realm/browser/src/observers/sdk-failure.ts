@@ -17,7 +17,7 @@
  *   2. IT CANNOT BREAK THE APP. Reporting is wrapped in its own try/catch and is strictly additive to
  *      an existing `catch` block. A failure to report a failure is discarded.
  */
-import { EventType } from '@reticlehq/core';
+import { EventType } from '@reticlehq/core/page';
 import type { Emit } from './types.js';
 import { errorText } from '@/util/error-text.js';
 

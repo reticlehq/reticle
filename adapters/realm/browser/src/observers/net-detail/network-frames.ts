@@ -1,4 +1,4 @@
-import { RETICLE_WS_PATH } from '@reticlehq/core';
+import { RETICLE_WS_PATH } from '@reticlehq/core/page';
 import { projectBody } from './network-body.js';
 
 /** The byte size of a binary frame (ArrayBuffer / Blob / typed-array view), or undefined if unknown. */

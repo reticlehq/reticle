@@ -1,9 +1,4 @@
 import {
-  ALTERNATIVE_TESTID_ATTRS,
-  DEFAULT_TESTID_ATTR,
-  ElementState,
-  QueryBy,
-  REDACTED_VALUE,
   type ElementDescriptor,
   type ElementQuery,
   type MatchResult,
@@ -11,8 +6,15 @@ import {
   type NearestTarget,
   type QueryEmptyHint,
   type QueryResult,
-  TRANSPORT_LIMITS,
 } from '@reticlehq/core';
+import {
+  ALTERNATIVE_TESTID_ATTRS,
+  DEFAULT_TESTID_ATTR,
+  ElementState,
+  QueryBy,
+  REDACTED_VALUE,
+  TRANSPORT_LIMITS,
+} from '@reticlehq/core/page';
 import { isElement, isFrame } from './realm.js';
 import { capturedRootOf } from './shadow-registry.js';
 import { getAccessibleName, getRole, describe, getStates } from './a11y.js';

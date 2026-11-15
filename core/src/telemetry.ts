@@ -44,7 +44,8 @@ import {
   ProjectProfileSchema,
   SessionSummarySchema,
 } from './telemetry-session.js';
-import { BrowserBrand, FeedbackSchema } from './telemetry-feedback.js';
+import { FeedbackSchema } from './telemetry-feedback.js';
+import { BrowserBrand } from './browser-brand.js';
 import { CaptureLoss, VerifiedReason } from './verdict/verified-constants.js';
 import { IdentitySchema } from './telemetry-feedback.js';
 import { LicenseActivation } from './telemetry-license.js';

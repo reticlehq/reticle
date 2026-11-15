@@ -1,5 +1,6 @@
 import { webcrypto } from 'node:crypto';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
+import { type ActivationTicketPayload } from '@reticlehq/core';
 import {
   ACTIVATION_TICKET_VERSION,
   ActivationRefusal,
@@ -9,7 +10,6 @@ import {
   PRODUCTION_ACTIVATE_PARAM,
   signActivationTicket,
   toBase64Url,
-  type ActivationTicketPayload,
 } from '@reticlehq/core';
 import { activate, type ActivateHost } from './activate.js';
 import { helloMode } from './connect-options.js';

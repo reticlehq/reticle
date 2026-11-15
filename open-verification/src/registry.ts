@@ -1,5 +1,6 @@
 import * as z from 'zod';
-import { ChannelId, type ChannelDescriptor } from './vocabulary/channel.js';
+import { type ChannelDescriptor } from './vocabulary/channel.js';
+import { ChannelId } from './vocabulary/channel-id.js';
 
 /**
  * Who implements this, and what they are entitled to claim.

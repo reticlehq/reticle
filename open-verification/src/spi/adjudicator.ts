@@ -1,10 +1,6 @@
 import { type Claim, Declaration } from '@/vocabulary/intent.js';
-import {
-  type ChannelDescriptor,
-  disagreementCanConvict,
-  Grade,
-  Independence,
-} from '@/vocabulary/channel.js';
+import { type ChannelDescriptor } from '@/vocabulary/channel.js';
+import { disagreementCanConvict, Grade, Independence } from '@/vocabulary/channel-id.js';
 import {
   canSupportConsequence,
   type Coverage,

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { ChannelId } from '@/vocabulary/channel.js';
+import { ChannelId } from '@/vocabulary/channel-id.js';
 import { criteriaToProgram, gradeCriteria } from './criteria.js';
 import { typecheckProgram } from './typecheck.js';
 

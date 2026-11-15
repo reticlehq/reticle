@@ -3,7 +3,7 @@
  *
  * One question: given a body, what is safe and affordable to report?
  */
-import { REDACTED_VALUE, ResponseBodyReason } from '@reticlehq/core';
+import { REDACTED_VALUE, ResponseBodyReason } from '@reticlehq/core/page';
 import { isSensitiveKey, safeStringify, scrubKnownSecrets } from '@/security/serialization.js';
 import { nativeClearTimeout, nativeSetTimeout } from '@/timers/native/native-timers.js';
 import { isEventStream, redactEventStream } from './network-event-stream.js';

@@ -1,4 +1,4 @@
-import { EventType, BlindSpotKind } from '@reticlehq/core';
+import { EventType, BlindSpotKind } from '@reticlehq/core/page';
 import type { Emit, Teardown } from './types.js';
 import { countUnmountedRows } from '@/dom/virtualized.js';
 import { isCaptured } from '@/dom/shadow-registry.js';

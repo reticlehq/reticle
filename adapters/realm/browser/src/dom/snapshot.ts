@@ -1,4 +1,4 @@
-import { ElementState, SnapshotMode } from '@reticlehq/core';
+import { ElementState, SnapshotMode } from '@reticlehq/core/page';
 import { capturedRootOf } from './shadow-registry.js';
 import { isElement, isFrame } from './realm.js';
 import { getAccessibleName, getRole, getStates, getValue } from './a11y.js';

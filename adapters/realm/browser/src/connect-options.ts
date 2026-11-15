@@ -1,11 +1,5 @@
-import {
-  HelloInstrumentation,
-  HudVisibility,
-  RETICLE_URL_PARAM,
-  type HelloEnv,
-  type HelloScope,
-  type RedactionConfig,
-} from '@reticlehq/core';
+import { type HelloEnv, type HelloScope, type RedactionConfig } from '@reticlehq/core';
+import { HelloInstrumentation, HudVisibility, RETICLE_URL_PARAM } from '@reticlehq/core/page';
 
 /**
  * What `reticle.connect()` accepts.

@@ -19,7 +19,7 @@
  * Call it BEFORE dispatch. A click that removes its own target leaves a detached element with no
  * ancestors and no inherited cursor, and judging that would misread a click that worked.
  */
-import { ActionType } from '@reticlehq/core';
+import { ActionType } from '@reticlehq/core/page';
 import { getRole } from '@/dom/a11y.js';
 import { parentAcrossShadowBoundary } from '@/dom/shadow-registry.js';
 import { INTERACTIVE } from '@/dom/snapshot.js';

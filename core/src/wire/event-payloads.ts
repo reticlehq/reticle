@@ -13,7 +13,7 @@ import {
 } from './constants/event-types.js';
 import { ResponseBodyReason } from './constants/response-body-reason.js';
 import { BlindSpotKind } from '@/verdict/verified-constants.js';
-import { BrowserBrand } from '@/telemetry-feedback.js';
+import { BrowserBrand } from '@/browser-brand.js';
 import { HudUseDataSchema, HumanControlDataSchema, HumanMarkDataSchema } from './messages.js';
 import { DepartedNetField, NEXT_ACTION_FIELD, REQUEST_SHAPE_FIELD } from './net.js';
 

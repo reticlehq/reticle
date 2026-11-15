@@ -125,15 +125,6 @@ export function driveFlowStatus(checks: {
 }
 
 /**
- * The kind of standalone assertion captured outside a flow.
- *
- * This is `PredicateKind` -- the vocabulary assertions are written in -- and not a second list: two
- * lists drift, and an artifact can only record what somebody can actually assert. Re-exported so
- * the places that read it from this file still can.
- */
-export { PredicateKind };
-
-/**
  * What a check came out as.
  *
  * `Verified` and not a second list. A binary one here would lose `unknown` and `no-fault` -- the
@@ -264,25 +255,6 @@ export const ScreenshotSource = {
   RENDERED: 'rendered',
 } as const;
 export type ScreenshotSource = (typeof ScreenshotSource)[keyof typeof ScreenshotSource];
-
-/** How a step screenshot is taken and kept — shared by the daemon, the SDK and the platform. */
-export const STEP_SCREENSHOT = {
-  /** `.reticle/visual/runs/<runId>/<seq>-<tool>.jpg` */
-  RUNS_DIR: 'runs',
-  /** One line per landed screenshot, beside the images: what the run artifact and the upload read. */
-  MANIFEST_FILE: 'shots.jsonl',
-  JPEG_QUALITY: 0.7,
-  MAX_SIDE_PX: 1600,
-  /** The platform refuses more than this for one run, so the daemon stops taking them there. */
-  MAX_PER_RUN: 300,
-  /** The platform refuses an image larger than this, decoded. */
-  MAX_BYTES: 1.5 * 1024 * 1024,
-  /**
-   * The `tool` of a frame: a picture taken between steps while Reticle drives a tab, about once a
-   * second. Frames share the run's `seq`, so the shots in `seq` order play the run as a film.
-   */
-  FRAME_TOOL: 'frame',
-} as const;
 
 /** One step's screenshot as a run artifact records it. `file` is relative to the run's directory. */
 export const StepScreenshotSchema = z.object({

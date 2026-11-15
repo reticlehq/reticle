@@ -1,4 +1,4 @@
-import { EventType, REDACTED_VALUE, StorageArea } from '@reticlehq/core';
+import { EventType, REDACTED_VALUE, StorageArea } from '@reticlehq/core/page';
 import { isSensitiveKey, scrubKnownSecrets } from '@/security/serialization.js';
 import { isReticleStorageKey } from '@/storage-keys.js';
 import { observeSafely, observeValue, type Emit, type Teardown } from './types.js';

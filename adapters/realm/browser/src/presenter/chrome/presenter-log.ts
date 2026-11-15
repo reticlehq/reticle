@@ -1,4 +1,4 @@
-import { PresenterMode } from '@reticlehq/core';
+import { PresenterMode } from '@reticlehq/core/page';
 import {
   LOG_ACTOR,
   LOG_KIND,

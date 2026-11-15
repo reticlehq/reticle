@@ -1,9 +1,5 @@
-import {
-  IMPACT_DEFECT_LIMIT,
-  type AccountState,
-  type ImpactScope,
-  type ImpactSnapshot,
-} from '@reticlehq/core';
+import { type AccountState, type ImpactScope, type ImpactSnapshot } from '@reticlehq/core';
+import { IMPACT_DEFECT_LIMIT } from '@reticlehq/core/page';
 import { PresenterIcon, PRESENTER_ICON_SIZE, hiIconHtml } from './icons/presenter-icons.js';
 import { HUD_SURFACE_CLASS } from './chrome/presenter-hud-chrome.js';
 import { esc, isSafeDashboardUrl } from './chrome/presenter-safe-html.js';

@@ -1,5 +1,5 @@
 /** Project bounded SSE data through the same structured redaction as JSON responses. */
-import { REDACTED_VALUE } from '@reticlehq/core';
+import { REDACTED_VALUE } from '@reticlehq/core/page';
 import { sanitizeWithReport } from '@/security/serialization.js';
 
 const EVENT_STREAM_CONTENT = /^text\/event-stream(?:\s*;|\s*$)/i;

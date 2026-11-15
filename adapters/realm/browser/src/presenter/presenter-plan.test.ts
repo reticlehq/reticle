@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { ReticleCommand, ScriptStatus, type PlanView } from '@reticlehq/core';
+import { type PlanView } from '@reticlehq/core';
+import { ReticleCommand, ScriptStatus } from '@reticlehq/core';
 import { Presenter } from './presenter.js';
 
 const view = (refund: ScriptStatus, audit: ScriptStatus): PlanView => ({

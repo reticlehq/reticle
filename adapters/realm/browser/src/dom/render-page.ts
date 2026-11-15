@@ -12,7 +12,7 @@
  * Privacy is decided HERE, before a pixel exists: the image leaves the machine with its run. A
  * password field, and any field whose name says it holds a secret, is drawn as a row of dots.
  */
-import { isSensitiveKey, STEP_SCREENSHOT } from '@reticlehq/core';
+import { isSensitiveKey, STEP_SCREENSHOT } from '@reticlehq/core/page';
 import { RETICLE_OVERLAY } from './dom-ignore.js';
 import { errorText } from '@/util/error-text.js';
 

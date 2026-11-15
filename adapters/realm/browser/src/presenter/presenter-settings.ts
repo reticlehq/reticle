@@ -26,7 +26,7 @@ import { findDock, scheduleSyncDockLayout } from './presenter-dock-layout.js';
 import { SETTINGS_CSS } from './presenter-settings-styles.js';
 import { creditsLeftText, creditsSpent, creditsUsedText, type Credits } from '@reticlehq/core/hud';
 import type { AccountState } from '@reticlehq/core';
-import { DISCOVERY_CALL_URL, FOUNDER_EMAIL, FOUNDER_MAILTO } from '@reticlehq/core';
+import { DISCOVERY_CALL_URL, FOUNDER_EMAIL, FOUNDER_MAILTO } from '@reticlehq/core/page';
 import {
   ACCOUNT_TEXT,
   accountControlHtml,

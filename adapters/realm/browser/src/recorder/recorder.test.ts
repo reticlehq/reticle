@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { type FlowStep } from '@reticlehq/core';
 import {
   ActionType,
   AnchorKind,
@@ -8,7 +9,6 @@ import {
   FLOW_FILE_VERSION,
   RecordedFlowSchema,
   RecorderPhase,
-  type FlowStep,
 } from '@reticlehq/core';
 import {
   anchorFor,

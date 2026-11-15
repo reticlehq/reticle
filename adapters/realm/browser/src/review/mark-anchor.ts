@@ -1,5 +1,5 @@
 import { readTestId } from '@/dom/addressing/testid-attr.js';
-import { MarkAnchorStrategy } from '@reticlehq/core';
+import { MarkAnchorStrategy } from '@reticlehq/core/page';
 import {
   AnchorStrategy,
   synthesizeAnchor,

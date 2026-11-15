@@ -1,5 +1,6 @@
 import { HUD_KEYED_ATTRS, isHudControl } from '@reticlehq/core/hud';
-import { HudPanel, HudPromptSurface, HudToggle, HudView, type HudUseData } from '@reticlehq/core';
+import { type HudUseData } from '@reticlehq/core';
+import { HudPanel, HudPromptSurface, HudToggle, HudView } from '@reticlehq/core/page';
 import { isReticleUi } from '@/dom/dom-ignore.js';
 import { nativeSetTimeout } from '@/timers/native/native-timers.js';
 import { CHAT_ATTR, MIN_ATTR, REPORT_ATTR, SETTINGS_ATTR } from './presenter-config.js';

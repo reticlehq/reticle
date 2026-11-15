@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { CreditKind, HarnessConfigSchema } from './impact.js';
+import { HarnessConfigSchema } from './impact.js';
+import { CreditKind } from './impact-constants.js';
 import {
   SIGN_UP_PITCH,
   creditsLeftText,

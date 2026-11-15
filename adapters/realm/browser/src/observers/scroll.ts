@@ -1,4 +1,4 @@
-import { EventType, ScrollDirection } from '@reticlehq/core';
+import { EventType, ScrollDirection } from '@reticlehq/core/page';
 import { refs } from '@/dom/addressing/refs.js';
 import { nativeSetTimeout, nativeClearTimeout } from '@/timers/native/native-timers.js';
 import type { Emit, Teardown } from './types.js';

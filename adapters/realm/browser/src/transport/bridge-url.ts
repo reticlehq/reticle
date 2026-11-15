@@ -7,7 +7,7 @@ import {
   TRANSPORT_LIMITS,
   isLocalPage,
   isLoopbackHostname,
-} from '@reticlehq/core';
+} from '@reticlehq/core/page';
 
 /**
  * The daemon only upgrades WebSocket connections on `RETICLE_WS_PATH`, so a hand-written bridge URL

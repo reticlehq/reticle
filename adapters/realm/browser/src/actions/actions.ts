@@ -11,7 +11,7 @@ import {
   ElementState,
   NATIVE_INPUT_ARG,
   SettleReason,
-} from '@reticlehq/core';
+} from '@reticlehq/core/page';
 import { isHiddenNativeOption } from '@/dom/query-finders.js';
 import { isReticleUi, isUnobserved } from '@/dom/dom-ignore.js';
 

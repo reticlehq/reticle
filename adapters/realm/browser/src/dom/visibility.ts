@@ -1,4 +1,4 @@
-import { RETICLE_OVERLAY_SELECTOR } from '@reticlehq/core';
+import { RETICLE_OVERLAY_SELECTOR } from '@reticlehq/core/page';
 import { isHtmlElement } from './realm.js';
 import { parentAcrossShadowBoundary } from './shadow-registry.js';
 import {

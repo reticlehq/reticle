@@ -3,7 +3,7 @@
  *
  * One question: which loads did the patched transports not see?
  */
-import { EventType } from '@reticlehq/core';
+import { EventType } from '@reticlehq/core/page';
 import { netUrlFields } from './network-redact.js';
 
 type EmitNet = (type: EventType, data: Record<string, unknown>) => void;

@@ -16,7 +16,8 @@
  * observing is the base. Everything the adjudicator needs is here; `perform` is not part of it.
  */
 
-import type { ChannelDescriptor, ChannelId } from '@/vocabulary/channel.js';
+import type { ChannelDescriptor } from '@/vocabulary/channel.js';
+import type { ChannelId } from '@/vocabulary/channel-id.js';
 import type { Coverage, Observation, BlindSpot } from '@/vocabulary/evidence.js';
 import type { Window } from '@/vocabulary/realm-surface.js';
 import type { SubjectRef } from '@/vocabulary/subject.js';

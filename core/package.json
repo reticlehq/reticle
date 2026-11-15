@@ -6,6 +6,10 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
+    "./page": {
+      "types": "./dist/page-entry.d.ts",
+      "default": "./dist/page-entry.js"
+    },
     ".": {
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"

@@ -1,4 +1,5 @@
-import { DATA_RETICLE_SOURCE_ATTR, QueryBy, type ElementQuery } from '@reticlehq/core';
+import { type ElementQuery } from '@reticlehq/core';
+import { DATA_RETICLE_SOURCE_ATTR, QueryBy } from '@reticlehq/core/page';
 import { isInput, isSelect, isTextArea } from './realm.js';
 import { getAccessibleName, getRole } from './a11y.js';
 import { isNonRendered, isVisible } from './visibility.js';

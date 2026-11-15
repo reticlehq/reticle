@@ -5,7 +5,7 @@
 // The CASES are wire values though, and they are core's ActionType. Spelled as free strings here,
 // a rename in core left this switch silently falling through to `default` - which returns the raw
 // action name, so the HUD degrades to "click Save" instead of a verb and nothing fails.
-import { ActionType } from '@reticlehq/core';
+import { ActionType } from '@reticlehq/core/page';
 
 export function actionVerb(action: string): string {
   switch (action) {

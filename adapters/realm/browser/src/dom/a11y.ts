@@ -1,11 +1,11 @@
 import { readTestId } from './addressing/testid-attr.js';
+import { type ElementDescriptor } from '@reticlehq/core';
 import {
   DEFAULT_TESTID_ATTR,
   ElementState,
   REDACTED_VALUE,
   TRANSPORT_LIMITS,
-  type ElementDescriptor,
-} from '@reticlehq/core';
+} from '@reticlehq/core/page';
 import {
   isButton,
   isImage,

@@ -1,4 +1,4 @@
-import { EventType } from '@reticlehq/core';
+import { EventType } from '@reticlehq/core/page';
 import { getAccessibleName, getRole } from '@/dom/a11y.js';
 import type { Emit, Teardown } from './types.js';
 
