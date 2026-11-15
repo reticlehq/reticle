@@ -34,6 +34,9 @@ import { watchPageRequests } from './page-requests.js';
 
 /** A key addresses focus, not a point; the gesture driver takes a box for every action. */
 const NO_BOX: ElementBox = { x: 0, y: 0, width: 0, height: 0 };
+
+/** The clock of a page whose caller gave none. */
+const wallClock = (): number => Date.now();
 const sleepFor = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
 // Every request, as a predicate: the mock installer clears the any-URL glob, and must not clear the
@@ -171,10 +174,12 @@ function wrapBrowser(browser: Browser, headless: boolean): PooledBrowser {
         await context.addInitScript(installDeterminism, determinismConfigOf(deterministic));
       }
       return {
-        newPage: async ({ now }): Promise<PooledPage> => {
+        newPage: async (opts): Promise<PooledPage> => {
           const page = await context.newPage();
-          // Before the first navigation, so the requests of the first load are counted.
-          const requests = watchPageRequests(page, now);
+          // Before the first navigation, so the requests of the first load are counted. The pool
+          // passes its own clock. A caller that wraps this context and drops it gets the wall clock,
+          // as `BrowserPool` does when nobody injects one.
+          const requests = watchPageRequests(page, opts?.now ?? wallClock);
           // Before the first navigation, so the code that runs while the page loads is counted.
           if (true === jsCoverage) {
             await startJsCoverage(page, covering);
