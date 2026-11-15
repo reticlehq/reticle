@@ -67,6 +67,27 @@ describe('createHydrationTracker', () => {
     expect(onHydrated).not.toHaveBeenCalled();
   });
 
+  // #2269 review: every commit pushed its root, also after the answer was fixed, so a long session
+  // kept every root React ever committed.
+  it('reads and keeps no root once the page is hydrated or unreadable', () => {
+    for (const final of [HydrationState.DONE, HydrationState.UNKNOWN]) {
+      let kept: readonly unknown[] = [];
+      let reads = 0;
+      const tracker = createHydrationTracker(vi.fn(), (roots) => {
+        kept = roots;
+        reads += 1;
+        return final;
+      });
+      tracker.onCommit({ current: {} });
+      tracker.onCommit({ current: {} });
+      tracker.onCommit({ current: {} });
+
+      // One read, at the first commit. After it the tracker holds no root at all.
+      expect(reads).toBe(1);
+      expect(kept).toHaveLength(0);
+    }
+  });
+
   it('gives the read every root that a commit named', () => {
     const seen: unknown[][] = [];
     const first = { current: {} };
