@@ -66,6 +66,8 @@ export type Predicate =
       kind: typeof PredicateKind.NET;
       method?: string;
       urlContains?: string;
+      /** The path of the request, exactly. The query and the fragment are not compared. */
+      urlPath?: string;
       status?: number;
       /** Did the call succeed? The honest field for IPC, which has no status code. */
       ok?: boolean;
@@ -134,6 +136,15 @@ export type Predicate =
   | { kind: typeof PredicateKind.ALL_OF; predicates: Predicate[] }
   | { kind: typeof PredicateKind.ANY_OF; predicates: Predicate[] }
   | { kind: typeof PredicateKind.NOT; predicate: Predicate };
+
+/**
+ * A path: it starts with one `/` and holds no query (`?`) and no fragment (`#`). A leading `//`
+ * is refused because a URL parser reads the next segment as a host, not as part of the path.
+ */
+const NET_URL_PATH_SHAPE = /^\/(?!\/)[^?#]*$/;
+const NET_URL_PATH_REFUSAL =
+  '`urlPath` is a path only. Start it with "/" and leave out the query and the fragment, ' +
+  'for example "/api/items". To match a query, use `urlContains`.';
 
 /**
  * Spellings an agent plausibly reaches for, mapped to the real field.
@@ -615,6 +626,16 @@ function predicateUnion() {
         kind: z.literal(PredicateKind.NET),
         method: z.string().optional(),
         urlContains: z.string().optional(),
+        /**
+         * The path of the request, compared exactly (#2286). `urlContains` is a substring, so a
+         * check for `/api/items` also matched `/api/items/count`, and `count` could not single out
+         * one endpoint. The query and the fragment are not compared, and a value that carries one
+         * is refused: it can never equal a path, so the check would fail on correct code.
+         *
+         * Not called `pathname`, and `pathname` is not an alias for it: a predicate with no `kind`
+         * is read by its keys, and `{ pathname }` alone must stay a `route` check.
+         */
+        urlPath: z.string().regex(NET_URL_PATH_SHAPE, NET_URL_PATH_REFUSAL).optional(),
         status: z.number().optional(),
         ok: z.boolean().optional(),
         since: z.number().optional(),

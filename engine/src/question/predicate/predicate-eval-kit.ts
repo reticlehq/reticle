@@ -419,6 +419,27 @@ export function describeNetFilter(
   return JSON.stringify(filter);
 }
 
+/**
+ * The base a relative request URL is read against. Only the path is kept, so the origin is never
+ * read: the `.invalid` top-level domain cannot name a real host.
+ */
+const PATH_BASE = 'http://reticle.invalid';
+
+/**
+ * The path of a URL, without the query and the fragment, or undefined when the URL cannot be read.
+ * A relative URL is read as a path.
+ *
+ * Both sides of a `net { urlPath }` check go through this function (#2286), so `/a b` and `/a%20b`
+ * are the same path. A trailing slash is kept: `/api/items/` and `/api/items` can be two routes.
+ */
+export function urlPathOf(url: string): string | undefined {
+  try {
+    return new URL(url, PATH_BASE).pathname;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Leading `major.minor.patch` as numbers; a pre-release of a version counts as that version. */
 function versionParts(version: string): [number, number, number] | undefined {
   const m = /^(\d+)\.(\d+)\.(\d+)/.exec(version);
