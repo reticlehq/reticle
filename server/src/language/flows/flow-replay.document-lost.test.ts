@@ -228,6 +228,7 @@ describe('navigateAndAwait — the navigation that kills its own transport', () 
         kind: 'lost',
         waitedMs: 300,
         stillLoading: false,
+        unanswered: false,
       },
     );
   });

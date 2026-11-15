@@ -33,6 +33,7 @@ import type {
 import type { RealInputArgs, RealInputResult } from '@/portal/input/real-input.js';
 import { readViewport, type LeaseMedia } from './lease-emulation.js';
 import { injectReaderInto } from './zero-install.js';
+import { pageLoadingOrFetching } from './page-requests.js';
 import { stepPage, type DeterminismStep } from './determinism.js';
 export type {
   InitScriptHandle,
@@ -416,7 +417,7 @@ export class BrowserPool {
     if (lease === undefined) {
       return false;
     }
-    return pageLoading(lease.page).catch(() => false);
+    return pageLoadingOrFetching(lease.page).catch(() => false);
   }
 
   /** Whether this session is a lease whose page has a real keyboard. */
@@ -649,7 +650,7 @@ export class BrowserPool {
       }
       await grantLocalNetworkAccess(context, url);
       const csp = await widenLeaseCsp(context, url, this.#daemonOrigin);
-      const page = await context.newPage();
+      const page = await context.newPage({ now: this.#now });
       // A desktop-shell stub must exist before the app's first module: added before goto, and kept.
       let hostStub: InitScriptHandle | undefined;
       if (opts.initScript !== undefined) {

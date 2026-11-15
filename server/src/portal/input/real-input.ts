@@ -37,9 +37,8 @@ import { installNetworkMocks, type MockRule } from './network-mock.js';
 import { attachNetworkDetail, type NetworkDetail } from './network-detail.js';
 import { attachDownloadCapture, type CdpLike } from './download-capture.js';
 import { injectedConnectArgs } from '@/portal/pool/zero-install.js';
-import { pageLoading } from '@/portal/pool/pool-lease.js';
-import { watchCodeFetches, type CodeFetchTracker } from '@/portal/pool/code-fetch-tracker.js';
 import { EARLY_CAPTURE_ARG, queueEarlyConsole } from '@/portal/pool/lease-page-error.js';
+import { DrivenPageLoading, type DrivenLoadingProbe } from './driven-page-loading.js';
 
 /** Viewport CSS-px box as returned by the INSPECT command (getBoundingClientRect). */
 export interface ElementBox {
@@ -115,7 +114,7 @@ export { capturePage, type ScreenshotOpts } from './page-capture.js';
 import { capturePage, type ScreenshotOpts } from './page-capture.js';
 
 /** The capability surface reticle_act depends on. A FAKE implementing this is injected in tests. */
-export interface RealInputProvider {
+export interface RealInputProvider extends DrivenLoadingProbe {
   /** Whether a Playwright Page currently matches this SDK session URL. */
   isAvailableFor(sessionUrl: string): Promise<boolean>;
   /** Drive a native gesture for `action` at the element `box`. */
@@ -169,11 +168,6 @@ export interface RealInputProvider {
    * engine's counters.
    */
   takeCodeCoverage?(sessionUrl: string): Promise<ScriptCoverage[] | undefined>;
-  /**
-   * Whether the one page this provider drives is still loading (see `pageLoading`). Optional: only
-   * a provider that opened the page saw its requests from the first load (#2155).
-   */
-  drivenPageLoading?(): Promise<boolean>;
   /**
    * Pin the correlated page's viewport to fixed pixel dimensions so a screenshot baseline is
    * reproducible across machines (the missing piece of CI-stable visual regression, alongside masks
@@ -681,9 +675,9 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
   readonly #zeroInstallScript: (() => string | undefined) | undefined;
   #browser: Browser | undefined;
   #page: Page | undefined;
-  #codeFetches: CodeFetchTracker | undefined;
   /** Pages collecting V8 coverage — see js-coverage.ts. */
   readonly #covering = new WeakSet<Page>();
+  readonly #loading = new DrivenPageLoading(() => this.#now());
 
   constructor(options: LaunchedProviderOptions) {
     this.#driveUrl = options.driveUrl;
@@ -704,7 +698,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
       ...(this.#storageState !== undefined ? { storageState: this.#storageState } : {}),
     });
     this.#page = page;
-    this.#codeFetches = watchCodeFetches(page, this.#now);
+    this.#loading.watch(page);
     // Before goto: a console error the page logs while it loads comes before its SDK connects.
     await page.addInitScript(queueEarlyConsole, EARLY_CAPTURE_ARG);
     // Capture CDP-authoritative response detail into the driven session's journal (best-effort).
@@ -806,15 +800,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
   }
 
   drivenPageLoading(): Promise<boolean> {
-    const page = this.#livePage();
-    const codeFetches = this.#codeFetches;
-    if (page === undefined || codeFetches === undefined) {
-      return Promise.resolve(false);
-    }
-    return pageLoading({
-      fetchingCode: () => codeFetches.fetching(),
-      evaluate: (script) => page.evaluate(script),
-    });
+    return this.#loading.loading(this.#livePage());
   }
 
   isAvailableFor(sessionUrl: string): Promise<boolean> {

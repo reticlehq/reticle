@@ -209,19 +209,8 @@ export interface ActiveLease {
   csp: { widenedFor?: string };
 }
 
-/**
- * Whether the page has not finished loading: it still fetches its code, or its document is not
- * complete. A page that cannot be asked counts as loaded.
- *
- * The code fetch comes first. A dev server can compile the module that dials Reticle long after the
- * document is `complete`, when the app imports that module dynamically (#2155).
- */
-export async function pageLoading(
-  page: Pick<PooledPage, 'fetchingCode' | 'evaluate'>,
-): Promise<boolean> {
-  if (true === page.fetchingCode?.()) {
-    return true;
-  }
+/** Whether the page's document has not finished loading. A page that cannot be asked counts as loaded. */
+export async function pageLoading(page: Pick<PooledPage, 'evaluate'>): Promise<boolean> {
   if (page.evaluate === undefined) {
     return false;
   }
