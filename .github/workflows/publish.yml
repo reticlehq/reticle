@@ -110,6 +110,12 @@ jobs:
       # scripts/check-unbumped-packages.mjs.
       - name: Refuse a package that changed under a published version
         run: node scripts/check-unbumped-packages.mjs
+        # The check packs each package already on npm and compares its files with npm's. It must pack
+        # as the publish step below does: @reticlehq/server's `prepack` stamps this key into
+        # license.js. Without it here, a re-run of a publish (every version already on npm) compared
+        # an unstamped server with npm's stamped one and refused 3.10.4's re-run.
+        env:
+          RETICLE_ISSUER_PUBLIC_KEY: ${{ secrets.RETICLE_ISSUER_PUBLIC_KEY }}
       - name: Publish public packages
         run: pnpm -r publish --access public --no-git-checks
         env:
