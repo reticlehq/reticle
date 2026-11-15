@@ -49,18 +49,21 @@ export const ROLE_TEXT_FIND_OPENING = 'A role find does not filter by `text`.';
  *
  * A role find narrows only by `name` (#2326). `{ by: "role", value: "button", text: "Save" }`
  * returned every button, and `{ role: "button", text: "Save" }` became a text search that dropped
- * the role. Either way the agent got matches it did not ask for, and nothing said so.
+ * the role. Either way the agent got matches it did not ask for, and nothing said so. Both the
+ * find and an act target call this on their raw arguments, before `normalizeQueryArgs`.
  */
 export function roleTextRefusal(args: Record<string, unknown>): Error | undefined {
-  const isRoleFind = QueryBy.ROLE === args['by'] || 'string' === typeof args['role'];
+  const role = QueryBy.ROLE === args['by'] ? args['value'] : args['role'];
   const text = args['text'];
-  if (!isRoleFind || 'string' !== typeof text || 0 === text.length) {
+  if ('string' !== typeof role || 'string' !== typeof text || 0 === text.length) {
     return undefined;
   }
+  const quotedRole = JSON.stringify(role);
+  const quotedText = JSON.stringify(text);
   return new Error(
-    `${ROLE_TEXT_FIND_OPENING} It would return every element of that role. Pass \`name\` with ` +
-      'the exact accessible name, e.g. { role: "button", name: "Save" }, or search ' +
-      '{ text: "Save" } alone.',
+    `${ROLE_TEXT_FIND_OPENING} It would match every element of that role. Pass \`name\` with ` +
+      `the exact accessible name, e.g. { role: ${quotedRole}, name: ${quotedText} }, or search ` +
+      `{ text: ${quotedText} } alone.`,
   );
 }
 

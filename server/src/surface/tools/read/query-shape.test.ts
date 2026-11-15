@@ -76,13 +76,15 @@ describe('normalizeQueryArgs', () => {
 describe('roleTextRefusal', () => {
   // #2326: a role find with `text` returned every element of the role (by + value), or dropped the
   // role and searched the text (the named-field spelling). Neither is what the caller asked for.
-  it('refuses `text` on a role find, in both spellings', () => {
+  it('refuses `text` on a role find, in both spellings, and echoes the caller’s values', () => {
     for (const args of [
-      { by: 'role', value: 'button', text: 'Save' },
-      { role: 'button', text: 'Save' },
+      { by: 'role', value: 'link', text: 'Docs' },
+      { role: 'link', text: 'Docs' },
     ]) {
-      expect(roleTextRefusal(args)?.message).toMatch(ROLE_TEXT_FIND_OPENING);
-      expect(roleTextRefusal(args)?.message).toMatch('name: "Save"');
+      const message = roleTextRefusal(args)?.message ?? '';
+      expect(message).toContain(ROLE_TEXT_FIND_OPENING);
+      expect(message).toContain('{ role: "link", name: "Docs" }');
+      expect(message).toContain('{ text: "Docs" } alone');
     }
   });
 
