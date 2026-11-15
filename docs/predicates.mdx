@@ -115,6 +115,14 @@ The one that catches the expensive bug:
 
 **Exactly one.** Double-submit fails at two, and nothing on screen would have told you.
 
+`urlContains` is a substring, so `/api/items` also matches `/api/items/count`. To count one endpoint only, use `urlPath`:
+
+```json
+{ "kind": "net", "method": "GET", "urlPath": "/api/items", "count": 1 }
+```
+
+`urlPath` compares the path of the request exactly. The query and the fragment are not compared, so `/api/items?page=2` matches. A trailing slash is compared, so `/api/items/` does not match. Start the value with `/`, and do not put a query or a fragment in it: the check refuses that value, because it can never match a path. To match a query, use `urlContains`.
+
 Two fields read the RESPONSE BODY, so a request that succeeded with the wrong number is still a failure:
 
 ```json
