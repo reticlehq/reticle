@@ -222,16 +222,6 @@
       "count": 1
     }
   },
-  "src/command/cli/ports/resolve/cli-port.test.ts": {
-    "curly": {
-      "count": 4
-    }
-  },
-  "src/command/cli/ports/resolve/cli-port.ts": {
-    "curly": {
-      "count": 19
-    }
-  },
   "src/command/cli/ports/sibling-ports.ts": {
     "curly": {
       "count": 2
@@ -308,16 +298,6 @@
   "src/command/daemon/daemon-resilience.ts": {
     "curly": {
       "count": 9
-    }
-  },
-  "src/command/daemon/daemon-resolve.test.ts": {
-    "curly": {
-      "count": 5
-    }
-  },
-  "src/command/daemon/daemon-resolve.ts": {
-    "curly": {
-      "count": 15
     }
   },
   "src/command/daemon/daemon-spawn.test.ts": {
@@ -2775,11 +2755,6 @@
     }
   },
   "src/surface/mcp/handshake-answered-once.test.ts": {
-    "curly": {
-      "count": 3
-    }
-  },
-  "src/surface/mcp/mcp-proxy-chaos.test.ts": {
     "curly": {
       "count": 3
     }

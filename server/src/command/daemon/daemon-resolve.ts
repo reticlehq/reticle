@@ -26,7 +26,7 @@ import {
   type DaemonRegistryEntry,
 } from '@reticlehq/core/artifacts';
 import { ReticleEnv, RETICLE_DEFAULT_PORT } from '@reticlehq/core';
-import { portFromEnv } from '../setup/init/init-port.js';
+import { isSameOrAbove, portFromEnv } from '../setup/init/init-port.js';
 
 const RETICLE_PORT_ENV = ReticleEnv.PORT;
 
@@ -46,12 +46,16 @@ export function readDaemonRegistry(home: string): DaemonRegistryEntry[] {
   }
   const entries: DaemonRegistryEntry[] = [];
   for (const file of files) {
-    if (null === daemonRegistryPort(file)) continue;
+    if (null === daemonRegistryPort(file)) {
+      continue;
+    }
     try {
       const parsed = DaemonRegistryEntrySchema.safeParse(
         JSON.parse(readFileSync(join(home, file), 'utf8')),
       );
-      if (parsed.success) entries.push(parsed.data);
+      if (parsed.success) {
+        entries.push(parsed.data);
+      }
     } catch {
       continue;
     }
@@ -90,16 +94,48 @@ export function resolveDaemonForProject(
  * A caller with no project of its own has no identity to defend and nothing to be confused about, so
  * it keeps the old permissive behaviour rather than being locked out of a daemon it can use.
  *
+ * A daemon that runs inside the caller's project folder is a package of the caller's own workspace,
+ * for example `apps/web` below an agent at the monorepo root (see `daemonInsideProject`). It is the
+ * same repository, so its different id is not another application.
+ *
  * Everything else — a named daemon and a differently-named caller — is the cross-project bleed, and
  * is the one case this refuses.
  */
 export function adoptable(
   daemonProjectId: string | undefined,
   callerProjectId: string | undefined,
+  daemonInside = false,
 ): boolean {
-  if (daemonProjectId === undefined || 0 === daemonProjectId.length) return true;
-  if (callerProjectId === undefined || 0 === callerProjectId.length) return true;
+  if (daemonInside) {
+    return true;
+  }
+  if (daemonProjectId === undefined || 0 === daemonProjectId.length) {
+    return true;
+  }
+  if (callerProjectId === undefined || 0 === callerProjectId.length) {
+    return true;
+  }
   return daemonProjectId === callerProjectId;
+}
+
+/**
+ * Does the daemon on `port` run from inside `projectDir`, the folder of the caller's `.reticle.json`?
+ *
+ * Reported from the field: in an agent session at a monorepo root, `init` in `apps/web` replaced the
+ * daemon with one for that app. Both MCP proxies then refused every call, because the root config
+ * named another project id. The registry records each daemon's folder, and a daemon below the
+ * caller's project folder is in the caller's own repository. False when the caller has no project.
+ */
+export function daemonInsideProject(
+  port: number,
+  home: string,
+  projectDir: string | undefined,
+): boolean {
+  if (projectDir === undefined) {
+    return false;
+  }
+  const cwd = readDaemonRegistry(home).find((e) => e.port === port)?.cwd;
+  return cwd !== undefined && isSameOrAbove(projectDir, cwd);
 }
 
 /** The project a daemon on `port` claims, or undefined when it claims none / is not registered. */
@@ -134,7 +170,9 @@ export function daemonsServingProjectElsewhere(
   alive: (pid: number) => boolean,
   connectedOn: (port: number) => boolean,
 ): readonly number[] {
-  if (projectId === undefined || 0 === projectId.length) return [];
+  if (projectId === undefined || 0 === projectId.length) {
+    return [];
+  }
   return readDaemonRegistry(home)
     .filter((entry) => entry.port !== myPort && alive(entry.pid) && connectedOn(entry.port))
     .map((entry) => entry.port)
@@ -167,7 +205,9 @@ export function projectlessNote(
   others: readonly { port: number; projectId: string }[],
 ): string | undefined {
   const first = others[0];
-  if (first === undefined) return undefined;
+  if (first === undefined) {
+    return undefined;
+  }
   const listed = others.map((o) => `${o.projectId} on :${String(o.port)}`).join(', ');
   return (
     `this daemon on :${String(myPort)} was started outside any project, and the projects on this ` +
@@ -193,7 +233,9 @@ export function splitBrainNote(
   /** Where `RETICLE_PORT` is read from; injectable so the note is testable. */
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): string | undefined {
-  if (0 === elsewhere.length) return undefined;
+  if (0 === elsewhere.length) {
+    return undefined;
+  }
   const listed = elsewhere.map((port) => `:${String(port)}`).join(', ');
   const first = elsewhere[0] ?? myPort;
   // The app landed on ANOTHER project's daemon (#1652): two projects share a port. `resolveMcpPort`
@@ -251,7 +293,9 @@ export function wrongDaemonNote(
   inspectedPort: number,
   ownPort: number | undefined,
 ): string | undefined {
-  if (ownPort === undefined || ownPort === inspectedPort) return undefined;
+  if (ownPort === undefined || ownPort === inspectedPort) {
+    return undefined;
+  }
   return (
     `this is not this project's own daemon: the registry says it owns a live daemon on ` +
     `:${String(ownPort)} and this command is looking at :${String(inspectedPort)}. Two daemons for ` +
@@ -274,20 +318,23 @@ export function relocationReason(
   alive: (pid: number) => boolean,
 ): string {
   const at = `:${String(port)}`;
-  if (projectId !== undefined && resolveDaemonForProject(projectId, home, alive) === port)
+  if (projectId !== undefined && resolveDaemonForProject(projectId, home, alive) === port) {
     return (
       `this project's daemon is already running on ${at}, so the agent uses it instead of ` +
       `:${String(requested)}. To use :${String(requested)}, run \`reticle stop --port ${String(port)}\` ` +
       'and reconnect the agent.'
     );
+  }
   const holder = daemonProjectAt(requested, home);
-  if (holder !== undefined && holder !== projectId)
+  if (holder !== undefined && holder !== projectId) {
     return (
       `:${String(requested)} serves project "${holder}", so this one is served on ${at}. Give this ` +
       'project its own port (RETICLE_PORT, or `port` in its .reticle.json) and restart the agent.'
     );
-  if (projectId === undefined)
+  }
+  if (projectId === undefined) {
     return `no project here, and the one live project daemon is on ${at}: the agent uses it.`;
+  }
   return `nothing usable answered on :${String(requested)}, so the agent is served on ${at}.`;
 }
 
@@ -319,9 +366,15 @@ export async function resolveMcpPort(
   },
   /** The port this project's `.reticle.json` names: the one its app dials. */
   own?: number,
+  /** The folder of this project's `.reticle.json`; a daemon below it is this workspace's own. */
+  projectDir?: string,
 ): Promise<number> {
+  const mayAdopt = (port: number): boolean =>
+    adoptable(daemonProjectAt(port, home), projectId, daemonInsideProject(port, home, projectDir));
   const mine = resolveDaemonForProject(projectId, home, deps.alive);
-  if (mine !== undefined) return mine;
+  if (mine !== undefined) {
+    return mine;
+  }
   if (!(await deps.daemonPresent(preferred))) {
     // A caller outside any project (an editor's user-scope MCP, launched from $HOME) used to dial the
     // default and never see the one project that had moved off it (#1240). With exactly one project
@@ -334,13 +387,19 @@ export async function resolveMcpPort(
         : [];
     return 1 === projects.length ? (projects[0]?.port ?? preferred) : preferred;
   }
-  if (adoptable(daemonProjectAt(preferred, home), projectId)) return preferred;
+  if (mayAdopt(preferred)) {
+    return preferred;
+  }
   // Moved off a port another project holds: to the one this project's app dials, when it is free or
   // already ours. A random port served nobody — the app kept dialling its own, and the agent was
   // told "wired, and a dev server is listening, but no session".
   if (own !== undefined && own !== preferred) {
-    if (!(await deps.daemonPresent(own))) return own;
-    if (adoptable(daemonProjectAt(own, home), projectId)) return own;
+    if (!(await deps.daemonPresent(own))) {
+      return own;
+    }
+    if (mayAdopt(own)) {
+      return own;
+    }
   }
   return deps.pickPort(preferred);
 }

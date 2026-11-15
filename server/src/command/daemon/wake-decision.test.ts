@@ -26,6 +26,11 @@ describe('waking onto a port that already has a daemon', () => {
     expect(decideWake(PortPresence.DAEMON, 'app-b', 'app-a')).toBe(WakeAction.REFUSE);
   });
 
+  /** `init` in `apps/web` replaced the daemon, and the agent at the monorepo root refused it. */
+  it('USES a daemon of another id that runs inside the caller project', () => {
+    expect(decideWake(PortPresence.DAEMON, 'app-b', 'app-a', true)).toBe(WakeAction.USE);
+  });
+
   // The two escape hatches `adoptable` already documents, restated here because the wake path is
   // where breaking them would lock people out: a daemon that claims no project belongs to whoever
   // asks (the global MCP registration in a directory that is not an app is the ordinary install),

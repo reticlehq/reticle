@@ -38,6 +38,8 @@ export function decideWake(
   presence: PortPresence,
   daemonProjectId: string | undefined,
   callerProjectId: string | undefined,
+  /** The daemon runs inside the caller's project folder: see `daemonInsideProject`. */
+  daemonInside = false,
 ): WakeAction {
   if (PortPresence.FREE === presence) {
     return WakeAction.SPAWN;
@@ -45,7 +47,9 @@ export function decideWake(
   if (PortPresence.DAEMON !== presence) {
     return WakeAction.REFUSE;
   }
-  return adoptable(daemonProjectId, callerProjectId) ? WakeAction.USE : WakeAction.REFUSE;
+  return adoptable(daemonProjectId, callerProjectId, daemonInside)
+    ? WakeAction.USE
+    : WakeAction.REFUSE;
 }
 
 /** What the refusal knows about the two sides. */

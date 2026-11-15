@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import {
   resolveDaemonForProject,
   adoptable,
+  daemonInsideProject,
   relocationReason,
   resolveMcpPort,
   projectlessNote,
@@ -34,7 +35,9 @@ const dead = (): boolean => false;
 describe('resolveDaemonForProject', () => {
   const dirs: string[] = [];
   afterEach(() => {
-    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+    for (const d of dirs.splice(0)) {
+      rmSync(d, { recursive: true, force: true });
+    }
   });
 
   function home(entries: readonly Record<string, unknown>[]): string {
@@ -111,6 +114,48 @@ describe('adoptable', () => {
   it('allows a caller with no project of its own to adopt anything', () => {
     expect(adoptable('blog', undefined)).toBe(true);
   });
+
+  /** A daemon started in a package of the caller's own workspace is the same repository. */
+  it('allows a daemon that runs inside the caller project, whatever its id', () => {
+    expect(adoptable('web', 'root', true)).toBe(true);
+    expect(adoptable('web', 'root', false)).toBe(false);
+  });
+});
+
+/**
+ * Reported from the field: in a Claude Code session at a monorepo root, `init` in `apps/web` replaced
+ * the daemon with one for that app. Both MCP proxies then refused every call, because the root's
+ * `.reticle.json` named another project id. The daemon ran inside the agent's own repository.
+ */
+describe('daemonInsideProject', () => {
+  const dirs: string[] = [];
+  afterEach(() => {
+    for (const d of dirs.splice(0)) {
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+  function homeWith(cwd: string): string {
+    const dir = mkdtempSync(join(tmpdir(), 'reticle-inside-'));
+    dirs.push(dir);
+    writeFileSync(
+      join(dir, 'daemon-4400.json'),
+      JSON.stringify({ port: 4400, pid: 1, cwd, startedAt: 1, projectId: 'web' }),
+    );
+    return dir;
+  }
+  const repo = join(tmpdir(), 'repo');
+
+  it('is true for a daemon in a folder below the caller project', () => {
+    expect(daemonInsideProject(4400, homeWith(join(repo, 'apps', 'web')), repo)).toBe(true);
+    expect(daemonInsideProject(4400, homeWith(repo), repo)).toBe(true);
+  });
+
+  it('is false for a daemon outside it, a sibling with a longer name, or no caller project', () => {
+    expect(daemonInsideProject(4400, homeWith(join(tmpdir(), 'other')), repo)).toBe(false);
+    expect(daemonInsideProject(4400, homeWith(`${repo}-two`), repo)).toBe(false);
+    expect(daemonInsideProject(4400, homeWith(join(repo, 'apps', 'web')), undefined)).toBe(false);
+    expect(daemonInsideProject(4401, homeWith(join(repo, 'apps', 'web')), repo)).toBe(false);
+  });
 });
 
 /**
@@ -120,7 +165,9 @@ describe('adoptable', () => {
 describe('resolveMcpPort', () => {
   const dirs: string[] = [];
   afterEach(() => {
-    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+    for (const d of dirs.splice(0)) {
+      rmSync(d, { recursive: true, force: true });
+    }
   });
   function home(entries: readonly Record<string, unknown>[]): string {
     const dir = mkdtempSync(join(tmpdir(), 'reticle-mcp-'));
@@ -150,6 +197,16 @@ describe('resolveMcpPort', () => {
     await expect(
       resolveMcpPort(4400, 'shop', dir, { alive: live, daemonPresent: absent, pickPort: assigned }),
     ).resolves.toBe(4400);
+  });
+
+  it('keeps the preferred port when its daemon runs inside this project', async () => {
+    const repo = join(tmpdir(), 'repo');
+    const dir = home([
+      { port: 4400, pid: 1, cwd: join(repo, 'apps', 'web'), startedAt: 1, projectId: 'web' },
+    ]);
+    const deps = { alive: live, daemonPresent: present, pickPort: assigned };
+    await expect(resolveMcpPort(4400, 'root', dir, deps, undefined, repo)).resolves.toBe(4400);
+    await expect(resolveMcpPort(4400, 'root', dir, deps)).resolves.toBe(51234);
   });
 
   /** THE defect: project B probing 4400, finding project A's daemon, and quietly joining it. */
@@ -275,7 +332,9 @@ describe('resolveMcpPort', () => {
 describe('daemonsServingProjectElsewhere', () => {
   const dirs: string[] = [];
   afterEach(() => {
-    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+    for (const d of dirs.splice(0)) {
+      rmSync(d, { recursive: true, force: true });
+    }
   });
 
   function home(entries: readonly Record<string, unknown>[]): string {
@@ -457,13 +516,16 @@ describe('splitBrainNote', () => {
 describe('relocationReason', () => {
   const dirs: string[] = [];
   afterEach(() => {
-    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+    for (const d of dirs.splice(0)) {
+      rmSync(d, { recursive: true, force: true });
+    }
   });
   function home(entries: readonly Record<string, unknown>[]): string {
     const dir = mkdtempSync(join(tmpdir(), 'reticle-reloc-'));
     dirs.push(dir);
-    for (const e of entries)
+    for (const e of entries) {
       writeFileSync(join(dir, `daemon-${String(e['port'])}.json`), JSON.stringify(e));
+    }
     return dir;
   }
 

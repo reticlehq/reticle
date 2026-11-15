@@ -1,0 +1,3 @@
+### Fixed
+
+- **`reticle mcp` — at a monorepo root, the agent did not use the daemon of an app in its own repository.** When `init` in `apps/web` replaced the daemon, an agent session at the root still read an older root `.reticle.json` with a different project id. The proxy refused every call, or moved to an empty daemon of its own that no app connected to. The proxy now uses a daemon that runs inside its project folder when the root config names no workspace app. A root config that points at one app still never attaches the agent to a different app. A session that runs an older proxy gets this after you update Reticle and restart the agent session.
