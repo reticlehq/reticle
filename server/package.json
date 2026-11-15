@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/server",
-  "version": "3.10.3",
+  "version": "3.10.4",
   "mcpName": "io.github.reticlehq/reticle",
   "description": "Reticle CLI, bridge and MCP server: a coding agent drives your running web app from the inside and gets a verdict with evidence, for change verification, access control, accessibility, performance and SEO checks.",
   "type": "module",
@@ -75,7 +75,7 @@
     "cli"
   ],
   "reticle": {
-    "changelog": "3.10.3: every page loads 119 KB less of the SDK (no zod on the first load). In a monorepo, an agent at the repo root uses the daemon of an app in its own workspace, and init starts the root dev script when it also starts the API, with turbo passing init's environment through. A Next.js redirect is no longer reported as an uncaught error.",
+    "changelog": "3.10.4: the smaller SDK first load from 3.10.3 now reaches an install from npm (open-verification 1.2.0). Also: a painted element state, act_and_wait answers when its pre-check cannot read the page, next dev --webpack stops rebuilding on .reticle writes, scoped name misses stay in scope, and reticle_observe takes one filter name.",
     "breakingChanges": []
   },
   "publishConfig": {
