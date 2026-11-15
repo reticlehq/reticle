@@ -361,11 +361,14 @@ export async function probePage(url: string, timeoutMs = PROBE_TIMEOUT_MS): Prom
       const res = await fetch(candidate, { signal: AbortSignal.timeout(timeoutMs) });
       const body = await res.text();
       const sdkInPage = /@reticlehq|@reticle-connect|reticle-dev/.test(body);
+      const html =
+        /text\/html/i.test(res.headers.get('content-type') ?? '') ||
+        /^\s*<(?:!doctype|html)/i.test(body);
       // Only stamp reachedUrl when we had to leave the announcement — callers that already have
       // the working URL should not rewrite it for a no-op.
       return candidate === url
-        ? { served: true, sdkInPage }
-        : { served: true, sdkInPage, reachedUrl: candidate };
+        ? { served: true, sdkInPage, html }
+        : { served: true, sdkInPage, html, reachedUrl: candidate };
     } catch (err) {
       const message = String(
         (err as { cause?: { message?: string }; message?: string })?.cause?.message ??
