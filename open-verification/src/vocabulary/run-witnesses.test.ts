@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { OVP_VERSION, VerificationRunSchema } from './run.js';
-import { CHANNEL_DEFAULTS, ChannelId, Grade, Independence } from './channel.js';
+import { CHANNEL_DEFAULTS, Grade, Independence } from './channel-id.js';
+import { ChannelId } from './channel-id.js';
 import { Surface } from './subject.js';
 
 /**

@@ -20,7 +20,11 @@
  * rather than guessing.
  */
 
-import { RETICLE_IPC_GLOBAL, RETICLE_TAURI_CAPTURE_COMMAND, VisualReason } from '@reticlehq/core';
+import {
+  RETICLE_IPC_GLOBAL,
+  RETICLE_TAURI_CAPTURE_COMMAND,
+  VisualReason,
+} from '@reticlehq/core/page';
 import { nativeFrame } from '@/timers/native/native-timers.js';
 import { RETICLE_OVERLAY } from './dom-ignore.js';
 import { errorText } from '@/util/error-text.js';

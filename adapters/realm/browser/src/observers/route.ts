@@ -1,7 +1,7 @@
-import { EventType, ROUTE_CHANGE_HOW_FIELD, RouteChangeHow } from '@reticlehq/core';
+import { EventType, ROUTE_CHANGE_HOW_FIELD, RouteChangeHow } from '@reticlehq/core/page';
 import { observeSafely, type Emit, type Teardown } from './types.js';
 import { captureMethod } from '@/patching/capture-method.js';
-import { redactUrl } from '@reticlehq/core';
+import { redactUrl } from '@reticlehq/core/page';
 
 function snapshotLocation(): { pathname: string; search: string; hash: string; href: string } {
   return {

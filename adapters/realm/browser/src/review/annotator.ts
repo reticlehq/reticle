@@ -1,6 +1,6 @@
 import { readTestId } from '@/dom/addressing/testid-attr.js';
 import { isSyntheticInput } from '@/actions/synthetic/synthetic-input.js';
-import { EventType } from '@reticlehq/core';
+import { EventType } from '@reticlehq/core/page';
 import { isReticleUi, isReticleOverlay } from '@/dom/dom-ignore.js';
 import { resolveMarkAnchor, type MarkAnchor } from './mark-anchor.js';
 import { marksCountText, marksForAgent } from './marks-for-agent.js';

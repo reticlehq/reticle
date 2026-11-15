@@ -1,11 +1,11 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { type HudUseData } from '@reticlehq/core';
 import {
   HudPanel,
   HudToggle,
   HudView,
   emptyImpactCounts,
   emptyImpactRecords,
-  type HudUseData,
 } from '@reticlehq/core';
 import { isHudControl } from '@reticlehq/core/hud';
 import { Presenter } from './presenter.js';

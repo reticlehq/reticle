@@ -1,6 +1,8 @@
 import { Realm } from '@/spi/realm.js';
 import type { DeterminismProfile } from '@/vocabulary/determinism.js';
-import { CHANNEL_DEFAULTS, ChannelId, type ChannelDescriptor } from '@/vocabulary/channel.js';
+import { type ChannelDescriptor } from '@/vocabulary/channel.js';
+import { CHANNEL_DEFAULTS } from '@/vocabulary/channel-id.js';
+import { ChannelId } from '@/vocabulary/channel-id.js';
 import {
   type Action,
   type ActionReceipt,

@@ -15,7 +15,7 @@
  * handler runs synchronously inside the dispatch that is being counted.
  */
 
-import { EventType } from '@reticlehq/core';
+import { EventType } from '@reticlehq/core/page';
 import { observeSafely, type Emit, type Teardown } from './types.js';
 import { isSyntheticInput } from '@/actions/synthetic/synthetic-input.js';
 

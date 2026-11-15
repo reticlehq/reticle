@@ -7,7 +7,7 @@
 //
 // A deterministic lease replaces the page's timers BEFORE this module loads. It keeps the real ones
 // under DETERMINISM_GLOBAL_KEY, and they are taken from there first.
-import { DETERMINISM_GLOBAL_KEY } from '@reticlehq/core';
+import { DETERMINISM_GLOBAL_KEY } from '@reticlehq/core/page';
 
 const g: typeof globalThis = globalThis;
 

@@ -1,4 +1,4 @@
-import { EventType, NetInitiator } from '@reticlehq/core';
+import { EventType, NetInitiator } from '@reticlehq/core/page';
 import { observeSafely, type Emit, type Teardown } from './types.js';
 
 /**

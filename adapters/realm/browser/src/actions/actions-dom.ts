@@ -5,7 +5,8 @@ import { hitTestOccluder } from '@/dom/occlusion.js';
 import { nativeFrame } from '@/timers/native/native-timers.js';
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
 import type { ActionTarget } from '@/dom/realm.js';
-import { ClickButton, clickButtonFromArgs, pointInBox, type BoxFraction } from '@reticlehq/core';
+import { type BoxFraction } from '@reticlehq/core';
+import { ClickButton, clickButtonFromArgs, pointInBox } from '@reticlehq/core/page';
 import { type ModifierFlags, pressModifiers } from './actions-press.js';
 
 interface ClickGeometry {

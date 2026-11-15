@@ -1,4 +1,4 @@
-import { SessionState } from '@reticlehq/core';
+import { SessionState } from '@reticlehq/core/page';
 import { pageHref } from '@/security/page-location.js';
 import { LOG_KIND, LOG_RESULT, type LogKind, type LogResult } from './chrome/presenter-log.js';
 import { getCapabilities, type Capabilities } from '@/registry/capabilities.js';

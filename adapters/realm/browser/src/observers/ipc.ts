@@ -6,7 +6,7 @@ import {
   NetInitiator,
   RETICLE_IPC_GLOBAL,
   RETICLE_TAURI_CAPTURE_COMMAND,
-} from '@reticlehq/core';
+} from '@reticlehq/core/page';
 import type { Emit, Teardown } from './types.js';
 import { observeSafely } from './types.js';
 

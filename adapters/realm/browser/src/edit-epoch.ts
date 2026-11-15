@@ -1,4 +1,4 @@
-import { NO_EDITS_OBSERVED } from '@reticlehq/core';
+import { NO_EDITS_OBSERVED } from '@reticlehq/core/page';
 import { echoRef, refs, type RefRegistry } from './dom/addressing/refs.js';
 
 /**

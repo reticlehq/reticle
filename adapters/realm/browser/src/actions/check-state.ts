@@ -1,4 +1,4 @@
-import { ActionType } from '@reticlehq/core';
+import { ActionType } from '@reticlehq/core/page';
 import { type ActionTarget, isInput } from '@/dom/realm.js';
 
 /** Custom toggles (`<button role="checkbox" aria-checked>`) that check/uncheck drive by clicking. */

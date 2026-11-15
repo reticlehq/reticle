@@ -1,4 +1,4 @@
-import { BlindSpotKind, EventType, REDACTED_VALUE } from '@reticlehq/core';
+import { BlindSpotKind, EventType, REDACTED_VALUE } from '@reticlehq/core/page';
 import {
   subscribableStores,
   onStoreRegistered,

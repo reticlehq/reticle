@@ -1,0 +1,3 @@
+### Changed
+
+- **`@reticlehq/browser` — every page that loads the SDK downloads 119 KB less.** The SDK's first load was 339,995 B, and about 95 KB of it was zod. A page parses two messages on the way in, but a schema anywhere on the first load brought most of zod with it. The SDK now reads a new zod-free entry, `@reticlehq/core/page`, and checks a command and an element query with hand-written functions. A property test keeps those functions in step with the zod schemas. zod now loads only with the panels and tools that a page fetches later. The first load is 221,113 B. Closes [#2369](https://github.com/reticlehq/reticle/issues/2369).

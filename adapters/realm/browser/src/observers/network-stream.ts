@@ -3,7 +3,7 @@
  *
  * One question: when did this response actually finish arriving?
  */
-import { EventType, StreamDirection, StreamTransport } from '@reticlehq/core';
+import { EventType, StreamDirection, StreamTransport } from '@reticlehq/core/page';
 import type { Emit } from './types.js';
 import { isStreamingBody } from './net-detail/network-body.js';
 import { nativeClearTimeout, nativeSetTimeout } from '@/timers/native/native-timers.js';

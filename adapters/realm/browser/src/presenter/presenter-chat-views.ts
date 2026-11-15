@@ -1,11 +1,11 @@
 import {
-  DEFAULT_PLATFORM_URL,
   type AccountState,
   type HarnessConfig,
   type AgentLink,
   type HarnessDrive,
   type LastDrive,
 } from '@reticlehq/core';
+import { DEFAULT_PLATFORM_URL } from '@reticlehq/core/page';
 import { PLAN_HTML } from './presenter-plan.js';
 import type { AnnotationItem } from '@/review/annotator.js';
 import { marksForAgent } from '@/review/marks-for-agent.js';

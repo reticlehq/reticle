@@ -6,7 +6,7 @@
  * instructions, not on a card. The link comes from core's one discovery module, so this card, the CLI
  * and the agent can never point at different places.
  */
-import { DISCOVERY_CALL_URL } from '@reticlehq/core';
+import { DISCOVERY_CALL_URL } from '@reticlehq/core/page';
 
 /** The booking link. */
 export const TALK_BOOK_ATTR = 'data-reticle-talk-book';

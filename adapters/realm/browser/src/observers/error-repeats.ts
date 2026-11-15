@@ -20,7 +20,7 @@
  * the output depend on how fast the machine happens to be.
  */
 
-import { fnv1a } from '@reticlehq/core';
+import { fnv1a } from '@reticlehq/core/page';
 
 /**
  * Occurrences of one fingerprint that pass through before suppression starts.
