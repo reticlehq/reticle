@@ -255,11 +255,11 @@ describe('BrowserPool', () => {
       throw new Error('no page');
     }
     page.evaluateResult = 'loading';
-    expect(await pool.leaseLoading(lease.sessionId)).toBe(true);
-    expect(await pool.leaseLoading('app-named')).toBe(true);
+    expect((await pool.leaseLoading(lease.sessionId)).loading).toBe(true);
+    expect((await pool.leaseLoading('app-named')).loading).toBe(true);
     page.evaluateResult = 'complete';
-    expect(await pool.leaseLoading('app-named')).toBe(false);
-    expect(await pool.leaseLoading('not-a-lease')).toBe(false);
+    expect((await pool.leaseLoading('app-named')).loading).toBe(false);
+    expect((await pool.leaseLoading('not-a-lease')).loading).toBe(false);
   });
 
   it('reuses one browser across many leases; each context is isolated', async () => {

@@ -68,6 +68,10 @@ export interface PooledPage {
    * OPTIONAL: without it only the document's `readyState` says whether the page is loading.
    */
   fetching?(): boolean;
+  /** The method and path of the oldest open request (see `trackPageRequests`). OPTIONAL. */
+  openRequest?(): string | undefined;
+  /** Whether the page is closed. OPTIONAL: without it a failed question to the page rejects. */
+  isClosed?(): boolean;
   /** Evaluate a script in the page's current document. OPTIONAL: without it no reader is injected. */
   evaluate?(script: string): Promise<unknown>;
   /** Add an init script to run after document creation but before any page scripts run. */

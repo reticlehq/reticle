@@ -33,7 +33,7 @@ import type {
 import type { RealInputArgs, RealInputResult } from '@/portal/input/real-input.js';
 import { readViewport, type LeaseMedia } from './lease-emulation.js';
 import { injectReaderInto } from './zero-install.js';
-import { pageLoadingOrFetching } from './page-requests.js';
+import { PAGE_LOADED, pageLoadingOrFetching, type PageLoad } from './page-requests.js';
 import { stepPage, type DeterminismStep } from './determinism.js';
 export type {
   InitScriptHandle,
@@ -412,12 +412,12 @@ export class BrowserPool {
   }
 
   /** Whether this lease's page is still loading. False for a non-lease, or a page that cannot say. */
-  async leaseLoading(sessionId: string): Promise<boolean> {
+  async leaseLoading(sessionId: string): Promise<PageLoad> {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
     if (lease === undefined) {
-      return false;
+      return PAGE_LOADED;
     }
-    return pageLoadingOrFetching(lease.page).catch(() => false);
+    return pageLoadingOrFetching(lease.page).catch(() => PAGE_LOADED);
   }
 
   /** Whether this session is a lease whose page has a real keyboard. */
