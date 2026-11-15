@@ -1,5 +1,22 @@
 ### Fixed
 
-- **`@reticlehq/server` — `reticle verify` stopped at 5 s on a start page whose dev server still compiled the module that connects Reticle.** Replay waits past the step budget only while the page is still loading, and it asked only a pool lease. The tab that `verify` drives had no probe, so a flow whose start page took about 12 s to connect ended "no page was connected" and nothing ran. Also, `document.readyState` is `complete` while an app compiles a module that it loads with a dynamic import. Now the driven tab and a lease both count a page as loading while a document, script or stylesheet request is open, or ended less than 1 s ago. Replay then waits up to its 30 s loading cap, with no change to the flow file. Closes [#2155](https://github.com/reticlehq/reticle/issues/2155).
+- **`@reticlehq/server` — flow replay stopped at 5 s on a page whose dev server still compiled the module that connects Reticle.** The flow did not run, and the result said "no page was connected". Closes [#2155](https://github.com/reticlehq/reticle/issues/2155).
 
-  This rule applies to every lease, not only to replay. `reticle_lease` `acquire` and the reconnect of a held lease use the same probe. These waits ask it only when the page did not connect in the first wait. A page that does not connect, and that requests a script again and again, now counts as loading. On such a page, `acquire` uses all of its loading grace rounds before it answers, and the answer has `stillLoading: true`, not a plain not-ready result.
+  Replay waits past the step budget only while the page is still loading. Two defects caused the early stop:
+
+  - A pool lease read only `document.readyState`. A page that imports its Reticle module dynamically is `complete` while the dev server compiles that module. `reticle_verify` with `parallel` runs each flow on a lease.
+  - The tab that `reticle verify` drives had no loading probe at all.
+
+  Now a page counts as loading while any request is open, or ended less than 1 s ago. An `EventSource` or a WebSocket does not count. Replay waits up to its 30 s loading cap, with no change to the flow file. A `navigate` step in a flow uses the same wait.
+
+  When the page is still loading at the cap, the result names `signalTimeoutMs`. Raise it in the flow file to wait longer.
+
+  Each question to the page now has a 250 ms limit. A page that runs an endless loop never answers. Replay then waits up to the 30 s cap, and says that the page did not answer. Before, replay on a lease waited forever.
+
+  Who sees a change:
+
+  - Replay on a lease: `reticle_verify` with `parallel`, and a Harness lane that replays a flow.
+  - Replay on the tab of a daemon that opened its own browser: `reticle verify`, `reticle drive`, `reticle serve --drive`, `reticle mcp --drive` and `@reticlehq/test`.
+  - A `navigate` step to a page that never connects, for example a page outside the app. While that page loads, the step waits up to the 30 s cap, not 5 s.
+  - The reconnect of a held lease in `reticle_lease` `acquire`. A page that keeps a request open can now answer `stillLoading: true`. The acquire deadline still bounds the wait.
+  - `reticle_lease` `acquire` of a new lease does not change. Its loading check still reads only `document.readyState`.
