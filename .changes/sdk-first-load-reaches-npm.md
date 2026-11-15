@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/browser` — 3.10.3's smaller first load did not reach an install from npm.** 3.10.3 took zod off the SDK's first load, which measured 221 KB in this repository. Part of that change was in `open-verification`, which kept its version, 1.1.0, so the publish skipped it and `@reticlehq/core@3.10.3` pinned the old build. An app that installed the SDK from npm still loaded zod: 330 KB on the first load. `open-verification` 1.2.0 carries the change, and core now depends on it. The release check also compares the packed files of a package whose version is already on npm, not only its dependencies, so a change under an unchanged version stops the publish.
