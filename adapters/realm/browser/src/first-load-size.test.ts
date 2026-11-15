@@ -394,7 +394,22 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * instead of a signal. Measured 267,263 B (every page that loads the SDK pays this, so the year budget is the tightest: ~27%) at 81e046201. Review it once a year, not per change; a
  * sudden jump inside it is still worth a look in review.
  */
-const MAX_FIRST_LOAD_BYTES = 340_000;
+/*
+ * Reset 2026-11-15 by the founder's decision, the one time this year, to 400,000 B. Review it
+ * again in 2027-11, not per change.
+ *
+ * The year above lasted five weeks. The published SDK measured: 3.7.0 268,559 B; 3.8.0 290,388 B;
+ * 3.9.0 337,732 B; 3.10.0 339,980 B. The step into 3.9.0 is the move to zod 4 (#1880), a security
+ * fix (GHSA-mrhx-c7xc-m3w5) that costs about 47 KB more on the way in than zod 3. With room under
+ * the ceiling the SDK grew 22 KB in 12 days (3.7.0 to 3.8.0), so this number alone does not hold a
+ * year. It holds a year with the schemas out of the first load.
+ *
+ * zod is about 100 KB of the first load, and a page parses two schemas on the way in:
+ * `CommandMessageSchema` (transport) and `ElementQuerySchema` (commands). The rest load because
+ * the SDK imports core's barrel, and core builds every schema at module scope. Get bytes back
+ * there, not by raising this number.
+ */
+const MAX_FIRST_LOAD_BYTES = 400_000;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
  * string, its shape checked in the daemon where it is counted, as control ids already are. The
