@@ -58,6 +58,12 @@ export async function readAlreadyTrue(
     until !== undefined && readsDomState(until, since)
       ? await evaluatePredicate(session, until, since, false, baselines)
       : undefined;
+  // A read that threw cannot say whether the consequence was already true. Treated as "not true",
+  // the action ran and a later pass was a `yes` that the action may not have caused. So the read's
+  // error stops the call here, as it does for a lone predicate whose read throws (#1656).
+  if (precheck?.readError !== undefined) {
+    throw new Error(precheck.readError);
+  }
   const alreadyTrue = precheck?.pass ?? false;
   if (!alreadyTrue || until === undefined) {
     return { alreadyTrue: false, alreadyTrueHiddenMatch: false, baselines };

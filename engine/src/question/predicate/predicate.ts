@@ -53,9 +53,16 @@ const ANIMATION_RUNTIME = {
  * nothing was proven; what changes is that the verdict reads UNKNOWN rather than blaming the app for
  * a clause the CALL under-specified.
  */
-function unreadableComposite(child: EvalResult, evidence: unknown): EvalResult {
+function unreadableComposite(
+  child: EvalResult,
+  evidence: unknown,
+  clauses: readonly EvalResult[],
+): EvalResult {
   const reason = child.inconclusive ?? 'a sub-predicate could not be evaluated';
-  return { pass: false, failureReason: reason, inconclusive: reason, evidence };
+  // Kept so the wait and the pre-check can act on a read that threw. See `EvalResult.readError`.
+  const readError = clauses.find((r) => r.readError !== undefined)?.readError;
+  const thrown = readError === undefined ? {} : { readError };
+  return { pass: false, failureReason: reason, inconclusive: reason, evidence, ...thrown };
 }
 
 /**
@@ -345,7 +352,12 @@ const PAGE_DID_NOT_ANSWER = 'the page did not answer: ';
  */
 function unansweredRead(error: unknown): EvalResult {
   const reason = error instanceof Error ? error.message : String(error);
-  return { pass: false, failureReason: reason, inconclusive: `${PAGE_DID_NOT_ANSWER}${reason}` };
+  return {
+    pass: false,
+    failureReason: reason,
+    inconclusive: `${PAGE_DID_NOT_ANSWER}${reason}`,
+    readError: reason,
+  };
 }
 
 /**
@@ -547,7 +559,7 @@ async function evaluatePredicateRaw(
       }
       const unreadable = results.find((r) => r.inconclusive !== undefined);
       if (unreadable !== undefined) {
-        return unreadableComposite(unreadable, results);
+        return unreadableComposite(unreadable, results, results);
       }
       return { pass: true, evidence: results.map((r) => r.evidence) };
     }
@@ -564,7 +576,7 @@ async function evaluatePredicateRaw(
       // never read: the unreadable clause might have been the one that would have matched.
       const unreadable = results.find((r) => r.inconclusive !== undefined);
       if (unreadable !== undefined) {
-        return unreadableComposite(unreadable, results);
+        return unreadableComposite(unreadable, results, results);
       }
       // A disjunction is decided when EVERY clause is permanently false: no branch can
       // ever become true, so waiting out the budget buys nothing. By this point every
@@ -590,7 +602,7 @@ async function evaluatePredicateRaw(
       // nobody could evaluate became a verdict of verified, manufactured out of a missing reading.
       // You cannot negate an answer nobody had.
       if (inner.inconclusive !== undefined) {
-        return unreadableComposite(inner, inner);
+        return unreadableComposite(inner, inner, [inner]);
       }
       return negate(predicate.predicate, inner);
     }
@@ -787,6 +799,11 @@ export function waitForPredicate(
             // waiting, because "it has not happened yet" and "it will not happen" are the same
             // reading until the budget ends.
             if (true === r.decided) {
+              finish(r);
+              return;
+            }
+            // Unknown because a read threw: end now, as a lone read that throws does (#1656).
+            if (r.readError !== undefined) {
               finish(r);
               return;
             }

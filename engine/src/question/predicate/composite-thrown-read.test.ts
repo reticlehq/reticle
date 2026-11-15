@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { EventType, ReticleCommand, type CommandResult, type ReticleEvent } from '@reticlehq/core';
 
 import { evaluatePredicate, waitForPredicate, type PredicateSession } from './predicate.js';
@@ -17,14 +17,27 @@ const MATCH_TIMEOUT = "command 'match' timed out after 3546ms";
 
 /** A session whose page records network events but cannot answer a page read. */
 class SlowPageSession implements PredicateSession {
-  constructor(private readonly events: ReticleEvent[]) {}
+  /** How many MATCH reads the page was sent. */
+  reads = 0;
+
+  constructor(
+    private readonly events: ReticleEvent[],
+    /** A text that the page CAN read, and finds. Every other read throws. */
+    private readonly readable?: string,
+  ) {}
 
   elapsed(): number {
     return 0;
   }
 
-  command(name: string): Promise<CommandResult> {
+  command(name: string, args: Record<string, unknown> = {}): Promise<CommandResult> {
     if (name === ReticleCommand.MATCH) {
+      this.reads += 1;
+      if (this.readable !== undefined && JSON.stringify(args).includes(this.readable)) {
+        const element = { ref: 'e1', role: 'status', name: this.readable, text: this.readable };
+        const result = { matched: true, count: 1, elements: [element] };
+        return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result });
+      }
       return Promise.reject(new Error(MATCH_TIMEOUT));
     }
     return Promise.resolve({ kind: 'command_result', id: 'x', ok: true, result: {} });
@@ -148,6 +161,98 @@ describe('a composite clause whose read throws (#1656)', () => {
   it('a lone clause that throws still ends as inconclusive with its reason', async () => {
     // Unchanged: no composite, so the wait's own catch answers.
     const result = await waitForPredicate(answered500(), errorText, 50);
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBe(`the page did not answer: ${MATCH_TIMEOUT}`);
+  });
+
+  it('keeps the exact message of the read that threw, for the caller to act on', async () => {
+    const result = await evaluatePredicate(answered500(), {
+      kind: 'allOf',
+      predicates: [errorText, otherText],
+    });
+    expect(result.readError).toBe(MATCH_TIMEOUT);
+  });
+
+  it('a composite with a clause that failed carries no read error', async () => {
+    const result = await evaluatePredicate(answered500(), {
+      kind: 'allOf',
+      predicates: [expects401, errorText],
+    });
+    expect(result.readError).toBeUndefined();
+  });
+});
+
+describe('a composite wait that is unknown because a read threw ends at once (#1656)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  /** Start a long wait and report whether it has ended, without letting the budget run. */
+  function startWait(session: SlowPageSession, predicate: Predicate) {
+    const state: { result: EvalResult | undefined } = { result: undefined };
+    void waitForPredicate(session, predicate, 30_000).then((r) => {
+      state.result = r;
+    });
+    return state;
+  }
+
+  it('allOf of two reads that throw ends at the first read, as on main', async () => {
+    // Before, one throw rejected the composite and the wait ended. The per-clause catch must not
+    // turn that into a wait that runs the whole budget for the same unknown.
+    const session = answered500();
+    const state = startWait(session, { kind: 'allOf', predicates: [errorText, otherText] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.result?.inconclusive).toBe(`the page did not answer: ${MATCH_TIMEOUT}`);
+    expect(session.reads).toBe(2);
+  });
+
+  it('allOf of a clause that passes and a read that throws ends at the first read', async () => {
+    const session = new SlowPageSession([netEvent(500)], 'Signed in');
+    const state = startWait(session, { kind: 'allOf', predicates: [otherText, errorText] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.result === undefined ? undefined : clauseResults(state.result)[0]?.pass).toBe(
+      true,
+    );
+    expect(state.result?.inconclusive).toBe(`the page did not answer: ${MATCH_TIMEOUT}`);
+    expect(session.reads).toBe(2);
+  });
+
+  it('allOf with a clause that failed keeps waiting, and gives no at the end of the budget', async () => {
+    const state = startWait(answered500(), { kind: 'allOf', predicates: [expects401, errorText] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.result).toBeUndefined();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(state.result?.pass).toBe(false);
+    expect(state.result?.inconclusive).toBeUndefined();
+  });
+});
+
+describe('not of a composite with a read that threw (#1656)', () => {
+  it('not(allOf[fail, throw]) passes: the allOf failed, so its negation holds', async () => {
+    const result = await evaluatePredicate(answered500(), {
+      kind: 'not',
+      predicate: { kind: 'allOf', predicates: [expects401, errorText] },
+    });
+    expect(result.pass).toBe(true);
+  });
+
+  it('not(allOf[pass, throw]) is inconclusive: the allOf could not be read', async () => {
+    const result = await evaluatePredicate(answered500(), {
+      kind: 'not',
+      predicate: { kind: 'allOf', predicates: [expects500, errorText] },
+    });
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBe(`the page did not answer: ${MATCH_TIMEOUT}`);
+  });
+
+  it('not(anyOf[fail, throw]) is inconclusive: the unread clause could have matched', async () => {
+    const result = await evaluatePredicate(answered500(), {
+      kind: 'not',
+      predicate: { kind: 'anyOf', predicates: [expects401, errorText] },
+    });
     expect(result.pass).toBe(false);
     expect(result.inconclusive).toBe(`the page did not answer: ${MATCH_TIMEOUT}`);
   });
