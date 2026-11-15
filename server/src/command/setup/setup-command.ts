@@ -8,7 +8,7 @@
 
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { mcpLauncher } from './mcp-launcher.js';
 import { planAgentConfigs, platformKey } from './agent-configs.js';
 import { AppShape, describeShape, readShape } from './desktop-shape.js';
@@ -294,6 +294,22 @@ async function afterConnect(
   return { flowSaved, notes };
 }
 
+/** The app's folder name and package name, to tell its url from a sibling server's. */
+function appNamesOf(appDir: string): string[] {
+  const names = [basename(appDir)];
+  try {
+    const pkg: unknown = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
+    const name: unknown =
+      'object' === typeof pkg && null !== pkg ? Reflect.get(pkg, 'name') : undefined;
+    if ('string' === typeof name && 0 < name.length) {
+      names.push(name);
+    }
+  } catch {
+    // No readable package.json: the folder name is still a name the runner prints.
+  }
+  return names;
+}
+
 export async function runSetupCommand(
   input: SetupCommandInput,
   print: (line: string) => void,
@@ -487,6 +503,7 @@ export async function runSetupCommand(
         shape,
         projectId: readProjectId(input.appDir),
         ...(undefined === devPort ? {} : { devPort }),
+        appNames: appNamesOf(input.appDir),
       },
       effects,
     );
