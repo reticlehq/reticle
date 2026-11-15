@@ -36,6 +36,7 @@ import { evalAnimationPredicate } from './predicate-animation.js';
 export { PredicateSchema, PredicateKind };
 export type { Predicate, EvalResult };
 import { withinBudget, type PredicateSession } from './predicate-session.js';
+import { unansweredRead, withoutReadError } from './predicate-eval-kit.js';
 export type { PredicateSession } from './predicate-session.js';
 
 const ANIMATION_RUNTIME = {
@@ -341,25 +342,6 @@ function failureRestsOnSeeing(predicate: Predicate): boolean {
   return 'count' in predicate && 0 === predicate.count;
 }
 
-/** The start of the `inconclusive` sentence for a read that threw. See `unansweredRead`. */
-const PAGE_DID_NOT_ANSWER = 'the page did not answer: ';
-
-/**
- * A read that threw never looked at the app: the page did not answer, or went away. That is "could
- * not tell", not "looked and it was false", so it is inconclusive, which the verdict rule turns into
- * unknown. As a plain false it was graded assertion_failed: a command timeout on a live, throttled
- * tab came back verified:no against a page that was never read.
- */
-function unansweredRead(error: unknown): EvalResult {
-  const reason = error instanceof Error ? error.message : String(error);
-  return {
-    pass: false,
-    failureReason: reason,
-    inconclusive: `${PAGE_DID_NOT_ANSWER}${reason}`,
-    readError: reason,
-  };
-}
-
 /**
  * Each clause of an `allOf` or `anyOf`, read on its own.
  *
@@ -554,12 +536,12 @@ async function evaluatePredicateRaw(
           pass: false,
           failureReason: failed.failureReason ?? 'a sub-predicate of allOf failed',
           ...(anyDecided ? { decided: true } : {}),
-          evidence: results,
+          evidence: results.map(withoutReadError),
         };
       }
       const unreadable = results.find((r) => r.inconclusive !== undefined);
       if (unreadable !== undefined) {
-        return unreadableComposite(unreadable, results, results);
+        return unreadableComposite(unreadable, results.map(withoutReadError), results);
       }
       return { pass: true, evidence: results.map((r) => r.evidence) };
     }
@@ -576,7 +558,7 @@ async function evaluatePredicateRaw(
       // never read: the unreadable clause might have been the one that would have matched.
       const unreadable = results.find((r) => r.inconclusive !== undefined);
       if (unreadable !== undefined) {
-        return unreadableComposite(unreadable, results, results);
+        return unreadableComposite(unreadable, results.map(withoutReadError), results);
       }
       // A disjunction is decided when EVERY clause is permanently false: no branch can
       // ever become true, so waiting out the budget buys nothing. By this point every
@@ -586,7 +568,7 @@ async function evaluatePredicateRaw(
         pass: false,
         failureReason: 'no sub-predicate of anyOf matched',
         ...(allDecided ? { decided: true } : {}),
-        evidence: results,
+        evidence: results.map(withoutReadError),
       };
     }
     case PredicateKind.NOT: {
@@ -602,7 +584,7 @@ async function evaluatePredicateRaw(
       // nobody could evaluate became a verdict of verified, manufactured out of a missing reading.
       // You cannot negate an answer nobody had.
       if (inner.inconclusive !== undefined) {
-        return unreadableComposite(inner, inner, [inner]);
+        return unreadableComposite(inner, withoutReadError(inner), [inner]);
       }
       return negate(predicate.predicate, inner);
     }
@@ -765,7 +747,7 @@ export function waitForPredicate(
       if (confirmTimer !== undefined) {
         clearTimeout(confirmTimer);
       }
-      resolve(result);
+      resolve(withoutReadError(result));
     };
     // Coalesce re-checks: at most ONE evaluatePredicate is ever in flight (each can be a browser
     // MATCH/STATE_READ round-trip). Events that arrive while one is running set a single trailing
@@ -981,11 +963,11 @@ export async function provenExpectedLinks(
     return per.flat();
   }
   if (PredicateKind.ANY_OF === predicate.kind) {
+    // Read like the anyOf itself (#1656): a branch whose read throws did not prove its link.
+    const read = await evaluateClauses(session, predicate.predicates, since, true, undefined);
     const per = await Promise.all(
-      predicate.predicates.map(async (p) =>
-        (await evaluatePredicate(session, p, since)).pass
-          ? provenExpectedLinks(session, p, since)
-          : [],
+      predicate.predicates.map(async (p, i) =>
+        true === read[i]?.pass ? provenExpectedLinks(session, p, since) : [],
       ),
     );
     return per.flat();
