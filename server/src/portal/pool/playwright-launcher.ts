@@ -188,6 +188,8 @@ function wrapBrowser(browser: Browser, headless: boolean): PooledBrowser {
             goto: (url, opts) => page.goto(url, gotoOptions(opts?.timeoutMs)),
             close: () => page.close(),
             fetching: () => requests.fetching(),
+            openRequest: () => requests.openRequest(),
+            isClosed: () => page.isClosed(),
             evaluate: (script) => page.evaluate(script),
             // Playwright returns a Buffer; Uint8Array is what the visual store and differ take.
             // Same determinism as the driven path's capturePage: without it a lease baseline caught

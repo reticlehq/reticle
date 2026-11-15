@@ -794,7 +794,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
     return page;
   }
 
-  drivenPageLoading(): Promise<boolean> {
+  drivenPageLoading(): ReturnType<DrivenPageLoading['loading']> {
     return this.#loading.loading(this.#livePage());
   }
 

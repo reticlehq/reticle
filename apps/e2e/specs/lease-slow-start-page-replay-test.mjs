@@ -159,7 +159,7 @@ try {
   );
   chk('each flow ran on its own lease', 'per-flow-lease' === suite.isolation, String(suite.isolation));
   chk(
-    'the server compiled the start page past the step budget',
+    'replay asked the server for the start page module, which it holds past the step budget',
     builderRequests.length > 0,
     'no request for the builder module',
   );

@@ -9,15 +9,17 @@
 
 import type { Page } from 'playwright';
 import {
+  PAGE_LOADED,
   pageLoadingOrFetching,
   watchPageRequests,
+  type PageLoad,
   type PageRequests,
 } from '@/portal/pool/page-requests.js';
 
 /** The probe on a real-input provider. */
 export interface DrivenLoadingProbe {
   /** Whether the page this provider drives is still loading. Absent: the provider did not open it. */
-  drivenPageLoading?(): Promise<boolean>;
+  drivenPageLoading?(): Promise<PageLoad>;
 }
 
 /** The requests of the driven page, kept from before its first navigation. */
@@ -35,14 +37,16 @@ export class DrivenPageLoading {
   }
 
   /** Whether `page` is still loading. No page, or a page not watched, counts as loaded. */
-  loading(page: Page | undefined): Promise<boolean> {
+  loading(page: Page | undefined): Promise<PageLoad> {
     const requests = this.#requests;
     if (page === undefined || requests === undefined) {
-      return Promise.resolve(false);
+      return Promise.resolve(PAGE_LOADED);
     }
     return pageLoadingOrFetching({
       fetching: () => requests.fetching(),
+      openRequest: () => requests.openRequest(),
       evaluate: (script) => page.evaluate(script),
+      isClosed: () => page.isClosed(),
     });
   }
 }

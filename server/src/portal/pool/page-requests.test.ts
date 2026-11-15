@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { REQUEST_QUIET_MS, pageLoadingOrFetching, trackPageRequests } from './page-requests.js';
+import {
+  REQUEST_QUIET_MS,
+  pageLoadingOrFetching,
+  requestName,
+  trackPageRequests,
+} from './page-requests.js';
 
 function clock(): { now: () => number; advance: (ms: number) => void } {
   let t = 0;
@@ -60,16 +65,66 @@ describe('trackPageRequests', () => {
   it('says nothing is fetched before any request', () => {
     expect(trackPageRequests(clock().now).fetching()).toBe(false);
   });
+
+  it('names the oldest request that is still open, by its method and path', () => {
+    const tracker = trackPageRequests(clock().now);
+    const poll = {};
+    const module = {};
+    tracker.started(
+      poll,
+      'fetch',
+      requestName('GET', 'http://127.0.0.1:8001/api/poll?token=s3cret'),
+    );
+    tracker.started(module, 'script', requestName('GET', 'http://127.0.0.1:8001/src/app.js'));
+    expect(tracker.openRequest()).toBe('GET /api/poll');
+    tracker.ended(poll);
+    expect(tracker.openRequest()).toBe('GET /src/app.js');
+    tracker.ended(module);
+    expect(tracker.openRequest()).toBeUndefined();
+  });
 });
 
 describe('pageLoadingOrFetching', () => {
-  it('counts a complete document with a request in flight as loading', async () => {
-    const page = { fetching: () => true, evaluate: () => Promise.resolve('complete') };
-    expect(await pageLoadingOrFetching(page)).toBe(true);
+  it('counts a complete document with a request in flight as loading, and names it', async () => {
+    const page = {
+      fetching: () => true,
+      openRequest: () => 'GET /src/dial.js',
+      evaluate: () => Promise.resolve('complete'),
+    };
+    expect(await pageLoadingOrFetching(page)).toEqual({
+      loading: true,
+      openRequest: 'GET /src/dial.js',
+    });
   });
 
+  // A guard, not a proof of the fix: it passes on main too. It stops the rule from over-counting.
   it('reads a complete document with no request in flight as loaded', async () => {
     const page = { fetching: () => false, evaluate: () => Promise.resolve('complete') };
-    expect(await pageLoadingOrFetching(page)).toBe(false);
+    expect(await pageLoadingOrFetching(page)).toEqual({ loading: false });
+  });
+
+  /*
+   * A failed question is one of two things, and the page says which. A navigation destroyed the
+   * context that the question ran in: the next document is loading. Or the page is closed.
+   */
+  it('counts a failed question on an open page as loading: a navigation is in progress', async () => {
+    const page = {
+      evaluate: () => Promise.reject(new Error('Execution context was destroyed')),
+      isClosed: () => false,
+    };
+    expect(await pageLoadingOrFetching(page)).toEqual({ loading: true });
+  });
+
+  it('counts a failed question on a closed page as loaded', async () => {
+    const page = {
+      evaluate: () => Promise.reject(new Error('Target page, context or browser has been closed')),
+      isClosed: () => true,
+    };
+    expect(await pageLoadingOrFetching(page)).toEqual({ loading: false });
+  });
+
+  it('rejects when the question failed and the page cannot say whether it is closed', async () => {
+    const page = { evaluate: () => Promise.reject(new Error('no answer')) };
+    await expect(pageLoadingOrFetching(page)).rejects.toThrow('no answer');
   });
 });

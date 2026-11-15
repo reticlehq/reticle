@@ -7,16 +7,25 @@
  * page for longer than the budget made replay stop at 5 s on exactly the tab `verify` uses.
  */
 
+/** What a page says when replay asks whether it is still loading (see `pageLoadingOrFetching`). */
+export interface PageLoad {
+  loading: boolean;
+  /** The method and path of the oldest open request. */
+  openRequest?: string;
+}
+
+const PAGE_LOADED: PageLoad = { loading: false };
+
 /** The slice of the browser pool that knows its leases. */
 interface LeaseLoading {
   leaseUrl(sessionId: string): string | undefined;
-  leaseLoading(sessionId: string): Promise<boolean>;
+  leaseLoading(sessionId: string): Promise<PageLoad>;
 }
 
 /** The slice of the real-input provider that knows the one tab it drives. */
 interface DrivenLoading {
   isAvailableFor(sessionUrl: string): Promise<boolean>;
-  drivenPageLoading?(): Promise<boolean>;
+  drivenPageLoading?(): Promise<PageLoad>;
 }
 
 /** The probe for this session's page, or undefined when nothing can see that page. */
@@ -24,7 +33,7 @@ export async function startPageLoadingProbe(
   pool: LeaseLoading | undefined,
   realInput: DrivenLoading | undefined,
   session: { id: string; url?: string },
-): Promise<(() => Promise<boolean>) | undefined> {
+): Promise<(() => Promise<PageLoad>) | undefined> {
   if (pool !== undefined && pool.leaseUrl(session.id) !== undefined) {
     return () => pool.leaseLoading(session.id);
   }
@@ -37,5 +46,5 @@ export async function startPageLoadingProbe(
   if (!drivesThisTab) {
     return undefined;
   }
-  return () => realInput.drivenPageLoading?.() ?? Promise.resolve(false);
+  return () => realInput.drivenPageLoading?.() ?? Promise.resolve(PAGE_LOADED);
 }

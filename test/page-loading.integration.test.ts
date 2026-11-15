@@ -173,22 +173,24 @@ const poll = { timeout: POLL_TIMEOUT_MS, interval: POLL_INTERVAL_MS };
 
 /**
  * The shared check. While the server holds the request, the document is `complete` and the page
- * still counts as loading. After the release and the quiet time, it counts as loaded.
+ * still counts as loading, and it names the held request by its method and path. After the release
+ * and the quiet time, it counts as loaded.
  */
 async function expectLoadingUntilRelease(
   request: string,
   hold: string,
   readyState: () => Promise<unknown>,
-  loading: () => Promise<boolean>,
+  load: () => Promise<{ loading: boolean; openRequest?: string }>,
 ): Promise<void> {
   await expect.poll(() => arrived.has(`${request}:${hold}`), poll).toBe(true);
   // `readyState` alone says loaded. This is the state that made replay stop at the budget.
   await expect.poll(readyState, poll).toBe('complete');
   await new Promise((resolve) => setTimeout(resolve, PAST_QUIET_MS));
-  expect(await loading()).toBe(true);
+  // The path only: the query, which can carry a token, is not in the name.
+  expect(await load()).toEqual({ loading: true, openRequest: `GET ${request}` });
 
   release(hold);
-  await expect.poll(loading, poll).toBe(false);
+  await expect.poll(async () => (await load()).loading, poll).toBe(false);
 }
 
 /** A driven provider on `path`, with the pages it opened. Disposed by the caller. */

@@ -80,12 +80,16 @@ function sessionsConnectingAt(connectAt: number, now: () => number): SessionMana
 /** One request of the page: its resource type, and when it starts and ends on the clock. */
 interface HeldRequest {
   resourceType(): string;
+  method(): string;
+  url(): string;
   from: number;
   to: number;
 }
 
-const request = (type: string, from: number, to: number): HeldRequest => ({
+const request = (type: string, from: number, to: number, path = '/src/dial.js'): HeldRequest => ({
   resourceType: () => type,
+  method: () => 'GET',
+  url: () => `http://127.0.0.1:8001${path}`,
   from,
   to,
 });
@@ -136,6 +140,7 @@ async function leaseOnDevServer(
         evaluate: (script: string) =>
           Promise.resolve('document.readyState' === script ? 'complete' : undefined),
         fetching: () => tracker.fetching(),
+        openRequest: () => tracker.openRequest(),
       });
     },
     close: () => Promise.resolve(),
@@ -211,6 +216,20 @@ describe('arriveAtStartPath on a lease whose dev server compiles past the step b
     expect(arrived.lost).toContain('signalTimeoutMs');
     expect(arrived.wait?.stillLoading).toBe(true);
   });
+
+  /*
+   * A page that never connects but keeps a request open (a long poll, a stream, a page outside the
+   * app) waits to the cap. Then "the dev server compiles" alone is the wrong advice: the result names
+   * the request that was open, and keeps the older reason after it.
+   */
+  it('names the request that was still open at the cap, then the older reason', async () => {
+    const arrived = await arriveOnLease([request('fetch', 0, Infinity, '/api/poll')], Infinity);
+    expect(arrived.lost).toContain(LOST);
+    expect(arrived.lost).toContain('a request was still open (GET /api/poll)');
+    expect(arrived.lost).toContain('signalTimeoutMs');
+    const lost = arrived.lost ?? '';
+    expect(lost.indexOf('GET /api/poll')).toBeLessThan(lost.indexOf('signalTimeoutMs'));
+  });
 });
 
 describe('arriveAtStartPath on a page that does not answer (#2155)', () => {
@@ -233,6 +252,29 @@ describe('arriveAtStartPath on a page that does not answer (#2155)', () => {
       );
       expect(arrived.lost).toContain(LOST);
       expect(arrived.lost).toContain('did not answer');
+    },
+    FROZEN_TEST_TIMEOUT_MS,
+  );
+
+  it(
+    'asks a page that does not answer only once, so the questions do not pile up',
+    async () => {
+      const clock = fakeClock();
+      let asked = 0;
+      const counted = (): Promise<boolean> => {
+        asked += 1;
+        return frozen();
+      };
+      await arriveAtStartPath(
+        sessionsConnectingAt(Infinity, clock.now),
+        tab,
+        flow,
+        1_000,
+        clock,
+        counted,
+        1_500,
+      );
+      expect(asked).toBe(1);
     },
     FROZEN_TEST_TIMEOUT_MS,
   );
