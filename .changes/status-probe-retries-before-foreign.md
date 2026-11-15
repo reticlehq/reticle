@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — on Windows, the agent's MCP server could refuse the user's own running daemon as "a port held by another process".** The daemon was running and of the same version, but its `/status` did not answer inside one second, or the request went out on a pooled connection that a restarted daemon had already closed. The port then read as a stranger's, every tool call was refused, and the agent could not use Reticle. A `/status` request that gets no answer is now asked once more, on a fresh connection with a five-second limit, before the port counts as another process's. A port that answers with something that is not a Reticle daemon is still refused at once.
