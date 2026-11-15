@@ -11,6 +11,7 @@ import {
 import { nativeSetTimeout, nativeNow } from '@/timers/native/native-timers.js';
 import { nativeWarn } from '@/timers/console/native-console.js';
 import { safeStringify } from '@/security/serialization.js';
+import { errorText } from '@/util/error-text.js';
 
 export interface CommandOutcome {
   ok: boolean;
@@ -57,9 +58,13 @@ interface TransportDeps {
 
 /** Default visibility source: fire `handler` whenever the document returns to the foreground. */
 function subscribeDocumentVisible(handler: () => void): () => void {
-  if ('undefined' === typeof document) return () => undefined;
+  if ('undefined' === typeof document) {
+    return () => undefined;
+  }
   const listener = (): void => {
-    if ('visible' === document.visibilityState) handler();
+    if ('visible' === document.visibilityState) {
+      handler();
+    }
   };
   document.addEventListener('visibilitychange', listener);
   return () => document.removeEventListener('visibilitychange', listener);
@@ -155,7 +160,9 @@ export class Transport {
   }
 
   connect(): void {
-    if ('undefined' === typeof WebSocket) return;
+    if ('undefined' === typeof WebSocket) {
+      return;
+    }
     this.#closed = false;
     this.#unsubscribeVisible ??= (this.#deps.onVisible ?? subscribeDocumentVisible)(() =>
       this.#onVisible(),
@@ -169,13 +176,17 @@ export class Transport {
    * exists (connected or mid-connect), so we never open a duplicate racing the scheduled retry.
    */
   #onVisible(): void {
-    if (this.#closed) return;
+    if (this.#closed) {
+      return;
+    }
     // A human just came back to the tab, which is the strongest signal the outage may be over — and
     // it is what makes a 30s ceiling safe. Reset the backoff BEFORE the mid-connect early return: if
     // a socket is already in flight and then fails, that retry should be prompt too, rather than
     // inheriting a delay earned while nobody was watching.
     this.#reconnectDelay = RECONNECT_DELAY_MS;
-    if (this.#ws !== undefined) return;
+    if (this.#ws !== undefined) {
+      return;
+    }
     // A refusal came from the daemon that was up then; the one up now may take this page.
     this.#refused = false;
     this.#open();
@@ -213,7 +224,9 @@ export class Transport {
       // so what the bridge receives is the order the page produced, minus the holes.
       this.#sendGapMarker(ws, greeting.sessionId);
       const replay = [...this.#churnQueue, ...this.#signalQueue].sort((a, b) => a.order - b.order);
-      for (const msg of replay) ws.send(msg.text);
+      for (const msg of replay) {
+        ws.send(msg.text);
+      }
       this.#churnQueue = [];
       this.#signalQueue = [];
       this.#deps.onConnected?.();
@@ -262,7 +275,9 @@ export class Transport {
    * restarting must not cost 30 seconds) and only a persistent outage backs off.
    */
   #scheduleReopen(): void {
-    if (this.#closed || this.#refused) return;
+    if (this.#closed || this.#refused) {
+      return;
+    }
     const delay = this.#reconnectDelay;
     this.#reconnectDelay = nextReconnectDelay(delay);
     const schedule = this.#deps.schedule ?? nativeSetTimeout;
@@ -270,7 +285,9 @@ export class Transport {
   }
 
   #reopen(): void {
-    if (this.#closed || this.#ws !== undefined) return;
+    if (this.#closed || this.#ws !== undefined) {
+      return;
+    }
     this.#open();
   }
 
@@ -280,7 +297,9 @@ export class Transport {
    * than retrying silently forever. Suppressed entirely once any connection has succeeded.
    */
   #noteInitialFailure(): void {
-    if (this.#everConnected || this.#warnedUnreachable) return;
+    if (this.#everConnected || this.#warnedUnreachable) {
+      return;
+    }
     this.#initialFailures += 1;
     if (this.#initialFailures >= UNREACHABLE_WARN_AFTER) {
       this.#warnedUnreachable = true;
@@ -357,7 +376,7 @@ export class Transport {
     } catch (error) {
       outcome = {
         ok: false,
-        error: error instanceof Error ? error.message : String(error),
+        error: errorText(error),
       };
     }
     this.#sendRaw(
@@ -406,7 +425,9 @@ export class Transport {
   }
 
   reannounce(): void {
-    if (this.#ws === undefined || this.#ws.readyState !== WebSocket.OPEN) return;
+    if (this.#ws === undefined || this.#ws.readyState !== WebSocket.OPEN) {
+      return;
+    }
     this.#ws.send(JSON.stringify(this.#deps.hello()));
   }
 
@@ -429,7 +450,9 @@ export class Transport {
         // agent is about to receive. The oldest drop is the honest floor: the hole starts no later
         // than here. A truncation marker may over-state its reach; it must never under-state it.
         const previous = this.#gap;
-        if (previous === undefined || evicted.event.t < previous.t) this.#gap = evicted.event;
+        if (previous === undefined || evicted.event.t < previous.t) {
+          this.#gap = evicted.event;
+        }
       }
     }
     const isChurn = event !== undefined && CHURN_TYPES.has(event.type);
@@ -456,7 +479,9 @@ export class Transport {
    */
   #sendGapMarker(ws: WebSocket, sessionId: string): void {
     const gap = this.#gap;
-    if (gap === undefined) return;
+    if (gap === undefined) {
+      return;
+    }
     const marker: ReticleEvent = {
       t: gap.t,
       seq: gap.seq,

@@ -96,6 +96,7 @@ export type { ReticleConnectOptions };
 // The bridge URL rules live with the transport; re-exported so existing importers are unaffected.
 export { connectionPolicy, withBridgePath } from './transport/bridge-url.js';
 import { connectionPolicy, withBridgePath } from './transport/bridge-url.js';
+import { errorText } from '@/util/error-text.js';
 
 /** Console line after the HUD's Kill Reticle, so the way back is written down somewhere. */
 /** Narration rows held for a panel that has not arrived yet. */
@@ -913,7 +914,7 @@ export class Reticle {
       return { ok: true, result };
     } catch (error) {
       this.#actHandle?.result(LOG_RESULT.FAIL);
-      return { ok: false, error: error instanceof Error ? error.message : String(error) };
+      return { ok: false, error: errorText(error) };
     } finally {
       setPresenterViewer(false);
       setOutwardPolicy(undefined);

@@ -19,6 +19,7 @@
  */
 import { EventType } from '@reticlehq/core';
 import type { Emit } from './types.js';
+import { errorText } from '@/util/error-text.js';
 
 /**
  * Where in the SDK a failure happened. A fixed vocabulary of OUR module names — never a file path,
@@ -54,7 +55,7 @@ const MAX_MESSAGE = 500;
  */
 export function reportSdkFailure(emit: Emit, site: SdkSite, error: unknown): void {
   try {
-    const message = error instanceof Error ? error.message : String(error);
+    const message = errorText(error);
     emit(EventType.SDK_FAILED, {
       site,
       message: message.slice(0, MAX_MESSAGE),

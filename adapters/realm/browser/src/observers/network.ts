@@ -25,6 +25,7 @@ import { watchStreamedBody } from './network-stream.js';
 import { frameFields, isBridgeSocket } from './net-detail/network-frames.js';
 import { requireCapturedMethod } from '@/util/captured-method.js';
 import { absoluteUrl, observeResourceTiming } from './net-detail/resource-timing.js';
+import { errorText } from '@/util/error-text.js';
 
 // Redaction lives in its own module; re-exported so callers keep importing it from here.
 export { redactUrl, netUrlFields };
@@ -634,7 +635,7 @@ export function installNetwork(emit: Emit, opts: NetworkOptions = {}): Teardown 
           url,
           status: 0,
           ok: false,
-          error: error instanceof Error ? error.message : String(error),
+          error: errorText(error),
           durationMs: Math.round(performance.now() - start),
           initiator: 'fetch',
           ...initiatorFields,
