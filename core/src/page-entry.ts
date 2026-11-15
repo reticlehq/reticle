@@ -157,6 +157,7 @@ export { HelloInstrumentation } from './wire/production/hello-mode.js';
 export {
   buildRedactionPolicy,
   isSensitiveKey,
+  netUrlFields,
   redactUrl,
   scrubKnownSecrets,
   setActiveRedactionPolicy,
