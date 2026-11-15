@@ -159,11 +159,6 @@
       "count": 3
     }
   },
-  "src/dom/desktop-capture.ts": {
-    "curly": {
-      "count": 3
-    }
-  },
   "src/dom/dom-ignore.test.ts": {
     "curly": {
       "count": 2
@@ -212,11 +207,6 @@
   "src/dom/refs.navigation.test.ts": {
     "curly": {
       "count": 4
-    }
-  },
-  "src/dom/render-page.ts": {
-    "curly": {
-      "count": 13
     }
   },
   "src/dom/shadow-registry.ts": {
@@ -750,11 +740,6 @@
       "count": 5
     }
   },
-  "src/registry/stores.ts": {
-    "curly": {
-      "count": 9
-    }
-  },
   "src/registry/stores/adapters.ts": {
     "curly": {
       "count": 6
@@ -858,11 +843,6 @@
   "src/transport/transport.silent-drop.test.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/transport/transport.ts": {
-    "curly": {
-      "count": 12
     }
   },
   "src/transport/transport.unreachable.test.ts": {

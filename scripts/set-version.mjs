@@ -83,11 +83,8 @@ const RULES = [
   {
     what: 'plugin + marketplace manifests',
     files: () => ['plugins/reticle/.claude-plugin/plugin.json', '.claude-plugin/marketplace.json'],
-    // The directory refuses an unpinned npx, so the MCP command carries the release version too.
-    edit: (text, from, to) =>
-      text
-        .replace(`"version": "${from}"`, `"version": "${to}"`)
-        .replace(`@reticlehq/server@${from}`, `@reticlehq/server@${to}`),
+    // The plugin's MCP launcher reads the server version from this `version` field. It is the one pin.
+    edit: (text, from, to) => text.replace(`"version": "${from}"`, `"version": "${to}"`),
   },
   {
     what: 'MCP registry manifest',

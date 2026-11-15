@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/engine` — a declared failure was graded `no` because of a signal sent before the request.** An action declared an expected failure, for example `net { method: "POST", status: 409 }`, and the server answered 409. Every clause passed. A signal that the app fired before it sent the request, such as `form:submit` or an analytics event, made the verdict `no` with `signal-contradicted`, so the error path could not be verified. A signal sent before a declared failed write is now not a success claim about it, and the verdict is `yes`. A success signal fired after the write was sent, such as `invite:sent` after the 409, is still `signal-contradicted`. Closes [#2172](https://github.com/reticlehq/reticle/issues/2172).

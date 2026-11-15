@@ -1,5 +1,6 @@
 import * as z from 'zod';
-import { ChannelIdSchema, Grade } from './channel.js';
+import { ChannelIdSchema } from './channel.js';
+import { Grade } from './channel-id.js';
 
 /**
  * The protocol's output, and the two things that must never be quietly merged into it.

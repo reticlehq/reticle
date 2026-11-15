@@ -1,4 +1,4 @@
-import { ChannelId } from '@reticlehq/core';
+import { ChannelId } from '@reticlehq/core/page';
 import { storeNames } from './stores.js';
 
 /**

@@ -791,11 +791,14 @@ async function notConnectedHint(
 const LEASE_RELEASE_TOOL: ToolDef = {
   name: ReticleTool.LEASE_RELEASE,
   description:
-    'Release a leased browser context by sessionId, closing it and freeing the pool slot for a queued acquire. Call this when a flow finishes so the pool stays within its concurrency cap.',
+    'Release a leased browser context by sessionId, closing it and freeing the pool slot for a queued acquire. Call this when a flow finishes so the pool stays within its concurrency cap. With no sessionId, it releases the one lease this agent holds.',
   inputSchema: {
     sessionId: z
       .string()
-      .describe('The leased sessionId returned by reticle_lease{action:"acquire"}.'),
+      .optional()
+      .describe(
+        'The leased sessionId returned by reticle_lease{action:"acquire"}. Omit it when this agent holds one lease.',
+      ),
   },
   outputSchema: {
     released: z.boolean(),
@@ -806,10 +809,7 @@ const LEASE_RELEASE_TOOL: ToolDef = {
     if (pool === undefined) {
       throw new Error(POOL_UNAVAILABLE);
     }
-    const sessionId = asString(args['sessionId']);
-    if (sessionId === undefined || 0 === sessionId.length) {
-      throw new Error('reticle_lease{action:"release"} requires a sessionId');
-    }
+    const sessionId = asString(args['sessionId']) ?? ownOnlyLease(deps, pool);
     // An id that holds no lease (a typo, or one that expired) answered `released: true`.
     if (pool.leaseUrl(sessionId) === undefined) {
       const held = pool.leasedSessionIds();
@@ -821,6 +821,23 @@ const LEASE_RELEASE_TOOL: ToolDef = {
     return { released: true, leased: await releaseLease(deps, pool, sessionId) };
   },
 };
+
+/**
+ * The one lease this caller holds, for a release with no sessionId. Another agent's lease is never
+ * this caller's to release (#1226), so none or several is a refusal that names what is held.
+ */
+function ownOnlyLease(deps: ToolDeps, pool: BrowserPool): string {
+  const own = pool.leasedSessionIds().filter((id) => pool.heldBy(id, deps.attachId));
+  const [only] = own;
+  if (only !== undefined && 1 === own.length) {
+    return only;
+  }
+  const held =
+    0 === own.length
+      ? 'this agent holds no lease'
+      : `this agent holds ${String(own.length)} leases: ${own.join(', ')}`;
+  throw new Error(`reticle_lease{action:"release"} needs a sessionId: ${held}.`);
+}
 
 /**
  * Release one lease and everything that hangs off it. Returns how many leases are still held.

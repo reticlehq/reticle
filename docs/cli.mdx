@@ -42,6 +42,7 @@ npx @reticlehq/server <command>
 | --- | --- | --- |
 | `reticle verify <url>` | One-shot: drive the URL, verify saved flows or one predicate, exit 0 on pass | [verify](/cli/verify) |
 | `reticle compare <reference-url> <candidate-url> [--base <url>] [--state <file>] [--json] [--report <file>]` | Drive two running builds the same way and list each difference in what users see; exit 0 same, 1 different, 2 invalid | [compare](/cli/compare) |
+| `reticle grade <snapshot\|judge\|tables\|suggest> [flags]` | Grade a finished run of an app from snapshots of its stored data, and check its final answer; exit 0 pass, 1 fail, 2 unverified | [grade](/cli/grade) |
 | `reticle gate [--since <ref>] [--accept-coverage] [--hook]` | Exit non-zero unless passing artifacts cover the affected flows | [gate](/cli/gate) |
 | `reticle gate --list [--since <ref>]` | Which saved flows must re-verify for the changed files | [affected](/cli/affected) |
 

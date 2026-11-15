@@ -1,11 +1,10 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { type HelloMessage, type ReticleEvent } from '@reticlehq/core';
 import {
   RETICLE_PROTOCOL_VERSION,
   EventMessageSchema,
   EventType,
   MessageKind,
-  type HelloMessage,
-  type ReticleEvent,
 } from '@reticlehq/core';
 import { MAX_QUEUE, Transport } from './transport.js';
 

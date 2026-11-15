@@ -55,9 +55,13 @@ export function planDevScript(
   packageManagerCommand: string,
   serving: boolean,
 ): DevScriptPlan {
-  if (serving) return { choice: DevScriptChoice.ALREADY_SERVING };
+  if (serving) {
+    return { choice: DevScriptChoice.ALREADY_SERVING };
+  }
   const name = CANDIDATES.find((c) => 'string' === typeof scripts[c] && scripts[c] !== '');
-  if (name === undefined) return { choice: DevScriptChoice.NO_SCRIPT };
+  if (name === undefined) {
+    return { choice: DevScriptChoice.NO_SCRIPT };
+  }
   return {
     choice: DevScriptChoice.START,
     script: name,
@@ -114,12 +118,18 @@ export function desktopLaunch(pkg: unknown): DesktopLaunch | undefined {
   if ('string' === typeof tauriScript && 0 < tauriScript.trim().length) {
     return { script: TAURI_SCRIPT, args: TAURI_DEV_ARG };
   }
-  if (undefined !== deps[TAURI_CLI_PACKAGE]) return { command: TAURI_DIRECT };
+  if (undefined !== deps[TAURI_CLI_PACKAGE]) {
+    return { command: TAURI_DIRECT };
+  }
   const forge = Object.entries(scripts).find(
     ([, body]) => 'string' === typeof body && FORGE_START.test(body),
   );
-  if (undefined !== forge) return { script: forge[0], args: '' };
-  if (undefined !== deps[FORGE_CLI_PACKAGE]) return { command: FORGE_DIRECT };
+  if (undefined !== forge) {
+    return { script: forge[0], args: '' };
+  }
+  if (undefined !== deps[FORGE_CLI_PACKAGE]) {
+    return { command: FORGE_DIRECT };
+  }
   return undefined;
 }
 
@@ -137,7 +147,9 @@ export function devCommandFrom(pkg: unknown, packageManagerCommand: string): str
     // can be noticed and it is not this one.
     const desktop = desktopLaunch(pkg);
     if (undefined !== desktop) {
-      if ('command' in desktop) return desktop.command;
+      if ('command' in desktop) {
+        return desktop.command;
+      }
       const run = runScript(packageManagerCommand, desktop.script);
       return 0 < desktop.args.length ? `${run} ${desktop.args}` : run;
     }
@@ -151,11 +163,60 @@ export function devCommandFrom(pkg: unknown, packageManagerCommand: string): str
   }
 }
 
+/** A runner that starts the script in every package of the workspace, unless a filter narrows it. */
+const RUNS_EVERY_PACKAGE =
+  /\bturbo\b|\bnx\s+run-many\b|\blerna\s+run\b|(?:^|\s)(?:-r|--recursive|--workspaces|-ws)(?=\s|$)/;
+/** A flag that narrows such a runner to named packages. */
+const NARROWS_PACKAGES = /--filter\b|(?:^|\s)-F(?=[\s=])|--scope\b|--projects?\b/;
+
+/** Does `body` name `word` as a whole token, so `web` does not match `web-admin`? */
+function namesToken(body: string, word: string): boolean {
+  if (0 === word.length) {
+    return false;
+  }
+  const escaped = word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?<![\\w@.-])${escaped}(?![\\w-])`).test(body);
+}
+
+/**
+ * The workspace root's dev command, when it also starts this app, or undefined.
+ *
+ * Reported from the field: init in `apps/web` ran that app's own `vite`, and the root `dev` script
+ * that a person runs also started the API workspace. The page loaded and every `/api` call failed,
+ * so the first verdict was about half an app. The root script is the one to run when it starts this
+ * app too: it runs every package with no filter, or it names this app by package name or folder.
+ * Anything else keeps the app's own script, because a root script that does not start the app
+ * would leave init waiting for a page that never comes.
+ */
+export function workspaceDevCommand(
+  rootPkg: unknown,
+  app: { readonly name: string | undefined; readonly dir: string },
+  packageManagerCommand: string,
+): string | undefined {
+  const scripts = manifestRecord(rootPkg, 'scripts');
+  const table: Record<string, string> = {};
+  for (const [name, body] of Object.entries(scripts)) {
+    if ('string' === typeof body) {
+      table[name] = body;
+    }
+  }
+  const plan = planDevScript(table, packageManagerCommand, false);
+  const body = plan.script === undefined ? undefined : table[plan.script];
+  if (body === undefined) {
+    return undefined;
+  }
+  const namesApp = namesToken(body, app.name ?? '') || namesToken(body, app.dir);
+  const runsAll = RUNS_EVERY_PACKAGE.test(body) && !NARROWS_PACKAGES.test(body);
+  return namesApp || runsAll ? plan.command : undefined;
+}
+
 /** The dev script's own command line (`react-router dev`, `vite`), or undefined when there is none. */
 export function devScriptBody(pkg: unknown): string | undefined {
   const scripts: unknown =
     'object' === typeof pkg && null !== pkg ? (pkg as { scripts?: unknown }).scripts : undefined;
-  if ('object' !== typeof scripts || null === scripts) return undefined;
+  if ('object' !== typeof scripts || null === scripts) {
+    return undefined;
+  }
   const table = scripts as Record<string, unknown>;
   const name = CANDIDATES.find((c) => 'string' === typeof table[c] && table[c] !== '');
   const body = name === undefined ? undefined : table[name];
@@ -193,7 +254,9 @@ const SKIP_CONFIG_DIRS = new Set([
 ]);
 
 function unquote(token: string): string {
-  if (token.startsWith("'") && token.endsWith("'")) return token.slice(1, -1);
+  if (token.startsWith("'") && token.endsWith("'")) {
+    return token.slice(1, -1);
+  }
   if (token.startsWith('"') && token.endsWith('"')) {
     return token.slice(1, -1).replace(/\\(["\\])/g, '$1');
   }
@@ -246,10 +309,14 @@ function viteInvocation(script: string): ViteInvocation | undefined {
   let start = 0;
   while (start < tokens.length) {
     let end = start;
-    while (end < tokens.length && !SHELL_SEPARATORS.has(tokens[end] ?? '')) end += 1;
+    while (end < tokens.length && !SHELL_SEPARATORS.has(tokens[end] ?? '')) {
+      end += 1;
+    }
     const segment = tokens.slice(start, end).map(unquote);
     let command = 0;
-    while (command < segment.length && ENV_ASSIGNMENT.test(segment[command] ?? '')) command += 1;
+    while (command < segment.length && ENV_ASSIGNMENT.test(segment[command] ?? '')) {
+      command += 1;
+    }
     const argsStart = viteArgsStart(segment, command);
     if (argsStart !== undefined) {
       const args = segment.slice(argsStart);
@@ -271,27 +338,43 @@ function viteInvocation(script: string): ViteInvocation | undefined {
 function nestedViteConfigs(io: InitIo, configNames: readonly string[]): string[] {
   const found: string[] = [];
   const walk = (dir: string, depth: number): void => {
-    if (found.length >= MAX_CONFIG_CANDIDATES || depth > MAX_CONFIG_DEPTH) return;
+    if (found.length >= MAX_CONFIG_CANDIDATES || depth > MAX_CONFIG_DEPTH) {
+      return;
+    }
     for (const file of io.listFiles(dir)) {
-      if (configNames.includes(file)) found.push(`${dir}/${file}`);
-      if (found.length >= MAX_CONFIG_CANDIDATES) return;
+      if (configNames.includes(file)) {
+        found.push(`${dir}/${file}`);
+      }
+      if (found.length >= MAX_CONFIG_CANDIDATES) {
+        return;
+      }
     }
     for (const child of io.listDirs(dir)) {
-      if (found.length >= MAX_CONFIG_CANDIDATES) return;
-      if (child.startsWith('.') || SKIP_CONFIG_DIRS.has(child)) continue;
+      if (found.length >= MAX_CONFIG_CANDIDATES) {
+        return;
+      }
+      if (child.startsWith('.') || SKIP_CONFIG_DIRS.has(child)) {
+        continue;
+      }
       walk(`${dir}/${child}`, depth + 1);
     }
   };
   for (const dir of io.listDirs('.')) {
-    if (found.length >= MAX_CONFIG_CANDIDATES) break;
-    if (dir.startsWith('.') || SKIP_CONFIG_DIRS.has(dir)) continue;
+    if (found.length >= MAX_CONFIG_CANDIDATES) {
+      break;
+    }
+    if (dir.startsWith('.') || SKIP_CONFIG_DIRS.has(dir)) {
+      continue;
+    }
     walk(dir, 1);
   }
   return [...new Set(found)];
 }
 
 function readable(io: InitIo, path: string | null): ViteConfigDiscovery['config'] {
-  if (null === path) return null;
+  if (null === path) {
+    return null;
+  }
   const source = io.readFile(path);
   return null === source ? null : { path, source };
 }
@@ -320,7 +403,9 @@ export function discoverPlainViteConfig(
       candidates: null === config ? [invocation.configArgument] : [],
     };
   }
-  if (invocation !== undefined) return { config: readable(io, rootPath), candidates: [] };
+  if (invocation !== undefined) {
+    return { config: readable(io, rootPath), candidates: [] };
+  }
 
   const nested = script === undefined ? [] : nestedViteConfigs(io, configNames);
   if (null === rootPath && nested.length > 0) {

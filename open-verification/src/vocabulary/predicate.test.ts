@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ChannelId } from './channel.js';
+import { ChannelId } from './channel-id.js';
 import type { Observation } from './evidence.js';
 import { BlindSpotKind } from './evidence.js';
 import {

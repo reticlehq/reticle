@@ -27,7 +27,9 @@ if (process.env[MARKER] === undefined) {
   // Playwright finds its browsers under the home directory; keep pointing at the real install so
   // browser-launching tests still launch.
   process.env.PLAYWRIGHT_BROWSERS_PATH ??= playwrightBrowsers(realHome);
-  const home = mkdtempSync(join(tmpdir(), 'reticle-test-home-'));
+  // Inside the run's own folder when there is one, so the run removes it (vitest.temp-home-root.ts).
+  const parent = process.env['RETICLE_TEST_HOME_ROOT'] ?? tmpdir();
+  const home = mkdtempSync(join(parent, 'reticle-test-home-'));
   process.env.HOME = home;
   process.env.USERPROFILE = home;
   process.env[MARKER] = home;

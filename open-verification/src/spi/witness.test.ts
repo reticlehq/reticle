@@ -1,13 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import { Witness, witnessDisagreement } from './witness.js';
 import { adjudicate } from './adjudicator.js';
-import {
-  CHANNEL_DEFAULTS,
-  ChannelId,
-  Grade,
-  Independence,
-  type ChannelDescriptor,
-} from '@/vocabulary/channel.js';
+import { type ChannelDescriptor } from '@/vocabulary/channel.js';
+import { CHANNEL_DEFAULTS, Grade, Independence } from '@/vocabulary/channel-id.js';
+import { ChannelId } from '@/vocabulary/channel-id.js';
 import { AnomalyKind, AnomalyTier, Verdict } from '@/vocabulary/verdict.js';
 import { CloseCondition, type Window } from '@/vocabulary/realm-surface.js';
 import { BlindSpotKind, type Coverage, type Observation } from '@/vocabulary/evidence.js';

@@ -1,4 +1,4 @@
-import { PlatformProfile, RETICLE_IPC_GLOBAL, ReticleCommand } from '@reticlehq/core';
+import { PlatformProfile, RETICLE_IPC_GLOBAL, ReticleCommand } from '@reticlehq/core/page';
 
 /**
  * What kind of place this is, and what it can be asked to do.

@@ -408,6 +408,42 @@ describe('runInit', () => {
     expect(r.context?.redirectedTo, 'a redirect is invisible to the caller').toBeDefined();
   });
 
+  /**
+   * Reported from the field: init ran the web app's own `vite`, and the root `dev` script that also
+   * starts the API never ran, so every `/api` call from the page failed with ECONNREFUSED.
+   */
+  it('runs the workspace root dev script when it starts this app and its API', () => {
+    const files = (rootDev: string): Record<string, string> => {
+      const root = JSON.stringify({
+        private: true,
+        workspaces: ['apps/*'],
+        scripts: { dev: rootDev },
+      });
+      // The root manifest under both keys: init reads it relative before the redirect and by its
+      // absolute path after, and this harness keys an absolute path as written.
+      return {
+        'package.json': root,
+        '/app/package.json': root,
+        'apps/web/package.json': JSON.stringify({
+          name: '@acme/web',
+          devDependencies: { vite: '^5', react: '^19' },
+          scripts: { dev: 'vite' },
+        }),
+        'apps/web/vite.config.ts': `export default { plugins: [] };\n`,
+        'apps/api/package.json': JSON.stringify({
+          name: '@acme/api',
+          scripts: { dev: 'node server.js' },
+        }),
+      };
+    };
+    const whole = runInit(OPTS, memoryIo(files('turbo run dev')));
+    expect(whole.context?.devCommand).toMatch(/ dev$/);
+    expect((whole.context?.devCommandDir ?? '').replace(/\\/g, '/')).toBe('/app');
+    const other = runInit(OPTS, memoryIo(files('turbo run dev --filter=@acme/api')));
+    expect(other.context?.devCommandDir, 'a root script that skips this app').toBeUndefined();
+    expect(other.context?.devCommand).toMatch(/ dev$/);
+  });
+
   it('reports the dev command it found, so a caller need not guess one', () => {
     const io = memoryIo({
       ...VITE_FILES,

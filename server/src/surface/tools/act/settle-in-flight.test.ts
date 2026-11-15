@@ -21,7 +21,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { ContradictionKind, EventType, type ReticleEvent } from '@reticlehq/core';
+import { ContradictionKind, DepartedNetField, EventType, type ReticleEvent } from '@reticlehq/core';
 import { findContradictions } from '@reticlehq/engine/disagreement/contradictions.js';
 import {
   inFlightRequestIds,
@@ -46,6 +46,13 @@ const settled = (id: string, t = 1): Ev => ({
 describe('which requests are still in flight', () => {
   it('a pending request with no matching settle is in flight', () => {
     expect(inFlightRequestIds([pending('a')])).toEqual(['a']);
+  });
+
+  // #1944: its answer went to a document that no longer exists, so no settle can ever close it.
+  it('a request whose page unloaded before the answer is not in flight', () => {
+    const unloaded = pending('a');
+    unloaded.data[DepartedNetField.PAGE_UNLOADED] = true;
+    expect(inFlightRequestIds([unloaded])).toEqual([]);
   });
 
   it('a pending request that settled is not', () => {

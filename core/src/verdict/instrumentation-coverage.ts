@@ -14,7 +14,7 @@
 import * as z from 'zod';
 import { ChannelId } from 'open-verification';
 import { InstrumentationGapKind, fixForGap } from './instrumentation-gap.js';
-import { CoverageMarker, SOURCE_MAPPING_CAPABILITY } from '../wire/platform-link.js';
+import { CoverageMarker, SOURCE_MAPPING_CAPABILITY } from '../wire/coverage-marker.js';
 
 /** The eight things that decide how strong a verdict on this app can be. */
 export const CoverageCapability = {

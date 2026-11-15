@@ -1,11 +1,11 @@
 import { readTestId, testIdSelector } from '@/dom/addressing/testid-attr.js';
+import { type FlowChip } from '@reticlehq/core';
 import {
   FlowProgressStatus,
   HumanControlKind,
   PresenterTone,
   SessionState,
-  type FlowChip,
-} from '@reticlehq/core';
+} from '@reticlehq/core/page';
 import { nativeSetTimeout, nativeClearTimeout } from '@/timers/native/native-timers.js';
 import { COPY_MARKS_ATTR, MARKS_ROW_ATTR } from './presenter-config.js';
 export type { ControlIntent, ControlHandler } from './presenter-config.js';

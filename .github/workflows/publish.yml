@@ -147,5 +147,19 @@ jobs:
             "https://github.com/modelcontextprotocol/registry/releases/download/${PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
           echo "${PUBLISHER_SHA256}  mcp-publisher.tar.gz" | sha256sum --check --strict
           tar xzf mcp-publisher.tar.gz mcp-publisher
+          # The registry checks that the npm version exists, and npm can take minutes to show a
+          # version it just accepted. Publishing at once failed the 3.10.0 and 3.10.1 releases with
+          # "version ... was not found (status: 404)". Wait until npm serves it, for at most 10 minutes.
+          VERSION="$(node -p "require('./server/package.json').version")"
+          for attempt in $(seq 1 40); do
+            if npm view "@reticlehq/server@${VERSION}" version >/dev/null 2>&1; then
+              break
+            fi
+            if [ "${attempt}" = 40 ]; then
+              echo "npm does not serve @reticlehq/server@${VERSION} after 10 minutes; not publishing to the MCP Registry"
+              exit 1
+            fi
+            sleep 15
+          done
           ./mcp-publisher login github-oidc
           ./mcp-publisher publish

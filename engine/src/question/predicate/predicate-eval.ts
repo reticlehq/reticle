@@ -1,6 +1,6 @@
 import {
   EventType,
-  NetInitiator,
+  neverAnswered,
   PredicateKind,
   ResponseBodyReason,
   SettledChannel,
@@ -16,11 +16,7 @@ import { describeObserved } from './observed-in-window.js';
 import { netEvidence } from './net-evidence.js';
 import { truncatedBodyAdvice } from './truncated-body-advice.js';
 import { mergeNetworkDetail, withDownloadRequests } from '@/window/network-detail-merge.js';
-import {
-  departedInWindow,
-  mediaEntryBeforeWindow,
-  unpatchedInWindow,
-} from '@/window/event-filters.js';
+import { departedInWindow, mediaEntryBeforeWindow } from '@/window/event-filters.js';
 import {
   checkRequestBody,
   REMEDY_BODY_CAPTURE,
@@ -52,8 +48,7 @@ import {
   targetsNativeDownload,
   targetsUnobservedChannel,
   unobservedChannelReason,
-  unpatchedFetchReason,
-  UNPATCHED_FETCH_ASSERTION,
+  unrecordedCallMiss,
 } from './net-blind-spots.js';
 export {
   clipBody,
@@ -171,25 +166,6 @@ function nativeDownloadMiss(
     observed: observedNetCalls(events, p.urlContains),
     expected: `a fetch or XHR matching ${filter}`,
     assertion,
-  };
-}
-
-/** `unknown` when the browser recorded a matching call no patched transport saw; else `undefined`. */
-function unpatchedFetchMiss(
-  events: ReticleEvent[],
-  p: Extract<Predicate, { kind: typeof PredicateKind.NET }>,
-): EvalResult | undefined {
-  if (!unpatchedInWindow(events, p.since ?? 0, p.urlContains)) {
-    return undefined;
-  }
-  const reason = unpatchedFetchReason(describeNetFilter(p));
-  return {
-    pass: false,
-    failureReason: reason,
-    inconclusive: reason,
-    observed: observedNetCalls(events, p.urlContains),
-    expected: `a recorded call matching ${describeNetFilter(p)}`,
-    assertion: UNPATCHED_FETCH_ASSERTION,
   };
 }
 
@@ -510,7 +486,7 @@ export function evalNet(
   // but fired the WRONG number of times. Without `count`, the matcher is presence-only (≥1).
   if (p.count !== undefined) {
     // A marked call is not in `matches`, so no count over its URL can be judged, a pass included.
-    const unpatched = unpatchedFetchMiss(events, p);
+    const unpatched = unrecordedCallMiss(events, p, () => observedNetCalls(events, p.urlContains));
     if (unpatched !== undefined) {
       return unpatched;
     }
@@ -550,7 +526,9 @@ export function evalNet(
   }
   const hit = matches[0];
   if (hit === undefined) {
-    const download = nativeDownloadMiss(events, p) ?? unpatchedFetchMiss(events, p);
+    const download =
+      nativeDownloadMiss(events, p) ??
+      unrecordedCallMiss(events, p, () => observedNetCalls(events, p.urlContains));
     if (download !== undefined) {
       return download;
     }
@@ -726,6 +704,21 @@ const SETTLE_ACTIVITY: ReadonlySet<EventType> = new Set([
 /** An app-scoped settle: the default's activity, and every framework render commit. */
 const APP_ACTIVITY: ReadonlySet<EventType> = new Set([...SETTLE_ACTIVITY, EventType.RENDER_COMMIT]);
 
+/**
+ * An attribute written with the value it already had. Nothing on the page changed, so it is not
+ * activity. A page with a hidden input whose inline style was written again, unchanged, every 1-3 s
+ * never read as settled, on a page that had stopped. Both values must be present: an SDK that does
+ * not send `old` keeps every write as activity, so a real change is never hidden.
+ */
+export function isUnchangedAttrWrite(e: ReticleEvent): boolean {
+  if (EventType.DOM_ATTR !== e.type) {
+    return false;
+  }
+  const value = e.data['value'];
+  const old = e.data['old'];
+  return 'string' === typeof value && 'string' === typeof old && value === old;
+}
+
 /** The quiet window of a network-scoped settle: a completed request is the only activity. */
 const NETWORK_ACTIVITY: ReadonlySet<EventType> = new Set([EventType.NET_REQUEST]);
 
@@ -752,11 +745,10 @@ const RETICLE_BUSY_SIGNAL = 'reticle:busy';
  * The act wait (`server/src/surface/tools/act/settle-in-flight.ts`) has always excluded it and
  * `core/src/wire/net.ts` says it must be; this predicate counted it, so `act_and_wait { until:
  * settled }` after a plain `<a href>` never passed and agents dropped `settled` from their `until`.
- * Spelled against the shared constant rather than the string, so the two settle decisions cannot
- * drift onto two vocabularies.
+ * Read through core's `neverAnswered`, so every settle decision uses one rule. It also covers a
+ * request whose page unloaded before its answer arrived (#1944): that answer went away too.
  */
-const isDeparture = (data: Record<string, unknown>): boolean =>
-  data['initiator'] === NetInitiator.NAVIGATION;
+const isDeparture = neverAnswered;
 
 /**
  * What the caller knows about whose traffic this is.
@@ -963,7 +955,7 @@ export function evalSettled(
   let lastT = -1;
   let lastType: EventType | undefined;
   for (const e of events) {
-    if (activity.has(e.type) && e.t > lastT) {
+    if (activity.has(e.type) && !isUnchangedAttrWrite(e) && e.t > lastT) {
       lastT = e.t;
       lastType = e.type;
     }

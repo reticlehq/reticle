@@ -116,6 +116,27 @@ describe('the whole sequence, when everything works', () => {
     await runSetupPhases({ ...INPUT, suppliedUrl: 'http://localhost:3000' }, fx);
     expect(started).toBe(false);
   });
+
+  it('runs the dev command in the folder init chose, else the app folder', async () => {
+    const dirs: string[] = [];
+    const fx = world({
+      startDevServer: (_command, cwd) => {
+        dirs.push(cwd);
+        return Promise.resolve();
+      },
+    });
+    await runSetupPhases({ ...INPUT, devCommandDir: '/repo' }, fx);
+    await runSetupPhases(
+      INPUT,
+      world({
+        startDevServer: (_command, cwd) => {
+          dirs.push(cwd);
+          return Promise.resolve();
+        },
+      }),
+    );
+    expect(dirs).toEqual(['/repo', '/app']);
+  });
 });
 
 /**

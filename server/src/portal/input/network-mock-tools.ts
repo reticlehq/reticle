@@ -18,6 +18,21 @@ function mockProvider(deps: ToolDeps): MockCapable | undefined {
   return p !== undefined && 'function' === typeof p.setMocks ? (p as MockCapable) : undefined;
 }
 
+/**
+ * Whether this call can mock the session: a lease of this caller, or a page the driven browser has.
+ * Having a driven browser is not enough: it mocks its own page, whatever session was named.
+ */
+async function canMock(
+  deps: ToolDeps,
+  session: { readonly id: string; readonly url: string },
+): Promise<boolean> {
+  if (true === deps.pool?.heldBy(session.id, deps.attachId)) {
+    return true;
+  }
+  const driven = mockProvider(deps);
+  return driven !== undefined && driven.isAvailableFor(session.url);
+}
+
 const ruleShape = z.object({
   urlContains: z
     .string()
@@ -146,9 +161,20 @@ export const NETWORK_MOCK_TOOLS: ToolDef[] = [
       recommendation: z.string().optional(),
     },
     handler: async (deps, args) => {
-      const session = deps.sessions.resolve(asString(args['sessionId']));
+      const session = await deps.sessions.resolveServing(asString(args['sessionId']), (s) =>
+        canMock(deps, s),
+      );
       const rules = true === args['clear'] ? [] : toRules(args['mocks']);
-      const provider = mockProvider(deps);
+      // A lease is mocked as the lease, and the driven browser mocks only a page it has. The driven
+      // provider mocks its own page whatever session was named: taken first, it mocked another tab,
+      // answered `applied: true`, and the lease's real write reached the backend.
+      const driven = mockProvider(deps);
+      const provider =
+        driven !== undefined &&
+        deps.pool?.leaseUrl(session.id) === undefined &&
+        (await driven.isAvailableFor(session.url))
+          ? driven
+          : undefined;
       if (provider !== undefined) {
         const applied = await provider.setMocks(session.url, rules);
         if (applied) {

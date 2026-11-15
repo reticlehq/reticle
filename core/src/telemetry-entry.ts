@@ -13,4 +13,6 @@ export * from './telemetry-refusal.js';
 export * from './telemetry-session.js';
 export * from './telemetry-license.js';
 export * from './telemetry-feedback.js';
+// Moved out of telemetry-feedback.ts so the SDK reads it without zod (#2373); still exported here.
+export * from './browser-brand.js';
 export * from './telemetry-signals.js';

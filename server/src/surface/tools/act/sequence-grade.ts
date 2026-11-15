@@ -46,6 +46,8 @@ export interface StepExpectation {
    * step is undecided, never a miss — `unknown`, as act_and_wait says.
    */
   undecided?: string;
+  /** The step's action (`click`, `fill`), so a plan that could not judge a step can name it. */
+  action?: string;
   /** A real frame flushed after this step's action, as `settled` on its act result says. */
   settled?: boolean;
   /**
@@ -96,6 +98,12 @@ function undeclaredBecause(total: number, dispatched: boolean): string {
   return `all ${String(total)} step(s) declared nothing, so the app was driven but not verified — give each step an \`expect\` naming the consequence it causes`;
 }
 
+/** A step as a sentence names it: its number, counted from 1, and its action when it has one. */
+function stepName(index: number, action: string | undefined): string {
+  const number = `step ${String(index + 1)}`;
+  return action === undefined ? number : `${number} (${action})`;
+}
+
 export function gradeSequence(
   steps: readonly StepExpectation[],
   plan: SequencePlan = { planned: steps.length, dispatched: true },
@@ -136,15 +144,17 @@ export function gradeSequence(
     };
   }
 
-  // Nothing failed that was seen: a step nobody could judge leaves the plan undecided, saying why.
-  const unjudged = steps.find((step) => step.undecided !== undefined);
-  if (unjudged !== undefined) {
+  // Nothing failed that was seen: a step nobody could judge leaves the plan undecided. The sentence
+  // names the step and what was missing, so the agent knows which step to change (#2204).
+  const unjudgedAt = steps.findIndex((step) => step.undecided !== undefined);
+  if (unjudgedAt >= 0) {
+    const unjudged = steps[unjudgedAt];
     return {
       verified: Verified.UNKNOWN,
       reason: VerifiedReason.INCONCLUSIVE,
       declared,
       total,
-      because: `a step could not be judged — ${unjudged.undecided ?? ''}`,
+      because: `${stepName(unjudgedAt, unjudged?.action)} could not be judged: ${unjudged?.undecided ?? ''}`,
     };
   }
 

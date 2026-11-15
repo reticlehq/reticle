@@ -20,7 +20,7 @@
  * data-testid, which Reticle's own docs recommend, silently removed the source pointer.
  */
 
-import { DATA_RETICLE_SOURCE_ATTR } from '@reticlehq/core';
+import { DATA_RETICLE_SOURCE_ATTR } from '@reticlehq/core/page';
 
 /** Stamped by @reticlehq/babel-plugin / @reticlehq/vite-plugin in dev as `file:line:column`. */
 const SOURCE_ATTR = DATA_RETICLE_SOURCE_ATTR;

@@ -11,7 +11,7 @@
  * It imports only a constant from core, so the observer can read it without pulling the HUD into the
  * first load. The session key is in core because a lease writes it from the server (#2026).
  */
-import { RETICLE_SESSION_STORAGE_KEY } from '@reticlehq/core';
+import { RETICLE_SESSION_STORAGE_KEY } from '@reticlehq/core/page';
 
 export const ReticleStorageKey = {
   SESSION: RETICLE_SESSION_STORAGE_KEY,

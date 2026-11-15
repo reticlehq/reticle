@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/engine` — a truncated response body on an SDK older than 3.3.0 said to raise `networkBodyMaxChars`.** SDKs before 3.3.0 cap every recorded body at 8192 characters and ignore that option, so following the advice changed nothing and the check stayed `inconclusive` however high it was set. When the page's SDK predates 3.3.0, the reason now says the SDK caps bodies at 8192 and to run `reticle update` in the app's folder and restart its dev server. A current SDK, or one whose version is unknown, still gets the advice on raising the cap. Closes [#2031](https://github.com/reticlehq/reticle/issues/2031).

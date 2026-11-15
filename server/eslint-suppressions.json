@@ -222,16 +222,6 @@
       "count": 1
     }
   },
-  "src/command/cli/ports/resolve/cli-port.test.ts": {
-    "curly": {
-      "count": 4
-    }
-  },
-  "src/command/cli/ports/resolve/cli-port.ts": {
-    "curly": {
-      "count": 19
-    }
-  },
   "src/command/cli/ports/sibling-ports.ts": {
     "curly": {
       "count": 2
@@ -308,16 +298,6 @@
   "src/command/daemon/daemon-resilience.ts": {
     "curly": {
       "count": 9
-    }
-  },
-  "src/command/daemon/daemon-resolve.test.ts": {
-    "curly": {
-      "count": 5
-    }
-  },
-  "src/command/daemon/daemon-resolve.ts": {
-    "curly": {
-      "count": 15
     }
   },
   "src/command/daemon/daemon-spawn.test.ts": {
@@ -493,11 +473,6 @@
       "count": 3
     }
   },
-  "src/command/setup/node-effects.ts": {
-    "curly": {
-      "count": 10
-    }
-  },
   "src/command/setup/probe/dev-port.test.ts": {
     "curly": {
       "count": 2
@@ -534,9 +509,6 @@
     }
   },
   "src/command/setup/run-setup.ts": {
-    "curly": {
-      "count": 11
-    },
     "no-nested-ternary": {
       "count": 3
     }
@@ -2782,16 +2754,6 @@
       "count": 3
     }
   },
-  "src/surface/mcp/mcp-proxy-chaos.test.ts": {
-    "curly": {
-      "count": 3
-    }
-  },
-  "src/surface/mcp/mcp.test.ts": {
-    "curly": {
-      "count": 3
-    }
-  },
   "src/surface/mcp/merged-name-dispatches.test.ts": {
     "curly": {
       "count": 1
@@ -3033,11 +2995,6 @@
   "src/surface/tools/act/screen-request.ts": {
     "curly": {
       "count": 9
-    }
-  },
-  "src/surface/tools/act/settle-in-flight.ts": {
-    "curly": {
-      "count": 11
     }
   },
   "src/surface/tools/act/unsettled-find.ts": {

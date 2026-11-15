@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/browser` — a click on a control that does not take pointer events is no longer reported as a click a person could make.** A control with `pointer-events: none` (set on it, or inherited) lets a person's pointer pass through to the element under it. The hit test found that element was an ancestor, read it as "not covered", and the synthetic click ran a handler no person could reach. Measured on a modal's error alert whose dismiss button a stylesheet rule made unclickable: the flow passed. The act now reports the element the pointer lands on as covering the target, so a replayed step is not proved. A form control whose label is on top is still reached through the label.

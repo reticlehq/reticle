@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server`, `@reticlehq/engine` — a replayed step is no longer `unverifiable` because of a background read that keeps failing.** A failed read of the app's own API makes a passing verdict `unknown`. Replay gave each step only its own window, so a poll of a broken endpoint that failed on every tick was blamed on every step it fell inside, and a working journey read `unverifiable`. Replay now gives each step the reads that finished before it, and a read that already failed the same way is treated as background. A read that fails for the first time inside a step is still reported. Only the failed-read rule reads these earlier events, so no other finding on a replayed step changes.

@@ -11,7 +11,13 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { desktopLaunch, devCommandFrom, planDevScript, DevScriptChoice } from './dev-script.js';
+import {
+  desktopLaunch,
+  devCommandFrom,
+  planDevScript,
+  DevScriptChoice,
+  workspaceDevCommand,
+} from './dev-script.js';
 
 const pm = 'pnpm';
 
@@ -95,5 +101,49 @@ describe('a desktop project', () => {
   it('leaves a web project on its dev script', () => {
     expect(devCommandFrom({ scripts: { dev: 'vite' } }, 'npm')).toBe('npm run dev');
     expect(desktopLaunch({ scripts: { dev: 'vite' } })).toBeUndefined();
+  });
+});
+
+/**
+ * Reported from the field: init in `apps/web` ran that app's own `vite`, while the root `dev`
+ * script also started the API workspace. The page loaded and every `/api` call failed with
+ * ECONNREFUSED, so the first verdict was about a half-started app.
+ */
+describe('a workspace app whose root dev script starts the whole workspace', () => {
+  const app = { name: '@acme/web', dir: 'apps/web' };
+  const root = (dev: string): unknown => ({ scripts: { dev } });
+
+  it('runs the root dev script when it runs every workspace package', () => {
+    expect(workspaceDevCommand(root('turbo run dev'), app, pm)).toBe('pnpm dev');
+    expect(workspaceDevCommand(root('turbo dev'), app, 'npm')).toBe('npm run dev');
+    expect(workspaceDevCommand(root('pnpm -r --parallel dev'), app, pm)).toBe('pnpm dev');
+    expect(workspaceDevCommand(root('nx run-many -t dev'), app, pm)).toBe('pnpm dev');
+  });
+
+  it('runs it when it names this app among the ones it starts', () => {
+    const both = 'concurrently "pnpm --filter @acme/web dev" "pnpm --filter @acme/api dev"';
+    expect(workspaceDevCommand(root(both), app, pm)).toBe('pnpm dev');
+    expect(
+      workspaceDevCommand(root('turbo dev --filter=@acme/web --filter=@acme/api'), app, pm),
+    ).toBe('pnpm dev');
+    expect(workspaceDevCommand(root('npm-run-all -p "dev --prefix apps/web" api'), app, pm)).toBe(
+      'pnpm dev',
+    );
+  });
+
+  it('keeps the app script when the root filters to other packages only', () => {
+    expect(workspaceDevCommand(root('turbo dev --filter=@acme/api'), app, pm)).toBeUndefined();
+    expect(workspaceDevCommand(root('pnpm --filter docs dev'), app, pm)).toBeUndefined();
+  });
+
+  it('does not read a longer package name as this app', () => {
+    const web = { name: 'web', dir: 'apps/web' };
+    expect(workspaceDevCommand(root('pnpm --filter web-admin dev'), web, pm)).toBeUndefined();
+  });
+
+  it('keeps the app script when the root has no dev script or it starts no workspace', () => {
+    expect(workspaceDevCommand({ scripts: {} }, app, pm)).toBeUndefined();
+    expect(workspaceDevCommand(root('node scripts/dev.js'), app, pm)).toBeUndefined();
+    expect(workspaceDevCommand(null, app, pm)).toBeUndefined();
   });
 });

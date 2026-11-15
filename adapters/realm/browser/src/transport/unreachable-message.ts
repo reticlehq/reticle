@@ -6,7 +6,7 @@
  * and what it could not determine, never a cause. See unreachable-message.test.ts.
  */
 
-import { UNREACHABLE_NOTICE_PREFIX } from '@reticlehq/core';
+import { UNREACHABLE_NOTICE_PREFIX } from '@reticlehq/core/page';
 
 /**
  * The page tried, failed, and cannot see why. Names the address and the attempt count, refuses to

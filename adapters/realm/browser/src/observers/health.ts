@@ -4,7 +4,7 @@ import {
   HealthReason,
   RETICLE_IPC_GLOBAL,
   SESSION_HEALTH,
-} from '@reticlehq/core';
+} from '@reticlehq/core/page';
 import { nativeSetInterval } from '@/timers/native/native-timers.js';
 import type { Emit, Teardown } from './types.js';
 

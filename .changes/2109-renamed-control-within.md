@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/browser`, `@reticlehq/server` — a replayed click failed on a correct build that names the control differently.** A flow recorded `button "Dismiss error message"`, and a correct build named the same button "Close message". The name query found nothing, so the step failed. A recorded role anchor now also keeps the roles of the control's nearest containers (`within`, for example `["alert", "dialog"]`). When the name finds nothing, the replay acts on the only control of that role inside those containers. When the containers hold more than one, the step is ambiguous and the replay does not act. A form or region counts as a container only when it has an accessible name. Closes [#2109](https://github.com/reticlehq/reticle/issues/2109).

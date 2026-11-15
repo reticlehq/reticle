@@ -226,6 +226,13 @@ interface VerifiedVerdict {
 export const VACUOUS_BECAUSE =
   'nothing was asserted at a real grade, so passing proves nothing — assert a signal, request, or state path';
 
+/**
+ * The sentence for an assertion that nobody could evaluate, with what was missing. Exported so a
+ * plan of steps names the missing evidence in the same words as one action (#2204).
+ */
+export const couldNotEvaluate = (missing: string): string =>
+  `the assertion could not be evaluated: ${missing}`;
+
 /** A `"POST /api/x"` label: is it a write? */
 const isWriteLabel = (label: string): boolean =>
   MUTATING_METHODS.includes((label.split(' ')[0] ?? '').toUpperCase());
@@ -283,7 +290,7 @@ export function decideVerified(inputs: VerifiedInputs): VerifiedVerdict {
     return {
       verified: Verified.UNKNOWN,
       verifiedReason: VerifiedReason.INCONCLUSIVE,
-      because: `the assertion could not be evaluated: ${inputs.inconclusive}`,
+      because: couldNotEvaluate(inputs.inconclusive),
     };
   }
 

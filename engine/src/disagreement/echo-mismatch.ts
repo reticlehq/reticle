@@ -347,6 +347,15 @@ function scalarsByKey(
   return into;
 }
 
+/** A boolean as the bit MySQL and SQLite store it as, and many APIs echo. */
+const BOOLEAN_AS_BIT: Readonly<Record<string, string>> = { true: '1', false: '0' };
+
+/** Did the response echo `want`? A boolean echoed as its stored bit (`false` → `0`) is the same value. */
+function echoedAs(want: string, values: ReadonlySet<string>): boolean {
+  const bit = BOOLEAN_AS_BIT[want];
+  return values.has(want) || (bit !== undefined && values.has(bit));
+}
+
 const OK_MIN = 200;
 const OK_MAX = 300;
 
@@ -553,7 +562,7 @@ export function findEchoMismatches(
       }
       compared += 1;
       const [want] = [...wanted];
-      if (want !== undefined && !values.has(want)) {
+      if (want !== undefined && !echoedAs(want, values)) {
         dropped.push(`${key}: asked ${want}, got ${[...values].join('/')}`);
       }
     }

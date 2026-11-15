@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
-import { compileSequenceStep } from './replay.js';
+import { compileSequenceStep, UNKEPT_EXPECT } from './replay.js';
 import { recordedStepToFlowStep } from './flows.js';
 
 /**
@@ -57,5 +57,26 @@ describe('recording a sequence keeps each step`s declared consequence', () => {
       'steps'
     ] as Record<string, unknown>[];
     expect(subs[0]?.['expect']).toBeUndefined();
+  });
+
+  // #2188. A sub-step `expect` that names a session ref (`scope: "e12"`) cannot be saved, and the
+  // flow then checks less than the drive proved. A single act marks the loss; a sequence did not,
+  // so `reticle_flow_save` never said that a check was lost.
+  it('marks the step when a sub-step `expect` names a session ref, so the save says it is lost', () => {
+    const withRef = {
+      steps: [
+        {
+          ref: 'e2',
+          action: 'click',
+          expect: { kind: 'text', contains: 'Saved', scope: 'e12' },
+        },
+      ],
+    };
+    const recorded = compileSequenceStep(withRef, { count: 1, steps: [RESULT.steps[1]] });
+    expect(recorded.unkeptExpect).toBe(UNKEPT_EXPECT);
+  });
+
+  it('does not mark a sequence whose every declared `expect` is kept', () => {
+    expect(compileSequenceStep(SEQUENCE_ARGS, RESULT).unkeptExpect).toBeUndefined();
   });
 });

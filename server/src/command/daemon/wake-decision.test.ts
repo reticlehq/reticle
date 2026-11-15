@@ -12,9 +12,10 @@
  * green wearing a valid session.
  */
 
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { PortPresence } from './binding/port-presence.js';
-import { WakeAction, decideWake } from './wake-decision.js';
+import { WakeAction, decideWake, otherProjectRefusal } from './wake-decision.js';
 
 describe('waking onto a port that already has a daemon', () => {
   it('uses our own project’s daemon', () => {
@@ -23,6 +24,11 @@ describe('waking onto a port that already has a daemon', () => {
 
   it('REFUSES a daemon that belongs to a different project', () => {
     expect(decideWake(PortPresence.DAEMON, 'app-b', 'app-a')).toBe(WakeAction.REFUSE);
+  });
+
+  /** `init` in `apps/web` replaced the daemon, and the agent at the monorepo root refused it. */
+  it('USES a daemon of another id that runs inside the caller project', () => {
+    expect(decideWake(PortPresence.DAEMON, 'app-b', 'app-a', true)).toBe(WakeAction.USE);
   });
 
   // The two escape hatches `adoptable` already documents, restated here because the wake path is
@@ -51,5 +57,35 @@ describe('waking onto a port that already has a daemon', () => {
   // state of the registry one moment after any daemon exits.
   it('never lets a stale registry entry block a spawn on a free port', () => {
     expect(decideWake(PortPresence.FREE, 'app-b', 'app-a')).not.toBe(WakeAction.REFUSE);
+  });
+});
+
+/*
+ * Reported from the field (3.10.2): after `init` in a monorepo app, both of the agent's proxies at the
+ * repo root refused every call with "belongs to a different project ... start this project on its
+ * own port". The root's `.reticle.json` named one project, the daemon served the app just wired. The
+ * refusal was right and named neither side, so the agent wrote its own HTTP client to get past it.
+ */
+describe('otherProjectRefusal', () => {
+  it('names both projects, where the daemon was started, and how to reach that app', () => {
+    const said = otherProjectRefusal({
+      port: 4400,
+      callerProjectId: 'shop-root-1a2b',
+      callerConfigDir: '/repo',
+      daemonProjectId: 'web-9f8e',
+      daemonCwd: '/repo/apps/web',
+    });
+    expect(said).toContain('"web-9f8e"');
+    expect(said).toContain('/repo/apps/web');
+    expect(said).toContain('"shop-root-1a2b"');
+    expect(said).toContain('run the agent from /repo/apps/web');
+    // Built with the OS separator, as the message builds it (a backslash on Windows).
+    expect(said).toContain(join('/repo', '.reticle.json'));
+  });
+
+  it('still refuses in words when the daemon left no registry entry', () => {
+    const said = otherProjectRefusal({ port: 4400, callerProjectId: 'a' });
+    expect(said).toContain('port 4400');
+    expect(said).toContain('"a"');
   });
 });

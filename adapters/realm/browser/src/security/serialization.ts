@@ -3,7 +3,7 @@ import {
   TRANSPORT_LIMITS,
   isSensitiveKey,
   scrubKnownSecrets,
-} from '@reticlehq/core';
+} from '@reticlehq/core/page';
 
 const TRUNCATED_VALUE = '[TRUNCATED]';
 const UNSERIALIZABLE_VALUE = '[UNSERIALIZABLE]';

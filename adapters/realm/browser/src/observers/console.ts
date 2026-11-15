@@ -4,16 +4,26 @@ import {
   PRE_ATTACH_FIELD,
   RETICLE_PRE_ATTACH_ERRORS,
   TRANSPORT_LIMITS,
-} from '@reticlehq/core';
+} from '@reticlehq/core/page';
 import { observeSafely, type Emit, type Teardown } from './types.js';
 import { safeStringify } from '@/security/serialization.js';
 import { requireCapturedMethod } from '@/util/captured-method.js';
 import { createRepeatLimiter, type ErrorIdentity } from './error-repeats.js';
+import { errorText } from '@/util/error-text.js';
 
 type ConsoleMethod = 'log' | 'warn' | 'error' | 'info' | 'debug';
 
 /** The DOM event a CSP violation arrives as, and the `kind` it is reported under. */
 const CSP_VIOLATION_EVENT = 'securitypolicyviolation';
+/** The window event for a rejected promise nobody awaited; also the `kind` of the error it reports. */
+const REJECTION_EVENT = 'unhandledrejection';
+/**
+ * The `digest` prefix Next.js gives its control-flow throws: `redirect()` and `notFound()`
+ * (`NEXT_HTTP_ERROR_FALLBACK;404` on Next.js 15 and later). Next.js cancels
+ * the rejection and navigates, so it is not a failure. Only these are skipped when cancelled: a page
+ * or library that cancels every rejection would otherwise hide real failures from a console check.
+ */
+const CONTROL_FLOW_DIGEST = /^NEXT_(REDIRECT|NOT_FOUND|HTTP_ERROR)/;
 /** `disposition` of a report-only policy: the browser reported the resource and did not block it. */
 const REPORT_ONLY = 'report';
 
@@ -167,12 +177,24 @@ export function installConsole(emit: Emit): Teardown {
       });
     });
   };
-  const onRejection = (event: PromiseRejectionEvent): void => {
+  /**
+   * Decided AFTER the whole dispatch, not in this listener. Next.js cancels its own control-flow
+   * throw (`NEXT_REDIRECT`) with `preventDefault()` and navigates, and the browser logs nothing. Read here, `defaultPrevented` is still false when the page's listener runs after ours,
+   * so the verdict showed an error no person sees. A microtask is too early: for a browser-dispatched
+   * event, microtasks run between listeners. A zero-delay timer runs after the last one.
+   */
+  const reportRejection = (event: PromiseRejectionEvent): void => {
+    // Inside `observeSafely`: reading `digest` from a page value can throw (a revoked Proxy).
     observeSafely(() => {
       const reason: unknown = event.reason;
+      // `Object()` boxes a primitive and maps null to `{}`, so a reason with no digest reads "undefined".
+      const digest = String((Object(reason) as { digest?: unknown }).digest);
+      if (signal.aborted || (event.defaultPrevented && CONTROL_FLOW_DIGEST.test(digest))) {
+        return;
+      }
       emitError({
-        message: reason instanceof Error ? reason.message : String(reason),
-        kind: 'unhandledrejection',
+        message: errorText(reason),
+        kind: REJECTION_EVENT,
         ...stackOf(reason),
       });
     });
@@ -209,7 +231,10 @@ export function installConsole(emit: Emit): Teardown {
   const listeners = new AbortController();
   const { signal } = listeners;
   window.addEventListener('error', onError, { capture: true, signal });
-  window.addEventListener('unhandledrejection', onRejection, { signal });
+  // `reportRejection` runs after the whole dispatch, so the page's own listeners have run: see there.
+  window.addEventListener(REJECTION_EVENT, (event) => setTimeout(reportRejection, 0, event), {
+    signal,
+  });
   // Dispatched on `document` and it bubbles, so a window listener sees it; registered in the
   // capture phase alongside the others so a page that stops propagation on `document` cannot hide
   // one from us.
@@ -227,7 +252,7 @@ export function installConsole(emit: Emit): Teardown {
     marks = mark;
     (globalThis as unknown as Record<string, PreAttachBuffer | undefined>)[
       RETICLE_PRE_ATTACH_ERRORS
-    ]?.drain(onError, onRejection, report, (count) => {
+    ]?.drain(onError, reportRejection, report, (count) => {
       mark[DROPPED_PRE_ATTACH_FIELD] = Number.isInteger(count) && count > 0 ? count : undefined;
     });
   });

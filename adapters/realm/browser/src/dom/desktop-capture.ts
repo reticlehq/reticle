@@ -20,9 +20,14 @@
  * rather than guessing.
  */
 
-import { RETICLE_IPC_GLOBAL, RETICLE_TAURI_CAPTURE_COMMAND, VisualReason } from '@reticlehq/core';
+import {
+  RETICLE_IPC_GLOBAL,
+  RETICLE_TAURI_CAPTURE_COMMAND,
+  VisualReason,
+} from '@reticlehq/core/page';
 import { nativeFrame } from '@/timers/native/native-timers.js';
 import { RETICLE_OVERLAY } from './dom-ignore.js';
+import { errorText } from '@/util/error-text.js';
 
 interface CaptureChannel {
   capture?: (fullPage?: boolean) => Promise<string | null>;
@@ -70,7 +75,9 @@ const TAURI_INTERNALS_GLOBAL = '__TAURI_INTERNALS__';
 function tauriCapture(): (() => Promise<string | null>) | undefined {
   const internals = (window as unknown as Record<string, unknown>)[TAURI_INTERNALS_GLOBAL] as
     TauriInternals | undefined;
-  if (typeof internals?.invoke !== 'function') return undefined;
+  if (typeof internals?.invoke !== 'function') {
+    return undefined;
+  }
   const invoke = internals.invoke.bind(internals);
   return async (fullPage?: boolean) => {
     const path = await invoke(RETICLE_TAURI_CAPTURE_COMMAND, { fullPage: true === fullPage });
@@ -117,7 +124,9 @@ async function withReticleUiHidden<T>(capture: () => Promise<T>): Promise<T> {
   const previous = roots.map((el) => el.style.visibility);
   // `visibility`, not `display`: it keeps the element's box, so hiding cannot reflow the app
   // underneath and change the very layout the screenshot is meant to record.
-  for (const el of roots) el.style.visibility = 'hidden';
+  for (const el of roots) {
+    el.style.visibility = 'hidden';
+  }
   try {
     if (roots.length > 0) {
       await nativeFrame();
@@ -144,12 +153,14 @@ export async function captureDesktopWindow(fullPage = false): Promise<CaptureRes
       ? { ok: true, path }
       : { ok: false, reason: 'capture returned no image' };
   } catch (error) {
-    const reason = error instanceof Error ? error.message : String(error);
+    const reason = errorText(error);
     // Recognised markers are reported as the reason ITSELF, so the tool can branch on a closed
     // vocabulary rather than on prose. Everything else keeps its own message: dressing an unknown
     // failure up as a known one would send the reader to the wrong place entirely.
     for (const marker of RECOGNISED_MARKERS) {
-      if (reason.includes(marker)) return { ok: false, reason: marker };
+      if (reason.includes(marker)) {
+        return { ok: false, reason: marker };
+      }
     }
     return { ok: false, reason };
   }

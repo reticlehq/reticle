@@ -32,7 +32,7 @@
   "navigation": {
     "versions": [
       {
-        "version": "3.9.0",
+        "version": "3.10.3",
         "default": true,
         "tabs": [
           {
@@ -136,6 +136,7 @@
                   "cli/drive",
                   "cli/verify",
                   "cli/compare",
+                  "cli/grade",
                   "cli/try",
                   "cli/affected",
                   "cli/gate",

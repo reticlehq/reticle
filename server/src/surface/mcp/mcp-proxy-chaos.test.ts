@@ -30,6 +30,15 @@ import { resetOutageReporting } from './faults/mcp-outage.js';
 
 const SSE_HEADERS = { 'content-type': 'text/event-stream' } as const;
 
+/**
+ * How long a reconnect may take. `vi.waitFor` gives up after 1 s by default, and a loaded Windows CI
+ * runner took longer to reconnect the proxy: "survives three drops in quick succession" failed with
+ * "expected 3 to be 4" on several branches and in the merge queue. A bound, not a duration
+ * (AGENTS.md rule 15), so a passing run is as fast as before.
+ */
+const RECONNECT_BOUND = { timeout: 15_000 };
+const waitFor = <T>(check: () => T | Promise<T>): Promise<T> => vi.waitFor(check, RECONNECT_BOUND);
+
 const clientCall = (id: number): string =>
   `${JSON.stringify({ jsonrpc: '2.0', id, method: 'tools/list' })}\n`;
 
@@ -119,7 +128,9 @@ function startFakeDaemon(): Promise<FakeDaemon> {
         echoReplayedHandshake,
         close: () =>
           new Promise<void>((done) => {
-            for (const stream of streams) stream.socket?.destroy();
+            for (const stream of streams) {
+              stream.socket?.destroy();
+            }
             server.close(() => done());
           }),
       });
@@ -131,7 +142,9 @@ describe('MCP proxy chaos — compound failure sequences', () => {
   const cleanups: (() => Promise<void> | void)[] = [];
 
   afterEach(async () => {
-    for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
+    for (const cleanup of cleanups.splice(0).reverse()) {
+      await cleanup();
+    }
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
     resetOutageReporting();
@@ -167,19 +180,19 @@ describe('MCP proxy chaos — compound failure sequences', () => {
 
       // Establish the first session — barrier: a post proves the endpoint was processed.
       stdin.write(clientCall(1));
-      await vi.waitFor(() => expect(daemon.posts.length).toBe(1));
+      await waitFor(() => expect(daemon.posts.length).toBe(1));
 
       // Drop 1: kill stream 0.
       (daemon.streams[0]?.socket as Socket).resetAndDestroy();
-      await vi.waitFor(() => expect(daemon.streams.length).toBe(2));
+      await waitFor(() => expect(daemon.streams.length).toBe(2));
 
       // Drop 2: kill stream 1 immediately after it appears.
       (daemon.streams[1]?.socket as Socket).resetAndDestroy();
-      await vi.waitFor(() => expect(daemon.streams.length).toBe(3));
+      await waitFor(() => expect(daemon.streams.length).toBe(3));
 
       // Drop 3: kill stream 2 as well.
       (daemon.streams[2]?.socket as Socket).resetAndDestroy();
-      await vi.waitFor(() => expect(daemon.streams.length).toBe(4));
+      await waitFor(() => expect(daemon.streams.length).toBe(4));
 
       // Stream 3 stays alive. Verify the proxy is still functional.
       await settle();
@@ -192,19 +205,19 @@ describe('MCP proxy chaos — compound failure sequences', () => {
       const stdin = driveProxy(daemon.port);
 
       stdin.write(clientCall(1));
-      await vi.waitFor(() => expect(daemon.posts.length).toBe(1));
+      await waitFor(() => expect(daemon.posts.length).toBe(1));
 
       // Three rapid drops.
       (daemon.streams[0]?.socket as Socket).resetAndDestroy();
-      await vi.waitFor(() => expect(daemon.streams.length).toBe(2));
+      await waitFor(() => expect(daemon.streams.length).toBe(2));
       (daemon.streams[1]?.socket as Socket).resetAndDestroy();
-      await vi.waitFor(() => expect(daemon.streams.length).toBe(3));
+      await waitFor(() => expect(daemon.streams.length).toBe(3));
       (daemon.streams[2]?.socket as Socket).resetAndDestroy();
-      await vi.waitFor(() => expect(daemon.streams.length).toBe(4));
+      await waitFor(() => expect(daemon.streams.length).toBe(4));
 
       // Now send a fresh call — it must arrive at the daemon.
       stdin.write(clientCall(99));
-      await vi.waitFor(() => {
+      await waitFor(() => {
         const fresh = daemon.posts.find((p) => p.includes('"id":99'));
         expect(fresh).toBeDefined();
       });
@@ -219,11 +232,13 @@ describe('MCP proxy chaos — compound failure sequences', () => {
 
       // Establish connection.
       stdin.write(clientCall(1));
-      await vi.waitFor(() => expect(daemon.posts.length).toBe(1));
+      await waitFor(() => expect(daemon.posts.length).toBe(1));
 
       // Send 5 calls. The daemon accepts the POSTs but never sends a response — simulating slow.
-      for (let i = 10; 15 > i; i++) stdin.write(clientCall(i));
-      await vi.waitFor(() => {
+      for (let i = 10; 15 > i; i++) {
+        stdin.write(clientCall(i));
+      }
+      await waitFor(() => {
         const inFlight = daemon.posts.filter((p) => p.includes('"id":1') || /"id":1[0-4]/.test(p));
         expect(inFlight.length).toBeGreaterThanOrEqual(5);
       });
@@ -232,7 +247,7 @@ describe('MCP proxy chaos — compound failure sequences', () => {
       (daemon.streams[0]?.socket as Socket).resetAndDestroy();
 
       // Wait for error replies to arrive on stdout.
-      await vi.waitFor(() => {
+      await waitFor(() => {
         const errorReplies = stdoutLines().filter((line) => line.includes('-32001'));
         expect(errorReplies.length).toBeGreaterThanOrEqual(5);
       });
@@ -262,22 +277,22 @@ describe('MCP proxy chaos — compound failure sequences', () => {
       // the replay below would hold over a replay that never happened.
       stdin.write(clientInitialize(0));
       stdin.write(clientCall(1));
-      await vi.waitFor(() => expect(daemon.posts.length).toBeGreaterThanOrEqual(1));
+      await waitFor(() => expect(daemon.posts.length).toBeGreaterThanOrEqual(1));
 
       // Drop stream 0 — triggers reconnect + handshake replay on stream 1.
       (daemon.streams[0]?.socket as Socket).resetAndDestroy();
-      await vi.waitFor(() => expect(daemon.streams.length).toBe(2));
+      await waitFor(() => expect(daemon.streams.length).toBe(2));
 
       // Stream 1 has no endpoint frame (withheld) and dies.
       await settle();
       (daemon.streams[1]?.socket as Socket).resetAndDestroy();
 
       // Stream 2 connects normally (not in withholdEndpoint set).
-      await vi.waitFor(() => expect(daemon.streams.length).toBe(3));
+      await waitFor(() => expect(daemon.streams.length).toBe(3));
 
       // The proxy must still be alive and functional after stream 2 connects.
       stdin.write(clientCall(50));
-      await vi.waitFor(() => {
+      await waitFor(() => {
         const found = daemon.posts.find((p) => p.includes('"id":50'));
         expect(found).toBeDefined();
       });
@@ -305,7 +320,7 @@ describe('MCP proxy chaos — compound failure sequences', () => {
       daemon.withholdEndpoint.add(0);
 
       const stdin = driveProxy(daemon.port);
-      await vi.waitFor(() => expect(daemon.streams.length).toBe(1));
+      await waitFor(() => expect(daemon.streams.length).toBe(1));
 
       // Send 3 calls while there is no endpoint (they queue).
       stdin.write(clientCall(1));
@@ -324,7 +339,7 @@ describe('MCP proxy chaos — compound failure sequences', () => {
       stdin.write(clientCall(5));
 
       // All 5 must arrive.
-      await vi.waitFor(() => expect(daemon.posts.length).toBeGreaterThanOrEqual(5));
+      await waitFor(() => expect(daemon.posts.length).toBeGreaterThanOrEqual(5));
 
       // Each id must appear exactly once.
       for (let i = 1; 6 > i; i++) {

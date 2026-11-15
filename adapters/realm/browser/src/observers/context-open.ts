@@ -1,4 +1,4 @@
-import { EventType } from '@reticlehq/core';
+import { EventType } from '@reticlehq/core/page';
 import { captureMethod } from '@/patching/capture-method.js';
 import { observeSafely, type Emit, type Teardown } from './types.js';
 

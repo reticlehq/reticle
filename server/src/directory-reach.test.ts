@@ -411,6 +411,8 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'drive',
     // `reticle compare` drives two builds of one app and lists what differs.
     'two-builds',
+    // `reticle grade` grades a finished run from snapshots of the app's stored data.
+    'finished-run',
     'cli',
     'daemon',
     'change',
@@ -464,6 +466,11 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // `outside` holds what `reticle compare` reads beside the page tree: the network and console
   // lines, and the values the app's scripts compare fields with.
   compare: ['exhaust', 'outside'],
+  // The grade rules read the state sources that `compare --state` declares.
+  grade: ['outside'],
+  // `reticle grade`: the rules are in `grade`; the step and flags in the `cli` parser; the host
+  // reads of state sources are the ones `two-builds` uses, so both commands read the same way.
+  'finished-run': ['cli', 'grade', 'outside', 'two-builds'],
   // `reticle compare`: the rules are in `compare`; this directory reaches the daemon over the same
   // MCP client and lease calls `cli` uses, with the pairing token (`bridge`) and the caller's
   // project `.reticle` (`project`).

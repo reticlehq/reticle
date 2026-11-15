@@ -1,5 +1,5 @@
 /** Read response clones without making the app wait for body capture. */
-import { ResponseBodyReason } from '@reticlehq/core';
+import { ResponseBodyReason } from '@reticlehq/core/page';
 import { nativeClearTimeout, nativeSetTimeout } from '@/timers/native/native-timers.js';
 import {
   networkBodyMaxChars,

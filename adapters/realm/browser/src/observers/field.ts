@@ -16,7 +16,7 @@
  * says it while carrying nobody's data.
  */
 import { readTestId } from '@/dom/addressing/testid-attr.js';
-import { EventType, FieldChangeField, FieldChangeKind } from '@reticlehq/core';
+import { EventType, FieldChangeField, FieldChangeKind } from '@reticlehq/core/page';
 import { getAccessibleName, isSensitiveField } from '@/dom/a11y.js';
 import type { Emit, Teardown } from './types.js';
 
