@@ -119,7 +119,7 @@ export const FEEDBACK_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          'For a failure: the root-cause analysis — the call you made, what you expected, what you got, and why Reticle is at fault. For a request: what you want, in your own words.',
+          'For a failure: the root-cause analysis — the call you made, what you expected, what you got, and why Reticle is at fault. For a request: what you want, in your own words. Send `text` or `summary`: one of them is needed, also when you send `need` and the other fields.',
         ),
       /**
        * `text` under the name agents reach for unprompted.
@@ -134,7 +134,10 @@ export const FEEDBACK_TOOLS: ToolDef[] = [
        * — with both names in the reason — only when neither did. Widening the schema is what buys
        * the chance to say anything at all.
        */
-      summary: z.string().optional().describe('Alias for `text`; send either.'),
+      summary: z
+        .string()
+        .optional()
+        .describe('Alias for `text`; send either. One of the two is needed.'),
       need: z
         .string()
         .optional()
