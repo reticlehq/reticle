@@ -3,7 +3,7 @@
  *
  * One question: given a body, what is safe and affordable to report?
  */
-import { REDACTED_VALUE, ResponseBodyReason } from '@reticlehq/core';
+import { CRAWL_DEFAULTS, REDACTED_VALUE, ResponseBodyReason } from '@reticlehq/core';
 import { isSensitiveKey, safeStringify, scrubKnownSecrets } from '@/security/serialization.js';
 import { nativeClearTimeout, nativeSetTimeout } from '@/timers/native/native-timers.js';
 import { isEventStream, redactEventStream } from './network-event-stream.js';
@@ -248,7 +248,7 @@ const ERROR_BODY_CHARS = 4096;
 export function shouldCaptureErrorBody(status: number, enabled: boolean): boolean {
   // A network-level failure reports status 0 and has no body to read; `statusIsOk` in network.ts
   // treats 3xx as success (a normal navigation redirect), and so does this.
-  return enabled && status >= 400;
+  return enabled && status >= CRAWL_DEFAULTS.FAILED_STATUS;
 }
 
 /** Project a failure body under the error-only cap, with the ordinary redaction applied. */
