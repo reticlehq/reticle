@@ -74,7 +74,7 @@ import {
   withStartPageWait,
 } from './flow-start-path.js';
 import { requestSender, type OpenPage } from './steps/page-steps.js';
-import { awaitHydration } from './steps/hydration-wait.js';
+import { ReplayHydration, hydrationBudgetMs } from './steps/hydration-wait.js';
 
 export function latestRecordedFlow(
   events: ReticleEvent[],
@@ -342,9 +342,8 @@ export async function replayNamedFlow(
   const ran: ReplayNotes = {};
   try {
     const result = await replayOnce(deps, args, observe, ran);
-    return ran.hydrationWait === undefined
-      ? result
-      : { ...result, hydrationWait: ran.hydrationWait };
+    const hydrationWait = ran.hydration?.wait;
+    return hydrationWait === undefined ? result : { ...result, hydrationWait };
   } finally {
     // Where this flow left the tab, so the next flow's reset does not keep its query.
     try {
@@ -357,7 +356,7 @@ export async function replayNamedFlow(
 
 /** What replay noted on its way to a result, for every exit of `replayOnce`. */
 interface ReplayNotes {
-  hydrationWait?: FlowReplayResult['hydrationWait'];
+  hydration?: ReplayHydration;
 }
 
 async function replayOnce(
@@ -462,6 +461,12 @@ async function replayOnce(
    */
   let live = session;
   let liveFloor = replayFloor;
+  // Each page that loads waits for React to hydrate before a step acts on it (#1654).
+  const hydration = new ReplayHydration(hydrationBudgetMs(startPathBudgetMs(loaded.value)), {
+    now: deps.now,
+    sleep: WALL_CLOCK.sleep,
+  });
+  ran.hydration = hydration;
   const openPage: OpenPage<FlowReplaySession> = async (url) => {
     const outcome = await navigateAndAwait(
       deps.sessions,
@@ -475,6 +480,7 @@ async function replayOnce(
     if ('arrived' === outcome.kind || 'redirected' === outcome.kind) {
       live = outcome.session;
       liveFloor = 0;
+      await hydration.arrive(live);
       return { session: observe(withLeaseKeyboard(deps, live)) };
     }
     if ('refused' === outcome.kind) {
@@ -551,11 +557,7 @@ async function replayOnce(
       arrival,
     );
   }
-  // Step 1 needs the handlers that hydration attaches. Wait for them when the page says so (#1654).
-  const hydrationWait = await awaitHydration(session, { now: deps.now, sleep: WALL_CLOCK.sleep });
-  if (hydrationWait !== undefined) {
-    ran.hydrationWait = hydrationWait;
-  }
+  await hydration.arrive(session);
   const unmet = await firstUnmetPrecondition(session, replayable, replayFloor);
   if (unmet !== undefined) {
     return withStartPageWait(
@@ -568,6 +570,7 @@ async function replayOnce(
       arrival,
     );
   }
+  const shoot = replayStepShooter(deps, session.id);
   let steps: FlowStepResult[];
   try {
     steps = await replayFlow(
@@ -601,7 +604,13 @@ async function replayOnce(
         ...(arrival.session === undefined ? {} : { loadSince: 0 }),
         // The HUD's replay chip, when the human pressed ▶. In-process only: an agent's arguments
         // arrive as JSON and can never carry a function.
-        onStepResult: replayStepShooter(deps, session.id),
+        onStepResult: async (result, flowName) => {
+          try {
+            await shoot(result, flowName);
+          } finally {
+            await hydration.noteStep(result, live);
+          }
+        },
         ...('function' === typeof args['onStep']
           ? { onStep: args['onStep'] as NonNullable<ReplayFromOptions['onStep']> }
           : {}),
@@ -612,6 +621,14 @@ async function replayOnce(
       throw error;
     }
     return withStartPageWait(lostDocumentResult(name, error), arrival);
+  }
+  // A step that failed on a page known not to be hydrated proves nothing about the app (#1654).
+  const notHydrated = hydration.unverifiableReason(steps);
+  if (notHydrated !== undefined) {
+    return withStartPageWait(
+      { name, status: ReplayStatus.UNVERIFIABLE, steps, unverifiable: { reason: notHydrated } },
+      arrival,
+    );
   }
   // Only part of the journey was driven here: its steps were checked, nothing about the whole flow.
   if (0 < (continueAt ?? 0) || (to !== undefined && to < loaded.value.steps.length)) {

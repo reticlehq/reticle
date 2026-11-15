@@ -282,6 +282,12 @@ export interface SuiteVerdict {
    */
   unverifiable?: { flow: string; reason: string }[];
   /**
+   * Flows whose replay stopped waiting for a page that was not hydrated (`FlowReplayResult`
+   * `hydrationWait`), from every run, passed or not. A step on such a page ran before React
+   * attached its handlers. Omitted when no wait reached its bound.
+   */
+  hydrationWaits?: ({ flow: string } & HydrationWait)[];
+  /**
    * Flows that have both passed AND failed on UNCHANGED code — intermittent, not regressions.
    *
    * A flake and a regression demand opposite responses: one is chased, the other is quarantined. The
@@ -405,8 +411,9 @@ export interface FlowReplayResult {
    */
   startPageWait?: StartPageWait;
   /**
-   * Set when the React adapter said the page was not hydrated, and replay stopped waiting at the
-   * bound. Step 1 then ran on a page whose handlers may not be attached (#1654).
+   * Set when replay stopped waiting for a page that was not hydrated, at the bound. The steps on
+   * that page then ran before React attached all of its event handlers (#1654). The most recent
+   * such wait when the flow opened more than one page.
    */
   hydrationWait?: HydrationWait;
   /**
@@ -458,6 +465,11 @@ export interface HydrationWait {
   waitedMs: number;
   /** The bound the wait reached. */
   budgetMs: number;
+  /**
+   * True when the page said `pending` the last time replay asked. False when the page did not
+   * answer in time, so replay could not tell.
+   */
+  stillPending: boolean;
 }
 
 /** A concrete, confidence-scored rebind proposed for one drifted step. */

@@ -16,14 +16,16 @@
  * complete minimal hook. MUST be installed before `react-dom` initializes (React reads the hook at
  * renderer-inject time) — import this as the first side-effect in the app entry, before React.
  */
-import { RETICLE_RENDER_PREHOOK, RETICLE_RENDERS_STORE } from '@reticlehq/core';
+import { HydrationState, RETICLE_RENDER_PREHOOK, RETICLE_RENDERS_STORE } from '@reticlehq/core';
 import { registerStore } from '@reticlehq/browser';
 import { HYDRATION_COMPLETE_SIGNAL, createHydrationTracker } from './hydration.js';
-import { HydrationState, readHydrationState } from './hydration-state.js';
+import { readHydrationState } from './hydration-state.js';
 import { createCommitAggregator } from './commit-aggregator.js';
 import { autoRegisterStores } from './auto-stores.js';
 
 const HOOK_KEY = '__REACT_DEVTOOLS_GLOBAL_HOOK__';
+/** Where the FiberRoot is in the arguments of `onCommitFiberRoot(rendererID, root, ...)`. */
+const COMMIT_ROOT_ARG = 1;
 const RENDER_STORE = RETICLE_RENDERS_STORE;
 
 // Fire the hydration-complete signal (once, when no server-rendered part waits) via the SDK instance if
@@ -35,7 +37,9 @@ function createPageHydration(): ReturnType<typeof createHydrationTracker> {
         .__reticleInstance;
       instance?.signal?.(HYDRATION_COMPLETE_SIGNAL);
     },
-    () => ('undefined' === typeof document ? HydrationState.DONE : readHydrationState(document)),
+    // No document (a server import) has no React tree to wait for.
+    (roots) =>
+      'undefined' === typeof document ? HydrationState.NONE : readHydrationState(document, roots),
   );
 }
 let hydration = createPageHydration();
@@ -78,10 +82,14 @@ const DISCOVERY_COMMITS = 10;
 let discoveryAttempts = 0;
 let shouldDiscover = true;
 
-/** One React commit: bump the counter, fire hydration on the first, and feed the throttled stream. */
-function onReactCommit(): void {
+/**
+ * One React commit: bump the counter, check hydration, and feed the throttled stream. React calls the
+ * hook as `onCommitFiberRoot(rendererID, root, ...)`; the root is how hydration finds a tree that the
+ * page scan does not reach.
+ */
+function onReactCommit(...args: unknown[]): void {
   commits += 1;
-  hydration.onCommit();
+  hydration.onCommit(args[COMMIT_ROOT_ARG]);
   commitStream.onCommit();
   if (shouldDiscover && discoveryAttempts < DISCOVERY_COMMITS && 'undefined' !== typeof document) {
     discoveryAttempts += 1;
@@ -129,14 +137,15 @@ export interface RenderStats {
   /** Total React commits observed since install (monotonic; diff over a window for a rate). */
   commits: number;
   /**
-   * True once React hydrated every server-rendered part of the page (`RenderStatsField.HYDRATED`).
-   * Replay waits for it before step 1, because a click before it does nothing (#1654).
+   * Whether React hydrated every server-rendered part of the page (`RenderStatsField.HYDRATION`).
+   * `done` stays once reached. Before that, each read looks at the page again. Replay waits while it
+   * is `pending`, because a click on a part that is not hydrated does nothing (#1654).
    */
-  hydrated: boolean;
+  hydration: HydrationState;
 }
 
 export function getRenderStats(): RenderStats {
-  return { commits, hydrated: hydration.isHydrated() };
+  return { commits, hydration: hydration.state() };
 }
 
 /** Reset the commit counter — call before a measured window so the count is window-scoped. */
@@ -208,7 +217,7 @@ export function installRenderMeter(options?: RenderMeterOptions): void {
           ? existing.onCommitFiberRoot.bind(existing)
           : undefined;
       existing.onCommitFiberRoot = (...args: unknown[]) => {
-        onReactCommit();
+        onReactCommit(...args);
         if (original !== undefined) {
           try {
             original(...args);
