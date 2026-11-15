@@ -8,7 +8,7 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import type { PredicateSession } from '@reticlehq/engine/question/predicate/predicate-session.js';
-import { readAlreadyTrue } from './already-true.js';
+import { readAlreadyTrue, readAlreadyTrueOrUnknown } from './already-true.js';
 
 /**
  * The pre-check before an action, when a page read throws (#1656).
@@ -74,5 +74,25 @@ describe('readAlreadyTrue when a read throws (#1656)', () => {
     const until: Predicate = { kind: PredicateKind.ALL_OF, predicates: [textA, net] };
     const reading = await readAlreadyTrue(new SlowPageSession([answered500]), until, 0);
     expect(reading.alreadyTrue).toBe(false);
+  });
+});
+
+describe('readAlreadyTrueOrUnknown with a composite whose reads throw (#1656)', () => {
+  it('grades it unknown, and the action is not sent', async () => {
+    const until: Predicate = {
+      kind: PredicateKind.ANY_OF,
+      predicates: [
+        textA,
+        {
+          kind: PredicateKind.NOT,
+          predicate: { kind: PredicateKind.ALL_OF, predicates: [textA, textB] },
+        },
+      ],
+    };
+    const reading = await readAlreadyTrueOrUnknown(new SlowPageSession(), until, 0);
+    expect('unknown' in reading).toBe(true);
+    const because = 'unknown' in reading ? reading.unknown.because : '';
+    expect(because).toContain('the action was not sent');
+    expect(because).toContain(MATCH_TIMEOUT);
   });
 });

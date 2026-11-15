@@ -1,7 +1,13 @@
 import { afterEach, beforeEach, describe, it, expect, vi } from 'vitest';
 import { EventType, ReticleCommand, type CommandResult, type ReticleEvent } from '@reticlehq/core';
 
-import { evaluatePredicate, waitForPredicate, type PredicateSession } from './predicate.js';
+import {
+  evaluatePredicate,
+  provenExpectedLinks,
+  waitForPredicate,
+  type PredicateSession,
+} from './predicate.js';
+import { predicateToExpectedLinks } from './predicate-to-links.js';
 import type { EvalResult, Predicate } from './predicate-eval.js';
 
 /**
@@ -163,6 +169,8 @@ describe('a composite clause whose read throws (#1656)', () => {
     const result = await waitForPredicate(answered500(), errorText, 50);
     expect(result.pass).toBe(false);
     expect(result.inconclusive).toBe(`the page did not answer: ${MATCH_TIMEOUT}`);
+    // `readError` is for the wait itself. The tool schemas do not declare it.
+    expect(result).not.toHaveProperty('readError');
   });
 
   it('keeps the exact message of the read that threw, for the caller to act on', async () => {
@@ -179,6 +187,45 @@ describe('a composite clause whose read throws (#1656)', () => {
       predicates: [expects401, errorText],
     });
     expect(result.readError).toBeUndefined();
+  });
+});
+
+/** Every key anywhere inside a value, so a nested `readError` cannot hide. */
+function keysDeep(value: unknown): string[] {
+  if (Array.isArray(value)) {
+    return value.flatMap(keysDeep);
+  }
+  if ('object' !== typeof value || null === value) {
+    return [];
+  }
+  return Object.entries(value).flatMap(([key, inner]) => [key, ...keysDeep(inner)]);
+}
+
+describe('readError stays out of what the agent reads (#1656)', () => {
+  it('no clause in a composite evidence carries readError, at any depth', async () => {
+    const session = answered500();
+    const shapes: Predicate[] = [
+      { kind: 'allOf', predicates: [expects401, errorText] },
+      { kind: 'allOf', predicates: [errorText, otherText] },
+      { kind: 'anyOf', predicates: [expects401, errorText] },
+      { kind: 'not', predicate: { kind: 'allOf', predicates: [errorText, otherText] } },
+      {
+        kind: 'allOf',
+        predicates: [{ kind: 'anyOf', predicates: [errorText, otherText] }, expects401],
+      },
+    ];
+    for (const shape of shapes) {
+      const result = await evaluatePredicate(session, shape);
+      expect(keysDeep(result.evidence)).not.toContain('readError');
+    }
+  });
+
+  it('the composite itself keeps readError, so the wait can end on it', async () => {
+    const result = await evaluatePredicate(answered500(), {
+      kind: 'not',
+      predicate: { kind: 'allOf', predicates: [errorText, otherText] },
+    });
+    expect(result.readError).toBe(MATCH_TIMEOUT);
   });
 });
 
@@ -220,6 +267,27 @@ describe('a composite wait that is unknown because a read threw ends at once (#1
     expect(session.reads).toBe(2);
   });
 
+  it('anyOf of a clause that failed and a read that throws ends at the first read', async () => {
+    const session = answered500();
+    const state = startWait(session, { kind: 'anyOf', predicates: [expects401, errorText] });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.result?.inconclusive).toBe(`the page did not answer: ${MATCH_TIMEOUT}`);
+    expect(session.reads).toBe(1);
+  });
+
+  it('a read that throws in a nested composite ends the wait at the first read', async () => {
+    const session = answered500();
+    const nested: Predicate = {
+      kind: 'allOf',
+      predicates: [{ kind: 'anyOf', predicates: [errorText, otherText] }, expects500],
+    };
+    const state = startWait(session, nested);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(state.result?.inconclusive).toBe(`the page did not answer: ${MATCH_TIMEOUT}`);
+    expect(state.result).not.toHaveProperty('readError');
+    expect(session.reads).toBe(2);
+  });
+
   it('allOf with a clause that failed keeps waiting, and gives no at the end of the budget', async () => {
     const state = startWait(answered500(), { kind: 'allOf', predicates: [expects401, errorText] });
     await vi.advanceTimersByTimeAsync(0);
@@ -255,5 +323,26 @@ describe('not of a composite with a read that threw (#1656)', () => {
     });
     expect(result.pass).toBe(false);
     expect(result.inconclusive).toBe(`the page did not answer: ${MATCH_TIMEOUT}`);
+  });
+});
+
+describe('provenExpectedLinks for an anyOf with a branch whose read throws (#1656)', () => {
+  it('keeps the link of the branch that passed, and drops the branch that threw', async () => {
+    // A green anyOf[net passes, text throws] is reachable now. The re-read of each branch must not
+    // reject: that turned a green verdict into a tool error.
+    const links = await provenExpectedLinks(answered500(), {
+      kind: 'anyOf',
+      predicates: [expects500, errorText],
+    });
+    expect(links).toEqual(predicateToExpectedLinks(expects500));
+  });
+
+  it('drops a branch that is unknown because a read threw, even when it has a link', async () => {
+    // The allOf branch has the same net link, so keeping it would list that link twice.
+    const links = await provenExpectedLinks(answered500(), {
+      kind: 'anyOf',
+      predicates: [expects500, { kind: 'allOf', predicates: [errorText, expects500] }],
+    });
+    expect(links).toEqual(predicateToExpectedLinks(expects500));
   });
 });
