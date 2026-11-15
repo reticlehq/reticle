@@ -13,10 +13,10 @@ import { takeJsCoverage, type ScriptCoverage } from './js-coverage.js';
 import type { Browser, Page } from 'playwright';
 import { DriveError } from './drive-error.js';
 import { pressViaKeyboard } from './real-input-press.js';
-import { stampedDriveUrl } from './drive-url-stamp.js';
+import { drivenPageOf, gotoDriveUrl, SDK_PRESENT, type DrivenPage } from './driven-page.js';
 import { launchChromium } from '@/launch-chromium.js';
 import { pageViewportOptions } from '@/chromium-launch-options.js';
-import { chromiumLaunchHint, gotoOptions } from '@/portal/pool/playwright-launcher.js';
+import { chromiumLaunchHint } from '@/portal/pool/playwright-launcher.js';
 import { BrowserLaunchKind } from '@reticlehq/core/telemetry';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { classifyConnectFailure } from '@/telemetry/connect-failure.js';
@@ -173,10 +173,8 @@ export interface RealInputProvider {
    * and the frozen clock). Returns true when a page matched, false otherwise. Optional.
    */
   setViewport?(sessionUrl: string, size: { width: number; height: number }): Promise<boolean>;
-  /** The URL of the driven page now. It can be a page that has no session (#2060). */
-  pageUrl?(): string | undefined;
-  /** Load the start URL again in the driven page. True when the page loaded. */
-  reopen?(): Promise<boolean>;
+  /** The one page a launched drive owns (driven-page.ts). Undefined for any other provider. */
+  drivenPage?(): DrivenPage | undefined;
 }
 
 /**
@@ -639,8 +637,6 @@ export interface LaunchedProviderOptions {
 }
 
 const INJECT_CONNECT_WAIT_MS = 8_000;
-/** True on a page whose Reticle SDK has loaded. */
-const SDK_PRESENT = '!!globalThis.__reticleInstance';
 
 /** The only place the dynamic value import of Playwright lives for the launched (drive) path. */
 export const launchedChromium: LaunchFn = async (headless) => {
@@ -714,41 +710,17 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
         .then((cdp) => attachDownloadCapture(cdp as unknown as CdpLike, sink, () => page.url()))
         .catch(() => undefined);
     }
-    await this.#open(page);
-  }
-
-  /** Load the drive URL in `page` and give it a session. Throws a DriveError when the load fails. */
-  async #open(page: Page): Promise<void> {
-    try {
-      // Same navigation rule as the pool, and for the same measured reason: Playwright's default
-      // waits for `load`, which an app with one never-finishing subresource never fires — 30s of
-      // nothing and then a failure that blames the app. The SDK connect is a module script, so it
-      // has already run by DOMContentLoaded. See gotoOptions.
-      // Stamped, so the page can tell Reticle opened it — see drive-url-stamp.ts. Without it the
-      // first-run tour mounts over a driven page and its scrim swallows every native gesture.
-      await page.goto(stampedDriveUrl(this.#driveUrl), gotoOptions(undefined));
-    } catch (e) {
-      throw new DriveError(
-        DriveErrorCode.NAVIGATE_FAILED,
-        e instanceof Error ? e.message : String(e),
-      );
-    }
+    await gotoDriveUrl(page, this.#driveUrl);
     await this.#supplyReader(page);
     await this.#tryInjectConnect(page);
   }
 
-  pageUrl(): string | undefined {
-    return this.#livePage()?.url();
-  }
-
-  reopen(): Promise<boolean> {
+  /** The page between flows (#2060). No second reader: `#supplyReader` made it an init script. */
+  drivenPage(): DrivenPage | undefined {
     const page = this.#livePage();
-    return page === undefined
-      ? Promise.resolve(false)
-      : this.#open(page).then(
-          () => true,
-          () => false,
-        );
+    const reload = (on: Page): Promise<void> =>
+      gotoDriveUrl(on, this.#driveUrl).then(() => this.#tryInjectConnect(on));
+    return page === undefined ? undefined : drivenPageOf(page, this.#driveUrl, () => reload(page));
   }
 
   /**

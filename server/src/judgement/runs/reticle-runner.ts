@@ -58,27 +58,45 @@ function whereLost(loss: SessionLoss): string {
     : `after the page went to ${loss.lastUrl}`;
 }
 
+/** What to change. With no URL, the reason cannot point at one page. */
+function whatToChange(loss: SessionLoss): string {
+  return loss.lastUrl === undefined
+    ? 'Make sure that each page that the flow goes to loads @reticlehq/browser, or end the flow ' +
+        'before it leaves the app.'
+    : 'Make sure that the page at that URL loads @reticlehq/browser, or end the flow before it ' +
+        'leaves the app.';
+}
+
 /** The reason for the flow during which the session dropped and did not come back. */
 export function sessionLostReason(loss: SessionLoss): string {
   return (
     `${NO_SESSION_AFTER_NAVIGATION}: the session was connected, then it dropped ` +
     `${whereLost(loss)}, and no session connected again. The port and the SDK setup worked ` +
-    'before this flow. Make sure that the page at that URL loads @reticlehq/browser, or end the ' +
-    'flow before it leaves the app.'
+    `before this flow. ${whatToChange(loss)}`
   );
 }
 
-/** Why the app did not come back: the session dropped in `lostIn`, and reopening did not help. */
-function stayedLost(lostIn: string, loss: SessionLoss): string {
+/** The flow in which the session was lost, and if the start URL was opened again after it. */
+export interface LostSession {
+  flow: string;
+  loss: SessionLoss;
+  reopened: boolean;
+}
+
+/** Why the app did not come back: the session dropped in a flow, and no session came back. */
+function stayedLost({ flow, loss, reopened }: LostSession): string {
+  const after = reopened
+    ? 'opening the start URL again did not bring a session back'
+    : 'no session came back';
   return (
-    `${NO_SESSION_AFTER_NAVIGATION}: the session dropped in flow "${lostIn}" ` +
-    `${whereLost(loss)}, and opening the start URL again did not bring a session back.`
+    `${NO_SESSION_AFTER_NAVIGATION}: the session dropped in flow "${flow}" ` +
+    `${whereLost(loss)}, and ${after}.`
   );
 }
 
-/** The reason for a later flow, when opening the app again did not bring a session back. */
-export function notRunAfterLossReason(lostIn: string, loss: SessionLoss): string {
-  return `not run, ${stayedLost(lostIn, loss)} Nothing was proved for this flow.`;
+/** The reason for a later flow, when no session came back after the session was lost. */
+export function notRunAfterLossReason(lost: LostSession): string {
+  return `not run, ${stayedLost(lost)} Nothing was proved for this flow.`;
 }
 
 /** The words before the reason that a flow's replay gave, when a session-loss reason comes first. */
@@ -90,11 +108,11 @@ function keepReplayReason(lead: string, own: string | undefined): string {
 }
 
 /**
- * The reason for the flow that tried once after the app was opened again, and got no session. It
+ * The reason for the flow that tried once after the session was lost, and got no session. It
  * starts with what the run saw, and keeps the reason the replay gave.
  */
-export function triedAfterLossReason(lostIn: string, loss: SessionLoss, own?: string): string {
-  return keepReplayReason(stayedLost(lostIn, loss), own);
+export function triedAfterLossReason(lost: LostSession, own?: string): string {
+  return keepReplayReason(stayedLost(lost), own);
 }
 
 /** The live capabilities ReticleRunner needs. Injected so tests pass fakes (no CDP, no session). */
@@ -108,15 +126,27 @@ export interface RunnerPort {
   /** Injected run-id generator (no Math.random in logic) — the live adapter supplies a branded uuid. */
   newRunId(): RunId;
   /**
-   * Asked after each flow: is the browser session gone, and did it stay gone? Undefined when a
-   * session is connected. Optional: a port without it behaves as before.
+   * Called once when a run starts. The live port forgets the tab that the last run drove: one port
+   * serves every run of `reticle serve --http`. Optional.
+   */
+  startRun?(): void;
+  /**
+   * Asked after each flow: is the session of the run's tab gone, and did it stay gone? Undefined
+   * when it is connected. Optional: a port without it behaves as before.
    */
   sessionLost?(): Promise<SessionLoss | undefined>;
   /**
-   * Open the run's start URL again. It does not wait for a session: the next flow's replay waits
-   * for its start page, as every replay does. That wait also covers a slow dev server (#2155).
+   * Asked with no wait before each later flow, after the session was lost and one flow tried and
+   * got none: can the run's tab have a session again? False skips the flow. Optional: a port
+   * without it skips each later flow.
    */
-  reopen?(): Promise<void>;
+  sessionBack?(): Promise<boolean>;
+  /**
+   * Open the run's start URL again in the tab that lost its session. True when the page loaded.
+   * It does not wait for a session: the next flow's replay waits for its start page, as every
+   * replay does. That wait also covers a slow dev server (#2155).
+   */
+  reopen?(): Promise<boolean>;
 }
 
 /**
@@ -184,19 +214,13 @@ function sessionLostWith(loss: SessionLoss): (own?: string) => string {
   return (own) => keepReplayReason(sessionLostReason(loss), own);
 }
 
-/** The flow in which the session was lost, and that the next flow tries to recover from. */
-interface LostSession {
-  flow: string;
-  loss: SessionLoss;
-}
-
 /** A flow that was not replayed, because the session was lost in an earlier flow and stayed lost. */
-function notRunAfterLoss(name: string, lostIn: string, loss: SessionLoss): FlowReplayResult {
+function notRunAfterLoss(name: string, lost: LostSession): FlowReplayResult {
   return {
     name,
     status: ReplayStatus.UNVERIFIABLE,
     steps: [],
-    unverifiable: { reason: notRunAfterLossReason(lostIn, loss) },
+    unverifiable: { reason: notRunAfterLossReason(lost) },
   };
 }
 
@@ -211,8 +235,9 @@ export class ReticleRunner {
    * Replay one flow, then look at the session. A flow that leaves the app on a page with no SDK
    * ends the session. That flow's reason names the URL, and the app is opened again. The next flow
    * then tries once, and its replay waits for its start page as every replay does (#2155). When
-   * that flow also ends with no session and ran no step, the app did not come back: `gone` is set,
-   * and the later flows are not replayed. With no session, a replay only waits (#2060).
+   * that flow also ends with no session and ran no step, the app did not come back: `gone` is set.
+   * Each later flow then asks the port, with no wait, if the session can be back. If it cannot,
+   * the flow is not replayed: with no session, a replay only waits (#2060).
    *
    * `retrying` is the loss that the app was opened again for, before this flow.
    */
@@ -230,16 +255,20 @@ export class ReticleRunner {
       return { replay };
     }
     if (retrying !== undefined && 0 === replay.steps.length) {
-      const { flow, loss: first } = retrying;
-      const tried = withLossReason(replay, (own) => triedAfterLossReason(flow, first, own));
+      const tried = withLossReason(replay, (own) => triedAfterLossReason(retrying, own));
       return { replay: tried, gone: retrying };
     }
     const lost = withLossReason(replay, sessionLostWith(loss));
     if (!more) {
       return { replay: lost };
     }
-    await (this.#port.reopen?.() ?? Promise.resolve()).catch(() => undefined);
-    return { replay: lost, lost: { flow: name, loss } };
+    const reopened = await (this.#port.reopen?.() ?? Promise.resolve(false)).catch(() => false);
+    return { replay: lost, lost: { flow: name, loss, reopened } };
+  }
+
+  /** Before a later flow, once the session stayed lost: can it be back? No wait (#2060). */
+  async #sessionBack(): Promise<boolean> {
+    return (await this.#port.sessionBack?.().catch(() => false)) ?? false;
   }
 
   /**
@@ -248,6 +277,7 @@ export class ReticleRunner {
    * DOM (the same reason reticle_flow_verify is sequential).
    */
   async verify(opts: VerifyOptions): Promise<ReticleVerificationRun> {
+    this.#port.startRun?.();
     const names = opts.names ?? (await this.#port.listFlows());
     /*
      * Emitting NEVER throws into the run. A dashboard, a log or an editor is watching, and none of
@@ -282,13 +312,13 @@ export class ReticleRunner {
         at: start,
       });
       let replay: FlowReplayResult;
-      if (gone === undefined) {
+      if (gone !== undefined && !(await this.#sessionBack())) {
+        replay = notRunAfterLoss(name, gone);
+      } else {
         const outcome = await this.#replayOne(runId, name, index < total - 1, retrying);
         replay = outcome.replay;
         retrying = outcome.lost;
         gone = outcome.gone;
-      } else {
-        replay = notRunAfterLoss(name, gone.flow, gone.loss);
       }
       replays.push(replay);
       const mapped = mapReplayToFlowResult(replay, this.#port.now() - start);

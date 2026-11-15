@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DriveErrorCode, InputMode } from '@reticlehq/core';
+import { DriveErrorCode, InputMode, RETICLE_SESSION_STORAGE_KEY } from '@reticlehq/core';
 import { DriveError, LaunchedRealInputProvider, boxCenter, type ElementBox } from './real-input.js';
 import { queueEarlyConsole } from '@/portal/pool/lease-page-error.js';
 
@@ -29,6 +29,8 @@ interface FakePageState {
   initScripts?: string[];
   /** The human closed the window, or Chromium died. Playwright keeps answering `url()` either way. */
   closed?: boolean;
+  /** What `page.evaluate(script, value)` answers. Null when absent. */
+  evaluates?: (script: unknown, value: unknown) => unknown;
 }
 
 function fakePage(state: FakePageState): unknown {
@@ -57,9 +59,9 @@ function fakePage(state: FakePageState): unknown {
       if (true === state.waitForFunctionThrows) return Promise.reject(new Error('no SDK on page'));
       return Promise.resolve(null);
     },
-    evaluate: (arg: unknown) => {
+    evaluate: (arg: unknown, value?: unknown) => {
       state.evalCalls.push(String(arg));
-      return Promise.resolve(null);
+      return Promise.resolve(state.evaluates?.(arg, value) ?? null);
     },
     addInitScript: (script: unknown) => {
       // Every driven page gets the early console queue; these tests are about the reader.
@@ -496,19 +498,104 @@ describe('the driven provider supports the tools that require a driven browser',
 
 /*
  * #2060: a flow went to a page with no Reticle SDK, so the session dropped and did not come back.
- * The next flow then ran with no session. The provider must say where the page went, and load the
- * start URL again in the same page.
+ * The next flow then ran with no session. Between flows, `verify` reads the driven page: its URL,
+ * its own session id, and whether it has the SDK. And it loads the start URL again in that page.
+ * The facts that only Chromium can give (the id in sessionStorage, the SDK global) are proved in
+ * the real browser by apps/e2e/specs/verify-session-lost-test.mjs.
  */
-describe('after a flow left the app', () => {
+describe('the driven page between flows', () => {
   const DEAD_URL = 'http://localhost:3000/stats?id=missing';
   const STAMPED = `${DRIVE_URL}?__reticle_opened=1`;
+  const TAB_ID = 's-driven-tab';
+
+  it('is undefined before navigate ran', () => {
+    expect(makeProvider(newSpy()).drivenPage()).toBeUndefined();
+  });
 
   it('says the URL of the page it drives', async () => {
     const spy = newSpy();
     const provider = makeProvider(spy);
     await provider.navigate();
     spy.state.page.url = DEAD_URL;
-    expect(provider.pageUrl()).toBe(DEAD_URL);
+    expect(provider.drivenPage()?.url()).toBe(DEAD_URL);
+  });
+
+  it("reads the page's own session id from the tab's session store", async () => {
+    const spy = newSpy();
+    const provider = makeProvider(spy);
+    await provider.navigate();
+    spy.state.page.evaluates = (_script, key) =>
+      key === RETICLE_SESSION_STORAGE_KEY ? TAB_ID : null;
+    await expect(provider.drivenPage()?.sessionId()).resolves.toBe(TAB_ID);
+    spy.state.page.evaluates = () => null;
+    await expect(provider.drivenPage()?.sessionId()).resolves.toBeUndefined();
+  });
+
+  it('says if the SDK global is on the page now, and nothing when the page cannot be read', async () => {
+    const spy = newSpy();
+    const provider = makeProvider(spy);
+    await provider.navigate();
+    for (const answer of [true, false]) {
+      spy.state.page.evaluates = () => answer;
+      await expect(provider.drivenPage()?.hasSdk()).resolves.toBe(answer);
+    }
+    spy.state.page.evaluates = () => null;
+    await expect(provider.drivenPage()?.hasSdk()).resolves.toBeUndefined();
+  });
+
+  // Review of #2261: "no SDK global yet" is not a dead end. A module script or a dynamic import
+  // loads the SDK after the document has loaded. Only an HTTP error or another origin is.
+  describe('a dead end', () => {
+    const OWN = new URL(DRIVE_URL).origin;
+    const facts = (over: Record<string, unknown>) => ({
+      status: 200,
+      origin: OWN,
+      loaded: true,
+      sdk: false,
+      ...over,
+    });
+    const deadEnd = async (answer: unknown): Promise<boolean | undefined> => {
+      const spy = newSpy();
+      const provider = makeProvider(spy);
+      await provider.navigate();
+      spy.state.page.evaluates = () => answer;
+      return provider.drivenPage()?.deadEnd();
+    };
+
+    // Final review of #2261: a Next.js not-found page loads the SDK in useEffect, with import(),
+    // after hydration, which can be after `load`. Rule 14: such a page gets the start-page wait.
+    it('is not a loaded page of the app with an HTTP error and no SDK yet', async () => {
+      expect(await deadEnd(facts({ status: 404 }))).toBe(false);
+    });
+
+    it('is a loaded page on another origin with no SDK, as the browser error page', async () => {
+      expect(await deadEnd(facts({ origin: 'https://example.com' }))).toBe(true);
+      expect(await deadEnd(facts({ origin: 'null' }))).toBe(true);
+    });
+
+    it('is not a page of the app whose SDK has not loaded yet', async () => {
+      expect(await deadEnd(facts({}))).toBe(false);
+      expect(await deadEnd(facts({ loaded: false }))).toBe(false);
+    });
+
+    // An app's own error page (a Next not-found page, a Rails 422 page) can load the SDK late.
+    it('is not an HTTP error page that is still loading, with no SDK yet', async () => {
+      expect(await deadEnd(facts({ status: 404, loaded: false }))).toBe(false);
+    });
+
+    it('is not a page that has the SDK, whatever its status', async () => {
+      expect(await deadEnd(facts({ status: 404, sdk: true }))).toBe(false);
+    });
+
+    it('is not a page on another origin that is still loading, as in a redirect', async () => {
+      expect(await deadEnd(facts({ origin: 'https://idp.example.com', loaded: false }))).toBe(
+        false,
+      );
+    });
+
+    it('is not a page that cannot be read', async () => {
+      expect(await deadEnd(null)).toBe(false);
+    });
   });
 
   it('loads the start URL again in the same page', async () => {
@@ -516,9 +603,33 @@ describe('after a flow left the app', () => {
     const provider = makeProvider(spy);
     await provider.navigate();
     spy.state.page.url = DEAD_URL;
-    await expect(provider.reopen()).resolves.toBe(true);
+    await expect(provider.drivenPage()?.reopen()).resolves.toBe(true);
     expect(spy.calls).toHaveLength(1);
     expect(spy.state.page.gotoCalls).toEqual([STAMPED, STAMPED]);
+  });
+
+  // The reader is an init script, which runs on every later document. A second one each time the
+  // page is opened again would pile up one copy for each lost session.
+  it('does not add the zero-install reader again when it loads the start URL again', async () => {
+    const spy = newSpy();
+    spy.state.page.waitForFunctionThrows = true;
+    const provider = makeProvider(spy, { zeroInstallScript: () => 'reader' });
+    await provider.navigate();
+    expect(spy.state.page.initScripts).toEqual(['reader']);
+    await provider.drivenPage()?.reopen();
+    await provider.drivenPage()?.reopen();
+    expect(spy.state.page.initScripts).toEqual(['reader']);
+  });
+
+  it('connects a hosted preview again after it loads the start URL again', async () => {
+    const spy = newSpy();
+    const provider = makeProvider(spy, { injectConnect: { token: 't', url: 'ws://127.0.0.1:1' } });
+    await provider.navigate();
+    const connects = (): number =>
+      spy.state.page.evalCalls.filter((call) => call.includes('.connect(')).length;
+    expect(connects()).toBe(1);
+    await provider.drivenPage()?.reopen();
+    expect(connects()).toBe(2);
   });
 
   it('is false, and does not throw, when the page cannot load', async () => {
@@ -526,12 +637,6 @@ describe('after a flow left the app', () => {
     const provider = makeProvider(spy);
     await provider.navigate();
     spy.state.page.gotoThrows = true;
-    await expect(provider.reopen()).resolves.toBe(false);
-  });
-
-  it('is false before navigate ran', async () => {
-    const provider = makeProvider(newSpy());
-    expect(provider.pageUrl()).toBeUndefined();
-    await expect(provider.reopen()).resolves.toBe(false);
+    await expect(provider.drivenPage()?.reopen()).resolves.toBe(false);
   });
 });

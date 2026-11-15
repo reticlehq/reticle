@@ -13,6 +13,7 @@ import {
 import {
   NO_SESSION_AFTER_NAVIGATION,
   ReticleRunner,
+  sessionLostReason,
   type RunnerPort,
   type VerifyOptions,
 } from './reticle-runner.js';
@@ -43,14 +44,17 @@ interface FakeApp {
   port: RunnerPort;
   replayed: string[];
   reopened: number;
+  runsStarted: number;
 }
 
 /**
  * What opening the start URL again does. `back`: a session is connected when reopen returns.
  * `late`: the page loads, but its session connects only while the next flow's replay waits for its
  * start page, as with a dev server that compiles for a long time. `never`: no session comes back.
+ * `after`: the next flow gets no session, and the session is back before the flow after it.
+ * `nopage`: there is no page to load again (no driven page), and no session comes back.
  */
-type Reopen = 'back' | 'late' | 'never';
+type Reopen = 'back' | 'late' | 'never' | 'after' | 'nopage';
 
 /** Four flows. `dead` goes to DEAD_URL, and the session is gone after it. */
 function fakeApp(reopen: Reopen, dead: FlowReplayResult): FakeApp {
@@ -66,7 +70,11 @@ function fakeApp(reopen: Reopen, dead: FlowReplayResult): FakeApp {
   const app: FakeApp = {
     replayed: [],
     reopened: 0,
+    runsStarted: 0,
     port: {
+      startRun: () => {
+        app.runsStarted += 1;
+      },
       listFlows: () => Promise.resolve(['first', 'dead', 'next', 'last']),
       replayFlow: (name) => {
         app.replayed.push(name);
@@ -85,12 +93,17 @@ function fakeApp(reopen: Reopen, dead: FlowReplayResult): FakeApp {
         return Promise.resolve(found);
       },
       sessionLost: () => Promise.resolve(connected ? undefined : { lastUrl: DEAD_URL }),
+      // Asked with no wait. In `after`, the session is back by the time the runner asks.
+      sessionBack: () => {
+        connected ||= 'after' === reopen;
+        return Promise.resolve(connected);
+      },
       reopen: () => {
         app.reopened += 1;
         connected = 'back' === reopen;
         // A late session is not there yet when reopen returns.
         connectsLate = 'late' === reopen;
-        return Promise.resolve();
+        return Promise.resolve('nopage' !== reopen);
       },
       now: () => (t += 1),
       newRunId: () => asRunId('run-1'),
@@ -179,5 +192,50 @@ describe('a flow that loses its session (#2060)', () => {
     const app = fakeApp('back', replaced);
     await new ReticleRunner(app.port).verify({ ...opts, names: ['first', 'dead'] });
     expect(app.reopened).toBe(0);
+  });
+
+  // Audit of #2261: once one flow tried and got no session, every later flow was "not run" for the
+  // rest of the run, even when the session came back. The check before each later flow has no wait.
+  it('replays a later flow when the session is back before it', async () => {
+    const app = fakeApp('after', replaced);
+    const run = await new ReticleRunner(app.port).verify(opts);
+    expect(app.replayed).toEqual(['first', 'dead', 'next', 'last']);
+    expect(run.flows[2]?.status).toBe(RunFlowStatus.SKIPPED);
+    expect(run.flows[3]?.status).toBe(RunFlowStatus.PASS);
+  });
+
+  // With no page to load again (an HTTP run with no driven page), the reason must not say that the
+  // start URL was opened again.
+  it('does not say that the start URL was opened again when no page was loaded', async () => {
+    const app = fakeApp('nopage', replaced);
+    const run = await new ReticleRunner(app.port).verify(opts);
+    const last = run.flows[3]?.failureReason ?? '';
+    expect(last).toContain(NO_SESSION_AFTER_NAVIGATION);
+    expect(last).not.toContain('opening the start URL again');
+  });
+
+  // One port serves every run of `reticle serve --http`: each run tells it that a run starts.
+  it('tells the port once that a run starts', async () => {
+    const app = fakeApp('back', replaced);
+    const runner = new ReticleRunner(app.port);
+    await runner.verify(opts);
+    await runner.verify(opts);
+    expect(app.runsStarted).toBe(2);
+  });
+});
+
+describe('the reason when the run cannot say where the session was lost', () => {
+  it('does not point at "that URL"', () => {
+    const reason = sessionLostReason({});
+    expect(reason.startsWith(NO_SESSION_AFTER_NAVIGATION)).toBe(true);
+    expect(reason).toContain('after a navigation');
+    expect(reason).not.toContain('that URL');
+    expect(reason).toContain('each page that the flow goes to');
+  });
+
+  it('points at the URL when it knows it', () => {
+    const reason = sessionLostReason({ lastUrl: DEAD_URL });
+    expect(reason).toContain(DEAD_URL);
+    expect(reason).toContain('the page at that URL');
   });
 });
