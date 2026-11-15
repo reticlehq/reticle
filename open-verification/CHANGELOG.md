@@ -4,6 +4,15 @@ Notable changes to the **`open-verification`** package and to the **Open Verific
 
 Two numbers appear in every heading and they are not the same number. The **package** version is semver over the published TypeScript distribution. The **protocol** version, stamped as `OVP_VERSION`, is the specification an artifact was produced under. A package major may break the code an implementer imports while the protocol stands still, and most implementers import nothing. [VERSIONING.md](./VERSIONING.md) names all four numbers in play.
 
+## [1.2.0] — 2026-11-15 · protocol 1.0 · wire 1 · flow grammar 2
+
+### Changed
+
+- **A page that reads the channel names no longer loads zod.** `ChannelId`, `Independence`, `Grade`, `CHANNEL_DEFAULTS`, `disagreementCanConvict` and `canProve` moved to a new module, `vocabulary/channel-id.js`, which imports nothing. The package root still exports every one of them. The package now declares `"sideEffects": false`: every module only declares, so a bundler can drop the modules a page does not use. Before, a browser SDK that read one channel name through the package root loaded every vocabulary module and its zod schemas, about 95 KB.
+- These changes were made for `@reticlehq/core@3.10.3`, but they kept the version 1.1.0, which npm already had, so the publish skipped them. This release publishes them.
+
+Nothing to migrate: the exported API, the schemas and the adjudication order are unchanged.
+
 ## [1.0.0] — 2026-09-18 · protocol 1.0 · wire 1 · flow grammar 2
 
 **The package version is renumbered from `3.1.0` to `1.0.0`, and nothing in the protocol changed.**
