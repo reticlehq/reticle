@@ -17,6 +17,13 @@ type ConsoleMethod = 'log' | 'warn' | 'error' | 'info' | 'debug';
 const CSP_VIOLATION_EVENT = 'securitypolicyviolation';
 /** The window event for a rejected promise nobody awaited; also the `kind` of the error it reports. */
 const REJECTION_EVENT = 'unhandledrejection';
+/**
+ * The `digest` prefix Next.js gives its control-flow throws: `redirect()` and `notFound()`
+ * (`NEXT_HTTP_ERROR_FALLBACK;404` on Next.js 15 and later). Next.js cancels
+ * the rejection and navigates, so it is not a failure. Only these are skipped when cancelled: a page
+ * or library that cancels every rejection would otherwise hide real failures from a console check.
+ */
+const CONTROL_FLOW_DIGEST = /^NEXT_(REDIRECT|NOT_FOUND|HTTP_ERROR)/;
 /** `disposition` of a report-only policy: the browser reported the resource and did not block it. */
 const REPORT_ONLY = 'report';
 
@@ -171,18 +178,20 @@ export function installConsole(emit: Emit): Teardown {
     });
   };
   /**
-   * Decided AFTER the whole dispatch, not in this listener. A page that handles the rejection calls
-   * `preventDefault()`, and then the browser logs nothing: Next.js does this for `NEXT_REDIRECT` and
-   * navigates. Read here, `defaultPrevented` is still false when the page's listener runs after ours,
+   * Decided AFTER the whole dispatch, not in this listener. Next.js cancels its own control-flow
+   * throw (`NEXT_REDIRECT`) with `preventDefault()` and navigates, and the browser logs nothing. Read here, `defaultPrevented` is still false when the page's listener runs after ours,
    * so the verdict showed an error no person sees. A microtask is too early: for a browser-dispatched
    * event, microtasks run between listeners. A zero-delay timer runs after the last one.
    */
   const reportRejection = (event: PromiseRejectionEvent): void => {
-    if (signal.aborted || event.defaultPrevented) {
-      return;
-    }
+    // Inside `observeSafely`: reading `digest` from a page value can throw (a revoked Proxy).
     observeSafely(() => {
       const reason: unknown = event.reason;
+      // `Object()` boxes a primitive and maps null to `{}`, so a reason with no digest reads "undefined".
+      const digest = String((Object(reason) as { digest?: unknown }).digest);
+      if (signal.aborted || (event.defaultPrevented && CONTROL_FLOW_DIGEST.test(digest))) {
+        return;
+      }
       emitError({
         message: errorText(reason),
         kind: REJECTION_EVENT,

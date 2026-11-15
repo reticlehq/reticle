@@ -278,15 +278,46 @@ describe('a promise rejection the page handles', () => {
   const uncaught = (events: Emitted[]): Emitted[] =>
     events.filter((e) => e.type === EventType.ERROR_UNCAUGHT);
 
-  it('reports nothing when a page listener after ours calls preventDefault', async () => {
+  /** Next.js marks its control-flow throws with a `digest`, as `redirect()` and `notFound()` do. */
+  function nextError(digest: string): Error {
+    return Object.assign(new Error(digest.split(';')[0]), { digest });
+  }
+  async function handledBy(reason: unknown): Promise<Emitted[]> {
     const { emit, events } = collect();
     teardown = installConsole(emit);
     const handle = (e: Event): void => e.preventDefault();
     window.addEventListener('unhandledrejection', handle);
-    window.dispatchEvent(rejection(new Error('NEXT_REDIRECT')));
+    window.dispatchEvent(rejection(reason));
     window.removeEventListener('unhandledrejection', handle);
     await afterDispatch();
-    expect(uncaught(events)).toEqual([]);
+    return uncaught(events);
+  }
+
+  it('reports nothing for a Next.js redirect or not-found the page handled', async () => {
+    expect(await handledBy(nextError('NEXT_REDIRECT;replace;/login;307;'))).toEqual([]);
+    teardown?.();
+    expect(await handledBy(nextError('NEXT_HTTP_ERROR_FALLBACK;404'))).toEqual([]);
+    teardown?.();
+    expect(await handledBy(nextError('NEXT_NOT_FOUND'))).toEqual([]);
+  });
+
+  /**
+   * A page or library can cancel EVERY rejection to keep the console clean. Skipping all of them
+   * would hide a real failure, and a clean-console check would pass on a broken page: a false green.
+   * Only a framework's own control-flow throw is skipped.
+   */
+  it('still reports a real failure the page cancelled', async () => {
+    const reported = await handledBy(new Error('payment failed'));
+    expect(reported).toHaveLength(1);
+    expect(reported[0]?.data['message']).toBe('payment failed');
+  });
+
+  it('still reports a Next.js control-flow throw that nobody handled', async () => {
+    const { emit, events } = collect();
+    teardown = installConsole(emit);
+    window.dispatchEvent(rejection(nextError('NEXT_REDIRECT;push;/;307;')));
+    await afterDispatch();
+    expect(uncaught(events)).toHaveLength(1);
   });
 
   it('still reports a rejection nobody handles', async () => {
