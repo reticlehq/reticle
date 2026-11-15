@@ -232,6 +232,25 @@ describe('arriveAtStartPath on a lease whose dev server compiles past the step b
   });
 });
 
+describe('arriveAtStartPath on a page whose renderer crashed (#2155)', () => {
+  it('stops at the budget, and says that the page crashed', async () => {
+    const clock = fakeClock();
+    const arrived = await arriveAtStartPath(
+      sessionsConnectingAt(Infinity, clock.now),
+      tab,
+      flow,
+      undefined,
+      clock,
+      () => Promise.resolve({ loading: false, crashed: true as const }),
+    );
+    expect(arrived.lost).toContain(LOST);
+    expect(arrived.lost).toContain('The page crashed');
+    // The slow-compile advice does not apply to a crash.
+    expect(arrived.lost).not.toContain('signalTimeoutMs');
+    expect(arrived.wait).toBeUndefined();
+  });
+});
+
 describe('arriveAtStartPath on a page that does not answer (#2155)', () => {
   /** A probe on a page that runs an endless loop: `page.evaluate` never answers. */
   const frozen = (): Promise<boolean> => new Promise<boolean>(() => undefined);
@@ -252,6 +271,8 @@ describe('arriveAtStartPath on a page that does not answer (#2155)', () => {
       );
       expect(arrived.lost).toContain(LOST);
       expect(arrived.lost).toContain('did not answer');
+      // A late answer is not proof of an endless loop, so the older advice stays after it.
+      expect(arrived.lost).toContain('signalTimeoutMs');
     },
     FROZEN_TEST_TIMEOUT_MS,
   );

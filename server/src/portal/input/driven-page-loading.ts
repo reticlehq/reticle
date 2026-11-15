@@ -45,6 +45,7 @@ export class DrivenPageLoading {
     return pageLoadingOrFetching({
       fetching: () => requests.fetching(),
       openRequest: () => requests.openRequest(),
+      crashed: () => requests.crashed(),
       evaluate: (script) => page.evaluate(script),
       isClosed: () => page.isClosed(),
     });

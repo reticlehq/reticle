@@ -42,6 +42,10 @@ export interface PageRequests {
   fetching(): boolean;
   /** The name of the oldest request that is still open, or undefined when none is. */
   openRequest(): string | undefined;
+  /** The page's renderer crashed. A Playwright page does not recover, so this stays set. */
+  crash(): void;
+  /** Whether the renderer crashed. */
+  crashed(): boolean;
 }
 
 /** Whether a page is still loading and, when a request keeps it loading, which request. */
@@ -49,7 +53,12 @@ export interface PageLoad {
   loading: boolean;
   /** The method and path of the oldest open request, as `GET /src/app.js`. */
   openRequest?: string;
+  /** The page's renderer crashed. It loads nothing, and it cannot connect again. */
+  crashed?: true;
 }
+
+/** A page whose renderer crashed. */
+export const PAGE_CRASHED: PageLoad = { loading: false, crashed: true };
 
 /** The name of an open request that was started with no name. */
 const UNNAMED_REQUEST = 'a request';
@@ -76,6 +85,7 @@ export function trackPageRequests(
   // Map, not Set: it keeps the order the requests started in, so the oldest one is named.
   const open = new Map<object, string | undefined>();
   let lastEnded: number | undefined;
+  let crashed = false;
   return {
     started(request, resourceType, name) {
       if (!STREAM_RESOURCE_TYPES.has(resourceType)) {
@@ -100,6 +110,14 @@ export function trackPageRequests(
       }
       return oldest.value ?? UNNAMED_REQUEST;
     },
+    crash() {
+      crashed = true;
+      // A crashed renderer finishes none of its requests.
+      open.clear();
+    },
+    crashed() {
+      return crashed;
+    },
   };
 }
 
@@ -114,6 +132,7 @@ export function watchPageRequests(page: Pick<Page, 'on'>, now: () => number): Pa
   });
   page.on('requestfinished', (request) => tracker.ended(request));
   page.on('requestfailed', (request) => tracker.ended(request));
+  page.on('crash', () => tracker.crash());
   return tracker;
 }
 
@@ -122,13 +141,19 @@ export function watchPageRequests(page: Pick<Page, 'on'>, now: () => number): Pa
  * complete. The requests come first, because the document can be `complete` while a dev server still
  * compiles a module that the app imports dynamically.
  *
+ * A crashed page comes first. It is not closed, and every question to it fails ("Target crashed"),
+ * so without this it read as a navigation and held replay to the cap with a false reason.
+ *
  * When the question to the document fails, the page says which case it is. A closed page loads
- * nothing. An open page is between two documents: a navigation destroyed the context that the
- * question ran in, and the next document is still loading. A page that cannot say rejects.
+ * nothing. An open page is usually between two documents: a navigation destroyed the context that
+ * the question ran in, and the next document is still loading. A page that cannot say rejects.
  */
 export async function pageLoadingOrFetching(
-  page: Pick<PooledPage, 'fetching' | 'openRequest' | 'evaluate' | 'isClosed'>,
+  page: Pick<PooledPage, 'fetching' | 'openRequest' | 'crashed' | 'evaluate' | 'isClosed'>,
 ): Promise<PageLoad> {
+  if (true === page.crashed?.()) {
+    return PAGE_CRASHED;
+  }
   const openRequest = page.openRequest?.();
   if (openRequest !== undefined) {
     return { loading: true, openRequest };

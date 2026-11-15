@@ -72,6 +72,8 @@ export interface PooledPage {
   openRequest?(): string | undefined;
   /** Whether the page is closed. OPTIONAL: without it a failed question to the page rejects. */
   isClosed?(): boolean;
+  /** Whether the page's renderer crashed. OPTIONAL. */
+  crashed?(): boolean;
   /** Evaluate a script in the page's current document. OPTIONAL: without it no reader is injected. */
   evaluate?(script: string): Promise<unknown>;
   /** Add an init script to run after document creation but before any page scripts run. */
