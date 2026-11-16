@@ -122,8 +122,15 @@ export function dangerousActionContext(el: ActionTarget): string {
 }
 
 /**
- * Does this control only OPEN something — a menu, a listbox, a dialog, a disclosure? Then pressing it
- * moves no money, whatever its name says. "Actions for Payment successful" opens a row menu; a
+ * `aria-haspopup` kinds that only reveal items: each item is then judged on its own text. `true`
+ * means `menu`. A `dialog` or `grid` is not here: a hosted payment sheet opens as a dialog and can
+ * charge when it is shown, so a "Pay" button that opens one is still judged by money words.
+ */
+const ITEM_POPUPS: ReadonlySet<string> = new Set(['true', 'menu', 'listbox', 'tree']);
+
+/**
+ * Does this control only REVEAL something — a menu, a listbox, a tree, a disclosure? Then pressing
+ * it moves no money, whatever its name says. "Actions for Payment successful" opens a row menu; a
  * "Model" button opens a picker. A submit button is never one: it submits, whatever else it says.
  */
 function opensPopupOnly(el: ActionTarget): boolean {
@@ -132,9 +139,9 @@ function opensPopupOnly(el: ActionTarget): boolean {
   if (inForm && el.matches(SUBMIT_CONTROL_SELECTOR)) {
     return false;
   }
-  const hasPopup = el.getAttribute('aria-haspopup');
-  if (null !== hasPopup && 'false' !== hasPopup.trim().toLowerCase()) {
-    return true;
+  const hasPopup = el.getAttribute('aria-haspopup')?.trim().toLowerCase();
+  if (undefined !== hasPopup && 'false' !== hasPopup && '' !== hasPopup) {
+    return ITEM_POPUPS.has(hasPopup);
   }
   return el.hasAttribute('aria-expanded');
 }

@@ -100,6 +100,26 @@ describe('a control that only opens a popup is not judged by money words', () =>
     expect(message).toContain('"delete" in its name');
   });
 
+  it.each(['true', 'menu', 'listbox', 'tree'])(
+    'does not refuse a payment-named trigger with aria-haspopup="%s"',
+    async (kind) => {
+      // These only reveal items; each item is judged on its own text.
+      document.body.innerHTML = `<button id="m" aria-haspopup="${kind}">Payment method</button>`;
+      await expect(executeAction(refTo('#m'), 'click')).resolves.toBeDefined();
+    },
+  );
+
+  it.each([
+    ['dialog', 'Pay', 'pay'],
+    ['dialog', 'Buy now', 'buy'],
+    ['grid', 'Place order', 'place order'],
+  ])('still refuses a money word when aria-haspopup is "%s"', async (kind, name, word) => {
+    // A dialog can be the step that charges (a hosted payment sheet), so it is not a mere reveal.
+    document.body.innerHTML = `<button id="p" aria-haspopup="${kind}" aria-expanded="false">${name}</button>`;
+    const message = await refusal('#p', 'click');
+    expect(message).toContain(`button "${name}" ("${word}" in its name)`);
+  });
+
   it('still refuses a money word when aria-haspopup is "false"', async () => {
     document.body.innerHTML = '<button id="p" aria-haspopup="false">Pay now</button>';
     const message = await refusal('#p', 'click');
