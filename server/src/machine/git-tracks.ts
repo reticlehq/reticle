@@ -7,6 +7,7 @@ import { dirname } from 'node:path';
 
 /** Exit status of `git check-ignore` for a path that git does not ignore. */
 const CHECK_IGNORE_NOT_IGNORED = 1;
+const GIT_TRACKED = 0;
 const GIT_TIMEOUT_MS = 2_000;
 const tracked = new Map<string, boolean>();
 
@@ -27,6 +28,17 @@ export function gitTracks(path: string): boolean {
   const answer = CHECK_IGNORE_NOT_IGNORED === result.status;
   tracked.set(path, answer);
   return answer;
+}
+
+/** True only when Git already tracks this exact file. */
+export function gitTracksFile(path: string): boolean {
+  const result = spawnSync('git', ['ls-files', '--error-unmatch', '--', path], {
+    cwd: existingAncestor(path),
+    stdio: 'ignore',
+    timeout: GIT_TIMEOUT_MS,
+    windowsHide: true,
+  });
+  return GIT_TRACKED === result.status;
 }
 
 /** `path`, or the nearest directory above it that exists: git needs a real working directory. */
