@@ -65,6 +65,7 @@ describe('isConsequenceDrift', () => {
         DriftReason.STATE_MISMATCH,
         DriftReason.EXPECT_ELEMENT_NOT_FOUND,
         DriftReason.NET_STILL_IN_FLIGHT,
+        DriftReason.EXPECT_UNDECIDED,
       ].sort(),
     );
   });

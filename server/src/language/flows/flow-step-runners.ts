@@ -38,6 +38,8 @@ import {
   unreachableTargetNote,
 } from '@/surface/tools/act/act-observation.js';
 import { anchorFieldName } from './flows.js';
+import { unreachableTargetResult } from './flow-undecided.js';
+export { unreachableTargetResult } from './flow-undecided.js';
 import type { FlowReplaySession, Sleep } from './flow-replay-types.js';
 import {
   ambiguityDrift,
@@ -571,28 +573,6 @@ export function staleTargetResult(
     status: ReplayStatus.UNVERIFIABLE,
     steps: [...steps],
     unverifiable: { reason: staleTargetReason(only.step) },
-  };
-}
-
-/**
- * The honest answer when a step acted on a target no person could have clicked (covered, of no
- * size, off screen). The replay stopped there, and nothing about the app was decided: undecided as a
- * whole, with the cause and the fix, as a live act answers it. Read as a drift, the suite counted it
- * as a failed flow ("Reticle result: failed") on an app that may be fine.
- */
-export function unreachableTargetResult(
-  name: string,
-  steps: readonly FlowStepResult[],
-): FlowReplayResult | undefined {
-  const step = steps.find((s) => DriftReason.TARGET_UNREACHABLE === s.drift?.reasonKind);
-  if (step?.drift === undefined) {
-    return undefined;
-  }
-  return {
-    name,
-    status: ReplayStatus.UNVERIFIABLE,
-    steps: [...steps],
-    unverifiable: { reason: `step ${String(step.step)}: ${step.drift.reason}` },
   };
 }
 

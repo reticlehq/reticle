@@ -17,6 +17,7 @@ import { routeOfEvent, routeOfUrl } from '@reticlehq/engine/question/predicate/p
 import { evalConsole } from '@reticlehq/engine/question/predicate/predicate-console.js';
 import { appScope, stepEffect } from '@reticlehq/engine/evidence/step-effect.js';
 import { stepContradictions } from './flow-cross-step.js';
+import { undecidedExpectDrift } from './flow-undecided.js';
 import {
   AnchorKind,
   DriftReason,
@@ -49,10 +50,7 @@ import { captureBaselines, type Baselines } from '@reticlehq/engine/evidence/bas
 const IN_FLIGHT_AT_BUDGET_END =
   'the request this step declared had not come back when the budget ended — it is still in flight, ' +
   'so nothing here says the app failed. Raise the step timeout, or look at the endpoint';
-import {
-  isDocumentGoneError,
-  SESSION_DISCONNECTED_REASON,
-} from '@/portal/session/facts/session-replaced.js';
+import { isDocumentGoneError } from '@/portal/session/facts/session-replaced.js';
 import { actOnResolvedRef } from './flow-step-runners.js';
 import { isPageStep, runPageStep, type OpenPage, type SendRequest } from './steps/page-steps.js';
 
@@ -371,11 +369,9 @@ export async function assertStepExpect(
   if (verdict.pass) {
     return undefined;
   }
-  // The wait ended because the page stopped being observable, not because the consequence failed:
-  // the same fact as a command the dying socket rejected, so it takes the same path (the replay loop
-  // reports a lost document). As a drift, a socket that blinked for 26ms read as the app's defect.
-  if (true === verdict.observationLost) {
-    throw new Error(SESSION_DISCONNECTED_REASON);
+  const undecided = undecidedExpectDrift(verdict, expect);
+  if (undecided !== undefined) {
+    return undecided;
   }
   // A request the step NAMED that had not come back yet is a blind spot, not an assertion the app
   // failed. The live verdict path already draws this line (namedNetIsInFlight); replay read the
