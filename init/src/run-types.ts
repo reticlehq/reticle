@@ -123,6 +123,11 @@ export interface InitContext {
   readonly packageManager: string;
   /** The project's own dev command, when its scripts name one. Never composed. */
   readonly devCommand?: string | undefined;
+  /**
+   * The folder to run `devCommand` in, when it is not `appDir`: the workspace root, whose `dev`
+   * script starts this app and the packages it calls (an API, for example).
+   */
+  readonly devCommandDir?: string | undefined;
   /** Set when init redirected into a workspace app, naming the one it chose. */
   readonly redirectedTo?: string | undefined;
   /**

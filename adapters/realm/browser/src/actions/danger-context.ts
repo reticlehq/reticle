@@ -24,7 +24,7 @@ import {
   outwardActionOf,
   outwardRefusal,
   withoutFilenameTokens,
-} from '@reticlehq/core';
+} from '@reticlehq/core/page';
 import { getAccessibleName, getRole } from '@/dom/a11y.js';
 import { type ActionTarget, isHtmlElement } from '@/dom/realm.js';
 

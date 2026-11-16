@@ -24,7 +24,7 @@ import {
   statSync,
   writeFileSync,
 } from 'node:fs';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { ReticleDir } from '@reticlehq/core';
 import { isAlive } from '@/command/daemon/daemon.js';
@@ -88,6 +88,33 @@ export function writableLogDir(preferred: string, projectDir: string): string {
 }
 
 /** The dev server this process started, and the only one it will ever stop. */
+/** turbo's own switch for which variables a task receives. */
+const TURBO_ENV_MODE = 'TURBO_ENV_MODE';
+/** turbo passes a task the whole environment, as a package script receives it. */
+const TURBO_ENV_MODE_LOOSE = 'loose';
+
+/**
+ * The environment init adds for the dev server it starts.
+ *
+ * Reported from a drive of a turbo monorepo: when the workspace root's `dev` script starts the app
+ * (`turbo run dev`), turbo 2 gives each task only the variables its `turbo.json` declares. The
+ * values from `init --env KEY=VALUE` and the `RETICLE_*` variables never reached the app, so the
+ * page presented another pairing token and was refused. For a script run from the root, init asks
+ * turbo to pass the whole environment through, as the app's own script receives it. A mode the
+ * person set themselves is kept.
+ */
+export function devServerEnv(
+  appDir: string,
+  cwd: string,
+  env: Readonly<Record<string, string>>,
+  inherited: Readonly<Record<string, string | undefined>> = process.env,
+): Record<string, string> {
+  if (resolve(cwd) === resolve(appDir) || inherited[TURBO_ENV_MODE] !== undefined) {
+    return { ...env };
+  }
+  return { ...env, [TURBO_ENV_MODE]: TURBO_ENV_MODE_LOOSE };
+}
+
 export class OwnedDevServer {
   private child: ChildProcess | undefined;
   private log: string | undefined;
@@ -154,7 +181,9 @@ export class OwnedDevServer {
   }
 
   output(): string {
-    if (undefined === this.log) return '';
+    if (undefined === this.log) {
+      return '';
+    }
     try {
       return readFileSync(this.log, 'utf8');
     } catch {
@@ -170,7 +199,9 @@ export class OwnedDevServer {
   quietForMs(): number {
     let lastOutputAt = this.startedAt;
     try {
-      if (undefined !== this.log) lastOutputAt = Math.max(lastOutputAt, statSync(this.log).mtimeMs);
+      if (undefined !== this.log) {
+        lastOutputAt = Math.max(lastOutputAt, statSync(this.log).mtimeMs);
+      }
     } catch {
       /* not written yet */
     }
@@ -181,7 +212,9 @@ export class OwnedDevServer {
   /** Ports anything in this server's process tree is listening on. */
   listeningPorts(): number[] {
     const pid = this.child?.pid;
-    if (undefined === pid) return [];
+    if (undefined === pid) {
+      return [];
+    }
     if (WINDOWS) {
       const tree = new Set(descendants(windowsProcessPairs(), pid));
       return [
@@ -195,7 +228,9 @@ export class OwnedDevServer {
     const pids = run('sh', ['-c', `ps -o pid= -g ${pid} 2>/dev/null | tr -d ' '`])
       .split('\n')
       .filter(Boolean);
-    if (0 === pids.length) return [];
+    if (0 === pids.length) {
+      return [];
+    }
     return parseLsofPorts(
       run('sh', [
         '-c',
@@ -228,9 +263,12 @@ export class OwnedDevServer {
 
   stop(): void {
     const child = this.child;
-    if (this.handedOver || undefined === child?.pid) return;
-    if (WINDOWS) run('taskkill', ['/PID', String(child.pid), '/T', '/F']);
-    else {
+    if (this.handedOver || undefined === child?.pid) {
+      return;
+    }
+    if (WINDOWS) {
+      run('taskkill', ['/PID', String(child.pid), '/T', '/F']);
+    } else {
       try {
         process.kill(-child.pid, 'SIGTERM');
       } catch {
@@ -259,7 +297,9 @@ export function run(file: string, args: string[], timeoutMs = RUN_TIMEOUT_MS): s
     maxBuffer: 8 * 1024 * 1024,
     timeout: timeoutMs,
   });
-  if (undefined !== r.error) return '';
+  if (undefined !== r.error) {
+    return '';
+  }
   return r.stdout ?? '';
 }
 
@@ -293,7 +333,9 @@ function windowsProcessPairs(): ProcessPair[] {
   const fromWmic = parseWmicProcesses(
     run('wmic', ['process', 'get', 'CreationDate,ParentProcessId,ProcessId']),
   );
-  if (0 < fromWmic.length) return fromWmic;
+  if (0 < fromWmic.length) {
+    return fromWmic;
+  }
   return parseWmicProcesses(
     run('powershell', ['-NoProfile', '-NonInteractive', '-Command', POWERSHELL_PAIRS]),
   );
@@ -319,11 +361,14 @@ export async function probePage(url: string, timeoutMs = PROBE_TIMEOUT_MS): Prom
       const res = await fetch(candidate, { signal: AbortSignal.timeout(timeoutMs) });
       const body = await res.text();
       const sdkInPage = /@reticlehq|@reticle-connect|reticle-dev/.test(body);
+      const html =
+        /text\/html/i.test(res.headers.get('content-type') ?? '') ||
+        /^\s*<(?:!doctype|html)/i.test(body);
       // Only stamp reachedUrl when we had to leave the announcement — callers that already have
       // the working URL should not rewrite it for a no-op.
       return candidate === url
-        ? { served: true, sdkInPage }
-        : { served: true, sdkInPage, reachedUrl: candidate };
+        ? { served: true, sdkInPage, html }
+        : { served: true, sdkInPage, html, reachedUrl: candidate };
     } catch (err) {
       const message = String(
         (err as { cause?: { message?: string }; message?: string })?.cause?.message ??
@@ -333,7 +378,9 @@ export async function probePage(url: string, timeoutMs = PROBE_TIMEOUT_MS): Prom
       if (/certificate|SELF_SIGNED|DEPTH_ZERO|ERR_TLS|unable to verify/i.test(message)) {
         sawTlsRefused = true;
       }
-      if (!isAddressMiss(err)) break;
+      if (!isAddressMiss(err)) {
+        break;
+      }
     }
   }
   return { served: false, sdkInPage: false, ...(sawTlsRefused ? { tlsRefused: true } : {}) };
@@ -354,7 +401,9 @@ export async function listSessions(port: number): Promise<CandidateSession[]> {
 export function flowsSaved(roots: readonly string[]): boolean {
   for (const root of roots) {
     try {
-      if (0 < readdirSync(join(root, '.reticle', 'flows')).length) return true;
+      if (0 < readdirSync(join(root, '.reticle', 'flows')).length) {
+        return true;
+      }
     } catch {
       /* no flows kept there */
     }

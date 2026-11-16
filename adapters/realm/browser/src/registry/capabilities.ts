@@ -1,6 +1,6 @@
 /** Self-describing capability registry — the testable surface the app advertises. */
 
-import { RETICLE_RENDERS_STORE } from '@reticlehq/core';
+import { RETICLE_RENDERS_STORE } from '@reticlehq/core/page';
 import { isPresenterVisible } from '@/dom/dom-ignore.js';
 import { domTestids } from './auto-testids.js';
 import { storeNames } from './stores.js';

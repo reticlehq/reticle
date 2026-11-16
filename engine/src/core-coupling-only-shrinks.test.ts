@@ -76,7 +76,16 @@ import { fileURLToPath } from 'node:url';
  * constants below, and it reads events the way `evalNet` and `evalSignal` do, so it goes with the
  * rest when `Realm` arrives.
  */
-const MAX_FILES_IMPORTING_CORE = 45;
+/*
+ * 45 -> 46 for `write-answer.ts`, and it is a SPLIT like `predicate-state.ts`.
+ *
+ * `contradiction-evidence.ts` crossed the 1000-line cap when the `response-ignored` check for a
+ * waiting control (#2115) landed on top of main. Rule 6 says split, so the check moved out whole.
+ * It imports `EventType`, `asString` and `ReticleEvent`, which the file it left already imports, so
+ * the symbol ceiling does not move. Importing them through `contradiction-evidence.ts` would keep
+ * this number flat, and that is the laundering this guard exists to catch.
+ */
+const MAX_FILES_IMPORTING_CORE = 46;
 /**
  * Raised by one, deliberately, and this is the argument for it.
  *
@@ -179,8 +188,17 @@ const MAX_FILES_IMPORTING_CORE = 45;
  * a timer is not read as the render of a click. The trigger crosses the wire, so it lives in core as
  * `CanvasTrigger` and rule 3 forbids spelling it here. It joins the import
  * `contradiction-evidence.ts` already has, so the file count is unmoved.
+ *
+ * 72 -> 74 for a request whose page unloaded before its answer (#1944).
+ *
+ * The daemon carries such a request into the next document's session with two flags, and their
+ * names cross the wire, so they live in core as `DepartedNetField`. `neverAnswered` is the one rule
+ * for "this pending can never close", shared by the settle predicate, the act's settle wait and the
+ * contradiction pass. Copying it here would give the engine and the server two rules for one
+ * question again. Both join imports that `event-filters.ts`, `contradiction-evidence.ts`,
+ * `contradictions.ts` and `predicate-eval.ts` already have, so the file count is unmoved.
  */
-const MAX_DISTINCT_SYMBOLS = 72;
+const MAX_DISTINCT_SYMBOLS = 74;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.

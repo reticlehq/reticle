@@ -19,13 +19,17 @@ function depsWith(
   realInput: RealInputProvider | undefined,
   pool?: { setMocksLease: (id: string, rules: MockRule[]) => Promise<boolean> },
 ): ToolDeps {
+  const session = { id: 'lease-1', url: 'http://localhost:5173/checkout' } as never;
   const sessions: Partial<SessionManager> = {
-    resolve: () => ({ id: 'lease-1', url: 'http://localhost:5173/checkout' }) as never,
+    resolve: () => session,
+    resolveServing: () => Promise.resolve(session),
   };
   return {
     sessions: sessions as SessionManager,
     realInput,
-    pool,
+    // A pool with no lease of this session, unless the test gives one.
+    pool:
+      pool === undefined ? undefined : { leaseUrl: () => undefined, heldBy: () => false, ...pool },
     recordings: new RecordingStore(),
   } as unknown as ToolDeps;
 }
@@ -198,5 +202,61 @@ describe('the mocks description names the rule shape (#345)', () => {
 
   it('says a leased tab is a driven context, not only reticle drive', () => {
     expect(tool().description).toMatch(/lease/i);
+  });
+});
+
+/*
+ * The driven provider mocks its own page, whatever session was named. Taken first, it mocked the
+ * driven tab, answered `applied: true` for the lease, and the lease's real write reached the backend.
+ */
+describe('reticle_network_mock targets the session it names', () => {
+  const LEASE = 'lease-1';
+  const APP = 'http://localhost:5173/checkout';
+  const RULES = [{ urlContains: '/api/save', abort: true }];
+
+  function deps(driven: RealInputProvider, mocked: string[], lease: boolean): ToolDeps {
+    const session = { id: LEASE, url: APP } as never;
+    return {
+      sessions: { resolve: () => session, resolveServing: () => Promise.resolve(session) },
+      realInput: driven,
+      pool: {
+        leaseUrl: (id: string) => (lease && id === LEASE ? APP : undefined),
+        heldBy: () => lease,
+        setMocksLease: (id: string) => {
+          mocked.push(id);
+          return Promise.resolve(lease);
+        },
+      },
+      recordings: new RecordingStore(),
+    } as unknown as ToolDeps;
+  }
+
+  const driven = (mocked: string[], hasPage: boolean): RealInputProvider =>
+    ({
+      isAvailableFor: () => Promise.resolve(hasPage),
+      perform: () => Promise.resolve({ performed: true }),
+      setMocks: () => {
+        mocked.push('driven');
+        return Promise.resolve(true);
+      },
+    }) as unknown as RealInputProvider;
+
+  it('mocks the lease, and not the driven page, when the session is a lease', async () => {
+    const mocked: string[] = [];
+    const res = (await tool().handler(deps(driven(mocked, true), mocked, true), {
+      mocks: RULES,
+      sessionId: LEASE,
+    })) as MockResult;
+    expect(mocked).toEqual([LEASE]);
+    expect(res.applied).toBe(true);
+  });
+
+  it('does not answer applied for a page the driven browser does not have', async () => {
+    const mocked: string[] = [];
+    const res = (await tool().handler(deps(driven(mocked, false), mocked, false), {
+      mocks: RULES,
+    })) as MockResult;
+    expect(mocked).not.toContain('driven');
+    expect(res.applied).toBe(false);
   });
 });

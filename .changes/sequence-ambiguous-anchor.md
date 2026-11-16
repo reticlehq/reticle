@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — a replayed sequence no longer clicks a guessed element when its anchor matches several.** A step inside a saved `reticle_act` sequence whose anchor matched more than one element, with no recorded position for them, acted on the first match. A click recorded on one item of a list (every item rendered from one line of code) then replayed on another item, and the step's check failed on a correct app. The step now reports `anchor_ambiguous` drift, as a single replayed step already did. A recorded position still selects the right element while the page has as many matches as it had when the flow was recorded.

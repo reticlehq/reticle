@@ -13,11 +13,19 @@
  * not: bump it. `workspace:*` is read as the version the workspace package carries, since that is
  * what pnpm writes at pack time.
  *
+ * Dependencies are not enough. 3.10.3 changed the FILES of `open-verification` (a zod-free module
+ * and `sideEffects: false`) and none of its dependencies, so this check passed, the publish skipped
+ * the package, and `@reticlehq/core@3.10.3` pinned the old build: every page that installed the SDK
+ * from npm loaded zod again. So the packed files are compared too: this tree's `pnpm pack` against
+ * the tarball npm serves, file by file (`contentDifferences`).
+ *
  * usage: node scripts/check-unbumped-packages.mjs        (exit 1 and a list when any differ)
  */
 import { execFileSync } from 'node:child_process';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { createHash } from 'node:crypto';
+import { mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, relative } from 'node:path';
 
 const ROOT = new URL('..', import.meta.url).pathname;
 
@@ -30,7 +38,7 @@ const workspacePackages = () => {
   for (const { path } of listed) {
     const manifest = JSON.parse(readFileSync(join(path, 'package.json'), 'utf8'));
     if (true !== manifest.private && 'string' === typeof manifest.name) {
-      out.set(manifest.name, manifest);
+      out.set(manifest.name, { ...manifest, dir: path });
     }
   }
   return out;
@@ -59,6 +67,91 @@ export const differences = (onNpm, local) => {
     );
 };
 
+/** Every file below `dir`, as paths relative to it with `/` separators, sorted. */
+const filesBelow = (dir) => {
+  const out = [];
+  const walk = (at) => {
+    for (const name of readdirSync(at)) {
+      const path = join(at, name);
+      if (statSync(path).isDirectory()) {
+        walk(path);
+      } else {
+        out.push(relative(dir, path).split('\\').join('/'));
+      }
+    }
+  };
+  walk(dir);
+  return out.sort();
+};
+
+const MANIFEST_FILE = 'package.json';
+
+/** A file's content as a comparable string: package.json as parsed data, every other file by hash. */
+const fingerprint = (path, file) => {
+  const bytes = readFileSync(path);
+  if (MANIFEST_FILE === file) {
+    const sortKeys = (value) =>
+      null !== value && 'object' === typeof value && !Array.isArray(value)
+        ? Object.fromEntries(
+            Object.keys(value)
+              .sort()
+              .map((key) => [key, sortKeys(value[key])]),
+          )
+        : value;
+    return JSON.stringify(sortKeys(JSON.parse(bytes.toString('utf8'))));
+  }
+  return createHash('sha256').update(bytes).digest('hex');
+};
+
+/**
+ * The differences between two unpacked packages: the one npm serves and the one this tree packs.
+ * Each line names a file and says how it differs. `package.json` is read as data, so key order and
+ * spacing are not a change.
+ */
+export const contentDifferences = (npmDir, localDir) => {
+  const onNpm = new Set(filesBelow(npmDir));
+  const here = new Set(filesBelow(localDir));
+  const lines = [];
+  for (const file of [...new Set([...onNpm, ...here])].sort()) {
+    if (!onNpm.has(file)) {
+      lines.push(`${file}: only in this tree`);
+    } else if (!here.has(file)) {
+      lines.push(`${file}: only on npm`);
+    } else if (fingerprint(join(npmDir, file), file) !== fingerprint(join(localDir, file), file)) {
+      lines.push(`${file}: changed`);
+    }
+  }
+  return lines;
+};
+
+/** Pack `name@version` from npm and this tree's copy from `dir`, unpack both, and compare them. */
+const packedDifferences = (name, version, dir) => {
+  const work = mkdtempSync(join(tmpdir(), 'reticle-unbumped-'));
+  try {
+    const unpack = (tarball, into) => {
+      mkdirSync(into, { recursive: true });
+      execFileSync('tar', ['-xzf', tarball, '-C', into], { stdio: 'ignore' });
+      return join(into, 'package');
+    };
+    const tarballIn = (folder) =>
+      join(folder, readdirSync(folder).find((file) => file.endsWith('.tgz')) ?? '');
+    const npmPack = join(work, 'npm');
+    const localPack = join(work, 'local');
+    mkdirSync(npmPack);
+    mkdirSync(localPack);
+    execFileSync('npm', ['pack', `${name}@${version}`, '--pack-destination', npmPack], {
+      stdio: 'ignore',
+    });
+    execFileSync('pnpm', ['pack', '--pack-destination', localPack], { cwd: dir, stdio: 'ignore' });
+    return contentDifferences(
+      unpack(tarballIn(npmPack), join(work, 'npm-files')),
+      unpack(tarballIn(localPack), join(work, 'local-files')),
+    );
+  } finally {
+    rmSync(work, { recursive: true, force: true });
+  }
+};
+
 const npmManifest = (name, version) => {
   try {
     return JSON.parse(
@@ -84,6 +177,13 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
     if (0 < diff.length) {
       stale.push(
         `${name}@${manifest.version} is on npm with other dependencies:\n  ${diff.join('\n  ')}`,
+      );
+      continue;
+    }
+    const files = packedDifferences(name, manifest.version, manifest.dir);
+    if (0 < files.length) {
+      stale.push(
+        `${name}@${manifest.version} is on npm with other files:\n  ${files.join('\n  ')}`,
       );
     }
   }

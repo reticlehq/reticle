@@ -170,13 +170,13 @@ describe('the skill copies agree about the rules', () => {
    * `@latest`: after the next release, a plugin user got a newer SDK than the pinned daemon.
    */
   it('makes the plugin copy run the init of the server version the plugin pins', () => {
+    // The plugin's MCP launcher starts the server version that plugin.json's `version` names.
     const manifest = JSON.parse(read('plugins/reticle/.claude-plugin/plugin.json')) as {
-      mcpServers: { reticle: { args: string[] } };
+      version?: string;
     };
-    const pinned = manifest.mcpServers.reticle.args.find((a) => a.startsWith('@reticlehq/server@'));
-    expect(pinned, 'plugin.json pins no @reticlehq/server version').toBeDefined();
+    expect(manifest.version, 'plugin.json declares no version').toBeDefined();
     const copy = read('plugins/reticle/SKILL.md');
-    expect(copy).toContain(`npx ${pinned ?? ''} init`);
+    expect(copy).toContain(`npx @reticlehq/server@${manifest.version ?? ''} init`);
     expect(copy).not.toContain('@reticlehq/server@latest init');
   });
 

@@ -1,4 +1,5 @@
 import { readTestId } from '@/dom/addressing/testid-attr.js';
+import { type FlowAnchor, type FlowFile, type FlowStep, type Predicate } from '@reticlehq/core';
 import {
   ActionType,
   AnchorKind,
@@ -8,13 +9,9 @@ import {
   FLOW_FILE_VERSION,
   ACT_STEP_TOOL,
   RecorderPhase,
-  type FlowAnchor,
-  type FlowFile,
-  type FlowStep,
   PredicateKind,
-  type Predicate,
-} from '@reticlehq/core';
-import { REDACTED_VALUE } from '@reticlehq/core';
+} from '@reticlehq/core/page';
+import { REDACTED_VALUE } from '@reticlehq/core/page';
 import { sourceFromDom } from '@/dom/addressing/source.js';
 import { getAccessibleName, getRole, isSensitiveField } from '@/dom/a11y.js';
 import { positionAmongNamesakes } from '@/actions/action-report.js';

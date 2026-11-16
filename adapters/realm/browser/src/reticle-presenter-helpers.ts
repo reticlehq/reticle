@@ -1,4 +1,4 @@
-import { ReticleCommand, PresenterMode, QueryBy } from '@reticlehq/core';
+import { ReticleCommand, PresenterMode, QueryBy } from '@reticlehq/core/page';
 import { refs } from './dom/addressing/refs.js';
 import { describe } from './dom/a11y.js';
 

@@ -318,3 +318,38 @@ export const NEXT_ACTION_HEADER = 'Next-Action';
  * that named the same action are the same write even when the body could not be read as text.
  */
 export const NEXT_ACTION_FIELD = 'nextAction';
+
+/**
+ * Fields the daemon writes on a network record that the document BEFORE this one made (#1944).
+ *
+ * A click can send a request and then load a new document. The old document sends its records
+ * before it unloads, but the new document connects as a new session, and every read after that
+ * reads the new session. The daemon carries the old document's network records from the last act
+ * into the new session, so a `net` check and `reticle_observe { action: "network" }` still see them.
+ */
+export const DepartedNetField = {
+  /**
+   * On every carried record. The record came from the document before this one. Its `t` is when
+   * the new document connected, not when the request happened, so it does not show the order of
+   * the request relative to the old document's other events.
+   */
+  FROM_DEPARTED_DOCUMENT: 'fromDepartedDocument',
+  /**
+   * On a carried `NET_PENDING` that had no answer when its document unloaded. The answer went to a
+   * document that no longer exists, so no `NET_REQUEST` can close it. Its outcome is unknown, not
+   * absent and not failed: the server can have received it or not.
+   */
+  PAGE_UNLOADED: 'pageUnloaded',
+} as const;
+export type DepartedNetField = (typeof DepartedNetField)[keyof typeof DepartedNetField];
+
+/**
+ * True when a `NET_PENDING` can never get its answer in this session: a departure (the browser left
+ * for this URL), or a request whose page unloaded before the answer arrived. Neither one is a
+ * request in flight. Every settle and in-flight decision reads this one function.
+ */
+export function neverAnswered(data: Readonly<Record<string, unknown>>): boolean {
+  return (
+    data['initiator'] === NetInitiator.NAVIGATION || true === data[DepartedNetField.PAGE_UNLOADED]
+  );
+}

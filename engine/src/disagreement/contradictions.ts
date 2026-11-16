@@ -1,5 +1,5 @@
 import {
-  NetInitiator,
+  neverAnswered,
   ContradictionKind,
   EventType,
   isAbsenceDerived,
@@ -36,6 +36,7 @@ import {
   UNNAMED_SIGNAL,
   type WriteIdentity,
 } from './contradiction-evidence.js';
+import { answersWrites, movesUi } from '../write-answer.js';
 import { findStaleResponses } from './stale-response.js';
 import { findBodyFailures } from './body-failures.js';
 import { findEchoMismatches } from './echo-mismatch.js';
@@ -104,15 +105,7 @@ export function readStateRender(
  */
 
 function uiAdvanced(events: readonly ReticleEvent[]): boolean {
-  return events.some(
-    (e) =>
-      e.type === EventType.DOM_ADDED ||
-      e.type === EventType.DOM_REMOVED ||
-      e.type === EventType.DOM_ATTR ||
-      e.type === EventType.DOM_TEXT ||
-      e.type === EventType.STATE_CHANGE ||
-      e.type === EventType.ROUTE_CHANGE,
-  );
+  return events.some(movesUi);
 }
 
 /**
@@ -630,9 +623,13 @@ function findWindowContradictions(
   // ── A write succeeded and nothing on the client moved ───────────────────────────────────────
   // Writes only: a GET that changes nothing is a prefetch; a POST that changes nothing is a lost
   // write, a response parsed into the void, or a render that never happened.
-  if (false === advanced) {
-    const ignoredWrites = settled.filter((c) => true === c.ok && isMutating(c));
-    if (ignoredWrites.length > 0) {
+  // A write the departed document made is left out: its page unloaded after it, and the unload
+  // is the client moving on (#1944).
+  const ignoredWrites = settled.filter(
+    (c) => true === c.ok && isMutating(c) && true !== c.departed,
+  );
+  if (advanced !== undefined && ignoredWrites.length > 0) {
+    if (!answersWrites(events, ignoredWrites, options.ref)) {
       // ...unless THIS document handed the consequence to another browsing context. An OAuth sign-in
       // posts, succeeds, and continues in a popup the in-page SDK cannot follow (#508): the original
       // tab legitimately never changes, and response-ignored would accuse it of ignoring a response
@@ -866,10 +863,9 @@ function findWindowContradictions(
     );
     const inFlight = events
       // A departure never completes by construction (NetInitiator.NAVIGATION): the browser leaves,
-      // or turns it into a download and stays. The settle oracle already excludes it; so does this.
-      .filter(
-        (e) => e.type === EventType.NET_PENDING && e.data['initiator'] !== NetInitiator.NAVIGATION,
-      )
+      // or turns it into a download and stays. A request whose page unloaded first lost its answer
+      // the same way (#1944). The settle oracle reads the same `neverAnswered`; so does this.
+      .filter((e) => e.type === EventType.NET_PENDING && !neverAnswered(e.data))
       .map((e) => ({ id: asString(e.data['id']), call: netCall(e) }))
       .filter((p) => p.id === undefined || !settledIds.has(p.id));
     if (inFlight.length > 0) {

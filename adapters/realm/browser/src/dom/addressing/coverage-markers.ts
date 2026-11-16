@@ -3,7 +3,7 @@ import {
   SOURCE_MAPPING_CAPABILITY,
   DATA_RETICLE_SOURCE_ATTR,
   RETICLE_OVERLAY_SELECTOR,
-} from '@reticlehq/core';
+} from '@reticlehq/core/page';
 import { testIdSelector } from './testid-attr.js';
 
 /** Whether any element matching `selector` is the app's, not Reticle's own UI. */

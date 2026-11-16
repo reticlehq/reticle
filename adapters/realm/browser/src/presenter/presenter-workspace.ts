@@ -1,4 +1,4 @@
-import { RETICLE_ROOT_GLOBAL, RETICLE_URL_PARAM } from '@reticlehq/core';
+import { RETICLE_ROOT_GLOBAL, RETICLE_URL_PARAM } from '@reticlehq/core/page';
 import { PresenterIcon, PRESENTER_ICON_SIZE, hiIconHtml } from './icons/presenter-icons.js';
 import type { AccountState } from '@reticlehq/core';
 import {

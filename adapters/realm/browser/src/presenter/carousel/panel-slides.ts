@@ -5,7 +5,7 @@
 import type { Slide } from './carousel.js';
 import { HudNoticeSchema, type HudNotice } from '@reticlehq/core/hud';
 import { esc } from '../chrome/presenter-safe-html.js';
-import { DEFAULT_PLATFORM_URL } from '@reticlehq/core';
+import { DEFAULT_PLATFORM_URL } from '@reticlehq/core/page';
 
 /**
  * Credits and plans live on the Plan screen; the console has no /harness page (it redirected home).

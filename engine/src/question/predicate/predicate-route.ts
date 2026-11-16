@@ -5,7 +5,7 @@
  * app is right now — and keeping that reconciliation in one place is what makes it readable.
  */
 import { EventType, PredicateKind, RETICLE_URL_PARAM, type ReticleEvent } from '@reticlehq/core';
-import { str, type EvalResult, type Predicate } from './predicate-eval.js';
+import { isUnchangedAttrWrite, str, type EvalResult, type Predicate } from './predicate-eval.js';
 
 /**
  * Which fact answered a `route` predicate: a navigation inside the window, or where the app is now.
@@ -384,7 +384,9 @@ export function evalRoute(
  * moment to be too close to, and a caveat there would describe a reading it is not about.
  */
 function sawActivityAfter(events: readonly ReticleEvent[], routeAt: number): boolean {
-  return events.some((e) => e.t > routeAt && ROUTE_SETTLE_ACTIVITY.has(e.type));
+  return events.some(
+    (e) => e.t > routeAt && ROUTE_SETTLE_ACTIVITY.has(e.type) && !isUnchangedAttrWrite(e),
+  );
 }
 
 /**

@@ -25,7 +25,8 @@
  * worse than a line of text, because the person waits for it.
  */
 
-import { CreditKind, type AccountState, type HarnessConfig } from '@reticlehq/core';
+import { type AccountState, type HarnessConfig } from '@reticlehq/core';
+import { CreditKind } from '@reticlehq/core/page';
 import { TRIAL_OFFER } from '@reticlehq/core/hud';
 import { hiIconHtml, PRESENTER_ICON_SIZE, PresenterIcon } from './icons/presenter-icons.js';
 import { esc, isSafeDashboardUrl } from './chrome/presenter-safe-html.js';

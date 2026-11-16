@@ -165,6 +165,10 @@ export default {
   '${ANGULAR_TOKEN_PATH}': {
     target: 'http://127.0.0.1:9',
     bypass(req, res) {
+      // webpack-dev-server calls this for every request. Answer only this path.
+      if ((req.url ?? '').split('?')[0] !== '${ANGULAR_TOKEN_PATH}') {
+        return undefined;
+      }
       const site = req.headers['sec-fetch-site'];
       const allowed =
         LOOPBACK.has(req.socket.remoteAddress ?? '') && (site === undefined || site === 'same-origin');

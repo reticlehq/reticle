@@ -15,6 +15,7 @@
 
 export * from './vocabulary/subject.js';
 export * from './vocabulary/channel.js';
+export * from './vocabulary/channel-id.js'; // zod-free, so a page can read ChannelId without zod
 export * from './vocabulary/determinism.js'; // DeterminismProfile / resumeStrategy — how a subject may be DRIVEN
 export * from './vocabulary/fixture.js'; // FixtureRef / fixtureIsUsable — state a suite starts from
 export * from './vocabulary/mutation.js'; // gradeMutation — does this flow notice when the feature breaks?

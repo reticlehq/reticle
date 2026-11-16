@@ -1,4 +1,4 @@
-import { EventType } from '@reticlehq/core';
+import { EventType } from '@reticlehq/core/page';
 import { refs } from '@/dom/addressing/refs.js';
 import { isReticleOverlay } from '@/dom/dom-ignore.js';
 import type { Emit, Teardown } from './types.js';

@@ -1,4 +1,4 @@
-import { RETICLE_OVERLAY_SELECTOR } from '@reticlehq/core';
+import { RETICLE_OVERLAY_SELECTOR } from '@reticlehq/core/page';
 import { capturedRootOf } from './shadow-registry.js';
 import { isVisible } from './visibility.js';
 

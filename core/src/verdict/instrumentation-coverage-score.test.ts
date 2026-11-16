@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ChannelId } from 'open-verification';
-import { CoverageMarker } from '../wire/platform-link.js';
+import { CoverageMarker } from '../wire/coverage-marker.js';
 import * as coverageModule from './instrumentation-coverage.js';
 import {
   CoverageCapability,

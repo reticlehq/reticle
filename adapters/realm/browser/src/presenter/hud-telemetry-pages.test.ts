@@ -6,7 +6,8 @@
  * which is the top of the signup funnel.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { HudPanel, HudPromptSurface, HudView, type HudUseData } from '@reticlehq/core';
+import { type HudUseData } from '@reticlehq/core';
+import { HudPanel, HudPromptSurface, HudView } from '@reticlehq/core';
 import { installHudTelemetry } from './hud-telemetry.js';
 import { flush } from './presenter.test-helpers.js';
 

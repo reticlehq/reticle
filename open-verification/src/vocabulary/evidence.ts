@@ -1,5 +1,6 @@
 import * as z from 'zod';
-import { ChannelIdSchema, Grade, Independence } from './channel.js';
+import { ChannelIdSchema } from './channel.js';
+import { Grade, Independence } from './channel-id.js';
 import { SubjectRefSchema } from './subject.js';
 
 /**

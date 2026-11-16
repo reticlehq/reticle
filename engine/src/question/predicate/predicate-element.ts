@@ -39,6 +39,9 @@ import { describeNameNearMiss } from './name-near-miss.js';
 export const ARIA_HIDDEN_NOTE =
   'text is inside an aria-hidden subtree — drawn on screen but excluded from the accessible tree';
 
+export const ARIA_HIDDEN_STATE_NOTE =
+  'the element is painted on screen but hidden from assistive technology by aria-hidden="true" — use state: "painted" to assert only that it renders';
+
 /**
  * HTML tag names mapped to the ARIA role that `getRole` gives them. A query like `{ role: "iframe" }`
  * always returns zero results because `iframe` is a tag, not a role. The map names the correct role
@@ -340,6 +343,7 @@ const ELEMENT_STATE_SINCE: Readonly<Partial<Record<ElementState, string>>> = {
   // The key is checked against ElementState by the Record type, so a misspelt state cannot compile.
   pressed: '3.4.0',
   receivesPointer: '3.10.0',
+  painted: '3.10.0',
 };
 
 /** The state, when the page's SDK is older than the first release that answers it. */
@@ -391,12 +395,15 @@ export async function evalElement(
     const reason = describeUnusableElementQuery(query, residual.unusable);
     return { pass: false, failureReason: reason, inconclusive: reason };
   }
+  // A `text` checked on this side is checked against the element's text, which is the 80-character
+  // display form unless the full text is asked for: words past the cut read as absent.
+  const textOnThisSide = residual.checks.some(([field]) => 'text' === field);
   let match = await matchOnce(
     session,
     withAltProjected(query, residual.checks),
     state,
     diagnose,
-    fullText,
+    fullText || textOnThisSide,
   );
   const subject = JSON.stringify(query);
   // Full text was asked for to JUDGE it, so a reading that is not the full text is not graded.
@@ -550,12 +557,13 @@ export async function evalElement(
   if (state !== undefined) {
     const relaxed = await matchOnce(session, query, undefined);
     if (relaxed.matched) {
+      const ariaNote = true === match.hint?.ariaHiddenState ? ` — ${ARIA_HIDDEN_STATE_NOTE}` : '';
       return {
         pass: false,
-        failureReason: `element matching ${subject} exists${describeRef(relaxed.elements[0])} but not in state '${state}'`,
+        failureReason: `element matching ${subject} exists${describeRef(relaxed.elements[0])} but not in state '${state}'${ariaNote}`,
         observed: `element matching ${subject} is present, states: ${
           relaxed.elements[0]?.states.join(', ') ?? 'unknown'
-        }`,
+        }${ariaNote}`,
         expected: `element matching ${subject} in state '${state}'`,
         assertion: 'element.state',
         evidence: { nearMiss: relaxed.elements },
@@ -563,7 +571,10 @@ export async function evalElement(
     }
   }
   if (query.role !== undefined && query.name !== undefined) {
-    const roleOnly = await matchOnce(session, { role: query.role }, state);
+    // The diagnosis looks where the check looked. A check scoped to one cell must not list the
+    // names in every other cell, which can be unrelated user text (#2282).
+    const within = scopeOf(query);
+    const roleOnly = await matchOnce(session, { role: query.role, ...within }, state);
     if (roleOnly.matched) {
       return {
         pass: false,
@@ -584,7 +595,7 @@ export async function evalElement(
     // contenteditable composer is not a `textbox`, a styled div is not a `button` — and the name is
     // the part the agent got right. Name the controls carrying it, with their real roles, so the
     // retry targets what exists instead of guessing again. A diagnosis only: `pass` stays false.
-    const byName = await nearestByName(session, query.name, state);
+    const byName = await nearestByName(session, query.name, state, within);
     if (byName.length > 0) {
       const seen = byName.map(
         (e) =>
@@ -620,12 +631,14 @@ export async function evalElement(
   const nearMiss = describeNameNearMiss(match.hint?.nameNearMiss, query.name, nearMissRole);
   const caseMiss = describeCaseMiss(match.hint?.caseMiss);
   const ariaNote = true === match.hint?.ariaHiddenMatch ? ARIA_HIDDEN_NOTE : undefined;
+  const ariaStateNote = true === match.hint?.ariaHiddenState ? ARIA_HIDDEN_STATE_NOTE : undefined;
   const unreachableRole = describeUnreachableRole(nearMissRole);
   const clause =
     caseMiss ??
     splitText ??
     nearMiss ??
     ariaNote ??
+    ariaStateNote ??
     unreachableRole ??
     (alsoHere === undefined || '' === alsoHere ? undefined : alsoHere);
   const suffix = clause === undefined ? '' : ` — ${clause}`;
@@ -804,6 +817,14 @@ export function withTextProperty(
   };
 }
 
+/** The scope of a query, and `self` with it, to carry into a follow-up query. Empty when unscoped. */
+function scopeOf(query: ElementQuery): Pick<ElementQuery, 'scope' | 'self'> {
+  if (query.scope === undefined) {
+    return {};
+  }
+  return { scope: query.scope, ...(true === query.self ? { self: true } : {}) };
+}
+
 /** How many same-name controls a role miss names. */
 const MAX_BY_NAME = 3;
 
@@ -815,8 +836,12 @@ async function nearestByName(
   session: PredicateSession,
   name: string,
   state: ElementState | undefined,
+  within: Pick<ElementQuery, 'scope' | 'self'>,
 ): Promise<ElementDescriptor[]> {
-  for (const query of [{ label: name }, { placeholder: name }]) {
+  for (const query of [
+    { label: name, ...within },
+    { placeholder: name, ...within },
+  ]) {
     const found = await matchOnce(session, query, state);
     if (found.matched) {
       return found.elements.slice(0, MAX_BY_NAME);

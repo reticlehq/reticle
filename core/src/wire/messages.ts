@@ -16,6 +16,7 @@ import { PlatformProfile } from './platform.js';
 import { ChannelId } from './channel.js';
 import { HelloEnv, HelloInstrumentation, HelloScope } from './production/hello-mode.js';
 import { OutwardAction } from '@/verdict/security.js';
+import { CommandActor } from './page-parse.js';
 
 const sessionIdSchema = z.string().min(1).max(TRANSPORT_LIMITS.MAX_SESSION_ID_LENGTH);
 const refSchema = z.string().max(TRANSPORT_LIMITS.MAX_REF_LENGTH);
@@ -286,11 +287,6 @@ export const HelloMessageSchema = z.object({
 export type HelloMessage = z.infer<typeof HelloMessageSchema>;
 
 /** Agent -> browser request, routed by the bridge with a correlation id. */
-/** Who sent a command: the Harness, or (when absent) the agent connected to the daemon. */
-export const CommandActor = {
-  HARNESS: 'harness',
-} as const;
-export type CommandActor = (typeof CommandActor)[keyof typeof CommandActor];
 
 export const CommandMessageSchema = z.object({
   kind: z.literal(MessageKind.COMMAND),

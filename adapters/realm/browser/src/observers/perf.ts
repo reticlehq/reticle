@@ -1,4 +1,4 @@
-import { EventType, PerfMetric } from '@reticlehq/core';
+import { EventType, PerfMetric } from '@reticlehq/core/page';
 import { refs } from '@/dom/addressing/refs.js';
 import { getTestIdAttr, readTestId } from '@/dom/addressing/testid-attr.js';
 import { isReticleOverlay } from '@/dom/dom-ignore.js';

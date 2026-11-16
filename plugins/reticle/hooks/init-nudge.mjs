@@ -61,11 +61,8 @@ function pinnedServer() {
   const manifest = readJson(
     join(dirname(fileURLToPath(import.meta.url)), '..', '.claude-plugin', 'plugin.json'),
   );
-  const args = manifest?.mcpServers?.reticle?.args ?? [];
-  return (
-    args.find((a) => 'string' === typeof a && a.startsWith('@reticlehq/server')) ??
-    '@reticlehq/server@latest'
-  );
+  const version = manifest?.version;
+  return 'string' === typeof version ? `@reticlehq/server@${version}` : '@reticlehq/server@latest';
 }
 
 function needsNudge(cwd) {

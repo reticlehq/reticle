@@ -64,6 +64,76 @@ describe('what counts as a Reticle daemon on /status', () => {
   });
 });
 
+/**
+ * Reported from the field: on Windows, an agent's MCP proxy refused the user's own daemon as "a port
+ * held by another process". The daemon was the same version and running, but `/status` did not
+ * answer in time, or the request went out on a pooled keep-alive socket the daemon had already
+ * closed. Either way the port read FOREIGN, the wake was refused, and the agent got no tool. A
+ * failed probe now asks once more, on a fresh socket with a longer limit, before calling the port
+ * a stranger's. A body that is not a daemon's is still FOREIGN at once.
+ */
+describe('a daemon that is slow or behind a stale socket is still a daemon', () => {
+  const DAEMON = { running: true, version: '3.10.4', sessionCount: 0, sessions: [] };
+  const SLOWER_THAN_FIRST_LIMIT_MS = 1500;
+
+  function listen(s: Server): Promise<number> {
+    server = s;
+    return new Promise((resolve, reject) => {
+      s.once('error', reject);
+      s.listen(0, '127.0.0.1', () => {
+        const addr = s.address();
+        if (null === addr || 'string' === typeof addr) {
+          reject(new Error('no port'));
+        } else {
+          resolve(addr.port);
+        }
+      });
+    });
+  }
+
+  it('reads a daemon that answers after the first limit as a daemon', async () => {
+    const port = await listen(
+      createServer((_req, res) => {
+        setTimeout(() => {
+          res.writeHead(200, { 'content-type': 'application/json' });
+          res.end(JSON.stringify(DAEMON));
+        }, SLOWER_THAN_FIRST_LIMIT_MS);
+      }),
+    );
+    expect(await probePresence(port, { tcpOpen, status: fetchStatus })).toBe(PortPresence.DAEMON);
+  }, 20_000);
+
+  it('reads a daemon whose first connection is reset as a daemon', async () => {
+    let requests = 0;
+    const port = await listen(
+      createServer((req, res) => {
+        requests += 1;
+        if (1 === requests) {
+          req.socket.destroy();
+          return;
+        }
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify(DAEMON));
+      }),
+    );
+    expect(await probePresence(port, { tcpOpen, status: fetchStatus })).toBe(PortPresence.DAEMON);
+    expect(requests).toBe(2);
+  }, 20_000);
+
+  it('does not ask again when the port answered with a body that is not a daemon', async () => {
+    let requests = 0;
+    const port = await listen(
+      createServer((_req, res) => {
+        requests += 1;
+        res.writeHead(200, { 'content-type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', name: 'some-mcp-server' }));
+      }),
+    );
+    expect(await probePresence(port, { tcpOpen, status: fetchStatus })).toBe(PortPresence.FOREIGN);
+    expect(requests).toBe(1);
+  }, 20_000);
+});
+
 describe('holding the daemon', () => {
   it('asks /status with the hold flag only when told to', async () => {
     const port = await serve({ running: true, version: '3.3.0', sessions: [] });

@@ -1,4 +1,6 @@
 import * as z from 'zod';
+// Plain constants live in a zod-free module, so the SDK reads them without zod (#2369).
+import { CreditKind } from './impact-constants.js';
 
 /**
  * The impact record: what Reticle has actually done for this user, and what that is worth.
@@ -91,16 +93,6 @@ export const ImpactSavingsSchema = z.object({
 export type ImpactSavings = z.infer<typeof ImpactSavingsSchema>;
 
 /**
- * How many recent defects a scope remembers.
- *
- * Small on purpose. `counts.failed` already says HOW MANY defects there have been; this list exists
- * so the HUD can say WHICH ONES, and a panel in the corner of somebody's app is not a triage queue.
- * Ten is enough to recognise what is currently broken and short enough that the record stays a
- * counters file rather than becoming a log.
- */
-export const IMPACT_DEFECT_LIMIT = 10;
-
-/**
  * One defect, as the HUD shows it.
  *
  * Recorded at the moment a verdict comes back verified:"no" - so it is a thing that actually failed
@@ -160,10 +152,6 @@ export const AccountStateSchema = z.object({
   host: z.string().optional(),
 });
 export type AccountState = z.infer<typeof AccountStateSchema>;
-
-/** The grant credits came from: sign-up, the card-started trial, or a paid plan. */
-export const CreditKind = { FREE: 'free', TRIAL: 'trial', PAID: 'paid' } as const;
-export type CreditKind = (typeof CreditKind)[keyof typeof CreditKind];
 
 /**
  * What the platform says about autonomous driving for this project.

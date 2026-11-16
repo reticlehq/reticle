@@ -170,6 +170,31 @@ describe('a step that could not be judged', () => {
     ]);
     expect(grade.verified).toBe(Verified.NO);
   });
+
+  // #2204: the sentence said "a step", so the agent did not know which step to change.
+  it('names the step by its number and its action', () => {
+    const grade = gradeSequence([
+      { action: 'fill', declared: true, held: true },
+      { action: 'click', declared: true, held: false, undecided: 'the page did not answer' },
+      { action: 'click', declared: true, held: true },
+    ]);
+    expect(grade.reason).toBe(VerifiedReason.INCONCLUSIVE);
+    expect(grade.because).toBe('step 2 (click) could not be judged: the page did not answer');
+  });
+
+  it('names the step by its number alone when the step has no action', () => {
+    const grade = gradeSequence([{ declared: true, held: false, undecided: 'tab hidden' }]);
+    expect(grade.because).toBe('step 1 could not be judged: tab hidden');
+  });
+
+  it('names the first step that could not be judged', () => {
+    const grade = gradeSequence([
+      { action: 'fill', declared: true, held: false, undecided: 'target matched no element' },
+      { action: 'click', declared: true, held: false, undecided: 'tab hidden' },
+    ]);
+    expect(grade.because).toContain('step 1 (fill)');
+    expect(grade.because).not.toContain('step 2');
+  });
 });
 
 /*

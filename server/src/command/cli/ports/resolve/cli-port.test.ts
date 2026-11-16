@@ -15,6 +15,7 @@ import {
   isLikelyDevServerPort,
   devServerPortWarning,
   diagnosePortMismatch,
+  namesWorkspaceApp,
 } from './cli-port.js';
 import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
 import { deriveProjectId } from '@reticlehq/init';
@@ -277,7 +278,9 @@ describe('the port of a workspace app, read from the monorepo root', () => {
 
   async function app(name: string, port?: number): Promise<void> {
     await writeJson(`apps/${name}/package.json`, { name, scripts: { dev: 'vite' } });
-    if (port !== undefined) await writeJson(`apps/${name}/.reticle.json`, { port });
+    if (port !== undefined) {
+      await writeJson(`apps/${name}/.reticle.json`, { port });
+    }
   }
 
   it('uses the one wired app below the root', async () => {
@@ -513,11 +516,15 @@ describe('Scenario matrix — port isolation per project', () => {
  */
 describe('isLikelyDevServerPort', () => {
   it('recognises the ports frameworks actually serve on', () => {
-    for (const p of [3000, 5173, 4321, 8080]) expect(isLikelyDevServerPort(p)).toBe(true);
+    for (const p of [3000, 5173, 4321, 8080]) {
+      expect(isLikelyDevServerPort(p)).toBe(true);
+    }
   });
 
   it('leaves Reticle bridge ports alone, including the multi-app range people are told to use', () => {
-    for (const p of [4400, 4460, 4461, 4477]) expect(isLikelyDevServerPort(p)).toBe(false);
+    for (const p of [4400, 4460, 4461, 4477]) {
+      expect(isLikelyDevServerPort(p)).toBe(false);
+    }
   });
 
   it('the warning names the port, the field, and the correct default', () => {
@@ -623,7 +630,9 @@ describe('the scanned dev-server ports cover what people actually run', () => {
   // The set does double duty: it also decides whether a `.reticle.json` BRIDGE port looks like a dev
   // server. Widening it must not start warning about the multi-app bridge range people are told to use.
   it('still leaves the bridge range alone after widening', () => {
-    for (const p of [4400, 4460, 4461, 4477]) expect(isLikelyDevServerPort(p)).toBe(false);
+    for (const p of [4400, 4460, 4461, 4477]) {
+      expect(isLikelyDevServerPort(p)).toBe(false);
+    }
   });
 });
 
@@ -660,5 +669,47 @@ describe('a git worktree with no .reticle.json of its own', () => {
   it('keeps its own .reticle.json when it has one', async () => {
     await writeFile(join(dir, 'wt', '.reticle.json'), JSON.stringify({ projectId: 'own-9f9f' }));
     expect(readProjectId(join(dir, 'wt'))).toBe('own-9f9f');
+  });
+});
+
+/**
+ * A daemon inside the project may be adopted only when the root config does not point at one app.
+ * A root that names app A must not attach the agent to app B: that checks the wrong app.
+ */
+describe('namesWorkspaceApp', () => {
+  let dir: string;
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'reticle-names-'));
+  });
+  afterEach(async () => {
+    await removeTempDir(dir);
+  });
+  async function writeJson(path: string, value: unknown): Promise<void> {
+    await mkdir(join(dir, path, '..'), { recursive: true });
+    await writeFile(join(dir, path), JSON.stringify(value), 'utf8');
+  }
+  async function wiredApp(name: string): Promise<void> {
+    await writeJson(`apps/${name}/package.json`, { name, scripts: { dev: 'vite' } });
+    await writeJson(`apps/${name}/.reticle.json`, { projectId: `${name}-id`, port: 4417 });
+  }
+  async function workspace(rootId: string | undefined): Promise<void> {
+    await writeJson('package.json', { name: 'repo', workspaces: ['apps/*'] });
+    await wiredApp('web');
+    await wiredApp('admin');
+    if (rootId !== undefined) {
+      await writeJson('.reticle.json', { projectId: rootId, port: 4417 });
+    }
+  }
+
+  it('is true when the root config carries the id of one workspace app', async () => {
+    await workspace('web-id');
+    expect(namesWorkspaceApp(dir)).toBe(true);
+  });
+
+  it('is false for a root id that no app carries, or no root config', async () => {
+    await workspace('stale-id');
+    expect(namesWorkspaceApp(dir)).toBe(false);
+    await rm(join(dir, '.reticle.json'));
+    expect(namesWorkspaceApp(dir)).toBe(false);
   });
 });

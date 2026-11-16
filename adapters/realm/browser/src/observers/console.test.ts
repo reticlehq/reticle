@@ -254,3 +254,88 @@ describe('CSP violations reach the console channel', () => {
     expect(events.filter((e) => e.type === EventType.CONSOLE_ERROR)).toHaveLength(0);
   });
 });
+
+/**
+ * Reported from the field: Reticle reported `NEXT_REDIRECT` as an uncaught error after a Next.js
+ * server action that redirects. Next.js's own `unhandledrejection` listener calls `preventDefault()`
+ * and navigates, so the browser logs nothing. The observer recorded the rejection before that
+ * listener ran, and the agent changed correct code to clear a console error nobody could see.
+ */
+describe('a promise rejection the page handles', () => {
+  let teardown: Teardown | undefined;
+  afterEach(() => {
+    teardown?.();
+    teardown = undefined;
+  });
+
+  /** jsdom has no PromiseRejectionEvent: the same event type, cancelable, with a `reason`. */
+  function rejection(reason: unknown): Event {
+    const event = new Event('unhandledrejection', { cancelable: true });
+    Object.defineProperty(event, 'reason', { value: reason });
+    return event;
+  }
+  const afterDispatch = (): Promise<void> => new Promise((resolve) => setTimeout(resolve, 0));
+  const uncaught = (events: Emitted[]): Emitted[] =>
+    events.filter((e) => e.type === EventType.ERROR_UNCAUGHT);
+
+  /** Next.js marks its control-flow throws with a `digest`, as `redirect()` and `notFound()` do. */
+  function nextError(digest: string): Error {
+    return Object.assign(new Error(digest.split(';')[0]), { digest });
+  }
+  async function handledBy(reason: unknown): Promise<Emitted[]> {
+    const { emit, events } = collect();
+    teardown = installConsole(emit);
+    const handle = (e: Event): void => e.preventDefault();
+    window.addEventListener('unhandledrejection', handle);
+    window.dispatchEvent(rejection(reason));
+    window.removeEventListener('unhandledrejection', handle);
+    await afterDispatch();
+    return uncaught(events);
+  }
+
+  it('reports nothing for a Next.js redirect or not-found the page handled', async () => {
+    expect(await handledBy(nextError('NEXT_REDIRECT;replace;/login;307;'))).toEqual([]);
+    teardown?.();
+    expect(await handledBy(nextError('NEXT_HTTP_ERROR_FALLBACK;404'))).toEqual([]);
+    teardown?.();
+    expect(await handledBy(nextError('NEXT_NOT_FOUND'))).toEqual([]);
+  });
+
+  /**
+   * A page or library can cancel EVERY rejection to keep the console clean. Skipping all of them
+   * would hide a real failure, and a clean-console check would pass on a broken page: a false green.
+   * Only a framework's own control-flow throw is skipped.
+   */
+  it('still reports a real failure the page cancelled', async () => {
+    const reported = await handledBy(new Error('payment failed'));
+    expect(reported).toHaveLength(1);
+    expect(reported[0]?.data['message']).toBe('payment failed');
+  });
+
+  it('still reports a Next.js control-flow throw that nobody handled', async () => {
+    const { emit, events } = collect();
+    teardown = installConsole(emit);
+    window.dispatchEvent(rejection(nextError('NEXT_REDIRECT;push;/;307;')));
+    await afterDispatch();
+    expect(uncaught(events)).toHaveLength(1);
+  });
+
+  it('still reports a rejection nobody handles', async () => {
+    const { emit, events } = collect();
+    teardown = installConsole(emit);
+    window.dispatchEvent(rejection(new Error('boom')));
+    await afterDispatch();
+    expect(uncaught(events)).toHaveLength(1);
+    expect(uncaught(events)[0]?.data['message']).toBe('boom');
+    expect(uncaught(events)[0]?.data['kind']).toBe('unhandledrejection');
+  });
+
+  it('reports nothing after teardown for a rejection dispatched before it', async () => {
+    const { emit, events } = collect();
+    const stop = installConsole(emit);
+    window.dispatchEvent(rejection(new Error('late')));
+    stop();
+    await afterDispatch();
+    expect(uncaught(events)).toEqual([]);
+  });
+});

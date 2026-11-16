@@ -9,7 +9,7 @@
  * Served from `@reticlehq/core/hud` only: from the root entry it rode into every page's first load.
  */
 
-import { CreditKind } from './impact.js';
+import { CreditKind } from './impact-constants.js';
 
 /** The trial a card starts. Not on the wire; the platform's own sentence names it the same. */
 export const TRIAL_DAYS = 14;

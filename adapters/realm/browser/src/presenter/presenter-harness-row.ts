@@ -7,12 +7,12 @@
  * the tab that asked.
  */
 import {
-  CreditKind,
   type AccountState,
   type HarnessConfig,
   type HarnessDrive,
   type LastDrive,
 } from '@reticlehq/core';
+import { CreditKind } from '@reticlehq/core/page';
 import {
   SIGN_UP_PITCH,
   creditsSpent,

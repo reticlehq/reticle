@@ -14,7 +14,7 @@ import {
   toolAnnotations,
 } from '@/surface/tools/tool-surface.js';
 import { ReticleTool } from '@reticlehq/core';
-import { sharedParamShort } from './shared-params.js';
+import { refusedKeyRedirect, sharedParamShort } from './shared-params.js';
 import { buildDynamicTools, descriptionOf } from '@/surface/tools/dynamic-tools.js';
 import { runTool } from '@/surface/tools/invoke-tool.js';
 import { sessionEnvelopeShape, newSnapshotCache, type ToolCall } from '@/surface/tools/tool-kit.js';
@@ -492,6 +492,7 @@ export function installFriendlyArgErrors(
         ErrorCode.InvalidParams,
         `Unknown ${1 === unknown.length ? 'parameter' : 'parameters'} for ${toolName}: ${unknown.join(', ')}. ` +
           `They were NOT applied — a result computed without them would look like an answer. ` +
+          refusedKeyRedirect(toolName, unknown) +
           (0 === declared.length ? '' : `${toolName} declares: ${declared}. `) +
           (example === undefined
             ? `Call reticle_tools { names: ["${toolName}"] } for its parameters.`

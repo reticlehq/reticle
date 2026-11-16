@@ -1,9 +1,4 @@
 import {
-  ALTERNATIVE_TESTID_ATTRS,
-  DEFAULT_TESTID_ATTR,
-  ElementState,
-  QueryBy,
-  REDACTED_VALUE,
   type ElementDescriptor,
   type ElementQuery,
   type MatchResult,
@@ -11,15 +6,24 @@ import {
   type NearestTarget,
   type QueryEmptyHint,
   type QueryResult,
-  TRANSPORT_LIMITS,
 } from '@reticlehq/core';
+import {
+  ALTERNATIVE_TESTID_ATTRS,
+  DEFAULT_TESTID_ATTR,
+  ElementState,
+  QueryBy,
+  REDACTED_VALUE,
+  TRANSPORT_LIMITS,
+} from '@reticlehq/core/page';
 import { isElement, isFrame } from './realm.js';
 import { capturedRootOf } from './shadow-registry.js';
 import { getAccessibleName, getRole, describe, getStates } from './a11y.js';
 import {
+  intersectsViewport,
   isHiddenByAriaOnly,
   isHiddenSubtree,
   isInViewport,
+  isPainted,
   isRenderedOutsideAriaHidden,
   isVisible,
   isNonRendered,
@@ -29,7 +33,7 @@ import { hitTestOccluder } from './occlusion.js';
 import { isSensitiveKey } from '@/security/serialization.js';
 import { declaredTestids } from '@/registry/capabilities.js';
 import { refs } from './addressing/refs.js';
-import { firstIn, firstListIn, hintRoots, resolveContainers } from './scope-roots.js';
+import { firstIn, firstListIn, hintRoots, pageContent, resolveContainers } from './scope-roots.js';
 import { getTestIdAttr, readTestId, testIdSelector } from './addressing/testid-attr.js';
 import { stableSelectorFor } from './stable-selector.js';
 import {
@@ -70,7 +74,7 @@ function visibleTextOf(el: Element, memo: Map<Element, boolean>): string {
   const visible = isVisible(el, memo);
   const apart = laysOutApart(el);
   let text = '';
-  for (const node of Array.from(el.childNodes)) {
+  for (const node of el.childNodes) {
     if (Node.TEXT_NODE === node.nodeType && visible) {
       text += node.textContent ?? '';
     } else if (isElement(node)) {
@@ -232,6 +236,11 @@ function findCandidates(query: ElementQuery): {
       if (seen.has(el)) {
         continue;
       } // reachable from both host and root - count once
+      // The whole-document root reaches `<head>` too; its payloads (title, style) are not page
+      // content an agent can read or drive (#1781).
+      if (!pageContent(el, query.scope)) {
+        continue;
+      }
       // Reticle's OWN UI is not part of the app under test. `snapshot` has always excluded it; query
       // did not, so the presenter panel and the annotator answered `by: role` like app controls -
       // on a production-sized dashboard, 7 of the 40 buttons an agent could see were ours
@@ -313,6 +322,9 @@ function inState(el: Element, state: ElementState, memo?: Map<Element, boolean>)
   if (ElementState.HIDDEN === state) {
     return !isVisible(el, memo);
   }
+  if (ElementState.PAINTED === state) {
+    return isPainted(el, memo);
+  }
   return getStates(el, isVisible(el, memo)).includes(state);
 }
 
@@ -380,13 +392,16 @@ export function matchQuery(
   // from unfiltered single-match and snapshot-wide describes to avoid bloat (#398).
   const stampViewport = described.length > 1 || ElementState.IN_VIEWPORT === state;
   const descriptors: ElementDescriptor[] = described.map((el) => {
-    let base = describe(el, visMemo, fullText);
+    const base = describe(el, visMemo, fullText);
     if (
       stampViewport &&
       isInViewport(el, visMemo) &&
       !base.states.includes(ElementState.IN_VIEWPORT)
     ) {
-      base = { ...base, states: [...base.states, ElementState.IN_VIEWPORT] };
+      base.states.push(ElementState.IN_VIEWPORT);
+    }
+    if (ElementState.PAINTED === state) {
+      base.states.push(ElementState.PAINTED);
     }
     if (attrs === undefined || 0 === attrs.length) {
       return base;
@@ -413,45 +428,44 @@ export function matchQuery(
   };
 }
 
-/** Resolve `aria-labelledby` (one or more element IDs) to the referenced elements' text - a bare ID is
- * not a human-readable name. Undefined when unset or nothing resolves. */
 function resolveLabelledBy(el: Element): string | undefined {
   const ids = el.getAttribute('aria-labelledby');
   if (null === ids) {
     return undefined;
   }
-  const text = ids
-    .split(/\s+/)
-    .map((id) =>
-      id.length > 0 ? (el.ownerDocument.getElementById(id)?.textContent?.trim() ?? '') : '',
-    )
-    .filter((t) => t.length > 0)
-    .join(' ');
+  let text = '';
+  for (const id of ids.split(/\s+/)) {
+    const t = el.ownerDocument.getElementById(id)?.textContent?.trim();
+    if (t !== undefined && t.length > 0) {
+      text = text.length > 0 ? `${text} ${t}` : t;
+    }
+  }
   return text.length > 0 ? text : undefined;
 }
+
+const CONTAINER_ROLES = [
+  'list',
+  'listbox',
+  'grid',
+  'table',
+  'tree',
+  'treegrid',
+  'dialog',
+  'alertdialog',
+  'navigation',
+  'main',
+  'banner',
+  'form',
+  'search',
+  'menu',
+  'menubar',
+  'tablist',
+] as const;
 
 /** Structural clusters of the page - the successor to the raw testid list in zero-match hints. */
 function buildPresentRegions(query: ElementQuery): PresentRegion[] {
   const roots = hintRoots(query.scope);
   const regions: PresentRegion[] = [];
-  const CONTAINER_ROLES = [
-    'list',
-    'listbox',
-    'grid',
-    'table',
-    'tree',
-    'treegrid',
-    'dialog',
-    'alertdialog',
-    'navigation',
-    'main',
-    'banner',
-    'form',
-    'search',
-    'menu',
-    'menubar',
-    'tablist',
-  ] as const;
   for (const role of CONTAINER_ROLES) {
     const containers = roots.flatMap((root) => queryByRoleAndName(root, role, undefined));
     for (const el of containers) {
@@ -467,7 +481,7 @@ function buildPresentRegions(query: ElementQuery): PresentRegion[] {
         undefined;
       const children = el.querySelectorAll('[role]');
       const sample: string[] = [];
-      for (const child of Array.from(children)) {
+      for (const child of children) {
         if (sample.length >= 3) {
           break;
         }
@@ -526,6 +540,9 @@ function splitTextOwner(
     if (isIgnored(el)) {
       continue;
     } // never point an agent at Reticle's own UI
+    if (!pageContent(el, query.scope)) {
+      continue;
+    } // <title> text must not anchor a split match
     // The query's own case rule: a case-exact check that missed only on case is not "split".
     if (!textMatches(visibleTextOf(el, memo), query, wanted)) {
       continue;
@@ -543,7 +560,7 @@ function splitTextOwner(
 }
 
 /** The text as the page shows it, when it differs from `wanted` only by case. */
-function caseOnlyMatch(container: HTMLElement, wanted: string): string | undefined {
+function caseOnlyMatch(container: HTMLElement, wanted: string, scope?: string): string | undefined {
   const target = comparableText(wanted).toLowerCase();
   if (0 === target.length) {
     return undefined;
@@ -553,6 +570,9 @@ function caseOnlyMatch(container: HTMLElement, wanted: string): string | undefin
     if (isIgnored(el)) {
       continue;
     }
+    if (!pageContent(el, scope)) {
+      continue;
+    } // <title> text is not a page-shown casing
     const text = normaliseVisibleText(visibleTextOf(el, memo));
     const at = foldTypography(text).toLowerCase().indexOf(target);
     if (-1 !== at) {
@@ -821,23 +841,21 @@ function buildEmptyHint(
   diagnose: boolean = true,
 ): QueryEmptyHint {
   const roots = hintRoots(query.scope);
-  const all = roots.flatMap((root) => Array.from(root.querySelectorAll(testIdSelector())));
   const present: string[] = [];
-  // Counted past the cap rather than stopping at it. The list is capped so the hint stays a hint;
-  // the COUNT is what stops a capped list being read as the whole page. `all` is already in hand,
-  // so the walk costs nothing the query had not already paid for.
   const seen = new Set<string>();
-  for (const el of all) {
-    if (isIgnored(el)) {
-      continue;
-    } // the "what IS here" hint must not advertise Reticle's own UI either
-    const id = readTestId(el);
-    if (null === id || 0 === id.length || seen.has(id)) {
-      continue;
-    }
-    seen.add(id);
-    if (present.length < MAX_PRESENT_TESTIDS) {
-      present.push(id);
+  const sel = testIdSelector();
+  for (const root of roots) {
+    for (const el of root.querySelectorAll(sel)) {
+      if (isIgnored(el) || !pageContent(el, query.scope)) {
+        continue;
+      }
+      const id = readTestId(el);
+      if (null !== id && id.length > 0 && !seen.has(id)) {
+        seen.add(id);
+        if (present.length < MAX_PRESENT_TESTIDS) {
+          present.push(id);
+        }
+      }
     }
   }
   // DECLARED, not observed: see declaredTestids. Every present testid is also an observed one, so
@@ -864,7 +882,7 @@ function buildEmptyHint(
       const selector = stableSelectorFor(owner);
       hint.splitText = selector === undefined ? described : { ...described, selector };
     } else if (true === query.matchCase) {
-      const shown = firstIn(roots, (root) => caseOnlyMatch(root, wanted));
+      const shown = firstIn(roots, (root) => caseOnlyMatch(root, wanted, query.scope));
       if (shown !== undefined) {
         hint.caseMiss = shown;
       }
@@ -883,6 +901,22 @@ function buildEmptyHint(
     if (roots.some((root) => textInAriaHidden(root, wanted))) {
       hint.ariaHiddenMatch = true;
     }
+  }
+  // An element query in state: 'visible' or state: 'inViewport' that missed because the matching
+  // element is painted on screen but excluded from the accessible tree by aria-hidden (#1648).
+  // For state: 'inViewport', only set the hint when the candidate is actually in the viewport —
+  // an element that is both aria-hidden AND scrolled out of view failed for a different reason.
+  if (
+    diagnose &&
+    (ElementState.VISIBLE === state || ElementState.IN_VIEWPORT === state) &&
+    elementsMatching(query).some(
+      (el) =>
+        isHiddenByAriaOnly(el) &&
+        isPainted(el) &&
+        (ElementState.IN_VIEWPORT !== state || intersectsViewport(el)),
+    )
+  ) {
+    hint.ariaHiddenState = true;
   }
   const near = firstListIn(roots, (root) => nameNearMisses(root, query));
   if (near.length > 0) {
@@ -918,13 +952,10 @@ export function runQuery(query: ElementQuery, limit?: number): QueryResult {
     ...(true === result.scopeMissing ? { scopeMissing: true as const } : {}),
     ...(result.scopeMatches === undefined ? {} : { scopeMatches: result.scopeMatches }),
   };
-  if (0 === result.elements.length) {
-    return {
-      elements: result.elements,
-      count: result.count,
-      hint: result.hint ?? buildEmptyHint(query),
-      ...scopeFields,
-    };
-  }
-  return { elements: result.elements, count: result.count, ...scopeFields };
+  return {
+    elements: result.elements,
+    count: result.count,
+    ...(0 === result.elements.length ? { hint: result.hint ?? buildEmptyHint(query) } : {}),
+    ...scopeFields,
+  };
 }

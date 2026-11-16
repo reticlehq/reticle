@@ -75,6 +75,23 @@ const VERIFY_DETAIL = `Drives the URL and verifies the saved flows. Exit 0 means
                                 action --expect cannot do, use the HTTP MCP transport:
                                 https://docs.reticle.sh/http-transport.md`;
 
+const GRADE_DETAIL = `Grades a finished run of an app from snapshots of its stored data. It needs no
+daemon and no browser.
+
+  grade snapshot --state <file> --out <file> [--url <url>]
+      read the declared state sources (and the page the run ended on) into a snapshot
+  grade judge --reference <file> --again <file> --candidate <file>
+              [--expect <file>] [--answer <text>] [--json]
+      compare the candidate snapshot with two snapshots of the correct run. A line that
+      differs between the two correct runs is ignored. --expect declares a source whose
+      rows are the correct answer, read now. Exit 0 = pass, 1 = fail, 2 = unverified
+  grade tables --list <command> --rows <template> [--container <name>] [--skip <prefix,...>]
+               --out <file>
+      write a declaration with one source for each table; {table} in the template is
+      the table name; --skip leaves out the tables whose name starts with a prefix
+  grade suggest --state <file> --reference <file> --again <file> --out <file>
+      keep only the sources that read the same on two correct runs`;
+
 const COMPARE_DETAIL = `Drives two running builds of one app the same way, for example main and a pull request
 preview, and reports each difference in what a person sees and in the requests and console
 errors the app made. Install nothing in the app.
@@ -146,6 +163,13 @@ const COMMANDS: readonly CommandDoc[] = [
     summary: 'Drive two builds the same way and list what users would see change',
     group: HelpGroup.CHECK,
     detail: COMPARE_DETAIL,
+  },
+  {
+    name: 'grade',
+    synopsis: 'grade <snapshot|judge|tables|suggest> [flags]',
+    summary: "Grade a finished run from snapshots of the app's stored data",
+    group: HelpGroup.MORE,
+    detail: GRADE_DETAIL,
   },
   {
     name: 'gate',

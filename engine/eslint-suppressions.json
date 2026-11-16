@@ -301,11 +301,6 @@
       "count": 8
     }
   },
-  "src/window/event-filters.ts": {
-    "curly": {
-      "count": 19
-    }
-  },
   "src/window/json-salvage.ts": {
     "curly": {
       "count": 6

@@ -1,5 +1,6 @@
 import { execFile } from 'node:child_process';
 import { NodePlatform } from '@/machine/platform.js';
+import { PLUGIN_SERVER_DIR } from '@/telemetry/agent-client.js';
 import { existsSync } from 'node:fs';
 import { platform } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -72,6 +73,11 @@ function detectExecutionKind(): ExecutionKind {
  */
 export function classifyExecutionKind(script: string): ExecutionKind {
   if (script.includes('/_npx/') || script.includes('\\_npx\\')) return ExecutionKind.NPX;
+  // The Claude Code plugin's copy sits in a `node_modules`, but it is not the project's. It is pinned
+  // to the plugin version, so treat it as npx: a restart picks the version, and nothing is installed.
+  if (script.includes(`/${PLUGIN_SERVER_DIR}/`) || script.includes(`\\${PLUGIN_SERVER_DIR}\\`)) {
+    return ExecutionKind.NPX;
+  }
   const globalSignals = [
     '/lib/node_modules/',
     '\\npm\\node_modules\\',

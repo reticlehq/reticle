@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/browser` — a click on a control that does nothing passed while the HUD was mounted.** The HUD changes its own DOM on every act. The act counted those changes as the click's effect, so `action-had-no-effect` did not fire, and `reticle_act_and_wait` gave a clean verdict for a dead button. The act now ignores changes in Reticle's own UI, the same set the DOM observer ignores. A new e2e spec checks `write-field-ignored`, `action-had-no-effect` and `pagination-not-fetched` in both directions in a real browser. Closes [#2141](https://github.com/reticlehq/reticle/issues/2141).

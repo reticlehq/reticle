@@ -26,14 +26,21 @@ import {
   reportWakeRefused,
 } from '@/surface/mcp/mcp-proxy.js';
 import { installProxyResilience } from '@/command/daemon/daemon-resilience.js';
-import { readProjectId, readProjectPort } from './ports/resolve/cli-port.js';
+import {
+  findProjectConfigDir,
+  namesWorkspaceApp,
+  readProjectId,
+  readProjectPort,
+} from './ports/resolve/cli-port.js';
 import {
   resolveMcpPort,
+  daemonInsideProject,
   daemonProjectAt,
+  readDaemonRegistry,
   relocationReason,
 } from '@/command/daemon/daemon-resolve.js';
 import { daemonSpawnArgs } from './daemon-start-options.js';
-import { WakeAction, decideWake } from '@/command/daemon/wake-decision.js';
+import { WakeAction, decideWake, otherProjectRefusal } from '@/command/daemon/wake-decision.js';
 import { runKill, stopWedgedDaemon } from './cli-kill.js';
 import { pickDaemonPortToBind } from '@/command/daemon/binding/free-port.js';
 import { fetchStatus, summarizeStatus } from '@/command/daemon/binding/daemon-status-probe.js';
@@ -135,6 +142,11 @@ export async function handleMcp(opts: {
   }
 
   const projectId = readProjectId(process.cwd());
+  const projectDir = findProjectConfigDir(process.cwd());
+  // A daemon below this folder runs in a package of this workspace, so it is this project's to use.
+  // Not when the root config points at one app: a daemon of another app is then the wrong app.
+  const adoptsBelow =
+    projectDir === undefined || namesWorkspaceApp(projectDir) ? undefined : projectDir;
   const resolvePort = (): Promise<number> =>
     resolveMcpPort(
       opts.port,
@@ -147,6 +159,7 @@ export async function handleMcp(opts: {
         pickPort: (p: number): Promise<number> => pickDaemonPortToBind(p),
       },
       readProjectPort(process.cwd()),
+      adoptsBelow,
     );
   const noteRelocated = (to: number): void => {
     log('reticle_mcp_port_relocated', {
@@ -212,7 +225,12 @@ export async function handleMcp(opts: {
     // straight onto it. The agent then drives, asserts and reports a verdict about a DIFFERENT
     // APPLICATION. That is worse than the disconnect it was reintroduced under the cover of, because
     // a disconnect is visible and this is a false green wearing a valid session.
-    const wake = decideWake(presence, daemonProjectAt(port, reticleStateHome()), projectId);
+    const wake = decideWake(
+      presence,
+      daemonProjectAt(port, reticleStateHome()),
+      projectId,
+      daemonInsideProject(port, reticleStateHome(), adoptsBelow),
+    );
     if (WakeAction.USE === wake) {
       // A proxy from a newer release stops an older daemon that nobody is using, and starts its own.
       // Otherwise every tool refused on the skew until a person ran `reticle restart`.
@@ -245,8 +263,13 @@ export async function handleMcp(opts: {
       );
       throw new Error(
         PortPresence.DAEMON === presence
-          ? `the daemon on port ${String(port)} belongs to a different project, so this one will ` +
-              'not adopt it. Stop it, or start this project on its own port.'
+          ? otherProjectRefusal({
+              port,
+              callerProjectId: projectId,
+              callerConfigDir: projectDir,
+              daemonProjectId: daemonProjectAt(port, reticleStateHome()),
+              daemonCwd: readDaemonRegistry(reticleStateHome()).find((e) => e.port === port)?.cwd,
+            })
           : describePortState(presence, port),
       );
     }

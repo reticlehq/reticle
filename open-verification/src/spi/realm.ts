@@ -7,7 +7,7 @@ import {
   RefusalReason,
   closedCleanly as windowClosedCleanly,
 } from '@/vocabulary/realm-surface.js';
-import { type ChannelId } from '@/vocabulary/channel.js';
+import { type ChannelId } from '@/vocabulary/channel-id.js';
 import { Witness } from './witness.js';
 import type { FixtureRef } from '@/vocabulary/fixture.js';
 import type { Reversal } from '@/vocabulary/mutation.js';

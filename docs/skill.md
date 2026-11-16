@@ -3,7 +3,7 @@ name: reticle-docs
 description: Install, instrument and verify this running web app from the inside (DOM, network, routing, console and framework state) instead of screenshots or guessing. Drives one real flow end to end and returns a verdict with the file:line to fix. Use when the user asks to set up or install Reticle, when a user-facing change needs proving before you call it done, when a test passes but the UI is broken, or when the user types /reticle.
 license: Apache-2.0
 metadata:
-  version: 3.9.0
+  version: 3.10.6
   homepage: https://docs.reticle.sh
   repository: https://github.com/reticlehq/reticle
   internal: true
@@ -106,7 +106,7 @@ Every `until`, `predicate` and `expect` is `{ kind, ...fields }`; unknown fields
 
 | kind | fields |
 | --- | --- |
-| `element` | `query: { testid \| role+name \| text \| label \| placeholder \| alt \| component, scope? }`, `state?`: `visible` `hidden` `enabled` `disabled` `checked` `expanded` `pressed` `focused` `present` `inViewport` `receivesPointer`, `absent?` |
+| `element` | `query: { testid \| role+name \| text \| label \| placeholder \| alt \| component, scope? }`, `state?`: `visible` `hidden` `enabled` `disabled` `checked` `expanded` `pressed` `focused` `present` `inViewport` `receivesPointer` `painted`, `absent?` |
 | `text` | `contains`, `scope?`, `visible?`, `absent?`, `ignoreCase?`, `satisfies?` |
 | `net` | `method`, `urlContains`, `status`, `ok`, `count` (exact; omit = ≥1; 0 = never), `bodyContains`, `bodyMatches`, `requestBodyMatches`, `repeatable` |
 | `route` | `pathname` or `contains` |

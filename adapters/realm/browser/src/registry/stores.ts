@@ -1,6 +1,7 @@
-import { RETICLE_RENDERS_STORE } from '@reticlehq/core';
+import { RETICLE_RENDERS_STORE } from '@reticlehq/core/page';
 import { nativeWarn } from '@/timers/console/native-console.js';
 import { sanitizeWithReport, type TruncationReport } from '@/security/serialization.js';
+import { errorText } from '@/util/error-text.js';
 
 /** Store registry — lets the agent pull live framework/store state on demand. */
 export type StoreGetter = () => unknown;
@@ -44,8 +45,12 @@ function isStoreLike(source: StoreGetter | StoreLike): source is StoreLike {
   // Zustand's `create` returns a CALLABLE hook that also carries getState/subscribe, so a store can be
   // typeof 'function' as well as 'object'. What distinguishes it from a plain getter is those two members
   // — never the typeof. (Checking only for 'object' left every Zustand app on pull-only reads.)
-  if (null === source) return false;
-  if (typeof source !== 'object' && typeof source !== 'function') return false;
+  if (null === source) {
+    return false;
+  }
+  if (typeof source !== 'object' && typeof source !== 'function') {
+    return false;
+  }
   const candidate = source as Partial<StoreLike>;
   return 'function' === typeof candidate.getState && 'function' === typeof candidate.subscribe;
 }
@@ -118,7 +123,9 @@ export function subscribableStores(): Array<[string, StoreGetter, StoreSubscribe
   const out: Array<[string, StoreGetter, StoreSubscribe]> = [];
   for (const [name, subscribe] of subscribers) {
     const getter = stores.get(name);
-    if (getter !== undefined) out.push([name, getter, subscribe]);
+    if (getter !== undefined) {
+      out.push([name, getter, subscribe]);
+    }
   }
   return out;
 }
@@ -131,11 +138,13 @@ export function subscribableStores(): Array<[string, StoreGetter, StoreSubscribe
 export function readStoresRaw(only?: string): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [name, getter] of stores) {
-    if (only !== undefined && name !== only) continue;
+    if (only !== undefined && name !== only) {
+      continue;
+    }
     try {
       out[name] = getter();
     } catch (error) {
-      out[name] = { __error: error instanceof Error ? error.message : String(error) };
+      out[name] = { __error: errorText(error) };
     }
   }
   return out;
@@ -164,7 +173,9 @@ export function readStoresWithTruncation(only?: string): {
   for (const [name, value] of Object.entries(readStoresRaw(only))) {
     const result = sanitizeWithReport(value);
     stores[name] = result.value;
-    if (result.truncation !== undefined) truncation[name] = result.truncation;
+    if (result.truncation !== undefined) {
+      truncation[name] = result.truncation;
+    }
   }
   return Object.keys(truncation).length > 0 ? { stores, truncation } : { stores };
 }
@@ -180,7 +191,9 @@ const warnedSilent = new Set<string>();
 const RETICLE_OWNED_STORES = new Set<string>([RETICLE_RENDERS_STORE]);
 
 function warnSilentStoreOnce(name: string): void {
-  if (RETICLE_OWNED_STORES.has(name) || warnedSilent.has(name)) return;
+  if (RETICLE_OWNED_STORES.has(name) || warnedSilent.has(name)) {
+    return;
+  }
   warnedSilent.add(name);
   nativeWarn(
     `[reticle] store "${name}" was registered without a subscribe function. It can be READ, but its ` +
@@ -212,15 +225,20 @@ export function markAdapterSource(store: object, source: object): void {
 }
 
 function claimSource(name: string, source: StoreGetter | StoreLike): void {
-  if (null === source || ('object' !== typeof source && 'function' !== typeof source)) return;
+  if (null === source || ('object' !== typeof source && 'function' !== typeof source)) {
+    return;
+  }
   sourceOwners.set(source, name);
   const wrapped = adapterSources.get(source);
-  if (wrapped !== undefined) sourceOwners.set(wrapped, name);
+  if (wrapped !== undefined) {
+    sourceOwners.set(wrapped, name);
+  }
 }
 
 /** The name this store source is registered under, or undefined if nothing has claimed it. */
 export function sourceOwner(value: unknown): string | undefined {
-  if (null === value || ('object' !== typeof value && 'function' !== typeof value))
+  if (null === value || ('object' !== typeof value && 'function' !== typeof value)) {
     return undefined;
+  }
   return sourceOwners.get(value);
 }

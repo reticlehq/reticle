@@ -12,8 +12,9 @@
  * Privacy is decided HERE, before a pixel exists: the image leaves the machine with its run. A
  * password field, and any field whose name says it holds a secret, is drawn as a row of dots.
  */
-import { isSensitiveKey, STEP_SCREENSHOT } from '@reticlehq/core';
+import { isSensitiveKey, STEP_SCREENSHOT } from '@reticlehq/core/page';
 import { RETICLE_OVERLAY } from './dom-ignore.js';
+import { errorText } from '@/util/error-text.js';
 
 /** What a masked field shows instead of its value. */
 export const MASK = '••••••••';
@@ -40,7 +41,9 @@ export type RenderResult =
 
 /** A field whose value is a secret: by type, or by what its name, id or autocomplete says. */
 function isSecretField(el: HTMLInputElement | HTMLTextAreaElement): boolean {
-  if (el instanceof HTMLInputElement && 'password' === el.type) return true;
+  if (el instanceof HTMLInputElement && 'password' === el.type) {
+    return true;
+  }
   return [el.name, el.id, el.getAttribute('autocomplete') ?? ''].some(
     (key) => key.length > 0 && isSensitiveKey(key),
   );
@@ -55,17 +58,73 @@ function isSecretField(el: HTMLInputElement | HTMLTextAreaElement): boolean {
 function carryState(from: Element, to: Element): void {
   if (from instanceof HTMLInputElement || from instanceof HTMLTextAreaElement) {
     const value = isSecretField(from) && from.value.length > 0 ? MASK : from.value;
-    if (from instanceof HTMLTextAreaElement) to.textContent = value;
-    else to.setAttribute('value', value);
+    if (from instanceof HTMLTextAreaElement) {
+      to.textContent = value;
+    } else {
+      to.setAttribute('value', value);
+    }
   }
   if (from instanceof HTMLInputElement) {
-    if (from.checked) to.setAttribute('checked', '');
-    else to.removeAttribute('checked');
+    if (from.checked) {
+      to.setAttribute('checked', '');
+    } else {
+      to.removeAttribute('checked');
+    }
   }
   if (from instanceof HTMLOptionElement) {
-    if (from.selected) to.setAttribute('selected', '');
-    else to.removeAttribute('selected');
+    if (from.selected) {
+      to.setAttribute('selected', '');
+    } else {
+      to.removeAttribute('selected');
+    }
   }
+}
+
+/** Keyframe keys that are not CSS properties. */
+const NOT_A_PROPERTY = new Set(['offset', 'easing', 'composite', 'computedOffset']);
+
+/**
+ * Write the frame the page shows now onto the clone, and stop its motion there.
+ *
+ * An SVG image starts every animation again at its first keyframe, so a row that fades in from
+ * `opacity: 0` is drawn blank. Each animated property gets its current computed value inline.
+ */
+function freezeMotion(from: Element, to: Element, animations: readonly Animation[]): void {
+  const view = from.ownerDocument.defaultView;
+  if (null === view || !(to instanceof HTMLElement || to instanceof SVGElement)) {
+    return;
+  }
+  const computed = view.getComputedStyle(from);
+  for (const animation of animations) {
+    const effect = animation.effect as KeyframeEffect | null;
+    for (const frame of effect?.getKeyframes() ?? []) {
+      for (const key of Object.keys(frame)) {
+        if (NOT_A_PROPERTY.has(key)) {
+          continue;
+        }
+        const name = key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+        to.style.setProperty(name, computed.getPropertyValue(name));
+      }
+    }
+  }
+  to.style.setProperty('animation', 'none');
+  to.style.setProperty('transition', 'none');
+}
+
+/** Every element that has an animation now, with its animations. One call, not one per element. */
+function animationsByElement(doc: Document): Map<Element, Animation[]> {
+  const byElement = new Map<Element, Animation[]>();
+  if (typeof doc.getAnimations !== 'function') {
+    return byElement;
+  }
+  for (const animation of doc.getAnimations()) {
+    const target = (animation.effect as KeyframeEffect | null)?.target ?? null;
+    if (null === target) {
+      continue;
+    }
+    byElement.set(target, [...(byElement.get(target) ?? []), animation]);
+  }
+  return byElement;
 }
 
 /** Every stylesheet the page can read, as text. A cross-origin sheet throws and is left out. */
@@ -74,7 +133,9 @@ function readableCss(doc: Document): string {
   const parts: string[] = [];
   for (const sheet of sheets) {
     try {
-      for (const rule of Array.from(sheet.cssRules)) parts.push(rule.cssText);
+      for (const rule of Array.from(sheet.cssRules)) {
+        parts.push(rule.cssText);
+      }
     } catch {
       // Cross-origin: the browser will not let the page read it, so the image goes without it.
     }
@@ -83,7 +144,7 @@ function readableCss(doc: Document): string {
 }
 
 /**
- * The document, ready to draw: live form state carried over, secrets masked, scripts and Reticle's
+ * The document, ready to draw: live form state and the current animation frame carried over, secrets masked, scripts and Reticle's
  * own UI removed, and every readable stylesheet inlined into one `<style>` (a linked sheet would not
  * load inside an SVG image).
  */
@@ -93,9 +154,16 @@ export function cloneForRender(doc: Document): HTMLElement {
   // Same tree, same order: walk both together before anything is removed from the clone.
   const live = root.querySelectorAll('*');
   const copied = clone.querySelectorAll('*');
+  const moving = animationsByElement(doc);
   live.forEach((el, i) => {
     const twin = copied[i];
-    if (twin !== undefined) carryState(el, twin);
+    if (twin !== undefined) {
+      carryState(el, twin);
+      const animations = moving.get(el);
+      if (animations !== undefined) {
+        freezeMotion(el, twin, animations);
+      }
+    }
   });
   const dropped = [RETICLE_OVERLAY, 'script', 'noscript', 'link[rel~="stylesheet"]', 'style'];
   clone.querySelectorAll(dropped.join(',')).forEach((el) => el.remove());
@@ -109,10 +177,13 @@ export function cloneForRender(doc: Document): HTMLElement {
 function backgroundOf(doc: Document): string {
   const view = doc.defaultView;
   for (const el of [doc.body, doc.documentElement]) {
-    if (null === view || null === el) continue;
+    if (null === view || null === el) {
+      continue;
+    }
     const colour = view.getComputedStyle(el).backgroundColor;
-    if (colour.length > 0 && 'transparent' !== colour && 'rgba(0, 0, 0, 0)' !== colour)
+    if (colour.length > 0 && 'transparent' !== colour && 'rgba(0, 0, 0, 0)' !== colour) {
       return colour;
+    }
   }
   return FALLBACK_BACKGROUND;
 }
@@ -139,7 +210,9 @@ function loadImage(url: string): Promise<HTMLImageElement> {
 /** Split base64 into strings the transport carries whole. */
 function chunked(base64: string): string[] {
   const out: string[] = [];
-  for (let i = 0; i < base64.length; i += CHUNK_CHARS) out.push(base64.slice(i, i + CHUNK_CHARS));
+  for (let i = 0; i < base64.length; i += CHUNK_CHARS) {
+    out.push(base64.slice(i, i + CHUNK_CHARS));
+  }
   return out;
 }
 
@@ -163,7 +236,9 @@ export async function renderPage(): Promise<RenderResult> {
       canvas.width = Math.max(1, Math.round(width * scale));
       canvas.height = Math.max(1, Math.round(height * scale));
       const ctx = canvas.getContext('2d');
-      if (null === ctx) return { ok: false, reason: 'this page has no 2D canvas to draw into' };
+      if (null === ctx) {
+        return { ok: false, reason: 'this page has no 2D canvas to draw into' };
+      }
       ctx.fillStyle = background;
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
@@ -177,6 +252,6 @@ export async function renderPage(): Promise<RenderResult> {
     }
     return { ok: false, reason: 'the rendered page was too large to send, even scaled down' };
   } catch (error) {
-    return { ok: false, reason: error instanceof Error ? error.message : String(error) };
+    return { ok: false, reason: errorText(error) };
   }
 }
