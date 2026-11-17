@@ -26,7 +26,7 @@ import {
 } from '@/command/daemon/binding/port-presence.js';
 import { describePortState } from '@/command/daemon/port-state.js';
 import { summarizeStatus } from './launch/cli-launch.js';
-import { readProjectId } from './ports/resolve/cli-port.js';
+import { readProjectId, readProjectPort } from './ports/resolve/cli-port.js';
 import { accountStatusFields } from './cloud-cli.js';
 import { localLinkOf, workspaceAppLinks } from './status/workspace-links.js';
 import { statusLines } from './status/status-lines.js';
@@ -64,15 +64,22 @@ export function splitBrainFields(
   projectId: string | undefined,
 ): { splitBrain?: string } {
   const home = reticleStateHome();
+  const configured = readProjectPort(process.cwd());
   const elsewhere = splitBrainNote(
     port,
-    daemonsServingProjectElsewhere(projectId, port, home, isAlive, (other: number) =>
-      hasProjectConnectedBefore(home, other, projectId),
+    daemonsServingProjectElsewhere(
+      projectId,
+      port,
+      home,
+      isAlive,
+      (other: number) => hasProjectConnectedBefore(home, other, projectId),
+      configured,
     ),
     { projectId, home },
   );
   const note =
-    elsewhere ?? wrongDaemonNote(port, resolveDaemonForProject(projectId, home, isAlive));
+    elsewhere ??
+    wrongDaemonNote(port, resolveDaemonForProject(projectId, home, isAlive, configured));
   return note === undefined ? {} : { splitBrain: note };
 }
 

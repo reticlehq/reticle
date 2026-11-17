@@ -77,8 +77,10 @@ export function resolveDaemonForProject(
   projectId: string | undefined,
   home: string,
   alive: (pid: number) => boolean,
+  /** `port` in this project's `.reticle.json`. It wins as it does for the page (#2341). */
+  configuredPort?: number,
 ): number | undefined {
-  return pickDaemonPort(readDaemonRegistry(home), projectId, alive) ?? undefined;
+  return pickDaemonPort(readDaemonRegistry(home), projectId, alive, configuredPort) ?? undefined;
 }
 
 /**
@@ -162,6 +164,11 @@ export function daemonProjectAt(port: number, home: string): string | undefined 
  * `hasProjectConnectedBefore` bound to the same projectId.
  *
  * Only LIVE daemons are named: a port a session used yesterday is history, not a split.
+ *
+ * A port this project used before `.reticle.json` moved it is history too (#2341). When the
+ * configured port is `myPort` and the page's own rule (core's `pickDaemonPort`, rule 1) picks it,
+ * the current app URL connects here. A live daemon on the prior port and its connection record do
+ * not change where the page dials, so they are not a split.
  */
 export function daemonsServingProjectElsewhere(
   projectId: string | undefined,
@@ -169,11 +176,20 @@ export function daemonsServingProjectElsewhere(
   home: string,
   alive: (pid: number) => boolean,
   connectedOn: (port: number) => boolean,
+  /** `port` in this project's `.reticle.json`: the port the page dials when a daemon answers there. */
+  configuredPort?: number,
 ): readonly number[] {
   if (projectId === undefined || 0 === projectId.length) {
     return [];
   }
-  return readDaemonRegistry(home)
+  const entries = readDaemonRegistry(home);
+  if (
+    configuredPort === myPort &&
+    pickDaemonPort(entries, projectId, alive, configuredPort) === myPort
+  ) {
+    return [];
+  }
+  return entries
     .filter((entry) => entry.port !== myPort && alive(entry.pid) && connectedOn(entry.port))
     .map((entry) => entry.port)
     .sort((a, b) => a - b);
