@@ -4,6 +4,14 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+## [3.10.7] — 2026-11-17
+
+### Fixed
+
+- **`@reticlehq/browser` — the in-page screenshot left out rows that had faded in.** A browser that Reticle did not launch gets a screenshot that the SDK draws itself, through an SVG image. An SVG image starts every animation again at its first keyframe, so a row that faded in from `opacity: 0` came out blank. The screenshot now draws each animated element at the frame that the page shows.
+- **`@reticlehq/server` — a replay reported a correct app as failed when a check could not be decided.** A text check passed when the flow was driven, then failed on replay with "the page's SDK did not return the whole text": the text sat in a panel with its own scroll area. The check had answered "not decided", and replay read that as a consequence that did not hold. A step whose check cannot be decided now drifts with `expect_undecided`, and the replay is `unverifiable` (`unknown`), not failed. A real failure in another step of the same run still fails it.
+- **`@reticlehq/browser` — a select inside its label could not be found by its name.** For `<label>Seats <select>…</select></label>`, Reticle named the select with the label's whole text, every option included ("Seats Select Under 20 …"). So `{ role: "combobox", name: "Seats" }` matched nothing, while a browser names it "Seats". The name now leaves out the control's own content, the same as a browser. A textarea inside its label is fixed the same way.
+
 ## [3.10.6] — 2026-11-16
 
 ### Fixed
