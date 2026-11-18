@@ -72,16 +72,42 @@ describe('installConsole', () => {
     expect(events[1]?.data['message']).toBe('debug line');
   });
 
+  it('captures a failed console.assert as CONSOLE_ERROR, as DevTools shows it', () => {
+    const { emit, events } = collect();
+    teardown = installConsole(emit);
+
+    console.assert(false, 'invariant broke', 7);
+    console.assert(undefined);
+
+    // Node's own console.assert delegates to console.warn (a browser's does not), so look only at
+    // the error channel this change adds.
+    const errors = events.filter((e) => EventType.CONSOLE_ERROR === e.type);
+    expect(errors).toHaveLength(2);
+    expect(errors[0]?.data['message']).toBe('Assertion failed: invariant broke 7');
+    expect(errors[1]?.data['message']).toBe('Assertion failed');
+  });
+
+  it('emits nothing for a console.assert that passes', () => {
+    const { emit, events } = collect();
+    teardown = installConsole(emit);
+
+    console.assert(true, 'fine');
+
+    expect(events).toHaveLength(0);
+  });
+
   it('restores the original console methods (identity) on teardown', () => {
     const beforeLog = console.log;
     const beforeWarn = console.warn;
     const beforeError = console.error;
+    const beforeAssert = console.assert;
     const t = installConsole(collect().emit);
     expect(console.error).not.toBe(beforeError);
     t();
     expect(console.log).toBe(beforeLog);
     expect(console.warn).toBe(beforeWarn);
     expect(console.error).toBe(beforeError);
+    expect(console.assert).toBe(beforeAssert);
   });
 });
 
