@@ -11,7 +11,7 @@ import { requireCapturedMethod } from '@/util/captured-method.js';
 import { createRepeatLimiter, type ErrorIdentity } from './error-repeats.js';
 import { errorText } from '@/util/error-text.js';
 
-type ConsoleMethod = 'log' | 'warn' | 'error' | 'info' | 'debug';
+type ConsoleMethod = 'log' | 'warn' | 'error' | 'info' | 'debug' | 'assert';
 
 /** The DOM event a CSP violation arrives as, and the `kind` it is reported under. */
 const CSP_VIOLATION_EVENT = 'securitypolicyviolation';
@@ -35,6 +35,8 @@ const METHOD_EVENT: Record<ConsoleMethod, EventType> = {
   // (low signal — most apps chatter here). Lean: no stack, like log/warn.
   info: EventType.CONSOLE_INFO,
   debug: EventType.CONSOLE_DEBUG,
+  // A FAILED console.assert is an error in DevTools ('Assertion failed: ...'); a passing one prints nothing.
+  assert: EventType.CONSOLE_ERROR,
 };
 
 function stringifyArgs(args: unknown[]): string {
@@ -87,7 +89,7 @@ interface PreAttachBuffer {
 
 /** Patch console.{log,warn,error} and window error events. Reversible. */
 export function installConsole(emit: Emit): Teardown {
-  const methods: ConsoleMethod[] = ['log', 'warn', 'error', 'info', 'debug'];
+  const methods: ConsoleMethod[] = ['log', 'warn', 'error', 'info', 'debug', 'assert'];
   const originals = new Map<ConsoleMethod, (...args: unknown[]) => void>();
   const patched = new Map<ConsoleMethod, (...args: unknown[]) => void>();
   // The pre-attach fields (#1540): set only while the buffer hands its entries over, and spread
@@ -100,7 +102,9 @@ export function installConsole(emit: Emit): Teardown {
         message: stringifyArgs(args),
         // Only console.error carries a stack, of its first Error argument — the diagnosis case,
         // near-zero cost. log/warn stay lean.
-        ...('error' === method ? stackOf(args.find((arg) => arg instanceof Error)) : {}),
+        ...('error' === method || 'assert' === method
+          ? stackOf(args.find((arg) => arg instanceof Error))
+          : {}),
       });
     });
   };
@@ -117,6 +121,18 @@ export function installConsole(emit: Emit): Teardown {
       // same reason. `stringifyArgs` walks arbitrary app objects, so one hostile getter or revoked
       // proxy would otherwise throw out of the app's own `console.log` before it had logged anything.
       callOriginal(...args);
+      if ('assert' === method) {
+        // Only a FALSY first argument fails the assertion; the rest is the message, which DevTools
+        // prefixes with 'Assertion failed'. `console.assert(true, ...)` prints nothing, so it emits nothing.
+        if (false === Boolean(args[0])) {
+          const [, ...detail] = args;
+          report(
+            method,
+            0 === detail.length ? ['Assertion failed'] : ['Assertion failed:', ...detail],
+          );
+        }
+        return;
+      }
       report(method, args);
     };
     patched.set(method, wrapper);
