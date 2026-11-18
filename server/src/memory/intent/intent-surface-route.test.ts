@@ -66,6 +66,19 @@ describe('the subject of a route', () => {
     },
   );
 
+  it('files the home page under its files, not under "home", when the intent names its code', () => {
+    expect(subjectFor({ surface: { route: '/', files: ['src/billing/Pay.tsx'] } })).toBe('billing');
+  });
+
+  it('files the home page under its binding API path, not under "home"', () => {
+    expect(
+      subjectFor({
+        surface: { route: '/' },
+        binding: { kind: 'net', urlContains: '/api/billing' },
+      }),
+    ).toBe('api');
+  });
+
   it('still leaves a route made only of ids unsorted', () => {
     expect(subjectFor({ surface: { route: '/123' } })).toBe(UNSORTED_SUBJECT);
   });

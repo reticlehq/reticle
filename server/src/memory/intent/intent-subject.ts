@@ -227,9 +227,6 @@ export const subjectFor = (evidence: SubjectEvidence): string => {
     if (seg !== undefined) {
       return slugifySubject(seg);
     }
-    if (isHomeRoute(route)) {
-      return HOME_SUBJECT;
-    }
   }
 
   /*
@@ -252,6 +249,15 @@ export const subjectFor = (evidence: SubjectEvidence): string => {
   const bound = fromBinding(evidence.binding);
   if (bound !== undefined) {
     return slugifySubject(bound);
+  }
+
+  /*
+   * The home page, last. The route `/` names no segment, so the ladder above got to look at the
+   * files and the binding first: an intent that said which code it covers, or which API it asserts
+   * on, is filed under that evidence and not under `home`.
+   */
+  if ('string' === typeof route && '' !== route.trim() && isHomeRoute(route)) {
+    return HOME_SUBJECT;
   }
 
   return UNSORTED_SUBJECT;
