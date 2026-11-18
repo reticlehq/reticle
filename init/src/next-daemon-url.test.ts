@@ -17,6 +17,15 @@ import { RETICLE_DEFAULT_PORT } from '@reticlehq/core';
  * one TypeScript and one plain CJS, connected by nothing but the name of an environment variable.
  */
 describe('the generated ReticleDev component', () => {
+  /** Next 16.4 can leave this import behind an inactive lazy-compilation proxy after a route reload. */
+  it('loads the SDK statically so it survives a cross-route reload', () => {
+    const file = nextReticleDevFile(undefined, 'shop-abc123');
+    expect(file).toContain(
+      "import { reticle, install, registerCapabilities } from '@reticlehq/react';",
+    );
+    expect(file).not.toContain("import('@reticlehq/react')");
+  });
+
   it('reads the URL withReticle discovers', () => {
     expect(nextReticleDevFile(undefined, 'shop-abc123')).toContain(
       'process.env.NEXT_PUBLIC_RETICLE_URL',
