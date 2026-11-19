@@ -17,7 +17,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join } from 'node:path';
 import ts from 'typescript';
@@ -26,6 +26,7 @@ import { tanstackStartConnectFile, tanstackStartConnectPath } from './tanstack-s
 import { VITE_DEV_MODULE_PATH, reactRouterEntryPatch, viteDevModuleFile } from './snippets.js';
 import { buildPlan, StepStatus, type PlanInput } from '@/plan/plan.js';
 import { Framework, PackageManager, UiLibrary, type Detection } from '@/detect/detect.js';
+import { removeTempDirSync } from '../test-support/temp-dir.test-helpers.js';
 
 /**
  * The smallest tsconfig a real Vite + TypeScript app can have, with the one thing the report is
@@ -137,7 +138,7 @@ function typecheck(files: Readonly<Record<string, string>>): readonly string[] {
     });
     return ts.getPreEmitDiagnostics(program).map(formatDiagnostic);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTempDirSync(root);
   }
 }
 

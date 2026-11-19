@@ -1,9 +1,10 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it, beforeAll } from 'vitest';
 import { ReticleDir, ReticleEnv } from '@reticlehq/core';
 import { reticle, RETICLE_CONNECT_MODULE, RETICLE_VITE_PLUGIN_NAME } from './index.js';
+import { removeTempDirSync } from './test-support/temp-dir.test-helpers.js';
 
 /**
  * Proves the prod-safety claim against Vite's *actual* config resolution rather than a unit
@@ -116,7 +117,7 @@ describe('disabled production build', () => {
 
   afterEach(() => {
     for (const dir of dirs.splice(0)) {
-      rmSync(dir, { recursive: true, force: true });
+      removeTempDirSync(dir);
     }
   });
 
@@ -249,7 +250,7 @@ describe('the connect module picks up a token written after the dev server start
     }
     for (const dir of dirs.splice(0)) {
       try {
-        rmSync(dir, { recursive: true, force: true });
+        removeTempDirSync(dir);
       } catch {
         /* Windows holds handles open behind a file watcher; a leaked temp dir is not a test failure */
       }

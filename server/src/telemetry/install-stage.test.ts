@@ -13,7 +13,7 @@
  * the question is moot.
  */
 import { describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { profileProject } from './project-profile.js';
@@ -24,6 +24,7 @@ import {
 } from './app-instrumented.js';
 import { createTelemetry, type TelemetryExtra } from './telemetry.js';
 import { TelemetryEventKind } from '@reticlehq/core/telemetry';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const withTempProject = (build: (root: string) => void, check: (root: string) => void): void => {
   const root = mkdtempSync(join(tmpdir(), 'reticle-install-stage-'));
@@ -31,7 +32,7 @@ const withTempProject = (build: (root: string) => void, check: (root: string) =>
     build(root);
     check(root);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTempDirSync(root);
   }
 };
 

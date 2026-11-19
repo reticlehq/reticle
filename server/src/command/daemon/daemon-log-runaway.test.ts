@@ -21,9 +21,10 @@ import {
   recoverOversizedLog,
 } from './lifetime/log-cap.js';
 import { DaemonHeartbeat } from './lifetime/heartbeat.js';
-import { mkdtempSync, rmSync, writeFileSync, existsSync, utimesSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, existsSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 /** A log file that only exists as a byte count, so none of this needs a filesystem. */
 function fakeLog(bytes = 0) {
@@ -110,7 +111,7 @@ describe('logs of ports nobody will use again', () => {
     expect(existsSync(join(dir, 'daemon-51234.log'))).toBe(false);
     // A live daemon writes a heartbeat every thirty seconds, so a fresh mtime IS the liveness probe.
     expect(existsSync(join(dir, 'daemon-4400.log'))).toBe(true);
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   });
 
   it('touches nothing that is not a daemon log, and survives a missing directory', () => {
@@ -123,7 +124,7 @@ describe('logs of ports nobody will use again', () => {
     expect(pruneOldDaemonLogs(dir, now)).toEqual([]);
     expect(existsSync(join(dir, 'daemon-4400.pid'))).toBe(true);
     expect(existsSync(join(dir, 'proxy-4400.log'))).toBe(true);
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
     expect(pruneOldDaemonLogs(dir, now)).toEqual([]);
   });
 });

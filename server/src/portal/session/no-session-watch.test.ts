@@ -11,7 +11,7 @@
  * by init after this daemon started"); `initialized` simply never got it.
  */
 import { describe, expect, it, afterEach } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NoSessionAction } from '@reticlehq/core';
@@ -19,10 +19,11 @@ import { startNoSessionWatch } from './no-session-watch.js';
 import { runWithClientDirectory } from '@/hooks/client-directory.js';
 import type { NoSessionNextAction } from './no-session-next-action.js';
 import type { SessionManager } from './session-manager.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const dirs: string[] = [];
 afterEach(() => {
-  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of dirs.splice(0)) removeTempDirSync(dir);
 });
 
 function projectDir(config: string | undefined): string {

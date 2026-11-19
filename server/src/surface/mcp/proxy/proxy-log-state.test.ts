@@ -1,14 +1,15 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, expect, it, vi } from 'vitest';
 import { ReticleEnv } from '@reticlehq/core';
 import { proxyLog, proxyLogPath, setProxyLogPort } from './proxy-log.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const dirs: string[] = [];
 afterEach(() => {
   vi.unstubAllEnvs();
-  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of dirs.splice(0)) removeTempDirSync(dir);
 });
 
 it('writes proxy diagnostics into the configured state directory, alongside the daemon log', () => {

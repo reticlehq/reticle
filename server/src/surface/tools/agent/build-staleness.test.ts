@@ -1,11 +1,12 @@
-import { mkdtempSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { STALE_BUILD_NOTICE, buildWatcher } from './build-staleness.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 let dir = '';
-afterEach(() => rmSync(dir, { recursive: true, force: true }));
+afterEach(() => removeTempDirSync(dir));
 
 describe('a daemon says once that its build on disk is newer than itself', () => {
   it('quiet while nothing changed; says so after a rebuild, and keeps saying it', () => {

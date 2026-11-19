@@ -17,12 +17,13 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
+import { mkdtempSync, readFileSync, existsSync, writeFileSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ReticleDir } from '@reticlehq/core';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { ensureWorkspaceGitignore } from './workspace-gitignore.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 let dir = '';
 let root = '';
@@ -32,7 +33,7 @@ beforeEach(() => {
   root = join(dir, ReticleDir.ROOT);
 });
 afterEach(() => {
-  rmSync(dir, { recursive: true, force: true });
+  removeTempDirSync(dir);
 });
 
 const readIgnore = (): string => readFileSync(join(root, '.gitignore'), 'utf8');

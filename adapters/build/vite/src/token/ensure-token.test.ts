@@ -22,18 +22,11 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import {
-  chmodSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-  mkdirSync,
-  statSync,
-} from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, writeFileSync, mkdirSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ensurePairingToken } from './ensure-token.js';
+import { removeTempDirSync } from '../test-support/temp-dir.test-helpers.js';
 
 /** POSIX file modes do not exist on Windows; the two tests below assert exactly that property. */
 const WINDOWS = 'win32' === process.platform;
@@ -43,7 +36,7 @@ const withDir = (fn: (dir: string) => void): void => {
   try {
     fn(dir);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   }
 };
 

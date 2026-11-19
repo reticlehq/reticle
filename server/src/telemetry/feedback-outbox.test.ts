@@ -1,10 +1,11 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { appendFileSync, mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { appendFileSync, mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { markDelivered, outboxPath, queueFeedback, readOutbox } from './feedback-outbox.js';
 import { drainFeedbackOutbox } from './feedback.js';
 import { createTelemetry } from './telemetry.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 /**
  * Feedback is written down BEFORE the network is touched.
@@ -26,7 +27,7 @@ describe('draining the outbox on daemon start', () => {
     home = mkdtempSync(join(tmpdir(), 'reticle-outbox-drain-'));
   });
   afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
+    removeTempDirSync(home);
   });
 
   const telemetryWith = (ok: boolean) => {
@@ -76,7 +77,7 @@ describe('the feedback outbox', () => {
     home = mkdtempSync(join(tmpdir(), 'reticle-outbox-'));
   });
   afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
+    removeTempDirSync(home);
   });
 
   it('persists a report and returns its id', () => {

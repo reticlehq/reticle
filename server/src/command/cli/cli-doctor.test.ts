@@ -9,7 +9,7 @@
  */
 
 import { createServer, type Server, type Socket } from 'node:net';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LOOPBACK_HOST } from '@reticlehq/core';
@@ -21,6 +21,7 @@ import {
   rememberToolCalled,
 } from '@/surface/mcp/attach-memory.js';
 import { handleDoctor } from './cli-doctor.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const RECORD_HEALTHY =
   '✓ an MCP client attached here and called tools before (a record, not a live check)';
@@ -99,7 +100,7 @@ describe('handleDoctor agent link row on a FOREIGN port', () => {
       expect(output).not.toContain(RECORD_HEALTHY);
     } finally {
       await close(server, sockets);
-      rmSync(stateHome, { recursive: true, force: true });
+      removeTempDirSync(stateHome);
     }
   }, 30000);
 
@@ -114,7 +115,7 @@ describe('handleDoctor agent link row on a FOREIGN port', () => {
       expect(line).not.toContain('restart your MCP client');
     } finally {
       await close(server, sockets);
-      rmSync(stateHome, { recursive: true, force: true });
+      removeTempDirSync(stateHome);
     }
   }, 30000);
 });

@@ -22,10 +22,11 @@
  */
 
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createNodeFileSystem } from './fs-port.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 let dir = '';
 let file = '';
@@ -37,7 +38,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  rmSync(dir, { recursive: true, force: true });
+  removeTempDirSync(dir);
 });
 
 describe('readFileFrom refuses an offset that would reach the syscall malformed', () => {

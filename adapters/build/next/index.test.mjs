@@ -13,6 +13,18 @@ import { tmpdir } from 'node:os';
 import { join, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+/**
+ * Remove a temp folder that a test made.
+ *
+ * On Windows, a folder can stay locked for a short time after a test closes its last handle in it.
+ * An antivirus scan, the indexer or a child process that is still exiting can hold it. `rmSync` then
+ * throws `EBUSY`, `ENOTEMPTY` or `EPERM`, and the cleanup fails a test that passed (#2158). Node
+ * retries exactly these errors when the call passes `maxRetries`.
+ */
+function removeTempDirSync(dir) {
+  rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+}
+
 const require = createRequire(import.meta.url);
 const {
   withReticle,
@@ -31,7 +43,7 @@ process.env[TOKEN_ENV] = defaultTokenDir;
 afterAll(() => {
   if (savedTokenDir === undefined) delete process.env[TOKEN_ENV];
   else process.env[TOKEN_ENV] = savedTokenDir;
-  rmSync(defaultTokenDir, { recursive: true, force: true });
+  removeTempDirSync(defaultTokenDir);
 });
 
 describe('readPairingToken', () => {
@@ -42,7 +54,7 @@ describe('readPairingToken', () => {
   afterEach(() => {
     if (previous === undefined) delete process.env[TOKEN_ENV];
     else process.env[TOKEN_ENV] = previous;
-    if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
+    if (dir !== undefined) removeTempDirSync(dir);
     dir = undefined;
   });
 
@@ -358,7 +370,7 @@ describe('discoverDaemonUrl', () => {
   }
 
   afterEach(() => {
-    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+    for (const d of dirs.splice(0)) removeTempDirSync(d);
   });
 
   it('honors RETICLE_PORT over an existing daemon and configured port', () => {
@@ -549,7 +561,7 @@ describe('withReticle forwards the discovered daemon', () => {
     else process.env.RETICLE_STATE_DIR = prevState;
     if (prevDir === undefined) delete process.env[TOKEN_ENV];
     else process.env[TOKEN_ENV] = prevDir;
-    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+    for (const d of dirs.splice(0)) removeTempDirSync(d);
   });
 
   function scenario(entry) {
@@ -619,8 +631,8 @@ describe('the duplicated wire constants match core', () => {
       );
       expect(discoverDaemonUrl(cwd, home, () => true)).toBe(bridgeWsUrl(4400));
     } finally {
-      rmSync(home, { recursive: true, force: true });
-      rmSync(cwd, { recursive: true, force: true });
+      removeTempDirSync(home);
+      removeTempDirSync(cwd);
     }
   });
 });
@@ -712,7 +724,7 @@ describe('a Next app in a git worktree', () => {
     return dir;
   };
   afterEach(() => {
-    for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+    for (const d of dirs.splice(0)) removeTempDirSync(d);
   });
 
   /**

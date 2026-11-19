@@ -8,13 +8,14 @@
  */
 
 import { describe, expect, it, afterEach, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NoSessionAction } from '@reticlehq/core';
 import { startNoSessionWatch } from './no-session-watch.js';
 import type { NoSessionNextAction } from './no-session-next-action.js';
 import type { SessionManager } from './session-manager.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 /**
  * A generous ceiling, not a measurement. Every case here writes a real temp directory, which is
@@ -28,7 +29,7 @@ const REFRESH_INTERVALS_MS = 60_000;
 
 const dirs: string[] = [];
 afterEach(() => {
-  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of dirs.splice(0)) removeTempDirSync(dir);
 });
 
 /** A project directory, wired or not, optionally with a dev script to source a command from. */

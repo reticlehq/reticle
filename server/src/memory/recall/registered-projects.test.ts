@@ -16,12 +16,13 @@
  * opposite fixes, and we were giving the second one.
  */
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ReticleDir, PROJECT_REGISTRY_FILE } from '@reticlehq/core';
 import { registeredProjects, registeredElsewhere, isUnscopedRoot } from './registered-projects.js';
 import { parse, resolve } from 'node:path';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 /** The filesystem root, spelled the way this platform spells it. */
 const ROOT = parse(resolve('.')).root;
@@ -47,7 +48,7 @@ beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'reticle-registry-'));
 });
 afterEach(() => {
-  rmSync(home, { recursive: true, force: true });
+  removeTempDirSync(home);
 });
 
 describe('projects this machine has paired before', () => {

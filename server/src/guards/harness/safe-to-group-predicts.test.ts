@@ -1,8 +1,9 @@
 import { describe, expect, it, afterEach } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 /**
  * The advice tool, which the directory guard's own header tells people to ask FIRST.
@@ -37,7 +38,7 @@ import { join } from 'node:path';
 
 let dir: string | undefined;
 afterEach(() => {
-  if (dir !== undefined) rmSync(dir, { recursive: true, force: true });
+  if (dir !== undefined) removeTempDirSync(dir);
   dir = undefined;
 });
 
@@ -145,7 +146,7 @@ describe('the tool the guard tells people to ask first', () => {
       expect(code, said).toBe(0);
       expect(said).toContain('group of 1');
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      removeTempDirSync(root);
     }
   });
 

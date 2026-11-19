@@ -5,18 +5,11 @@
 
 import { describe, expect, it } from 'vitest';
 import { spawnSync } from 'node:child_process';
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  statSync,
-  writeFileSync,
-} from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { BoundedLog, ROTATED_SUFFIX } from './dev-server-log-cap.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const size = (path: string): number => (existsSync(path) ? statSync(path).size : 0);
 
@@ -30,7 +23,7 @@ describe('the bounded log', () => {
     expect(size(path)).toBeLessThanOrEqual(1_000);
     expect(size(`${path}${ROTATED_SUFFIX}`)).toBeLessThanOrEqual(1_000);
     expect(readFileSync(path, 'utf8')).toContain('line 499');
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   });
 
   it('keeps only the tail of one chunk larger than the cap', () => {
@@ -41,7 +34,7 @@ describe('the bounded log', () => {
     log.close();
     expect(size(path)).toBe(100);
     expect(readFileSync(path, 'utf8').endsWith('END')).toBe(true);
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   });
 
   // A rotation closed the descriptor, then its rename threw, and every later write went to that
@@ -57,7 +50,7 @@ describe('the bounded log', () => {
     log.close();
     expect(readFileSync(path, 'utf8')).toContain('line 49');
     expect(size(path)).toBeLessThanOrEqual(100);
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   });
 });
 
@@ -76,6 +69,6 @@ describe('the supervisor process', () => {
     expect(run.status).toBe(3);
     expect(size(path) + size(`${path}${ROTATED_SUFFIX}`)).toBeLessThanOrEqual(4_000);
     expect(readFileSync(path, 'utf8')).toContain('echo 19999');
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   }, 25_000);
 });

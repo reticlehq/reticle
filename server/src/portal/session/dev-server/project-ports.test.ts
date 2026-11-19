@@ -1,14 +1,15 @@
 /** An app whose port is set only in `.env` was invisible to the no-session scan (reticle#1543). */
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { envFilePorts } from './project-ports.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const dirs: string[] = [];
 afterEach(() => {
   for (const dir of dirs.splice(0)) {
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   }
 });
 

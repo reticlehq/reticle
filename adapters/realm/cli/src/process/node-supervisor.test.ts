@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NodeSupervisor } from './node-supervisor.js';
+import { removeTempDirSync } from '../test-support/temp-dir.test-helpers.js';
 
 /**
  * The half that talks to the operating system, tested against real processes.
@@ -179,7 +180,7 @@ describe('an effect that lands after the process returns', () => {
         `settledMs=${String(run.settledMs)}; dir now: [${readdirSync(root).join(', ')}]`,
     ).toBe(true);
     expect(run.settledMs).toBe(3_000);
-    rmSync(root, { recursive: true, force: true });
+    removeTempDirSync(root);
   });
 
   /*

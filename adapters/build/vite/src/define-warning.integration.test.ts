@@ -1,9 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { ReticleEnv } from '@reticlehq/core';
 import { reticle } from './index.js';
+import { removeTempDirSync } from './test-support/temp-dir.test-helpers.js';
 
 /**
  * Regression guard for #165: Vite 8 (rolldown) rejects a top-level `define` inside
@@ -72,7 +73,7 @@ describe('vite 8 dev boot with the plugin produces no define warnings (#165)', (
     }
     for (const dir of dirs.splice(0)) {
       try {
-        rmSync(dir, { recursive: true, force: true });
+        removeTempDirSync(dir);
       } catch {
         /* Windows holds handles; a leaked temp dir is not a test failure */
       }

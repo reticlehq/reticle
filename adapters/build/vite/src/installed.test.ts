@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -8,6 +8,7 @@ import {
   sdkPackageVersion,
   sdkBuildFingerprint,
 } from './installed.js';
+import { removeTempDirSync } from './test-support/temp-dir.test-helpers.js';
 
 const SDK_PACKAGE = '@reticlehq/react';
 const FAKE_SDK_VERSION = '9.9.9';
@@ -79,8 +80,8 @@ describe('installed — probes resolve from the app root, not from this plugin',
     writeFileSync(join(emptyRoot, 'package.json'), JSON.stringify({ name: 'empty' }));
   });
   afterAll(() => {
-    rmSync(appRoot, { recursive: true, force: true });
-    rmSync(emptyRoot, { recursive: true, force: true });
+    removeTempDirSync(appRoot);
+    removeTempDirSync(emptyRoot);
   });
 
   it('reads the version from the SDK installed in the app', () => {
@@ -114,7 +115,7 @@ describe('installed — probes resolve from the app root, not from this plugin',
       );
       expect(resolvableChain([outer, middle, leaf], nested)).toBe(`${outer} > ${middle} > ${leaf}`);
     } finally {
-      rmSync(nested, { recursive: true, force: true });
+      removeTempDirSync(nested);
     }
   });
 
@@ -127,7 +128,7 @@ describe('installed — probes resolve from the app root, not from this plugin',
       // The leaf is only reachable THROUGH the middle — naming it one segment short must fail.
       expect(resolvableChain([outer, leaf], nested)).toBeNull();
     } finally {
-      rmSync(nested, { recursive: true, force: true });
+      removeTempDirSync(nested);
     }
   });
 
