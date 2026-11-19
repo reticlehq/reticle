@@ -207,9 +207,6 @@
     }
   },
   "src/command/cli/lifecycle/daemon-lifecycle.ts": {
-    "curly": {
-      "count": 5
-    },
     "no-nested-ternary": {
       "count": 1
     }
@@ -253,9 +250,6 @@
     }
   },
   "src/command/cli/try-command.ts": {
-    "curly": {
-      "count": 19
-    },
     "no-nested-ternary": {
       "count": 2
     }
@@ -431,11 +425,6 @@
   "src/command/setup/bringup/ensure-daemon.test.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/command/setup/bringup/ensure-daemon.ts": {
-    "curly": {
-      "count": 12
     }
   },
   "src/command/setup/desktop-shape.ts": {
@@ -2802,11 +2791,6 @@
   "src/surface/mcp/proxy/mcp-post-transport.ts": {
     "curly": {
       "count": 2
-    }
-  },
-  "src/surface/mcp/proxy/proxy-daemon-probe.ts": {
-    "curly": {
-      "count": 3
     }
   },
   "src/surface/mcp/proxy/proxy-handshake.ts": {

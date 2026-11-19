@@ -43,7 +43,7 @@ import {
 } from '@/command/daemon/binding/port-presence.js';
 import { describePortState } from '@/command/daemon/port-state.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
-import { probeDaemon, waitForDaemonBind } from '@/surface/mcp/mcp-proxy.js';
+import { probeDaemon, spawnedDaemonAlive, waitForDaemonBind } from '@/surface/mcp/mcp-proxy.js';
 import { readProjectPort } from '@/command/cli/ports/resolve/cli-port.js';
 import { callerArtifactRoot } from '@/memory/project/link-directory.js';
 import { seeRunLine } from '@/memory/project/sync-status.js';
@@ -119,7 +119,9 @@ export function parseTryArgs(argv: readonly string[]): TryArgs | { error: string
     const arg = argv[i];
     if (arg === PERSONA_FLAG) {
       persona = argv[i + 1];
-      if (persona === undefined) return { error: `${PERSONA_FLAG} needs a value` };
+      if (persona === undefined) {
+        return { error: `${PERSONA_FLAG} needs a value` };
+      }
       i++;
     } else if (arg !== undefined && arg.startsWith('--')) {
       return { error: `unknown argument '${arg}'` };
@@ -129,7 +131,9 @@ export function parseTryArgs(argv: readonly string[]): TryArgs | { error: string
       return { error: `unknown argument '${String(arg)}'` };
     }
   }
-  if (url === undefined) return { error: 'usage: reticle try <url> [--persona <who>]' };
+  if (url === undefined) {
+    return { error: 'usage: reticle try <url> [--persona <who>]' };
+  }
   return persona === undefined ? { url } : { url, persona };
 }
 
@@ -169,7 +173,9 @@ export async function runTry(args: TryArgs, ports: TryPorts): Promise<number> {
   const grant = await ports.requestDrive(cloud);
   if (!grant.granted) {
     ports.fail(grant.message);
-    if (grant.hint !== undefined) ports.fail(grant.hint);
+    if (grant.hint !== undefined) {
+      ports.fail(grant.hint);
+    }
     if (grant.needsCard) {
       const base = (await ports.dashboardUrl(cloud).catch(() => undefined)) ?? cloud.url;
       ports.fail(`Plans: ${planUrl(base)}`);
@@ -186,7 +192,9 @@ export async function runTry(args: TryArgs, ports: TryPorts): Promise<number> {
     ports.fail(drive.error);
     return EXIT_FAIL;
   }
-  for (const line of summarizeTry(drive.journeys)) ports.out(line);
+  for (const line of summarizeTry(drive.journeys)) {
+    ports.out(line);
+  }
   // Saying "saved" over a sync that failed would be this command lying about its own work.
   if (await ports.sync(drive.runIds).catch(() => false)) {
     const dashboard = await ports.dashboardUrl(cloud).catch(() => undefined);
@@ -195,7 +203,9 @@ export async function runTry(args: TryArgs, ports: TryPorts): Promise<number> {
       dashboard === undefined || 0 === drive.runIds.length
         ? [`Saved to your dashboard: ${dashboard ?? cloud.url}`]
         : drive.runIds.map((runId) => seeRunLine(dashboard, runId));
-    for (const line of lines) ports.out(line);
+    for (const line of lines) {
+      ports.out(line);
+    }
   } else {
     ports.fail(
       'The run is kept on this machine; it could not be sent. Run `reticle sync` to retry.',
@@ -238,22 +248,31 @@ export function journeysOf(report: Record<string, unknown>, persona?: string): T
 
 function tryPort(cwd: string): number {
   const fromEnv = Number(process.env[ReticleEnv.PORT]);
-  if (Number.isInteger(fromEnv) && 0 < fromEnv) return fromEnv;
+  if (Number.isInteger(fromEnv) && 0 < fromEnv) {
+    return fromEnv;
+  }
   return readProjectPort(cwd) ?? RETICLE_DEFAULT_PORT;
 }
 
 /** A daemon serving `port`: the one already there, or one started now. Undefined when ready. */
 export async function ensureTryDaemon(port: number): Promise<string | undefined> {
   const presence = await probePresence(port, { tcpOpen: probeDaemon, status: fetchStatus });
-  if (presenceIsUsable(presence)) return undefined;
+  if (presenceIsUsable(presence)) {
+    return undefined;
+  }
   // A stranger on the port: a daemon spawned now could not bind, so say who holds it instead.
-  if (PortPresence.FREE !== presence) return describePortState(presence, port);
+  if (PortPresence.FREE !== presence) {
+    return describePortState(presence, port);
+  }
   const script = process.argv[1];
-  if (script === undefined) return 'Cannot locate the reticle daemon script.';
+  if (script === undefined) {
+    return 'Cannot locate the reticle daemon script.';
+  }
   spawnDaemon(process.execPath, script, [DAEMON_INNER_COMMAND, PORT_FLAG, String(port)], port);
-  return (await waitForDaemonBind(port))
-    ? undefined
-    : `Could not start the Reticle daemon on port ${String(port)}.`;
+  const bound = await waitForDaemonBind(port, {
+    childAlive: () => spawnedDaemonAlive(port),
+  });
+  return bound ? undefined : `Could not start the Reticle daemon on port ${String(port)}.`;
 }
 
 /** The drive itself, through the daemon: a watched window, the zero-install reader, one explore. */
@@ -264,14 +283,18 @@ async function driveThroughDaemon(
   reticleRoot: string,
 ): Promise<TryDrive> {
   const unavailable = await ensureTryDaemon(port);
-  if (unavailable !== undefined) return { journeys: [], runIds: [], error: unavailable };
+  if (unavailable !== undefined) {
+    return { journeys: [], runIds: [], error: unavailable };
+  }
   const token = readOrCreatePairingTokenSync(defaultPairingTokenDir());
   const caller = await connectOverSse(endpointFor(port, token));
   try {
     // Headed whatever the daemon was started as: the point of `try` is watching it happen. An app
     // with no Reticle SDK gets one supplied by the lease.
     const opened = await acquireLease(caller, request.url, true, reticleRoot);
-    if ('failed' in opened) return { journeys: [], runIds: [], error: opened.failed.join('\n') };
+    if ('failed' in opened) {
+      return { journeys: [], runIds: [], error: opened.failed.join('\n') };
+    }
     try {
       const drove = await exploreToEnd(
         caller,
@@ -284,7 +307,9 @@ async function driveThroughDaemon(
         TRY_BUDGET_MS,
       );
       const refusal = refusalText(drove);
-      if (refusal !== undefined) return { journeys: [], runIds: [], error: refusal };
+      if (refusal !== undefined) {
+        return { journeys: [], runIds: [], error: refusal };
+      }
       const report = verdictOf(drove, 'stopReason') ?? {};
       const runIds = Array.isArray(report['runIds'])
         ? report['runIds'].filter((id): id is string => 'string' === typeof id)
@@ -308,7 +333,9 @@ async function driveThroughDaemon(
 async function waitForRuns(reticleRoot: string, runIds: readonly string[]): Promise<void> {
   const runsDir = join(reticleRoot, ReticleDir.RUNS_SUBDIR);
   for (let waited = 0; waited < RUN_WRITE_WAIT_MS; waited += RUN_WRITE_POLL_MS) {
-    if (runIds.every((id) => existsSync(join(runsDir, `${id}.json`)))) return;
+    if (runIds.every((id) => existsSync(join(runsDir, `${id}.json`)))) {
+      return;
+    }
     await new Promise((resolve) => setTimeout(resolve, RUN_WRITE_POLL_MS));
   }
 }
@@ -382,11 +409,12 @@ const names = (value: unknown): string[] =>
  */
 export function initCoverageLines(tab: Record<string, unknown> | undefined, url: string): string[] {
   const percent = tab?.['setupScore'];
-  if (tab === undefined || 'number' !== typeof percent)
+  if (tab === undefined || 'number' !== typeof percent) {
     return [
       'Instrumentation is measured on an open tab of the app: run `reticle doctor` with it open.',
       msgProveOneFlow(url),
     ];
+  }
   const unseen = [...names(tab['missing']), ...names(tab['notSeenYet'])];
   const prompt = tab['prompt'];
   return [
@@ -449,7 +477,9 @@ function tabIn(
   url: string,
 ): Record<string, unknown> | undefined {
   const list = asRecord(status)['coverage'];
-  if (!Array.isArray(list)) return undefined;
+  if (!Array.isArray(list)) {
+    return undefined;
+  }
   const tabs = list.map((entry: unknown) => asRecord(entry));
   return (
     tabs.find((tab) => sessionId === tab['sessionId']) ??
@@ -469,15 +499,23 @@ export async function initFirstFlow(
     // A leased proof's tab has closed; another open tab of the same app still answers for it.
     const status = await fetchStatus(ctx.bridgePort).catch(() => undefined);
     say('');
-    for (const line of initCoverageLines(tabIn(status, ctx.sessionId, ctx.url), ctx.url)) say(line);
+    for (const line of initCoverageLines(tabIn(status, ctx.sessionId, ctx.url), ctx.url)) {
+      say(line);
+    }
     const linked = linkedCloudPort(
       createNodeFileSystem(),
       projectRoot(ctx.appDir),
       homedir(),
       process.env,
     );
-    if (null === (await linked().catch(() => null))) for (const line of UNLINKED_PITCH) say(line);
+    if (null === (await linked().catch(() => null))) {
+      for (const line of UNLINKED_PITCH) {
+        say(line);
+      }
+    }
   }
-  for (const line of await strandedWorkLines(ctx.appDir).catch(() => [])) say(line);
+  for (const line of await strandedWorkLines(ctx.appDir).catch(() => [])) {
+    say(line);
+  }
   return { flowSaved: false };
 }
