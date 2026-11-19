@@ -836,6 +836,35 @@ function isPageMutation(record: MutationRecord): boolean {
 }
 
 /**
+ * The single file input `scope` holds, or undefined when it holds none. Throws when it holds
+ * more than one: setting files on the wrong input reports a success the app never saw.
+ */
+function onlyFileInputIn(scope: Element): HTMLInputElement | undefined {
+  // At the top of a shadow tree, query the root itself: the composed parent is the host, but
+  // the host's `querySelectorAll` cannot see shadow children. The root contains the scope, so
+  // one query covers both.
+  const found = fileInputsIn(shadowRootAbove(scope) ?? scope);
+  if (1 < found.length) {
+    throw new Error(
+      `upload target is not a file input and its scope holds ${found.length} file inputs — ` +
+        'target the file input itself so the upload cannot land on the wrong one',
+    );
+  }
+  return found[0];
+}
+
+/**
+ * The shadow root `scope` sits directly under, or null. Duck-typed on `host` the way a11y.ts
+ * does: `instanceof ShadowRoot` fails across realms, and `host` exists on a ShadowRoot and not
+ * on a Document.
+ */
+function shadowRootAbove(scope: Element): ShadowRoot | null {
+  if (null !== scope.parentElement) return null;
+  const root = scope.getRootNode() as Partial<ShadowRoot>;
+  return undefined === root.host ? null : (root as ShadowRoot);
+}
+
+/**
  * Execute a single action against a ref and probe for best-effort evidence of effect.
  * Always async: the MutationObserver read needs a microtask + rAF after dispatch.
  */
