@@ -1,4 +1,4 @@
-import { fnv1a } from '@reticlehq/core';
+import { fnv1a } from '@reticlehq/core/page';
 
 /**
  * The per-page salt for text-body fingerprints: drawn once when the observer loads and never
