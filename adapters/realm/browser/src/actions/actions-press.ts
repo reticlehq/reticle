@@ -1,4 +1,9 @@
-import { ActionType, isGlobalPress, pressKeyFromArgs, pressKeysFromArgs } from '@reticlehq/core';
+import {
+  ActionType,
+  isGlobalPress,
+  pressKeyFromArgs,
+  pressKeysFromArgs,
+} from '@reticlehq/core/page';
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
 import { nativeSetTimeout } from '@/timers/native/native-timers.js';
 

@@ -473,11 +473,6 @@
       "count": 3
     }
   },
-  "src/command/setup/node-effects.ts": {
-    "curly": {
-      "count": 10
-    }
-  },
   "src/command/setup/probe/dev-port.test.ts": {
     "curly": {
       "count": 2

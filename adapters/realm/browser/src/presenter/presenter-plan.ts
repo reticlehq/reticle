@@ -1,4 +1,5 @@
-import { ScriptStatus, type PlanView } from '@reticlehq/core';
+import { type PlanView } from '@reticlehq/core';
+import { ScriptStatus } from '@reticlehq/core/page';
 
 /**
  * The Harness's drive plan, drawn on the Harness page above its log while it runs.

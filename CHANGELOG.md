@@ -4,6 +4,54 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+## [3.10.7] — 2026-11-17
+
+### Fixed
+
+- **`@reticlehq/browser` — the in-page screenshot left out rows that had faded in.** A browser that Reticle did not launch gets a screenshot that the SDK draws itself, through an SVG image. An SVG image starts every animation again at its first keyframe, so a row that faded in from `opacity: 0` came out blank. The screenshot now draws each animated element at the frame that the page shows.
+- **`@reticlehq/server` — a replay reported a correct app as failed when a check could not be decided.** A text check passed when the flow was driven, then failed on replay with "the page's SDK did not return the whole text": the text sat in a panel with its own scroll area. The check had answered "not decided", and replay read that as a consequence that did not hold. A step whose check cannot be decided now drifts with `expect_undecided`, and the replay is `unverifiable` (`unknown`), not failed. A real failure in another step of the same run still fails it.
+- **`@reticlehq/browser` — a select inside its label could not be found by its name.** For `<label>Seats <select>…</select></label>`, Reticle named the select with the label's whole text, every option included ("Seats Select Under 20 …"). So `{ role: "combobox", name: "Seats" }` matched nothing, while a browser names it "Seats". The name now leaves out the control's own content, the same as a browser. A textarea inside its label is fixed the same way.
+
+## [3.10.6] — 2026-11-16
+
+### Fixed
+
+- **`reticle init` — in a workspace whose root `dev` script also starts an API, init checked the API instead of the app.** Since 3.10.3, init runs the workspace root's `dev` script when it also starts the app. That script started the API too, the API announced its URL first, and init said "the SDK is NOT in the page" about the API and exited 1, while the app served correctly. For a root script, init now waits for the URL that serves an HTML page, and prefers the URL on the app's expected port or on the output line that names the app. An API's JSON is never taken for the app.
+
+## [3.10.5] — 2026-11-16
+
+### Fixed
+
+- **`@reticlehq/server` — on Windows, the agent's MCP server could refuse the user's own running daemon as "a port held by another process".** The daemon was running and of the same version, but its `/status` did not answer inside one second, or the request went out on a pooled connection that a restarted daemon had already closed. The port then read as a stranger's, every tool call was refused, and the agent could not use Reticle. A `/status` request that gets no answer is now asked once more, on a fresh connection with a five-second limit, before the port counts as another process's. A port that answers with something that is not a Reticle daemon is still refused at once.
+
+## [3.10.4] — 2026-11-15
+
+### Added
+
+- **`@reticlehq/core`, `@reticlehq/browser`, `@reticlehq/engine` — `state: "painted"` and aria-hidden diagnostic hint.** An element with `aria-hidden="true"` read as hidden under `state: "visible"`. `state: "painted"` now asserts that an element is painted on screen, even when hidden from assistive technology. When an element check in `state: "visible"` or `state: "inViewport"` misses only because of `aria-hidden="true"`, the hint names `aria-hidden` and suggests `state: "painted"`. Closes [#1648](https://github.com/reticlehq/reticle/issues/1648).
+
+### Fixed
+
+- **`@reticlehq/server`: `reticle_act_and_wait` no longer fails with a raw error when the check before the action cannot read the page.** The tool reads the page once before it acts, to tell a consequence the action caused from one that was already true. When that read failed, the caller got the bare read error with no verdict, and the action window stayed open, so later events were attributed to an action that had ended. Now the window is closed, and the result is `verified: unknown` with `verifiedReason: inconclusive`; `because` carries the read error and says the action was not sent. Refs [#2038](https://github.com/reticlehq/reticle/issues/2038).
+- **`@reticlehq/engine` — `response-ignored` missed an app that ignored its response when the clicked button changed `disabled` or `aria-busy` while the request ran.** The change counted as the client answering the write, so a 2xx that changed nothing else on screen gave `verified: clean`. The acted control becoming disabled or busy after the write was sent, or changing either attribute before the send, no longer counts as an answer. Taking the control out of that state after the send still counts, so a settings form that enables Save again in its response handler is not accused, over fetch or XHR. Every other change still counts, so an optimistic update is not accused. Two limits: a button that only becomes disabled after the response is reported, and a label such as "Saving…" still counts as an answer. Closes [#2115](https://github.com/reticlehq/reticle/issues/2115).
+- **`@reticlehq/next` — `next dev --webpack` rebuilt every few seconds while a tab was connected.** Reticle writes to `.reticle/` in the project, and Next's webpack watcher did not ignore that folder. Each write looked like a source change, so the page refetched and refs and sessions went stale. `withReticle()` now adds `.reticle` to `watchOptions.ignored` for webpack dev builds and keeps the patterns the app already set. Closes [#2281](https://github.com/reticlehq/reticle/issues/2281).
+- **`@reticlehq/engine` — a scoped role and name miss listed names from outside the scope.** A check scoped to one table cell looked only in that cell, but when it failed, `failureReason` and `observed` named the controls of every cell, which can be other users' text. The follow-up lookups now keep the check's `scope` and `self`, so a miss names only what is inside the scope. Closes [#2282](https://github.com/reticlehq/reticle/issues/2282).
+- **`@reticlehq/server` — `reticle_observe { filters: "state" }` was refused.** The description said "Use a bucket name", but the schema took only an array, so the natural first call failed with `expected array, received string`. `filters` now takes one bucket name or event type, or an array of them. A string that holds a JSON array is read as that array. A string that names no bucket and no event type, such as `"net, console"`, is refused with the names to use, so it cannot answer an empty timeline. Closes [#2294](https://github.com/reticlehq/reticle/issues/2294).
+- **`@reticlehq/browser` — 3.10.3's smaller first load did not reach an install from npm.** 3.10.3 took zod off the SDK's first load, which measured 221 KB in this repository. Part of that change was in `open-verification`, which kept its version, 1.1.0, so the publish skipped it and `@reticlehq/core@3.10.3` pinned the old build. An app that installed the SDK from npm still loaded zod: 330 KB on the first load. `open-verification` 1.2.0 carries the change, and core now depends on it. The release check also compares the packed files of a package whose version is already on npm, not only its dependencies, so a change under an unchanged version stops the publish.
+
+## [3.10.3] — 2026-11-15
+
+### Changed
+
+- **`@reticlehq/browser` — every page that loads the SDK downloads 119 KB less.** The SDK's first load was 339,995 B, and about 95 KB of it was zod. A page parses two messages on the way in, but a schema anywhere on the first load brought most of zod with it. The SDK now reads a new zod-free entry, `@reticlehq/core/page`, and checks a command and an element query with hand-written functions. A property test keeps those functions in step with the zod schemas. zod now loads only with the panels and tools that a page fetches later. The first load is about 221 KB. Closes [#2369](https://github.com/reticlehq/reticle/issues/2369).
+
+### Fixed
+
+- **`@reticlehq/browser` — a Next.js redirect was reported as an uncaught error.** After a Next.js server action that redirects, Reticle reported `NEXT_REDIRECT` as an error. Next.js handles that rejection itself: its listener calls `preventDefault()` and navigates, and the browser console stays clean. Reticle read the rejection before the page's listener ran, so a clean-console check failed on correct code. Reticle now decides after every listener has run, and skips a rejection that the page cancelled and that carries a Next.js control-flow `digest` (`redirect()`, `notFound()`). Every other rejection is still reported, including a real failure that a page cancels to keep its console clean.
+- **`reticle init` — in a monorepo, init started only the app's own dev script.** For an app in `apps/web`, init ran that app's `vite`. The root `dev` script, which also starts the API, did not run, so every `/api` call from the page failed with `ECONNREFUSED`. Init now runs the root `dev` script from the root when that script starts this app: it runs every workspace package (`turbo`, `nx run-many`, `pnpm -r`), or it names this app. A root script that skips the app leaves the app's own script in place. When the root script is turbo, init also sets `TURBO_ENV_MODE=loose` for that run, unless you set it, so the values from `init --env` and the `RETICLE_*` variables reach the app as they did before: turbo 2 passes a task only the variables its `turbo.json` declares.
+- **`reticle mcp` — at a monorepo root, the agent did not use the daemon of an app in its own repository.** When `init` in `apps/web` replaced the daemon, an agent session at the root still read an older root `.reticle.json` with a different project id. The proxy refused every call, or moved to an empty daemon of its own that no app connected to. The proxy now uses a daemon that runs inside its project folder when the root config names no workspace app. A root config that points at one app still never attaches the agent to a different app. A session that runs an older proxy gets this after you update Reticle and restart the agent session.
+- **`@reticlehq/server` — an agent whose project config named another app was refused with no way forward.** In a monorepo, `init` wired an app, and the agent's MCP server at the repo root refused every call with "the daemon on port 4400 belongs to a different project ... start this project on its own port". The root's `.reticle.json` named a different project than the app's daemon. The refusal was right, and it named neither side, so the agent wrote its own client to get past it. The refusal now names both projects, the folder the daemon serves and the config file, and gives the two ways out: run the agent from the app's folder, or copy the app's `.reticle.json` to the config the agent reads.
+
 ## [3.10.2] — 2026-11-14
 
 ### Fixed

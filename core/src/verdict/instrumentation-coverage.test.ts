@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ChannelId } from 'open-verification';
 import { InstrumentationGapKind, fixForGap } from './instrumentation-gap.js';
-import { CoverageMarker } from '../wire/platform-link.js';
+import { CoverageMarker } from '../wire/coverage-marker.js';
 import {
   AGENT_PROMPT_LEAD,
   AGENT_PROMPT_TAIL,

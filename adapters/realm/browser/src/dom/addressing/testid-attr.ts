@@ -1,4 +1,4 @@
-import { DEFAULT_TESTID_ATTR, TESTID_ATTR_PATTERN } from '@reticlehq/core';
+import { DEFAULT_TESTID_ATTR, TESTID_ATTR_PATTERN } from '@reticlehq/core/page';
 
 /**
  * The attribute this page's test ids live in. Module state because it is configuration, set once by

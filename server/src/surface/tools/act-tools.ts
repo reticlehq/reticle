@@ -110,7 +110,7 @@ import { resolveActTarget } from './act/act-target.js';
 import { hiddenTargetField } from './act/resolve-target.js';
 import { screenRequestFindings, withAdvisories } from './act/screen-request.js';
 import { gradeOfPredicate } from './assert/assert-grade.js';
-import { readAlreadyTrue } from './act/already-true.js';
+import { readAlreadyTrueOrUnknown } from './act/already-true.js';
 import { engineBlindSpotsField, noteSourceSeen } from '@/portal/session/recorded-gaps.js';
 
 /**
@@ -517,20 +517,20 @@ export const ACT_TOOLS: ToolDef[] = [
       // (the whole point of act_and_wait) attribute to this action. finishAction fires after the wait.
       session.beginAction(ReticleTool.ACT_AND_WAIT, asRecord(args));
       let settledOutcome: boolean | undefined;
-      // The verdict, written into the action record so a LATER turn can read what this one proved.
-      // A verdict that lives only in the response lives only in the agent's context window, which is
-      // exactly the copy a compaction destroys — see runs/run-context.ts.
+      // The verdict, written into the action record so a LATER turn can read what this one proved:
+      // one only in the response lives in the agent's context, the copy a compaction destroys.
       let verdictEffect: JournalVerdictEffect | undefined;
-      // Was the consequence ALREADY TRUE, and what did that reading say? See act/already-true.ts.
-      const { alreadyTrue, alreadyTrueHiddenMatch, alreadyTrueEvidence, baselines } =
-        await readAlreadyTrue(session, until, since);
       // Same as the ACT handler: the route this step RAN on, before the action can move the app.
       const routeBeforeWait = pageOf(session.url);
-      // Recorded in `finally`, once the verdict is known — see captureVerdictedAct. `held`: the
-      // action made the declared claim hold.
+      // Recorded in `finally` once the verdict is known; `held`: the action made the claim hold.
       let dispatched: { result: unknown } | undefined;
       let held = false;
       try {
+        const read = await readAlreadyTrueOrUnknown(session, until, since);
+        if ('unknown' in read) {
+          return withControl(session, read.unknown);
+        }
+        const { alreadyTrue, alreadyTrueHiddenMatch, alreadyTrueEvidence, baselines } = read;
         // actCommand is the single interception point for upload+path rewrite.
         //
         // A replacement can land BETWEEN resolving the target and dispatching, and the tool used to

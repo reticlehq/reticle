@@ -131,8 +131,71 @@ export function announcedUrl(output: string): string | undefined {
  * compiled successfully, served happily, and setup timed out insisting no url appeared — the
  * evidence there is the process we spawned, not a convention.
  */
-export function urlToWatch(output: string, observedPorts: readonly number[]): string | undefined {
-  const announced = announcedUrl(output);
+/** Every url announced in the output, with the line that announced it, in order. */
+const URLS_IN_OUTPUT = new RegExp(URL_IN_OUTPUT.source, 'g');
+
+/** What says which announced url is the app's: the port it should take, and its folder or package. */
+export interface AppUrlHint {
+  readonly port?: number | undefined;
+  readonly names?: readonly string[] | undefined;
+}
+
+/** Does the text before a url name `name` as a whole word (`frontend dev:`, `@acme/web:dev:`)? */
+function lineNames(prefix: string, name: string): boolean {
+  if (0 === name.length) {
+    return false;
+  }
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|[\\s/@:])${escaped}(?=[\\s:]|$)`).test(prefix);
+}
+
+/**
+ * The app's url among those the output announced.
+ *
+ * Reported from the field: in a pnpm workspace `init` ran the root `dev` script, which started the
+ * Vite app and a Fastify API. The API announced first, init probed it and reported "the SDK is NOT
+ * in the page". When several urls are announced, the one on the port the app is expected to take
+ * wins, else the one on a line that names the app (workspace runners prefix each line with the
+ * package). With neither, the first url, as before.
+ */
+function announcedInOrder(output: string, hint: AppUrlHint | undefined): string[] {
+  const found: { url: string; prefix: string }[] = [];
+  for (const line of output.split(/\r?\n/)) {
+    for (const match of line.matchAll(URLS_IN_OUTPUT)) {
+      found.push({ url: match[0], prefix: line.slice(0, match.index) });
+    }
+  }
+  const names = hint?.names ?? [];
+  const isApp = (f: { url: string; prefix: string }): boolean =>
+    (hint?.port !== undefined && Number(new URL(f.url).port) === hint.port) ||
+    names.some((name) => lineNames(f.prefix, name));
+  const urls = [...found.filter(isApp), ...found.filter((f) => !isApp(f))].map((f) => f.url);
+  return [...new Set(urls)];
+}
+
+/**
+ * Every url that may be the app's, best first: the announced urls the hint names as the app's,
+ * then the other announced urls in order, then a url for each port our process group bound.
+ */
+export function candidateUrls(
+  output: string,
+  observedPorts: readonly number[],
+  hint?: AppUrlHint,
+): string[] {
+  const announced = announcedInOrder(output, hint);
+  const announcedPorts = new Set(announced.map((u) => Number(new URL(u).port)));
+  const observed = observedPorts
+    .filter((port) => !announcedPorts.has(port))
+    .map((port) => `http://localhost:${String(port)}`);
+  return [...announced, ...observed];
+}
+
+export function urlToWatch(
+  output: string,
+  observedPorts: readonly number[],
+  hint?: AppUrlHint,
+): string | undefined {
+  const announced = announcedInOrder(output, hint)[0];
   if (undefined !== announced) return announced;
   const port = observedPorts[0];
   return undefined === port ? undefined : `http://localhost:${port}`;

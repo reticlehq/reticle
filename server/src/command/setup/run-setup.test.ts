@@ -144,6 +144,51 @@ describe('the whole sequence, when everything works', () => {
  * three sessions and no way to pick. The judgement already existed (`ALREADY_SERVING`); the spawn
  * path never asked it. Prefer the live server this project announced over starting another.
  */
+/**
+ * Reported from the field, and reproduced on a real pnpm workspace: `init` ran the root `dev` script
+ * (#2365), which starts the app AND an API. The API announced and answered first, setup took it for
+ * the app, and the connect step said "the SDK is NOT in the page" and exited 1. For a root script,
+ * setup now waits for a candidate that serves an HTML page; an API's JSON is never the app.
+ */
+describe('a root dev script that starts the app and an API', () => {
+  const API = 'backend dev: Server listening at http://127.0.0.1:4011';
+  const APP = 'frontend dev:   ➜  Local:   http://localhost:5182/';
+
+  it('waits past the API that answered first, and takes the app', async () => {
+    let polls = 0;
+    const probed: string[] = [];
+    const fx = world({
+      devServerOutput: () => (polls < 3 ? API : `${API}\n${APP}`),
+      probePage: (u: string): Promise<PageProbe> => {
+        polls += 1;
+        probed.push(u);
+        return Promise.resolve(
+          u.includes('5182')
+            ? { served: true, sdkInPage: true, html: true }
+            : { served: true, sdkInPage: false, html: false },
+        );
+      },
+      listSessions: (): Promise<CandidateSession[]> =>
+        Promise.resolve([{ sessionId: 'new', url: 'http://localhost:5182' }]),
+    });
+    const r = await runSetupPhases(
+      { ...INPUT, devCommand: 'pnpm dev', devCommandDir: '/repo', appNames: ['frontend'] },
+      fx,
+    );
+    expect(r.url).toBe('http://localhost:5182');
+    expect(probed.some((u) => u.includes('4011'))).toBe(true);
+  });
+
+  it("keeps the app's own script as before: the first url that serves", async () => {
+    const fx = world({
+      devServerOutput: () => APP,
+      probePage: (): Promise<PageProbe> => Promise.resolve({ served: true, sdkInPage: true }),
+    });
+    const r = await runSetupPhases(INPUT, fx);
+    expect(r.url).toBe('http://localhost:5182');
+  });
+});
+
 describe('it never starts a second server for this project', () => {
   const EXISTING = 'http://localhost:5173';
 

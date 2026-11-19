@@ -130,7 +130,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
    * predicate it reads, and the platform can build the same sentence from the contract.
    */
   // 20 with `run-report.ts`: the schema of the end-of-run report, beside `Verified`, which it uses.
-  'core/src/verdict': 20,
+  // 21 with `step-screenshot.ts`: a constant the SDK reads, split from `verification-run.ts`, where
+  // a module that builds zod schemas put most of zod on every page's first load (#2369).
+  'core/src/verdict': 21,
   // 17 since `hold.ts`: `clampHoldMs` is the bound BOTH input paths clamp `holdMs` with, so it
   // belongs to the contract rather than to either caller. The reason it is a file of its own rather
   // than a line in `global-press.ts` is the one recorded below: `core/src/wire`'s filenames are
@@ -139,7 +141,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 19 with `next-step.ts`: a coded refusal's `next` steps and the connect command, which the error
   // envelope carries to the agent. It needs `ReticleTool`, and `wire/constants` may not reach up
   // into `wire` (the directory-reach guard refused it there).
-  'core/src/wire': 20,
+  // 22 with `page-parse.ts` (the command and element query a page reads, checked without zod) and
+  // `coverage-marker.ts` (constants split from `platform-link.ts`): a module that builds zod schemas put most of zod on every page's first load (#2369).
+  'core/src/wire': 22,
   // 11 with `match-args.ts`: the arguments of the `match` command that only a verdict sets
   // (`fullText`). It is one small group with a reader on each side of the wire, and nothing else in
   // `constants.ts` depends on it, so that file is the wrong place for it. Recorded rather than
@@ -183,7 +187,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // platform both, so it lives with the other formats behind the artifacts subpath.
   // 21 with `flow-results.ts`, the replay/suite/heal result envelopes split from `flow-types.ts` at
   // its line cap; re-exported from there, so nothing that imports flow types moved.
-  'core/src/artifacts': 21,
+  // 22 with `impact-constants.ts`: two constants the SDK reads, split from `impact.ts`, where
+  // a module that builds zod schemas put most of zod on every page's first load (#2369).
+  'core/src/artifacts': 22,
   // 11 since `hud-entry.ts`, the `@reticlehq/core/hud` subpath. Entry points live at the package root
   // beside `tour-entry.ts` and `telemetry-entry.ts`, because package.json names them by path.
   // 12 with `telemetry-signals.ts`: the account, client, HUD, link and Harness-run vocabulary, beside
@@ -193,7 +199,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // into one directory is the next step if this grows again.
   // 14 with `activation-entry.ts`: the `./activation` subpath. A subpath entry sits at the root
   // beside `hud-entry.ts` and `tour-entry.ts`, so the page loader does not load the core barrel.
-  'core/src': 14,
+  // 16 with `page-entry.ts`, the `./page` subpath the SDK loads instead of the barrel, and
+  // `browser-brand.ts`, a constant split from `telemetry-feedback.ts`: a module that builds zod schemas put most of zod on every page's first load (#2369).
+  'core/src': 16,
   // 19 with `state-bookkeeping.ts`: telling a query cache's own bookkeeping from a state change.
   // 20 with `superseded-checks.ts`: the one rule every fold of a run's checks applies.
   'engine/src/evidence': 20,
@@ -245,7 +253,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // than about what it can see: how it may be driven, and the state a suite starts from. Recorded
   // rather than grouped -- this directory IS the vocabulary, and splitting it would put nouns an
   // implementer reads together into two places.
-  'open-verification/src/vocabulary': 12,
+  // 13 with `channel-id.ts`: the channel names and trust grades, split from `channel.ts`, where
+  // a module that builds zod schemas put most of zod on every page's first load (#2369).
+  'open-verification/src/vocabulary': 13,
   // 12 since `defaultRunId` moved out of `runner-port.ts` into its own leaf: `verification-sync`
   // wanted that one function and imported a module that pulls the whole flow-replay stack, closing a
   // cycle. Same trade as `language/flows` below — a cycle is paid for in files.
@@ -388,7 +398,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // suite verdict and the suite selection, which all live here.
   // +1: flow-start-path.ts, replay's start-page arrival split out of flow-replay-run.ts at the 1000-line cap (#1705).
   // +1: flow-lease.ts, the leased-context helpers split out of flow-tools.ts at the 1000-line cap (#1705).
-  'server/src/language/flows': 39,
+  // +1: flow-undecided.ts, the replay answers that decide nothing, split out of flow-replay.ts at the cap.
+  'server/src/language/flows': 40,
   // 12 since `drive-flow.ts`: the rule that turns a session's ambient tape into a flow per journey,
   // and the gate that refuses to save one asserting nothing. It sits beside `session-end.ts` because
   // teardown is the only caller and the tape is data by then — the reach guard already refused the

@@ -7,7 +7,8 @@
  * These tests pin the page's half: each shape matches, with and without a scope.
  */
 import { describe, it, expect } from 'vitest';
-import { ElementState, type ElementQuery } from '@reticlehq/core';
+import { type ElementQuery } from '@reticlehq/core';
+import { ElementState } from '@reticlehq/core';
 import { matchQuery } from './query.js';
 
 const SCOPE = '[data-testid=fixes-summary]';

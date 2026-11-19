@@ -5,4 +5,4 @@
  * reads straight off the network stack, and those need redacting by exactly this rule rather than by a
  * second copy of it. Re-exported here because this module's name is where the SDK's own callers look.
  */
-export { netUrlFields, redactUrl } from '@reticlehq/core';
+export { netUrlFields, redactUrl } from '@reticlehq/core/page';

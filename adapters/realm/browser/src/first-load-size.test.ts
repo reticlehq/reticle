@@ -394,6 +394,14 @@ const DIST_ENTRY = join(PACKAGE_ROOT, 'dist', 'index.js');
  * instead of a signal. Measured 267,263 B (every page that loads the SDK pays this, so the year budget is the tightest: ~27%) at 81e046201. Review it once a year, not per change; a
  * sudden jump inside it is still worth a look in review.
  */
+/*
+ * Kept at 340,000 B on 2026-11-15, by the founder's wish for a limit that does not change per PR.
+ * It had filled in five weeks. The published SDK measured 268,559 B (3.7.0), 290,388 B (3.8.0),
+ * 337,732 B (3.9.0) and 339,980 B (3.10.0): the step into 3.9.0 is the move to zod 4 (#1880). The
+ * fix was the zod, not the number (#2369): the SDK now reads `@reticlehq/core/page`, which names
+ * only zod-free modules, and checks its two messages without zod. Measured 221,113 B, so the year
+ * budget has its room back. "loads no zod on the way in" below keeps it that way.
+ */
 const MAX_FIRST_LOAD_BYTES = 340_000;
 /*
  * Raised 248_300 -> 248_400 for rail slide impressions: `HudUseData` gained an optional `slide`
@@ -565,6 +573,13 @@ const PANEL_DIR = '/presenter/';
  * download it on load anyway (about 7.5 KB with its styles), for a feature it never turns on.
  */
 const RECORDER_DIR = '/recorder/';
+/**
+ * zod, wherever the bundler put it. The move to zod 4 (#1880) put about 100 KB of it on every page
+ * load, 47 KB more than zod 3, and nothing said so until the ceiling was full (#2369). The page
+ * needs none of it to start: the two messages it reads on the way in have hand-written checks
+ * (`core/src/wire/page-parse.ts`). zod stays in the chunks a page fetches later.
+ */
+const ZOD_DIR = '/node_modules/zod/';
 
 /**
  * The panel is tens of KB wherever it sits, so this floor is far below the truth and far above zero.
@@ -593,6 +608,8 @@ interface Chunk {
  */
 function firstLoad(): {
   bytes: number;
+  zodBytes: number;
+  zodBytesAnywhere: number;
   panelBytes: number;
   panelBytesAnywhere: number;
   deferredBytes: number;
@@ -629,6 +646,7 @@ function firstLoad(): {
   walk(entry);
 
   let bytes = 0;
+  let zodBytes = 0;
   let panelBytes = 0;
   let recorderBytes = 0;
   for (const name of onTheWayIn) {
@@ -636,6 +654,9 @@ function firstLoad(): {
     for (const [source, piece] of Object.entries(chunks[name]?.inputs ?? {})) {
       if (source.includes(PANEL_DIR)) {
         panelBytes += piece.bytesInOutput;
+      }
+      if (source.includes(ZOD_DIR)) {
+        zodBytes += piece.bytesInOutput;
       }
       if (source.includes(RECORDER_DIR)) {
         recorderBytes += piece.bytesInOutput;
@@ -648,6 +669,7 @@ function firstLoad(): {
   // both — see the companion assertion below.
   let panelBytesAnywhere = 0;
   let recorderBytesAnywhere = 0;
+  let zodBytesAnywhere = 0;
   for (const [name, chunk] of Object.entries(chunks)) {
     if (!onTheWayIn.has(name) && name.endsWith('.js')) {
       deferredBytes += chunk.bytes;
@@ -659,10 +681,15 @@ function firstLoad(): {
       if (source.includes(RECORDER_DIR)) {
         recorderBytesAnywhere += piece.bytesInOutput;
       }
+      if (source.includes(ZOD_DIR)) {
+        zodBytesAnywhere += piece.bytesInOutput;
+      }
     }
   }
   return {
     bytes,
+    zodBytes,
+    zodBytesAnywhere,
     panelBytes,
     panelBytesAnywhere,
     deferredBytes,
@@ -697,6 +724,23 @@ describe('what a page downloads just for loading the SDK', () => {
         'on every page load, including the ones where no agent ever connects. Either find what ' +
         'grew, or raise this ceiling here with the reason.',
     ).toBeLessThanOrEqual(MAX_FIRST_LOAD_BYTES);
+  });
+
+  it('loads no zod on the way in', () => {
+    const { zodBytes, zodBytesAnywhere } = firstLoad();
+    // Not vacuous: the deferred chunks still parse with zod, so a path that stopped matching would
+    // read 0 here too, and this says it does not.
+    expect(
+      zodBytesAnywhere,
+      `no ${ZOD_DIR} bytes at all: the zod path stopped matching`,
+    ).toBeGreaterThan(0);
+    expect(
+      zodBytes,
+      `${String(zodBytes)} B of zod loads with the SDK. A schema on the way in brings most of zod: ` +
+        'one classic schema is about 85 KB, and zod mini beside a classic schema in a later chunk ' +
+        "brings zod's whole core. Read what the page needs on the way in without zod, and keep a " +
+        'module that builds schemas out of every barrel the first load imports.',
+    ).toBe(0);
   });
 
   it('keeps almost none of the in-page panel in that first load', () => {

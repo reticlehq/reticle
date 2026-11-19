@@ -9,7 +9,7 @@ import {
   StreamTransport,
   StreamDirection,
   fnv1a,
-} from '@reticlehq/core';
+} from '@reticlehq/core/page';
 import { captureMethod } from '@/patching/capture-method.js';
 import { observeSafely, observeValue, type Emit, type Teardown } from './types.js';
 import {

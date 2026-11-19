@@ -17,6 +17,7 @@ import { pathToFileURL } from 'node:url';
 import {
   alreadyWired,
   binaryExists,
+  devServerEnv,
   flowsSaved,
   probePage,
   writableLogDir,
@@ -552,5 +553,31 @@ describe('writableLogDir falls back to the project', () => {
     writeFileSync(join(project, '.reticle', 'logs', '.gitignore'), 'mine\n');
     const dir = writableLogDir(preferred, project);
     expect(readFileSync(join(dir, '.gitignore'), 'utf8')).toBe('mine\n');
+  });
+});
+
+/**
+ * Reported from a drive of a turbo monorepo: init ran the root `dev` script (`turbo run dev`), and
+ * turbo 2 passes a task only the variables its `turbo.json` declares. `init --env KEY=VALUE` and the
+ * `RETICLE_*` variables never reached the app, so the page presented another pairing token and was
+ * refused. The app's own script, which init ran before, received them.
+ */
+describe('the environment of a dev server init starts', () => {
+  const APP = join('/repo', 'apps', 'web');
+  const ROOT = '/repo';
+
+  it('asks turbo to pass the whole environment through when the script runs from the workspace root', () => {
+    expect(devServerEnv(APP, ROOT, { API_URL: 'x' }, {})).toEqual({
+      API_URL: 'x',
+      TURBO_ENV_MODE: 'loose',
+    });
+  });
+
+  it("leaves the app's own script as it was", () => {
+    expect(devServerEnv(APP, APP, { API_URL: 'x' }, {})).toEqual({ API_URL: 'x' });
+  });
+
+  it('keeps a turbo env mode the person chose', () => {
+    expect(devServerEnv(APP, ROOT, {}, { TURBO_ENV_MODE: 'strict' })).toEqual({});
   });
 });

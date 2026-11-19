@@ -28,6 +28,12 @@ export interface PageProbe {
    * Callers that open a browser or wait on a session should prefer this over the announcement (#884).
    */
   readonly reachedUrl?: string | undefined;
+  /**
+   * The answer was an HTML page (`text/html`, or a body that opens with `<!doctype` or `<html`).
+   * An API answers with JSON: a root `dev` script that starts the app and an API announces both, and
+   * only the HTML one is the app. Absent from a probe that did not read it.
+   */
+  readonly html?: boolean | undefined;
 }
 
 export const PageFinding = {

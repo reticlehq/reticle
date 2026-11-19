@@ -1,7 +1,12 @@
 import { expect, it } from 'vitest';
 import { ElementState, PredicateKind, type ElementDescriptor, type Ref } from '@reticlehq/core';
 
-import { ARIA_HIDDEN_NOTE, evalElement, HTML_TAG_TO_ARIA_ROLE } from './predicate-element.js';
+import {
+  ARIA_HIDDEN_NOTE,
+  ARIA_HIDDEN_STATE_NOTE,
+  evalElement,
+  HTML_TAG_TO_ARIA_ROLE,
+} from './predicate-element.js';
 import { waitForPredicate } from './predicate.js';
 import { residualQueryChecks, satisfiesResiduals } from './predicate-schema.js';
 import type { PredicateSession } from './predicate-session.js';
@@ -58,6 +63,20 @@ it('is inconclusive for receivesPointer on a page SDK older than 3.10.0', async 
   );
   expect(result.pass).toBe(false);
   expect(result.inconclusive).toContain('receivesPointer');
+  expect(result.inconclusive).toContain('3.10.0');
+});
+
+it('is inconclusive for painted on a page SDK older than 3.10.0', async () => {
+  const old: PredicateSession = { ...session, sdkVersion: '3.9.0' };
+  const result = await evalElement(
+    old,
+    { role: 'button', name: 'Close' },
+    ElementState.PAINTED,
+    true,
+    true,
+  );
+  expect(result.pass).toBe(false);
+  expect(result.inconclusive).toContain('painted');
   expect(result.inconclusive).toContain('3.10.0');
 });
 
@@ -212,6 +231,70 @@ it('a role miss names the controls carrying that name under their real role — 
   expect(result.evidence).toEqual({ nearestByName: [composer] });
 });
 
+/**
+ * A check scoped to one table cell looked only in that cell, but its role and name miss listed the
+ * names of every cell in the table, which can be another user's text (#2282). The follow-up queries
+ * keep the scope, so the failure names only what is inside it.
+ */
+it('a scoped role+name miss lists only names inside the scope', async () => {
+  const inCell = { ref: 'e2', role: 'button', name: 'Edit', states: [], visible: true };
+  const elsewhere = { ref: 'e9', role: 'button', name: 'Private note', states: [], visible: true };
+  const page = pageWith((q) => {
+    if ('button' !== q['role'] || undefined !== q['name']) {
+      return undefined;
+    }
+    return '#cell-1' === q['scope'] ? [inCell] : [inCell, elsewhere];
+  });
+  const result = await evalElement(
+    page,
+    { role: 'button', name: 'Delete', scope: '#cell-1' },
+    undefined,
+    false,
+    true,
+  );
+  expect(result.pass).toBe(false);
+  expect(result.failureReason).toContain('saw: Edit');
+  expect(result.failureReason).not.toContain('Private note');
+  expect(result.evidence).toEqual({ nearMiss: [inCell] });
+});
+
+it('a scoped role miss names same-name controls only inside the scope', async () => {
+  const composer = { ref: 'e7', role: 'generic', name: 'Delete', states: [], visible: true };
+  const page = pageWith((q) =>
+    'Delete' === q['label'] && undefined === q['scope'] ? [composer] : undefined,
+  );
+  const result = await evalElement(
+    page,
+    { role: 'button', name: 'Delete', scope: '#cell-1', self: true },
+    undefined,
+    false,
+    true,
+  );
+  expect(result.pass).toBe(false);
+  expect(result.failureReason).not.toContain('e7');
+  expect(result.evidence).not.toEqual({ nearestByName: [composer] });
+});
+
+it('a scoped role miss passes the scope and self to the name lookup', async () => {
+  const seen: Record<string, unknown>[] = [];
+  const page = pageWith((q) => {
+    seen.push(q);
+    return undefined;
+  });
+  await evalElement(
+    page,
+    { role: 'button', name: 'Delete', scope: '#cell-1', self: true },
+    undefined,
+    false,
+    true,
+  );
+  const followUps = seen.filter((q) => q['name'] === undefined);
+  expect(followUps.length).toBeGreaterThan(0);
+  for (const q of followUps) {
+    expect(q).toMatchObject({ scope: '#cell-1', self: true });
+  }
+});
+
 it('a case-only text miss says what would hold, and the verdict stays a failure', async () => {
   const page = pageWith(() => undefined, { caseMiss: 'Trial' });
   const result = await evalElement(
@@ -252,6 +335,55 @@ it('names the aria-hidden subtree when the hint says so (#1070)', async () => {
   const result = await evalElement(withHint, { text: 'Hello' }, undefined, false, true);
   expect(result.pass).toBe(false);
   expect(result.failureReason).toContain(ARIA_HIDDEN_NOTE);
+});
+
+it('names aria-hidden when a visible state miss is caused only by aria-hidden (#1648)', async () => {
+  const withHint: PredicateSession = {
+    ...session,
+    command: (_cmd, payload) => {
+      const p = payload as { state?: ElementState };
+      if (p?.state !== undefined) {
+        return Promise.resolve({
+          ok: true,
+          id: '1',
+          kind: 'command_result' as const,
+          result: {
+            matched: false,
+            count: 0,
+            elements: [],
+            hint: {
+              route: '/',
+              presentTestids: [],
+              presentRegions: [],
+              knownEmptyState: false,
+              ariaHiddenState: true,
+            },
+          },
+        });
+      }
+      return Promise.resolve({
+        ok: true,
+        id: '2',
+        kind: 'command_result' as const,
+        result: {
+          matched: true,
+          count: 1,
+          elements: [
+            {
+              ref: '1',
+              role: 'generic',
+              name: '',
+              states: [ElementState.PRESENT, ElementState.HIDDEN],
+              visible: false,
+            },
+          ],
+        },
+      });
+    },
+  };
+  const result = await evalElement(withHint, { testid: 'bg' }, ElementState.VISIBLE, false, true);
+  expect(result.pass).toBe(false);
+  expect(result.failureReason).toContain(ARIA_HIDDEN_STATE_NOTE);
 });
 
 it('does not blame aria-hidden when a visible element exists in the wrong state (#1070)', async () => {

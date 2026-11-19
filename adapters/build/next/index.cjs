@@ -526,6 +526,55 @@ function sdkPackageVersion() {
 }
 
 /**
+ * The state folder as a RegExp: the form webpack accepts alone, and the form Next's own default uses.
+ *
+ * Anchored on the start of the path or a separator, so it matches the folder and not a name that
+ * only ends in `.reticle`. Both separators are accepted because the path arrives in the platform's
+ * own form.
+ */
+const STATE_DIR_IGNORE = new RegExp(
+  `(^|[\\\\/])${RETICLE_HOME_DIR.replace('.', '\\.')}([\\\\/]|$)`,
+);
+/** The same folder as a glob, for the one case where webpack takes only strings (an array of them). */
+const STATE_DIR_IGNORE_GLOB = `**/${RETICLE_HOME_DIR}/**`;
+
+/**
+ * Add the Reticle state folder to webpack's `watchOptions.ignored`, and keep what is already there.
+ *
+ * The daemon rewrites files in `<project>/.reticle/` while a tab is connected (`ambient.json`, and
+ * the session journals). Next's default ignore list holds only `.git`, `.next` and `node_modules`,
+ * so every write looked like a source change. The dev server then sent a server-component update
+ * every few seconds, and the page refetched and lost its refs and sessions.
+ *
+ * `ignored` has three legal shapes in webpack 5, and the merge must not treat them alike:
+ * - A RegExp (the shape Next sets): join it with ours in one RegExp. An array may hold only
+ *   strings, so the RegExp cannot go in a list.
+ * - A string: it is one glob. Spreading it would split it into one pattern per character, which
+ *   drops the app's own exclusion with no error.
+ * - An array of strings: append the glob. An empty string is invalid in this list, so skip it.
+ *
+ * It returns a new value and never changes the one it is given: Next freezes its own options.
+ *
+ * @param {unknown} existing
+ * @returns {RegExp | string[]}
+ */
+function mergeWatchIgnored(existing) {
+  if (existing === undefined || existing === null) {
+    return STATE_DIR_IGNORE;
+  }
+  if (existing instanceof RegExp) {
+    // `g` and `y` make `.test()` remember the last match, so a joined pattern would skip paths.
+    const flags = existing.flags.replace(/[gy]/g, '');
+    return new RegExp(`(?:${existing.source})|(?:${STATE_DIR_IGNORE.source})`, flags);
+  }
+  const listed = Array.isArray(existing) ? existing : [existing];
+  return [
+    ...listed.filter((entry) => typeof entry === 'string' && entry !== ''),
+    STATE_DIR_IGNORE_GLOB,
+  ];
+}
+
+/**
  * @param {import('next').NextConfig} [nextConfig]
  * @param {{ sourceMapping?: boolean }} [options] Pass `{ sourceMapping: false }` for an app that
  *   renders through a non-DOM React reconciler — react-three-fiber, react-pdf, ink. A lowercase JSX
@@ -611,6 +660,14 @@ function withReticle(nextConfig = {}, options = {}) {
       NEXT_PUBLIC_RETICLE_SDK_VERSION: sdkPackageVersion(),
     },
     webpack(config, ctx) {
+      if (ctx?.dev) {
+        // A new object, not an edit: Next hands over `watchOptions` frozen. This is separate from
+        // source mapping on purpose, so `sourceMapping: false` still stops the rebuild loop.
+        config.watchOptions = {
+          ...config.watchOptions,
+          ignored: mergeWatchIgnored(config.watchOptions?.ignored),
+        };
+      }
       if (options.sourceMapping !== false) {
         config.module = config.module || { rules: [] };
         config.module.rules = config.module.rules || [];

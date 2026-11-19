@@ -15,6 +15,7 @@ import {
   devServerDiedMessage,
   portBusyMessage,
   QUIET_MEANS_HUNG_MS,
+  candidateUrls,
   urlToWatch,
   WaitVerdict,
 } from './bringup/dev-server-wait.js';
@@ -227,6 +228,11 @@ export interface SetupInput {
   readonly suppliedUrl?: string | undefined;
   /** The port the dev command will take, when it is known. See probe/dev-port.ts. */
   readonly devPort?: number | undefined;
+  /**
+   * The app's folder name and package name. A workspace root's `dev` script starts several servers,
+   * and their output lines are prefixed with the package; these pick the app's url among them.
+   */
+  readonly appNames?: readonly string[] | undefined;
   /** The Vite config init left for a manual step. A dev-server stop names it (#1263). */
   readonly pendingViteConfig?: string | undefined;
   /**
@@ -253,6 +259,24 @@ export interface SetupInput {
   readonly htmlCarriesSdk: boolean;
   readonly phaseTimeoutMs: number;
   readonly pollMs: number;
+}
+
+/**
+ * For a root dev script: the first candidate that serves an HTML page, with its probe. An API that
+ * answers first with JSON is skipped, so its url is never taken for the app's. A probe that does
+ * not say whether it read HTML counts as a page, as every probe did before.
+ */
+async function firstPageCandidate(
+  urls: readonly string[],
+  probePage: (url: string) => Promise<PageProbe>,
+): Promise<{ url: string; probe: PageProbe } | undefined> {
+  for (const url of urls) {
+    const probe = await probePage(url);
+    if (probe.served && false !== probe.html) {
+      return { url, probe };
+    }
+  }
+  return undefined;
 }
 
 const asProgress = (input: SetupInput, o: Partial<SetupOutcome>): Progress => ({
@@ -377,17 +401,31 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
       // "wedged" has been given no way to act. See wait-progress.ts.
       let spokeAtMs: number | undefined;
       for (;;) {
-        const watching = urlToWatch(fx.devServerOutput(), fx.observedPorts());
+        const hint = { port: input.devPort, names: input.appNames };
+        // A root script starts the app and its siblings (an API): wait for the one that serves a page.
+        const rootPick =
+          undefined === input.devCommandDir
+            ? undefined
+            : await firstPageCandidate(
+                candidateUrls(fx.devServerOutput(), fx.observedPorts(), hint),
+                fx.probePage,
+              );
+        const watching =
+          rootPick?.url ?? urlToWatch(fx.devServerOutput(), fx.observedPorts(), hint);
         const waitedMs = fx.now() - startedAt;
         const progress = waitProgressLine(waitedMs, watching, spokeAtMs);
         if (progress !== undefined) {
           note(progress);
           spokeAtMs = waitedMs;
         }
-        const probe =
-          undefined === watching
-            ? { served: false as const, sdkInPage: false as const }
-            : await fx.probePage(watching);
+        let probe: PageProbe;
+        if (undefined !== rootPick) {
+          probe = rootPick.probe;
+        } else if (undefined === watching || undefined !== input.devCommandDir) {
+          probe = { served: false, sdkInPage: false };
+        } else {
+          probe = await fx.probePage(watching);
+        }
         const serving = probe.served;
         const verdict = judgeWait({
           output: fx.devServerOutput(),

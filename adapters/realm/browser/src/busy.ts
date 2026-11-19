@@ -1,4 +1,4 @@
-import { RETICLE_BUSY_SIGNAL } from '@reticlehq/core';
+import { RETICLE_BUSY_SIGNAL } from '@reticlehq/core/page';
 import { captureMethod } from '@/patching/capture-method.js';
 
 /**

@@ -1,10 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
-import {
-  ComponentStateReason,
-  ReticleCommand,
-  type ComponentStateResult,
-  type MatchResult,
-} from '@reticlehq/core';
+import { type ComponentStateResult, type MatchResult } from '@reticlehq/core';
+import { ComponentStateReason, ReticleCommand } from '@reticlehq/core';
 import { createCommandRegistry, resolveNavigationUrl } from './commands.js';
 import { refs } from '@/dom/addressing/refs.js';
 import { registerStore, unregisterStore } from '@/registry/stores.js';

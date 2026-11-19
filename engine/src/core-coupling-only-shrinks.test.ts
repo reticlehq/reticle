@@ -76,7 +76,16 @@ import { fileURLToPath } from 'node:url';
  * constants below, and it reads events the way `evalNet` and `evalSignal` do, so it goes with the
  * rest when `Realm` arrives.
  */
-const MAX_FILES_IMPORTING_CORE = 45;
+/*
+ * 45 -> 46 for `write-answer.ts`, and it is a SPLIT like `predicate-state.ts`.
+ *
+ * `contradiction-evidence.ts` crossed the 1000-line cap when the `response-ignored` check for a
+ * waiting control (#2115) landed on top of main. Rule 6 says split, so the check moved out whole.
+ * It imports `EventType`, `asString` and `ReticleEvent`, which the file it left already imports, so
+ * the symbol ceiling does not move. Importing them through `contradiction-evidence.ts` would keep
+ * this number flat, and that is the laundering this guard exists to catch.
+ */
+const MAX_FILES_IMPORTING_CORE = 46;
 /**
  * Raised by one, deliberately, and this is the argument for it.
  *

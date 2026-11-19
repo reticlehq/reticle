@@ -4,7 +4,7 @@ import {
   PRE_ATTACH_FIELD,
   RETICLE_PRE_ATTACH_ERRORS,
   TRANSPORT_LIMITS,
-} from '@reticlehq/core';
+} from '@reticlehq/core/page';
 import { observeSafely, type Emit, type Teardown } from './types.js';
 import { safeStringify } from '@/security/serialization.js';
 import { requireCapturedMethod } from '@/util/captured-method.js';

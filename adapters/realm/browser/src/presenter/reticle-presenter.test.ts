@@ -1,12 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { type CommandMessage, type ReticleEvent } from '@reticlehq/core';
 import {
   EventType,
   HumanControlKind,
   ReticleCommand,
   MessageKind,
   SessionState,
-  type CommandMessage,
-  type ReticleEvent,
 } from '@reticlehq/core';
 
 // Capture the deps Reticle passes to Transport so tests can drive #handleCommand without a real

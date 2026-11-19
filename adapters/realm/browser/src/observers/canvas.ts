@@ -1,4 +1,4 @@
-import { CanvasTrigger, EventType } from '@reticlehq/core';
+import { CanvasTrigger, EventType } from '@reticlehq/core/page';
 
 export { CanvasTrigger };
 import { refs } from '@/dom/addressing/refs.js';

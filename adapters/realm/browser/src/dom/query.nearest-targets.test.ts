@@ -5,7 +5,8 @@
  * loop to find what they meant. The list is advice. The query still reports zero matches.
  */
 import { beforeEach, describe, expect, it } from 'vitest';
-import { QueryBy, type NearestTarget } from '@reticlehq/core';
+import { type NearestTarget } from '@reticlehq/core';
+import { QueryBy } from '@reticlehq/core';
 import { MAX_NEAREST_NAME, nameSimilarity, runQuery } from './query.js';
 
 function nearestOf(query: Parameters<typeof runQuery>[0]): NearestTarget[] | undefined {

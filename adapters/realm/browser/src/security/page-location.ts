@@ -5,7 +5,7 @@
  * `redactUrl`, but the route, the route events and the hello sent `location` raw, so a live session
  * token reached the agent's transcript. Every address the SDK sends comes from here.
  */
-import { redactUrl } from '@reticlehq/core';
+import { redactUrl } from '@reticlehq/core/page';
 
 /** The full address, with a token in the query, the fragment or the authority redacted. */
 export function pageHref(): string {

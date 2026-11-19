@@ -1,11 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { type HelloMessage } from '@reticlehq/core';
 import {
   CommandResultSchema,
   EventType,
   RETICLE_PROTOCOL_VERSION,
   MessageKind,
   TRANSPORT_LIMITS,
-  type HelloMessage,
 } from '@reticlehq/core';
 import { Transport } from './transport.js';
 

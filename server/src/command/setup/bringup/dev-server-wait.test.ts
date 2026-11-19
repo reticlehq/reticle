@@ -78,6 +78,37 @@ describe('which url to watch', () => {
   });
 });
 
+/**
+ * Reported from the field: `init` in a pnpm workspace ran the root `dev` script, which starts the
+ * Vite app AND a Fastify API. The API announced its url first, init probed it, said "the SDK is NOT
+ * in the page" and exited 1, while the app served on 5173. When the output announces several urls,
+ * the app's own is chosen: by the port the app is expected to take, else by the line that names it.
+ */
+describe('which url is the app, when the root script starts several servers', () => {
+  const BOTH =
+    'backend dev: Server listening at http://127.0.0.1:4000\n' +
+    'frontend dev:   ➜  Local:   http://localhost:5173/\n';
+
+  it('takes the url on the port the app is expected to take', () => {
+    expect(urlToWatch(BOTH, [], { port: 5173 })).toBe('http://localhost:5173');
+  });
+
+  it("takes the url on the line that names the app's folder or package", () => {
+    expect(urlToWatch(BOTH, [], { names: ['frontend', '@acme/web'] })).toBe(
+      'http://localhost:5173',
+    );
+    const turbo =
+      '@acme/api:dev: Server listening at http://127.0.0.1:4000\n' +
+      '@acme/web:dev:   ➜  Local:   http://localhost:5173/\n';
+    expect(urlToWatch(turbo, [], { names: ['web', '@acme/web'] })).toBe('http://localhost:5173');
+  });
+
+  it('keeps the first url when nothing says which one is the app', () => {
+    expect(urlToWatch(BOTH, [])).toBe('http://127.0.0.1:4000');
+    expect(urlToWatch(BOTH, [], { port: 3000, names: ['docs'] })).toBe('http://127.0.0.1:4000');
+  });
+});
+
 describe('a taken port is named, not reported as a silent exit (#802)', () => {
   it('reads CRA\'s "already running on port" prompt', () => {
     expect(

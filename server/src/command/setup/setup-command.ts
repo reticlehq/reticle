@@ -8,7 +8,7 @@
 
 import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { mcpLauncher } from './mcp-launcher.js';
 import { planAgentConfigs, platformKey } from './agent-configs.js';
 import { AppShape, describeShape, readShape } from './desktop-shape.js';
@@ -44,7 +44,7 @@ import {
   handedOverUrl,
   stopHandedOver,
 } from './bringup/dev-server-files.js';
-import { listSessions, OwnedDevServer, probePage } from './node-effects.js';
+import { devServerEnv, listSessions, OwnedDevServer, probePage } from './node-effects.js';
 import { fetchStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { daemonSkew, summarizeStatus } from '@/command/cli/launch/cli-launch.js';
 import {
@@ -294,6 +294,22 @@ async function afterConnect(
   return { flowSaved, notes };
 }
 
+/** The app's folder name and package name, to tell its url from a sibling server's. */
+function appNamesOf(appDir: string): string[] {
+  const names = [basename(appDir)];
+  try {
+    const pkg: unknown = JSON.parse(readFileSync(join(appDir, 'package.json'), 'utf8'));
+    const name: unknown =
+      'object' === typeof pkg && null !== pkg ? Reflect.get(pkg, 'name') : undefined;
+    if ('string' === typeof name && 0 < name.length) {
+      names.push(name);
+    }
+  } catch {
+    // No readable package.json: the folder name is still a name the runner prints.
+  }
+  return names;
+}
+
 export async function runSetupCommand(
   input: SetupCommandInput,
   print: (line: string) => void,
@@ -397,7 +413,7 @@ export async function runSetupCommand(
           `signing the dev build as ${String(signing[SigningEnv.IDENTITY])}, so macOS does not ask for the keychain password`,
         );
       }
-      server.start(command, cwd, { ...input.env, ...signing });
+      server.start(command, cwd, devServerEnv(input.appDir, cwd, { ...input.env, ...signing }));
       return Promise.resolve();
     },
     // Asked before the dev script is spawned: a listener on one loopback only is not this
@@ -487,6 +503,7 @@ export async function runSetupCommand(
         shape,
         projectId: readProjectId(input.appDir),
         ...(undefined === devPort ? {} : { devPort }),
+        appNames: appNamesOf(input.appDir),
       },
       effects,
     );

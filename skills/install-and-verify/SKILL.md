@@ -3,7 +3,7 @@ name: install-and-verify
 description: Verify that a web app change actually works by driving the running app from the inside (DOM, network, routing, console, framework state) instead of screenshots or guessing. Use after any user-facing change, when a fix is claimed but unproven, when a test passes but the UI is broken, or when you need a real verdict rather than "looks right". Also use to install and wire up Reticle in a project that does not have it yet.
 license: Apache-2.0
 metadata:
-  version: 3.10.2
+  version: 3.10.7
   homepage: https://www.reticle.sh
   repository: https://github.com/reticlehq/reticle
 ---
@@ -105,7 +105,7 @@ Every `until`, `predicate` and `expect` is `{ kind, ...fields }`; unknown fields
 
 | kind | fields |
 | --- | --- |
-| `element` | `query: { testid \| role+name \| text \| label \| placeholder \| alt \| component, scope? }`, `state?`: `visible` `hidden` `enabled` `disabled` `checked` `expanded` `pressed` `focused` `present` `inViewport` `receivesPointer`, `absent?` |
+| `element` | `query: { testid \| role+name \| text \| label \| placeholder \| alt \| component, scope? }`, `state?`: `visible` `hidden` `enabled` `disabled` `checked` `expanded` `pressed` `focused` `present` `inViewport` `receivesPointer` `painted`, `absent?` |
 | `text` | `contains`, `scope?`, `visible?`, `absent?`, `ignoreCase?`, `satisfies?` |
 | `net` | `method`, `urlContains`, `urlPath` (exact path, no query), `status`, `ok`, `count` (exact; omit = ≥1; 0 = never), `bodyContains`, `bodyMatches`, `requestBodyMatches`, `repeatable` |
 | `route` | `pathname` or `contains` |

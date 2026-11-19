@@ -51,7 +51,9 @@ The verdict reports the grade it proved, strongest first: `signal`, `net`, `stat
 }
 ```
 
-`query` accepts `role`, `name`, `text`, `label`, `placeholder`, `testid`, `alt`, `value`, `by`, `component`, `source`, `scope`, `self`, `attrs`, `matchCase`. Written flat on the predicate instead of under `query`, these fields are moved into `query` for you. `state` is one of `visible`, `hidden`, `enabled`, `disabled`, `checked`, `expanded`, `pressed`, `focused`, `inViewport`, `present`.
+`query` accepts `role`, `name`, `text`, `label`, `placeholder`, `testid`, `alt`, `value`, `by`, `component`, `source`, `scope`, `self`, `attrs`, `matchCase`. Written flat on the predicate instead of under `query`, these fields are moved into `query` for you. `state` is one of `visible`, `painted`, `hidden`, `enabled`, `disabled`, `checked`, `expanded`, `pressed`, `focused`, `inViewport`, `present`.
+
+`visible` asserts that the element is rendered on screen AND exposed to assistive technology (not `aria-hidden="true"`). Use `painted` to assert that the element is rendered on screen (CSS-painted: not `display: none`, not `opacity: 0`, not `visibility: hidden`, and not inside closed `<details>`) regardless of whether it is hidden from assistive tech. This allows asserting on decorative layers, WebGL `<canvas>` elements, and background illustrations that intentionally carry `aria-hidden="true"`. A `visible` miss caused only by `aria-hidden` reports that in its failure message.
 
 `value` is the one worth knowing about. `{ "role": "textbox", "name": "Amount" }` collapses to "a textbox called Amount exists", which passes against an empty field; adding `value` is what makes it an assertion about what the user will actually send. `by` selects the locator strategy explicitly, `component` and `source` match React component identity and source location, and `self` restricts a scoped match to the scope element itself rather than its descendants.
 

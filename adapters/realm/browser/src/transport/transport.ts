@@ -1,13 +1,11 @@
+import { type CommandMessage, type HelloMessage, type ReticleEvent } from '@reticlehq/core';
 import {
   CHURN_TYPES,
-  CommandMessageSchema,
   EventType,
   MessageKind,
   SESSION_LIFECYCLE,
-  type CommandMessage,
-  type HelloMessage,
-  type ReticleEvent,
-} from '@reticlehq/core';
+  parseCommandMessage,
+} from '@reticlehq/core/page';
 import { nativeSetTimeout, nativeNow } from '@/timers/native/native-timers.js';
 import { nativeWarn } from '@/timers/console/native-console.js';
 import { safeStringify } from '@/security/serialization.js';
@@ -328,8 +326,9 @@ export class Transport {
     } catch {
       return;
     }
-    const result = CommandMessageSchema.safeParse(parsed);
-    if (!result.success) {
+    // Checked without zod: a schema here would put most of zod on every page's first load (#2369).
+    const result = parseCommandMessage(parsed);
+    if (!result.ok) {
       // Also once silent. A command the page cannot parse is a version skew between the SDK and the
       // daemon, and dropping it produces the same unfalsifiable timeout every other hang produces — the one
       // failure mode where the cause is knowable and was being thrown away. Reply if we can recover
@@ -349,7 +348,7 @@ export class Transport {
       }
       return;
     }
-    const command = result.data;
+    const command = result.value;
     // #sessionId is set in onopen, which always precedes any inbound command on the same socket.
     //
     // A mismatch must NOT `return` silently: the command then has no reply of any kind, so the agent

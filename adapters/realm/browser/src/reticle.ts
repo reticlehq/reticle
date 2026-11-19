@@ -4,6 +4,12 @@ import { declareRoutes } from './observers/route.js';
 import { setOutwardPolicy } from './actions/danger-context.js';
 import { coverageMarkers, notApplicableFor } from './dom/addressing/coverage-markers.js';
 import {
+  type CommandMessage,
+  type HelloMessage,
+  type RedactionConfig,
+  type ReticleEvent,
+} from '@reticlehq/core';
+import {
   EventType,
   RETICLE_DEFAULT_PORT,
   RETICLE_PROTOCOL_VERSION,
@@ -27,11 +33,7 @@ import {
   CommandActor,
   HudCorner,
   HudVisibility,
-  type CommandMessage,
-  type HelloMessage,
-  type RedactionConfig,
-  type ReticleEvent,
-} from '@reticlehq/core';
+} from '@reticlehq/core/page';
 import { rememberSessionLabel, tabSessionStore } from './session-continuity.js';
 import { editEpoch } from './edit-epoch.js';
 import {

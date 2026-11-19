@@ -1,4 +1,5 @@
-import { TRANSPORT_LIMITS, asRef, type Ref } from '@reticlehq/core';
+import { type Ref } from '@reticlehq/core';
+import { TRANSPORT_LIMITS, asRef } from '@reticlehq/core/page';
 import { ReticleStorageKey } from '@/storage-keys.js';
 /**
  * Stable, human-meaningful element handles. Each element gets a ref like `e7`; the same

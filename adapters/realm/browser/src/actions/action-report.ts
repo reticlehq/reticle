@@ -5,7 +5,8 @@
  * has to happen before dispatch (the anchor, while the target is still mounted).
  */
 import { readTestId } from '@/dom/addressing/testid-attr.js';
-import { QueryBy, type SettleReason } from '@reticlehq/core';
+import { type SettleReason } from '@reticlehq/core';
+import { QueryBy } from '@reticlehq/core/page';
 import { elementsMatching } from '@/dom/query.js';
 import { ownWords } from '@/dom/query-finders.js';
 import { getAccessibleName, getRole, isSensitiveField } from '@/dom/a11y.js';

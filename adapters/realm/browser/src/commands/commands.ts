@@ -1,7 +1,7 @@
+import { type ComponentStateResult, type ElementQuery, type ElementState } from '@reticlehq/core';
 import {
   ANIMATION_TARGET_ARG,
   ComponentStateReason,
-  ElementQuerySchema,
   INSPECT_IN_VIEWPORT_FIELD,
   INSPECT_REVEAL_ARG,
   MatchArg,
@@ -9,12 +9,10 @@ import {
   SnapshotMode,
   SESSION_REF,
   TRANSPORT_LIMITS,
+  parseElementQuery,
   selectPath,
   capDepth,
-  type ComponentStateResult,
-  type ElementQuery,
-  type ElementState,
-} from '@reticlehq/core';
+} from '@reticlehq/core/page';
 import { buildSnapshot } from '@/dom/snapshot.js';
 import { paintContextOf } from '@/dom/paint-context.js';
 import { embeddedRootsUnder, matchQuery, runQuery } from '@/dom/query.js';
@@ -52,6 +50,15 @@ function num(value: unknown): number | undefined {
 
 function record(value: unknown): Record<string, unknown> {
   return 'object' === typeof value && value !== null ? (value as Record<string, unknown>) : {};
+}
+
+/** The `match` query, checked without zod (#2369). A query the page cannot read throws its reason. */
+function elementQueryOf(value: unknown): ElementQuery {
+  const parsed = parseElementQuery(record(value));
+  if (!parsed.ok) {
+    throw new Error(`invalid query: ${parsed.error}`);
+  }
+  return parsed.value;
 }
 
 function sourceLocation(value: unknown): ElementQuery['source'] {
@@ -449,7 +456,7 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
   });
   reg.set(ReticleCommand.MATCH, (args) =>
     matchQuery(
-      ElementQuerySchema.parse(record(args['query'])),
+      elementQueryOf(args['query']),
       str(args['state']) as ElementState | undefined,
       undefined,
       undefined,

@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/server",
-  "version": "3.10.2",
+  "version": "3.10.7",
   "mcpName": "io.github.reticlehq/reticle",
   "description": "Reticle CLI, bridge and MCP server: a coding agent drives your running web app from the inside and gets a verdict with evidence, for change verification, access control, accessibility, performance and SEO checks.",
   "type": "module",
@@ -75,7 +75,7 @@
     "cli"
   ],
   "reticle": {
-    "changelog": "3.10.2 fixes a false verdict: a settled check never passed on a page where an attribute was written again with the same value. Such a write changes nothing, so it no longer counts as activity.",
+    "changelog": "3.10.7 fixes a false failure on replay: a step whose check could not be decided (the page did not return the whole text) now replays as unknown, not failed. It also names a select inside its label by the label's words, and draws faded-in rows in the in-page screenshot.",
     "breakingChanges": []
   },
   "publishConfig": {

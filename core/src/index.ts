@@ -52,6 +52,13 @@ export * from './wire/constants/determinism.js'; // the clock and random source 
 export * from './identity/document-identity.js'; // which document an observation belongs to
 export * from './identity/edit-epoch.js'; // which round of source edits an observation belongs to
 export * from './wire/messages.js'; // ReticleEvent + the message schemas
+// zod-free modules the SDK reads on the way in. Exported here, not through the classic module
+// beside them: a name that passes through a module keeps all of its schemas on the page (#2369).
+export * from './wire/page-parse.js'; // the two messages a page reads on the way in, checked without zod
+export * from './wire/coverage-marker.js';
+export * from './verdict/step-screenshot.js';
+export * from './browser-brand.js';
+export * from './artifacts/impact-constants.js';
 export * from './wire/production/hello-mode.js'; // HelloEnv / HelloScope: a leaf the SDK sends
 export * from './wire/production/production-policy.js'; // the production action policy: rules + refused requests
 export * from './wire/production/activation-ticket.js'; // the signed ticket a live page checks before it loads the SDK

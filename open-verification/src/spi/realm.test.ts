@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Realm } from './realm.js';
-import { CHANNEL_DEFAULTS, ChannelId, Grade, Independence } from '@/vocabulary/channel.js';
+import { CHANNEL_DEFAULTS, Grade, Independence } from '@/vocabulary/channel-id.js';
+import { ChannelId } from '@/vocabulary/channel-id.js';
 import type { ChannelDescriptor } from '@/vocabulary/channel.js';
 import { CloseCondition, RefusalReason } from '@/vocabulary/realm-surface.js';
 import type { Action, ActionReceipt, Capability, Window } from '@/vocabulary/realm-surface.js';

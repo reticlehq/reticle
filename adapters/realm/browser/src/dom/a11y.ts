@@ -1,11 +1,11 @@
 import { readTestId } from './addressing/testid-attr.js';
+import { type ElementDescriptor } from '@reticlehq/core';
 import {
   DEFAULT_TESTID_ATTR,
   ElementState,
   REDACTED_VALUE,
   TRANSPORT_LIMITS,
-  type ElementDescriptor,
-} from '@reticlehq/core';
+} from '@reticlehq/core/page';
 import {
   isButton,
   isImage,
@@ -249,7 +249,7 @@ function labelledByText(el: Element): string | null {
  * alternatives: `<button><img alt="Close"></button>` is named "Close", not nameless. Pieces are
  * joined with spaces so an icon followed by a word never fuses into one unmatchable token.
  */
-function textWithoutHidden(node: Node): string {
+function textWithoutHidden(node: Node, skip?: Element): string {
   if (node.nodeType === Node.TEXT_NODE) {
     return node.textContent ?? '';
   }
@@ -257,7 +257,9 @@ function textWithoutHidden(node: Node): string {
     return '';
   }
   const el = node as Element;
-  if ('true' === el.getAttribute('aria-hidden') || isNonRendered(el)) {
+  // A label that wraps its control: the control's own content (a select's options, a textarea's
+  // default text) is not part of the name it gets from that label, as in a browser.
+  if (el === skip || 'true' === el.getAttribute('aria-hidden') || isNonRendered(el)) {
     return '';
   }
   if (isImage(el)) {
@@ -267,7 +269,7 @@ function textWithoutHidden(node: Node): string {
   let result = '';
   let lastWasElement = false;
   for (const child of el.childNodes) {
-    const piece = textWithoutHidden(child);
+    const piece = textWithoutHidden(child, skip);
     if (0 === piece.length) {
       continue;
     }
@@ -321,7 +323,7 @@ export function getAccessibleName(el: Element): string {
     const labels = el.labels;
     if (labels !== null && labels.length > 0) {
       const text = [...labels]
-        .map((l) => collapse(textWithoutHidden(l)))
+        .map((l) => collapse(textWithoutHidden(l, el)))
         .join(' ')
         .trim();
       if (text.length > 0) {
