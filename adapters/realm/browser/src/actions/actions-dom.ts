@@ -338,10 +338,12 @@ export function leavePreviousHover(next: Element): EventTarget {
   // coordinates the out and leave events read (0, 0) to a handler that hit-tests (#1851).
   const prevCoords: MouseEventInit = isActionTarget(prev) ? coordsAt(centreOf(prev)) : {};
   firePointer(prev, 'pointerout', next, prevCoords);
-  prev.dispatchEvent(mouseEventFor(prev, 'mouseout', { bubbles: true, relatedTarget: next }));
+  prev.dispatchEvent(
+    mouseEventFor(prev, 'mouseout', { bubbles: true, relatedTarget: next, ...prevCoords }),
+  );
   for (let el: Element | null = prev; el !== null && !el.contains(next); el = el.parentElement) {
     firePointerNonBubbling(el, 'pointerleave', next, prevCoords);
-    el.dispatchEvent(mouseEventFor(el, 'mouseleave', { relatedTarget: next }));
+    el.dispatchEvent(mouseEventFor(el, 'mouseleave', { relatedTarget: next, ...prevCoords }));
   }
   return prev;
 }

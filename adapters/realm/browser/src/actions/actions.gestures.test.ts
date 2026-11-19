@@ -216,6 +216,31 @@ describe('hover carries where the pointer is', () => {
       ['pointermove', 60, 40],
     ]);
   });
+
+  it('puts the leave events at the centre of the element the pointer leaves', async () => {
+    // The other half of the same path: moving to a second element leaves the first.
+    // The pointer events on the way out carried the first element's centre, but the
+    // mouse events did not, so a hit-testing handler read (0, 0) from mouseout and
+    // mouseleave for a pointer that was never there (#1851).
+    const first = mount('<button>First</button>');
+    const second = document.createElement('button');
+    second.textContent = 'Second';
+    document.body.appendChild(second);
+    first.getBoundingClientRect = () => new DOMRect(10, 20, 100, 40);
+    const seen: Array<[string, number, number]> = [];
+    for (const type of ['pointerout', 'mouseout', 'mouseleave']) {
+      first.addEventListener(type, (e) =>
+        seen.push([type, (e as MouseEvent).clientX, (e as MouseEvent).clientY]),
+      );
+    }
+    await act(first, ActionType.HOVER);
+    await act(second, ActionType.HOVER);
+    expect(seen).toEqual([
+      ['pointerout', 60, 40],
+      ['mouseout', 60, 40],
+      ['mouseleave', 60, 40],
+    ]);
+  });
 });
 
 describe('zoom refuses rather than faking it', () => {
