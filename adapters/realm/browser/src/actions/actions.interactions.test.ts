@@ -790,7 +790,67 @@ describe('upload resolves the file input a dropzone hides', () => {
   it('resolves an input the target contains', async () => {
     document.body.innerHTML =
       '<div id="d" role="button">Drop files<input id="f" type="file" aria-hidden="true"></div>';
-    expect(await errorOf('#d')).not.toMatch(/upload target must be/);
+    const changes = stubFiles(fileInputById('f'));
+    const done: unknown = await uploadOnSelector('#d');
+    expect(done).not.toBeInstanceOf(Error);
+    expect(changes).toEqual(['f']);
+  });
+
+  it('resolves a button inside a label that wraps a file input', async () => {
+    document.body.innerHTML =
+      '<label>Upload<input id="f" type="file"><button id="b" type="button">Browse</button></label>';
+    const changes = stubFiles(fileInputById('f'));
+    const done: unknown = await uploadOnSelector('#b');
+    expect(done).not.toBeInstanceOf(Error);
+    expect(changes).toEqual(['f']);
+  });
+
+  it('resolves a button and its input together in one shadow root', async () => {
+    document.body.innerHTML = '<div id="host"></div>';
+    const host = document.getElementById('host');
+    if (!(host instanceof HTMLElement)) throw new Error('no host');
+    const root = host.attachShadow({ mode: 'open' });
+    root.innerHTML = '<button id="b" type="button">Browse</button><input id="f" type="file">';
+    const input = root.getElementById('f');
+    if (!(input instanceof HTMLInputElement)) throw new Error('no shadow input');
+    const changes = stubFiles(input);
+    const button = root.getElementById('b');
+    if (null === button) throw new Error('no shadow button');
+    const done: unknown = await uploadOn(button);
+    expect(done).not.toBeInstanceOf(Error);
+    expect(changes).toEqual(['f']);
+  });
+
+  it('REFUSES a Browse button with an empty dropzone when the page sits in #root', async () => {
+    // The walk used to stop only at body or html. Most apps wrap the whole page in
+    // <div id="root">, so the walk decided there and a Browse button with no input in
+    // its dropzone picked up the header's avatar input. The walk now stops at the first
+    // ancestor that holds another interactive control: here the header's avatar menu
+    // button, so the upload refuses and no input gets change.
+    document.body.innerHTML =
+      '<div id="root">' +
+      '<header><button id="avatar-menu" type="button">Avatar</button>' +
+      '<input id="avatar" type="file"></header>' +
+      '<main><div class="dropzone"><button id="b" type="button">Browse</button></div></main>' +
+      '</div>';
+    const changes = stubFiles(fileInputById('avatar'));
+    expect(String(await uploadOnSelector('#b'))).toMatch(/upload target must be/);
+    expect(changes).toEqual([]);
+  });
+
+  it('REFUSES a dropzone in #root next to a form that holds its own file input', async () => {
+    // The dropzone holds no input and a sibling form holds exactly one. The walk must
+    // not claim it: #root holds the form's Save button, an interactive control that is
+    // neither the target nor a file input, so the walk refuses before it can decide.
+    document.body.innerHTML =
+      '<div id="root">' +
+      '<div class="dropzone"><button id="b" type="button">Browse</button></div>' +
+      '<form><button id="save" type="submit">Save</button>' +
+      '<input id="profile" type="file"></form>' +
+      '</div>';
+    const changes = stubFiles(fileInputById('profile'));
+    expect(String(await uploadOnSelector('#b'))).toMatch(/upload target must be/);
+    expect(changes).toEqual([]);
   });
 
   it('REFUSES when the scope holds more than one file input', async () => {

@@ -742,17 +742,43 @@ function fileInputsIn(scope: Element): HTMLInputElement[] {
   return Array.from(scope.querySelectorAll('input[type="file"]')).filter(isInput);
 }
 
+/** The interactive controls that bound the upload walk: a decision past one of these is a guess. */
+const INTERACTIVE_CONTROL_SELECTOR = 'button, a, input, select, textarea';
+
+/**
+ * Whether `queryRoot` holds an interactive control that is neither the upload target nor a
+ * file input. The target and the file inputs are the two things the walk is allowed to see.
+ * Anything else — the header's avatar menu button, a form's Save button — means the input the
+ * walk would decide on belongs to another part of the page, so the walk stops here.
+ */
+function holdsOtherInteractiveControl(
+  queryRoot: Element | ShadowRoot,
+  target: ActionTarget,
+): boolean {
+  const controls = queryRoot.querySelectorAll(INTERACTIVE_CONTROL_SELECTOR);
+  return Array.from(controls).some(
+    (control) => control !== target && !(isInput(control) && 'file' === control.type),
+  );
+}
+
 /**
  * The file input an `upload` on a non-input target means (#1249).
  *
  * The standard dropzone pattern hides the input (`sr-only`, `aria-hidden`) behind a Browse
  * button. The snapshot skips `aria-hidden` subtrees, so the input never gets a ref and the
  * button is the only target the agent can name. Resolve the input the target labels first (a
- * label target, or the label that wraps the target), then walk outward from the target: the
- * first container that holds any file input decides, which covers an input the target contains,
- * a sibling in the same dropzone, and the inputs of the enclosing form. More than one input in
- * the deciding scope is a refusal, never a guess: setting files on the wrong input reports a
- * success the app never saw.
+ * label target, or the label that wraps the target), then walk outward from the target.
+ *
+ * The walk is bounded two ways. It stops at the first ancestor that holds an interactive
+ * control other than the target and the file inputs: a button, link, input, select or
+ * textarea. Past that point the input the walk would decide on belongs to another part of
+ * the page — most apps wrap the whole page in a `<div id="root">`, so a wrapper scope
+ * would otherwise hand a Browse button with an empty dropzone the header's avatar input,
+ * and the upload would report a success the app never saw. The nearest enclosing form is
+ * the last scope it queries, and it never decides at `body` or `html`, for the same
+ * reason. More than one input in the deciding scope is a refusal, never a guess. At the
+ * top of a shadow tree the walk queries the shadow root itself before hopping to the host,
+ * so a dropzone inside a shadow root resolves.
  */
 function resolveUploadInput(el: ActionTarget): HTMLInputElement {
   const label = isLabel(el) ? el : el.closest('label');
@@ -760,17 +786,19 @@ function resolveUploadInput(el: ActionTarget): HTMLInputElement {
   if (isInput(labeled) && 'file' === labeled.type) return labeled;
 
   let scope: Element | null = el;
+  let aboveTarget = false;
   while (null !== scope) {
-    const found = fileInputsIn(scope);
-    if (1 < found.length) {
-      throw new Error(
-        `upload target is not a file input and its scope holds ${found.length} file inputs — ` +
-          'target the file input itself so the upload cannot land on the wrong one',
-      );
+    if ('BODY' !== scope.tagName && 'HTML' !== scope.tagName) {
+      const queryRoot = shadowRootAbove(scope) ?? scope;
+      if (aboveTarget && holdsOtherInteractiveControl(queryRoot, el)) {
+        throw new Error('upload target must be a <input type="file">');
+      }
+      const only = onlyFileInputIn(scope);
+      if (undefined !== only) return only;
     }
-    const only = found[0];
-    if (only !== undefined) return only;
-    scope = scope.parentElement;
+    if (isForm(scope)) break;
+    scope = parentAcrossShadowBoundary(scope);
+    aboveTarget = true;
   }
   throw new Error('upload target must be a <input type="file">');
 }
