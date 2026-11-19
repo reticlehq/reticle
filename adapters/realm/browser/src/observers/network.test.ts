@@ -1039,6 +1039,40 @@ describe('installNetwork (request-body shape fingerprint)', () => {
     expect(shape).toMatch(/^[0-9a-f]{8}$/);
   });
 
+  it('separates same-shape, same-length JSON bodies whose values differ (#1521)', async () => {
+    const accessSets = await shapeOfPost(JSON.stringify({ cmd: 'accessSets' }));
+    const currencies = await shapeOfPost(JSON.stringify({ cmd: 'currencies' }));
+    expect(accessSets).not.toBe(currencies);
+  });
+
+  it('gives a run of Tauri-style invoke calls distinct fingerprints (#1521)', async () => {
+    const names = ['get_balance', 'list_orders', 'fetch_users', 'sync_states'];
+    const shapes = new Set<unknown>();
+    for (const name of names) {
+      shapes.add(await shapeOfPost(JSON.stringify({ name })));
+    }
+    expect(shapes.size).toBe(names.length);
+  });
+
+  it('separates two sends that differ only in a timestamp or a request id (#1521)', async () => {
+    // What the duplicate-request rule reports for these, stated plainly: NOT a duplicate.
+    // The rule keys on fingerprint equality, and a per-send timestamp or id field makes the
+    // fingerprints differ, so a double submit whose body carries one is missed. That is the
+    // cost of separating distinct commands that share a shape; the salt test in
+    // body-fingerprint.test.ts pins why the values must be hashed to do it.
+    const first = await shapeOfPost(
+      JSON.stringify({ cmd: 'save', ts: 1730000000000, requestId: 'req-1' }),
+    );
+    const second = await shapeOfPost(
+      JSON.stringify({ cmd: 'save', ts: 1730000005000, requestId: 'req-2' }),
+    );
+    expect(first).not.toBe(second);
+    const repeat = await shapeOfPost(
+      JSON.stringify({ cmd: 'save', ts: 1730000000000, requestId: 'req-1' }),
+    );
+    expect(repeat).toBe(first);
+  });
+
   it('reports a bodyless write as carrying no body, not as an unknown one', async () => {
     expect(await shapeOfPost('')).toBe(REQUEST_SHAPE_NONE);
     const { emit, events } = collect();
