@@ -28,7 +28,10 @@ import { realmOf, AppRuntime, isOpaqueOrigin, ReticleTool } from '@reticlehq/cor
  * this value, so it is a wire value, and two independent spellings of it is how one side gains a
  * runtime the other silently refuses to recognise.
  */
-export type PageRuntime = AppRuntime;
+// A string, not only `AppRuntime`: a realm that a host registered (`registerRealm`) reports a name
+// with the extension prefix, and the session keeps it. Compare with `AppRuntime` values or ask
+// `realmOf`; do not list the names again.
+export type PageRuntime = string;
 
 interface TimeoutContext {
   url: string;

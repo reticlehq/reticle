@@ -202,6 +202,39 @@ export function registerRealm(runtime: string, traits: RealmTraits): void {
 }
 
 /** Every runtime this process understands: the built-ins, plus whatever a host registered. */
+/**
+ * True for the name of any realm: a built-in one, or one that a host registered. `isKnownRealm`
+ * answers for the built-in realms only, and narrows to their type.
+ */
+export function isRealmName(runtime: string | undefined): runtime is string {
+  return (
+    isKnownRealm(runtime) ||
+    (runtime !== undefined && (REGISTERED.has(runtime) || Object.hasOwn(PEER_REALMS, runtime)))
+  );
+}
+
+/**
+ * The runtime that a computer-use peer reports: a whole application, read through the operating
+ * system, with no SDK in it. It has the extension prefix while `@reticlehq/computer-use` is
+ * private.
+ */
+export const COMPUTER_USE_RUNTIME = 'x-computer-use';
+
+/**
+ * Realms that reach the bridge as a peer and are not a runtime of the SDK. They are not in
+ * `REALMS`, because `AppRuntime` is what the SDK in a page reports and what telemetry carries.
+ */
+const PEER_REALMS: Readonly<Record<string, RealmTraits>> = {
+  // Not a web view in a shell: there is no page, no IPC between halves and no rendering engine.
+  [COMPUTER_USE_RUNTIME]: {
+    surface: Surface.DESKTOP,
+    isDesktopShell: false,
+    usesWebKit: false,
+    ownsCoverageKinds: false,
+    hasOwnBaselineDirectory: false,
+  },
+};
+
 export function knownRuntimes(): string[] {
   return [...Object.keys(REALMS), ...REGISTERED.keys()];
 }
@@ -214,7 +247,7 @@ export function resetRegisteredRealms(): void {
 export function realmOf(runtime: string | undefined): RealmTraits {
   const name = runtime ?? '';
   if (Object.hasOwn(REALMS, name)) return REALMS[name as AppRuntime];
-  return REGISTERED.get(name) ?? REALMS[AppRuntime.WEB];
+  return REGISTERED.get(name) ?? PEER_REALMS[name] ?? REALMS[AppRuntime.WEB];
 }
 
 /**
