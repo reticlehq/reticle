@@ -701,6 +701,104 @@ describe('PeerCommands', () => {
     ).rejects.toThrow(/Notes ended while the action on button "Save" ran/);
   });
 
+  /**
+   * `clear`, `check`, `uncheck` and `submit` are actions every agent sends to a form. The realm
+   * refused each one by name, and a form with a checkbox could not be completed.
+   */
+  describe('the actions of a form', () => {
+    const form = (value: string, checked: boolean): UiRead => ({
+      root: node(UiRole.WINDOW, 'Sign up', {
+        frame: [0, 0, 400, 300],
+        children: [
+          node(UiRole.TEXTBOX, 'Name', { frame: [10, 10, 200, 30], value }),
+          node(UiRole.CHECKBOX, 'Remember', {
+            frame: [10, 50, 200, 30],
+            states: checked ? [ElementState.CHECKED] : [],
+          }),
+        ],
+      }),
+      unread: 0,
+      unmapped: [],
+    });
+    const fake = (start: { value: string; checked: boolean }, pressWorks = true) => {
+      const state = { ...start };
+      const asked: [string, string | undefined][] = [];
+      const commands = new PeerCommands({
+        driver: {
+          subject: () => ({ app: 'Sign up', pid: 7 }),
+          read: () => Promise.resolve(form(state.value, state.checked)),
+          reach: () => Promise.resolve({ reach: 'yes' }),
+          act: (request) => {
+            asked.push([request.kind, request.value]);
+            const before = form(state.value, state.checked);
+            if (ActKind.SET === request.kind) {
+              state.value = request.value ?? '';
+            }
+            if (ActKind.PRESS === request.kind && pressWorks) {
+              state.checked = !state.checked;
+            }
+            return Promise.resolve({
+              delivered: true,
+              reachable: true,
+              settled: true,
+              before,
+              after: form(state.value, state.checked),
+            });
+          },
+        },
+        emit: () => undefined,
+      });
+      const act = async (role: UiRole, action: string) => {
+        const found = (await commands.answer(ReticleCommand.QUERY, { role })) as {
+          elements: { ref: string }[];
+        };
+        return (
+          (await commands.answer(ReticleCommand.ACT, {
+            ref: found.elements[0]?.ref ?? '',
+            action,
+          })) as { effect: Record<string, unknown> }
+        ).effect;
+      };
+      return { act, asked, state };
+    };
+
+    it('clears a field', async () => {
+      const { act, state } = fake({ value: 'Old', checked: false });
+      expect((await act(UiRole.TEXTBOX, ActionType.CLEAR))['valueChanged']).toBe(true);
+      expect(state.value).toBe('');
+    });
+
+    it('checks a box, and reads that it is checked', async () => {
+      const { act, state } = fake({ value: '', checked: false });
+      await act(UiRole.CHECKBOX, ActionType.CHECK);
+      expect(state.checked).toBe(true);
+    });
+
+    it('sends nothing to a box that is in the state already, and says so', async () => {
+      const { act, asked } = fake({ value: '', checked: true });
+      const effect = await act(UiRole.CHECKBOX, ActionType.CHECK);
+      expect(effect['alreadyAtValue']).toBe(true);
+      expect(effect['dispatched']).toBe(false);
+      expect(asked).toEqual([]);
+    });
+
+    it('fails when the box did not change', async () => {
+      const { act } = fake({ value: '', checked: true }, false);
+      await expect(act(UiRole.CHECKBOX, ActionType.UNCHECK)).rejects.toThrow(/is still checked/);
+    });
+
+    it('refuses to check an element that is not a box', async () => {
+      const { act } = fake({ value: '', checked: false });
+      await expect(act(UiRole.TEXTBOX, ActionType.CHECK)).rejects.toThrow(/checkbox/);
+    });
+
+    it('submits with the Return key in the field', async () => {
+      const { act, asked } = fake({ value: 'Ada', checked: false });
+      await act(UiRole.TEXTBOX, ActionType.SUBMIT);
+      expect(asked).toEqual([[ActKind.KEY, 'Return']]);
+    });
+  });
+
   it('says why a press can have no effect, when the peer was told a reason', async () => {
     const still = { before: read('Ready'), after: read('Ready') };
     const press = async (commands: PeerCommands) =>

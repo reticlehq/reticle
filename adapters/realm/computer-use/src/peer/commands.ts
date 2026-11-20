@@ -125,7 +125,23 @@ const KIND_OF: Readonly<Partial<Record<string, ActKind>>> = {
   [ActionType.FILL]: ActKind.SET,
   [ActionType.TYPE]: ActKind.TYPE,
   [ActionType.PRESS]: ActKind.KEY,
+  [ActionType.CLEAR]: ActKind.SET,
+  [ActionType.CHECK]: ActKind.PRESS,
+  [ActionType.UNCHECK]: ActKind.PRESS,
+  [ActionType.SUBMIT]: ActKind.KEY,
 };
+/** The actions that carry their own value: a caller gives none. */
+const VALUE_OF: Readonly<Partial<Record<string, string>>> = {
+  [ActionType.CLEAR]: '',
+  [ActionType.SUBMIT]: 'Return',
+};
+/** The state each of these actions asks for. */
+const WANTS_CHECKED: Readonly<Partial<Record<string, boolean>>> = {
+  [ActionType.CHECK]: true,
+  [ActionType.UNCHECK]: false,
+};
+const BOX_ROLES: ReadonlySet<string> = new Set([UiRole.CHECKBOX, UiRole.RADIO]);
+const isChecked = (node: UiNode): boolean => node.states.includes(ElementState.CHECKED);
 /** The actions this realm does. The peer declares exactly these to the bridge. */
 export const PEER_ACTIONS: readonly string[] = [...Object.keys(KIND_OF), ActionType.SCROLL];
 
@@ -198,7 +214,8 @@ interface ActResult {
   ok: true;
   ref: string;
   action: string;
-  dispatched: true;
+  /** False when nothing was sent: the element was in the state the caller asked for. */
+  dispatched: boolean;
   settled: boolean;
   settleReason: string | null;
   effect: Record<string, unknown>;
@@ -735,10 +752,33 @@ export class PeerCommands {
     const modifiers = Array.isArray(more['modifiers']) ? more['modifiers'].map(String) : [];
     const key = text(more['text']);
     // `fill` gives `value`. `type` gives `text`. `press` gives the key in `text`, with modifiers.
-    const value =
+    const given =
       kind === ActKind.KEY && key !== undefined
         ? [...modifiers, key].join('+')
         : (text(more['value']) ?? key);
+    const value = VALUE_OF[action] ?? given;
+    const wanted = WANTS_CHECKED[action];
+    if (wanted !== undefined) {
+      if (!BOX_ROLES.has(target.node.role)) {
+        throw new Error(
+          `${action} is for a checkbox or a radio button. ${target.node.role} "${target.node.name}" is not one. Use ${ActionType.CLICK}.`,
+        );
+      }
+      // Nothing is sent to a box that is in the state already: a press would turn it over.
+      if (isChecked(target.node) === wanted) {
+        return {
+          ok: true,
+          ref,
+          action,
+          dispatched: false,
+          settled: true,
+          settleReason: null,
+          effect: { alreadyAtValue: true, dispatched: false, targetMatched: true },
+          role: target.node.role,
+          name: target.node.name,
+        };
+      }
+    }
     const how = {
       delivery: Delivery.USER_PATH,
       budgetMs: 'number' === typeof more['settleMs'] ? more['settleMs'] : DEFAULT_SETTLE_MS,
@@ -766,6 +806,14 @@ export class PeerCommands {
       }
     }
     const { outcome, changes, byItself, offScreen } = driven;
+    if (wanted !== undefined) {
+      const now = place(outcome.after.root).find((p) => p.key === target.key)?.node;
+      if (now === undefined || isChecked(now) !== wanted) {
+        throw new Error(
+          `${target.node.role} "${target.node.name}" is still ${wanted ? 'not checked' : 'checked'} after the press.`,
+        );
+      }
+    }
     return {
       ok: true,
       ref,
