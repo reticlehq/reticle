@@ -93,4 +93,27 @@ describe('writeLines', () => {
       '  - window "Notes" (ref=e5)',
     ]);
   });
+
+  it('says how many rows of a table are not shown, and keeps a ref with its row after a scroll', () => {
+    const table = (first: number): UiNode =>
+      node(UiRole.LIST, 'Files', {
+        notShown: 4998,
+        children: [
+          node(UiRole.ROW, '', {
+            index: first,
+            children: [node(UiRole.TEXT, `file ${String(first)}`)],
+          }),
+          node(UiRole.ROW, '', { index: first + 1 }),
+        ],
+      });
+    const refs = new RefTable();
+    const before = writeLines(table(0), refs).split('\n');
+    expect(before[0]).toBe('- list "Files" (ref=e1) [not shown: 4998]');
+    expect(before[3]).toBe('  - row (ref=e4)');
+
+    // The table scrolled by one row. Row 1 is now the first row that shows.
+    const after = writeLines(table(1), refs).split('\n');
+    expect(after[1]).toBe('  - row (ref=e4)');
+    expect(after[3]).toBe('  - row (ref=e6)');
+  });
 });
