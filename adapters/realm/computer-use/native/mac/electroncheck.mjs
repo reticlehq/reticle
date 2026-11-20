@@ -1,7 +1,8 @@
 // Checks the realm against a small Electron application, through the peer:
 //   - with the accessibility switch off, a press does nothing, and the answer says why;
 //   - with the switch on, a press works;
-//   - a slow effect belongs to its own press, and the next press does not get it.
+//   - a slow effect belongs to its own press, and the next press does not get it;
+//   - a list takes a choice by its name, and a checkbox is not pressed twice.
 //
 //   node native/mac/electroncheck.mjs
 //
@@ -77,7 +78,17 @@ try {
   const dead = await press('Dead');
   assert.equal(dead.domMutatedWithin, 0, 'a dead button was given the effect of another press');
 
-  process.stdout.write('computer-use electroncheck: 5 of 5 cases held\n');
+  // A list in a web view does not name its choices, so the realm types the name of the choice.
+  await act('combobox', 'Priority', ActionType.SELECT, { value: 'High' });
+  const list = await commands.answer(ReticleCommand.QUERY, { role: 'combobox' });
+  assert.equal(list.elements[0]?.value, 'High', 'the list did not go to the choice');
+
+  const checked = await act('checkbox', 'Pinned', ActionType.CHECK);
+  assert.equal(checked.dispatched, true);
+  const again = await act('checkbox', 'Pinned', ActionType.CHECK);
+  assert.equal(again.alreadyAtValue, true, 'a box that was checked was pressed again');
+
+  process.stdout.write('computer-use electroncheck: 7 of 7 cases held\n');
 } finally {
   app.kill();
   await sleep(500);

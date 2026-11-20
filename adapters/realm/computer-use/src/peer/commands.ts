@@ -732,15 +732,32 @@ export class PeerCommands {
     if (wanted === undefined) {
       throw new Error(`${ActionType.SELECT} needs the name of the choice: args: { value: "…" }.`);
     }
-    const popup = await this.#resolve(ref);
+    const read = await this.#deps.driver.read();
+    const key = this.#refs.keyOf(ref);
+    const popup = see(read.root).find((s) => s.key === key);
+    if (popup === undefined) {
+      throw new Error(`ref '${ref}' no longer resolves to an element`);
+    }
     const how = { delivery: Delivery.USER_PATH, budgetMs: DEFAULT_SETTLE_MS };
+    // A list in a web view has no choice with a name below it, open or closed. A person types
+    // the name into the list, and the list goes to that choice. The pop-up is not opened: it is
+    // a window of its own there, and a key that is sent to the application does not close it.
+    const named = place(read.root).some(
+      (p) =>
+        p.key.startsWith(`${popup.key}/`) && p.node.role === UiRole.MENUITEM && '' !== p.node.name,
+    );
+    if (popup.node.role === UiRole.COMBOBOX && !named) {
+      return this.#selectByTyping(popup, ref, wanted, how);
+    }
     await this.#drive(popup, ref, ActKind.PRESS, undefined, how);
     const choices = see((await this.#deps.driver.read()).root).filter(
       (s) => s.visible && s.node.role === UiRole.MENUITEM && s.key.startsWith(popup.key),
     );
     const choice = choices.find((s) => s.node.name === wanted);
     if (choice === undefined) {
-      await this.#drive(popup, ref, ActKind.KEY, ESCAPE, how);
+      // The pop-up that this action opened lies over its own control, so the control is "not
+      // reachable" now. The key that closes the pop-up goes to the application without that check.
+      await this.#drive(popup, ref, ActKind.KEY, ESCAPE, { ...how, delivery: Delivery.DIRECT });
       throw new Error(
         `${popup.node.role} "${popup.node.name}" has no choice ${quoted(wanted)}. It has: ${choices
           .slice(0, CHOICES_NAMED)
@@ -753,6 +770,43 @@ export class PeerCommands {
       allowed,
     );
     return { ...pressed, ref, action: ActionType.SELECT };
+  }
+
+  async #selectByTyping(
+    popup: Seen,
+    ref: string,
+    wanted: string,
+    how: { delivery: Delivery; budgetMs: number },
+  ): Promise<ActResult> {
+    const typed = await this.#drive(popup, ref, ActKind.TYPE, wanted, how);
+    const held = heldBy(typed.outcome, popup.key);
+    const was = popup.node.value ?? '';
+    if (held !== wanted) {
+      if (held !== was) {
+        // The keys went to another choice that starts the same way. Put the old one back.
+        await this.#drive(popup, ref, ActKind.TYPE, was, how);
+      }
+      throw new Error(
+        `${popup.node.role} "${popup.node.name}" did not go to the choice ${quoted(wanted)}: it holds ${quoted(was)}. The list does not name its choices, so the realm typed the name.`,
+      );
+    }
+    const settled = typed.outcome.settled;
+    return {
+      ok: true,
+      ref,
+      action: ActionType.SELECT,
+      dispatched: true,
+      settled,
+      settleReason: settled ? null : SettleReason.TIMEOUT,
+      effect: {
+        dispatched: true,
+        targetMatched: true,
+        valueChanged: typed.changes.some((c) => c.value !== undefined),
+        domMutatedWithin: typed.changes.length,
+      },
+      role: popup.node.role,
+      name: popup.node.name,
+    };
   }
 
   async #act(args: Args, allowed?: readonly string[]): Promise<ActResult> {
