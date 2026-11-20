@@ -223,7 +223,9 @@ export class MacDriver implements UiDriver {
       request.kind,
       request.value ?? '',
       String(request.budgetMs),
-      request.delivery,
+      request.quietMs === undefined
+        ? request.delivery
+        : `${request.delivery}:${String(request.quietMs)}`,
       ...request.watch,
     ]);
     const no = RefusedSchema.safeParse(answer);

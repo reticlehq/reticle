@@ -55,6 +55,12 @@ export interface ActRequest {
   value?: string;
   delivery: Delivery;
   budgetMs: number;
+  /**
+   * How long the application must show no change before the action is called finished. Absent:
+   * the driver's own time. A caller gives a shorter time only when it goes on looking after the
+   * action, so that a later change is still seen.
+   */
+  quietMs?: number;
   /** Folders where a written file is an effect too. The wait ends when they and the tree are quiet. */
   watch: readonly string[];
 }

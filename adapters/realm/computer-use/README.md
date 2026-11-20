@@ -71,7 +71,7 @@ Read these before you rely on a result.
 - **Only the Space that is in front.** The accessibility interface lists the windows on the Space that the person looks at. An application on another Space reads as an application with no window. The realm says how many windows are not on the screen.
 - **An application must give an accessibility tree.** An Electron application and a browser give very little until a switch is set in them. This realm does not set that switch. A canvas and a game have no elements to read.
 - **A large window is slow to read.** The cost is for each element. A table is read only for the rows on the screen, and its line says how many rows are not shown.
-- **An action takes about 600 ms.** The realm waits for 500 ms with no change before it calls an action finished. `RETICLE_AX_QUIET_MS` sets another time.
+- **An action with its proof takes about 350 ms through the tools.** The peer calls an action finished after 150 ms with no change, and it goes on looking: a change that comes later is sent when it comes. A caller of the realm class looks once, so it waits for 500 ms with no change; `RETICLE_AX_QUIET_MS` sets that time.
 - **The realm trusts the place that an application gives for an element.** Some applications give a wrong place on a second display with a high resolution. The question "is this element on top" is then asked at the wrong place, and the realm refuses the action. It does not act on a guess.
 - **Shortcuts use the key places of a US keyboard.**
 - **A drag, a hover and a right-click are not built.**

@@ -2,7 +2,7 @@
 //
 //   reticle-ax tree <pid>
 //   reticle-ax reach <pid> <path> <role> <name>
-//   reticle-ax act  <pid> <path> <role> <name> press|set|type|key [value] [budgetMs] [user-path|direct] [folder...]
+//   reticle-ax act  <pid> <path> <role> <name> press|set|type|key [value] [budgetMs] [user-path|direct][:quietMs] [folder...]
 //
 // <path> is the child index at each level from the application element, joined by ".", "" for the
 // application. <role> and <name> are what the caller last read there. If the element at <path> is
@@ -299,7 +299,10 @@ func run(_ args: [String]) throws {
   let action = onlyReach ? "" : args[6]
   let value = args.count > 7 ? args[7] : ""
   let budgetMs = args.count > 8 ? Int(args[8]) ?? 1000 : 1000
-  let direct = args.count > 9 && args[9] == "direct"
+  // The way to deliver, and after ":" the quiet time for this action when the caller gives one.
+  let how = args.count > 9 ? args[9].split(separator: ":").map(String.init) : []
+  let direct = how.first == "direct"
+  let quietWanted = how.count > 1 ? Int(how[1]) ?? quietNeededMs : quietNeededMs
   let folders = Array(args.dropFirst(10))
 
   /// The names, sizes and change times of every file in the watched folders, as one string.
@@ -461,9 +464,9 @@ func run(_ args: [String]) throws {
     if after.json != last || files != lastFiles || menuShows() { quietSince = Date() }
     last = after.json
     lastFiles = files
-    if quietMs() >= quietNeededMs && (after.json != before.json || files != filesBefore) { break }
+    if quietMs() >= quietWanted && (after.json != before.json || files != filesBefore) { break }
   }
-  let settled = quietMs() >= quietNeededMs
+  let settled = quietMs() >= quietWanted
   var wrote: UInt64?
   if let was = writtenBefore, let now = bytesWritten(pid), now >= was { wrote = now - was }
 

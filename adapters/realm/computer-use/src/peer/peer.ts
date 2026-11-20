@@ -23,6 +23,7 @@ const ADAPTER = 'computer-use';
 /** A session with no word for 12 s reads as throttled. The SDK in a page sends this at the same rate. */
 const HEARTBEAT_MS = 5000;
 const FILES_EVERY_MS = 1000;
+const TREE_EVERY_MS = 250;
 const RETRY_MS = 1000;
 const MAX_RETRY_MS = 10_000;
 /** The bridge drops a result whose error is longer than 4,096 characters, and the command then waits. */
@@ -49,6 +50,8 @@ export interface PeerInput {
   workspace?: WorkspacePort;
   /** How often the watched folders are looked at between actions. The default is one second. */
   filesEveryMs?: number;
+  /** How often the tree is looked at between actions. The default is a quarter of a second. */
+  treeEveryMs?: number;
   /** How long to wait before the first new dial when the bridge goes away. The default is one second. */
   retryMs?: number;
   now: () => number;
@@ -73,6 +76,7 @@ export function connectPeer(input: PeerInput): Peer {
   let retry: ReturnType<typeof setTimeout> | undefined;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let files: ReturnType<typeof setInterval> | undefined;
+  let tree: ReturnType<typeof setInterval> | undefined;
 
   const send = (message: unknown): void => {
     if (socket?.readyState === WebSocket.OPEN) {
@@ -103,6 +107,7 @@ export function connectPeer(input: PeerInput): Peer {
   const stopTimers = (): void => {
     clearInterval(heartbeat);
     clearInterval(files);
+    clearInterval(tree);
   };
 
   const announce = (): void => {
@@ -132,6 +137,12 @@ export function connectPeer(input: PeerInput): Peer {
       health(HealthReason.HEARTBEAT);
     }, HEARTBEAT_MS);
     heartbeat.unref();
+    // ponytail: a whole read each time. For a window with thousands of elements the read costs
+    // more than the wait; read less often there, or read only the window in front.
+    tree = setInterval(() => {
+      commands.sendTreeChanges().catch(() => undefined);
+    }, input.treeEveryMs ?? TREE_EVERY_MS);
+    tree.unref();
     if (input.workspace !== undefined) {
       // ponytail: a whole look at the folders each time. Watch them for changes when a folder
       // is large enough for the look to cost more than the wait.
