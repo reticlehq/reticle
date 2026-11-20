@@ -174,7 +174,8 @@ export class ComputerUseRealm extends Realm {
       },
       {
         name: ActKind.TYPE,
-        meaning: 'type text in one element, one key event for each character',
+        meaning:
+          'type text in one element, one key event for each character. A text field that takes the keyboard selects its text first, so the typed text replaces it',
         mutating: true,
         parameters: TARGET_PARAMETERS,
       },

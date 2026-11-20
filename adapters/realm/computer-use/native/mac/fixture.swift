@@ -4,6 +4,7 @@
 //   Dead     does nothing.
 //   Covered  works, but a view lies over it, so a person cannot click it.
 //   Title    a text field. The Return key in it changes the status text.
+//   Items    a table of three rows. To choose a row changes the status text.
 //   Actions  a menu. Its items are not on the screen until it is open.
 //   Volume   a slider. Its value is a number, not text.
 //   Export   writes the title to note.txt in the folder given as the first argument, then says so.
@@ -20,7 +21,18 @@ final class Cover: NSView {
   override func mouseDown(with event: NSEvent) {}
 }
 
-final class Fixture: NSObject, NSApplicationDelegate {
+final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTableViewDelegate {
+  let items = ["Alpha", "Beta", "Gamma"]
+  let table = NSTableView()
+
+  func numberOfRows(in tableView: NSTableView) -> Int { items.count }
+  func tableView(_ tableView: NSTableView, viewFor column: NSTableColumn?, row: Int) -> NSView? {
+    NSTextField(labelWithString: items[row])
+  }
+  func tableViewSelectionDidChange(_ notification: Notification) {
+    if table.selectedRow >= 0 { status.stringValue = "Chosen: \(items[table.selectedRow])" }
+  }
+
   var window: NSWindow!
   let field = NSTextField(frame: NSRect(x: 20, y: 170, width: 320, height: 24))
   let status = NSTextField(labelWithString: "Ready")
@@ -34,7 +46,7 @@ final class Fixture: NSObject, NSApplicationDelegate {
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     window = NSWindow(
-      contentRect: NSRect(x: 80, y: 80, width: 360, height: 220), styleMask: [.titled],
+      contentRect: NSRect(x: 80, y: 80, width: 360, height: 320), styleMask: [.titled],
       backing: .buffered, defer: false)
     window.title = "Reticle Fixture"
     window.level = .floating
@@ -57,6 +69,16 @@ final class Fixture: NSObject, NSApplicationDelegate {
     slider.frame = NSRect(x: 190, y: 24, width: 150, height: 24)
     slider.setAccessibilityLabel("Volume")
     window.contentView!.addSubview(slider)
+    let column = NSTableColumn(identifier: NSUserInterfaceItemIdentifier("Item"))
+    column.title = "Item"
+    column.width = 300
+    table.addTableColumn(column)
+    table.dataSource = self
+    table.delegate = self
+    table.setAccessibilityLabel("Items")
+    let scroll = NSScrollView(frame: NSRect(x: 20, y: 210, width: 320, height: 96))
+    scroll.documentView = table
+    window.contentView!.addSubview(scroll)
     let actions = NSPopUpButton(frame: NSRect(x: 20, y: 140, width: 110, height: 26), pullsDown: true)
     actions.addItems(withTitles: ["Actions", "Mark done", "Mark open"])
     actions.item(at: 1)?.target = self

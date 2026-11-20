@@ -25,7 +25,7 @@ let attributes =
   [
     kAXRoleAttribute, kAXSubroleAttribute, kAXTitleAttribute, kAXDescriptionAttribute,
     kAXValueAttribute, kAXEnabledAttribute, kAXFocusedAttribute, kAXPositionAttribute,
-    kAXSizeAttribute, kAXChildrenAttribute, kAXIdentifierAttribute,
+    kAXSizeAttribute, kAXChildrenAttribute, kAXIdentifierAttribute, kAXSelectedAttribute,
   ] as CFArray
 
 func values(_ element: AXUIElement) -> [AnyObject]? {
@@ -72,12 +72,12 @@ func readElement(_ element: AXUIElement, _ depth: Int, _ unread: inout Int) -> [
     node["frame"] = [r.origin.x, r.origin.y, r.size.width, r.size.height]
   }
   if let s = text(v[10]), !s.isEmpty { node["id"] = s }
+  if let b = v[11] as? Bool, b { node["selected"] = true }
   var children = depth < 80 ? (v[9] as? [AXUIElement]) ?? [] : []
   // A table gives every row it has, and makes each one when it is asked. A table of 5,000 rows
   // did not answer in four minutes. A person sees the rows that are on the screen, so those are
   // the rows that are read. Each keeps its place in the whole list as "i", and "notShown" says how
-  // many elements of the table were left out: the other rows, and the columns, which hold the
-  // same cells a second time.
+  // many rows were left out.
   var places: [Int]?
   let role = text(v[0]) ?? ""
   if role == "AXTable" || role == "AXOutline" {
@@ -89,7 +89,13 @@ func readElement(_ element: AXUIElement, _ depth: Int, _ unread: inout Int) -> [
       let found = rows.compactMap { row in all.firstIndex { CFEqual($0, row) } }
       places = found
       children = found.map { all[$0] }
-      node["notShown"] = all.count - children.count
+      // The rows that are not on the screen. The columns are left out too, and they are not
+      // counted: they hold the same cells a second time, so nothing in them is hidden.
+      var every: AnyObject?
+      let total =
+        AXUIElementCopyAttributeValue(element, kAXRowsAttribute as CFString, &every) == .success
+        ? (every as? [AXUIElement])?.count ?? children.count : children.count
+      node["notShown"] = max(0, total - children.count)
     }
   }
   var kids: [[String: Any]] = []
@@ -213,6 +219,12 @@ func reach(_ target: AXUIElement, _ rect: CGRect) -> Reach {
   return .unknown(code: Int(code.rawValue))
 }
 
+/// How long the application must show no change before an action is called finished: 500 ms, the
+/// quiet time the engine uses for a web page. Measured on the fixture's menu, which shows its choice
+/// for a moment before it closes: 250 ms failed one run in four, and 400 ms failed none. The
+/// environment can set it: an application with long animations needs more.
+let quietNeededMs = Int(ProcessInfo.processInfo.environment["RETICLE_AX_QUIET_MS"] ?? "") ?? 500
+
 /// Key codes of the ANSI keyboard. A letter here is the key at that place, for a shortcut.
 let keyCodes: [String: CGKeyCode] = [
   "return": 36, "enter": 36, "tab": 48, "space": 49, "escape": 53, "backspace": 51, "delete": 117,
@@ -315,7 +327,13 @@ func run(_ args: [String]) throws {
   let started = Date()
   let result: AXError
   switch action {
-  case "press": result = AXUIElementPerformAction(target, kAXPressAction as CFString)
+  case "press":
+    let pressed = AXUIElementPerformAction(target, kAXPressAction as CFString)
+    // A row of a table has no press. A click on it chooses it, so choose it.
+    result =
+      pressed == .actionUnsupported
+      ? AXUIElementSetAttributeValue(target, kAXSelectedAttribute as CFString, kCFBooleanTrue)
+      : pressed
   case "set":
     // An element whose value is a number (a slider, a scroll bar) takes a number, not its text.
     let number = now[4] is NSNumber ? Double(value).map { NSNumber(value: $0) } : nil
@@ -365,28 +383,36 @@ func run(_ args: [String]) throws {
   }
 
   // Wait for the application to finish. Notifications from AXObserver are not dependable from one
-  // application to the next, and a read is cheap, so read again until two reads in a row agree.
-  // When nothing has changed, spend the whole budget: an early "nothing changed" is a false result
-  // for every effect that takes longer than the first read.
+  // application to the next, and a read is cheap, so read again until the application is quiet.
+  //
+  // Quiet is a length of TIME with no change, not a number of reads. It was two reads that agree,
+  // and when a read took 60 ms that was a long time. With a read of 5 ms it was 50 ms: a menu that
+  // shows its choice for a moment before it closes was called finished before it ran its action.
+  // An action that is called finished too soon gives a false "no effect".
+  //
+  // When nothing has changed at all, spend the whole budget: an early "nothing changed" is a false
+  // result for every effect that takes longer than the first read.
   var last = before.json
   var lastFiles = filesBefore
   var after = before
-  var stable = 0
+  var quietSince = Date()
   func elapsedMs() -> Int { Int(Date().timeIntervalSince(started) * 1000) }
+  func quietMs() -> Int { Int(Date().timeIntervalSince(quietSince) * 1000) }
   while elapsedMs() < budgetMs {
     Thread.sleep(forTimeInterval: 0.025)
     after = snapshot(app)
     let files = filesNow()
-    stable = after.json == last && files == lastFiles ? stable + 1 : 0
+    if after.json != last || files != lastFiles { quietSince = Date() }
     last = after.json
     lastFiles = files
-    if stable >= 2 && (after.json != before.json || files != filesBefore) { break }
+    if quietMs() >= quietNeededMs && (after.json != before.json || files != filesBefore) { break }
   }
+  let settled = quietMs() >= quietNeededMs
 
   try emit([
     "delivered": result == .success, "axError": Int(result.rawValue), "reachable": canReach,
     "coveredBy": coveredBy,
-    "settled": stable >= 2, "waitedMs": elapsedMs(), "budgetMs": budgetMs,
+    "settled": settled, "waitedMs": elapsedMs(), "budgetMs": budgetMs,
     "before": before.tree, "after": after.tree, "unreadBefore": before.unread,
     "unreadAfter": after.unread,
   ])

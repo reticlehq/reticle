@@ -130,11 +130,33 @@ try {
   assert.deepEqual(typed.summaries, [CuSummary.UI_CHANGED]);
 
   // Key events, not a value put in the field: the Return key runs the field's own action.
-  const keyed = await step('Title', ActKind.TYPE, { value: ' B' });
-  assert.deepEqual(keyed.summaries, [CuSummary.UI_CHANGED]);
+  const keyed = await step('Title', ActKind.TYPE, { value: 'Plan B' });
+  // Two things change: the text in the field, and where the keyboard is. A field that takes the
+  // keyboard selects its text, so the typed text replaces it: the realm reports what the field
+  // holds after it, which is what a caller must read and not assume.
+  assert.ok(
+    keyed.observed.some(
+      (o) => 'textbox "Title"' === o.value.element && o.value.detail.includes('"Plan" -> "Plan B"'),
+    ),
+  );
   const entered = await step('Title', ActKind.KEY, { value: 'Return' });
   assert.deepEqual(entered.summaries, [CuSummary.UI_GONE, CuSummary.UI_APPEARED]);
   assert.equal(entered.observed[1].value.element, 'text "Entered: Plan B"');
+
+  // A row of a table has no press of its own. A press chooses it, as a click does.
+  const rows = await realm.locate({ role: 'row' });
+  assert.equal(rows.length, 3);
+  const window = realm.openWindow(1000);
+  const chose = await realm.perform({
+    id: 'row',
+    actor: 'selfcheck',
+    capability: ActKind.PRESS,
+    target: rows[1].ref,
+    at: Date.now(),
+  });
+  assert.equal(chose.dispatched, true);
+  const afterRow = await realm.observe(realm.closeWindow(window));
+  assert.ok(afterRow.some((o) => 'text "Chosen: Beta"' === o.value.element));
 
   // A menu: its items are not on the screen until it is open, so they are not targets until then.
   assert.deepEqual(await realm.locate({ name: 'Mark done' }), []);
@@ -187,7 +209,7 @@ try {
   report.push(
     `Fake   -> verdict ${lied.verdict} (${lied.ground})`,
     `Export -> verdict ${proved.verdict} (${proved.ground})`,
-    'computer-use selfcheck: 14 of 14 cases held',
+    'computer-use selfcheck: 15 of 15 cases held',
     '',
   );
   process.stdout.write(report.join('\n'));
