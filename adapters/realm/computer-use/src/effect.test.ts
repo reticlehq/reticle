@@ -59,6 +59,36 @@ describe('effectOf', () => {
   });
 
   /**
+   * An element with a frame of no size is not on the screen: the items of a closed menu. When
+   * text was selected in a field, the operating system filled a menu that was closed, and the
+   * realm reported each item as an effect. A person saw none of them.
+   */
+  describe('an element that is not on the screen', () => {
+    const menu = (open: boolean, items: readonly string[]): UiNode =>
+      node(UiRole.WINDOW, 'Notes', {
+        children: [
+          node(UiRole.MENU, 'Services', {
+            frame: open ? [0, 0, 100, 60] : [0, 0, 0, 0],
+            children: items.map((name) =>
+              node(UiRole.MENUITEM, name, { frame: open ? [0, 0, 100, 20] : [0, 0, 0, 0] }),
+            ),
+          }),
+        ],
+      });
+
+    it('is not an effect when it changes', () => {
+      expect(effectOf(menu(false, []), menu(false, ['Look Up'])).kind).toBe(EffectKind.NONE);
+    });
+
+    it('is an effect when it comes on the screen, and when it goes', () => {
+      const opened = effectOf(menu(false, ['Look Up']), menu(true, ['Look Up']));
+      expect(opened.changes.map(changeLine)).toEqual(['+ menu "Services"']);
+      const closed = effectOf(menu(true, ['Look Up']), menu(false, ['Look Up']));
+      expect(closed.changes.map(changeLine)).toEqual(['- menu "Services"']);
+    });
+  });
+
+  /**
    * An application changes with no action: a clock, a tip that rotates, a count that updates. On
    * the first real application the realm was tried on, a press reported the tips of a panel as
    * what the press did. The realm learns the places that change by themselves, from two reads
