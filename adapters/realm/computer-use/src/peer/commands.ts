@@ -68,6 +68,9 @@ const PEER_QUIET_MS = 150;
 /** The keys that select all the text of a field, and that remove what is selected. */
 const SELECT_ALL = 'Meta+a';
 const DELETE = 'Backspace';
+const ESCAPE = 'Escape';
+/** The choices a refusal names. A long menu is not put in an error. */
+const CHOICES_NAMED = 20;
 /** The roles whose value is the text a fill asks for. A slider's value is a number in another form. */
 const TEXT_ROLES: ReadonlySet<string> = new Set([UiRole.TEXTBOX, UiRole.COMBOBOX]);
 
@@ -143,7 +146,11 @@ const WANTS_CHECKED: Readonly<Partial<Record<string, boolean>>> = {
 const BOX_ROLES: ReadonlySet<string> = new Set([UiRole.CHECKBOX, UiRole.RADIO]);
 const isChecked = (node: UiNode): boolean => node.states.includes(ElementState.CHECKED);
 /** The actions this realm does. The peer declares exactly these to the bridge. */
-export const PEER_ACTIONS: readonly string[] = [...Object.keys(KIND_OF), ActionType.SCROLL];
+export const PEER_ACTIONS: readonly string[] = [
+  ...Object.keys(KIND_OF),
+  ActionType.SCROLL,
+  ActionType.SELECT,
+];
 
 type Args = Record<string, unknown>;
 
@@ -715,6 +722,39 @@ export class PeerCommands {
     };
   }
 
+  /**
+   * Chooses one item of a pop-up as a person does: press the pop-up, read its choices, press the
+   * one asked for. When that choice is not there, the pop-up is closed again and the answer
+   * names the choices that are.
+   */
+  async #select(ref: string, more: Args, allowed?: readonly string[]): Promise<ActResult> {
+    const wanted = text(more['value']);
+    if (wanted === undefined) {
+      throw new Error(`${ActionType.SELECT} needs the name of the choice: args: { value: "…" }.`);
+    }
+    const popup = await this.#resolve(ref);
+    const how = { delivery: Delivery.USER_PATH, budgetMs: DEFAULT_SETTLE_MS };
+    await this.#drive(popup, ref, ActKind.PRESS, undefined, how);
+    const choices = see((await this.#deps.driver.read()).root).filter(
+      (s) => s.visible && s.node.role === UiRole.MENUITEM && s.key.startsWith(popup.key),
+    );
+    const choice = choices.find((s) => s.node.name === wanted);
+    if (choice === undefined) {
+      await this.#drive(popup, ref, ActKind.KEY, ESCAPE, how);
+      throw new Error(
+        `${popup.node.role} "${popup.node.name}" has no choice ${quoted(wanted)}. It has: ${choices
+          .slice(0, CHOICES_NAMED)
+          .map((s) => quoted(s.node.name))
+          .join(', ')}.`,
+      );
+    }
+    const pressed = await this.#act(
+      { ref: this.#refs.refFor(choice.key), action: ActionType.CLICK, args: more },
+      allowed,
+    );
+    return { ...pressed, ref, action: ActionType.SELECT };
+  }
+
   async #act(args: Args, allowed?: readonly string[]): Promise<ActResult> {
     const ref = text(args['ref']) ?? '';
     const action = text(args['action']) ?? '';
@@ -733,6 +773,9 @@ export class PeerCommands {
         role: target.node.role,
         name: target.node.name,
       };
+    }
+    if (action === ActionType.SELECT) {
+      return this.#select(ref, record(args['args']), allowed);
     }
     const kind = KIND_OF[action];
     if (kind === undefined) {
