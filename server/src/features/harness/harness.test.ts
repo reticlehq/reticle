@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ReticleTool } from '@reticlehq/core';
+import { ReticleTool, WRITING_RULE } from '@reticlehq/core';
 import {
   FINISH_TOOL,
   MSG_OPENED_IN_PLACE,
@@ -427,5 +427,34 @@ describe('a route the map already knows', () => {
       { maxSteps: 1, routes: ROUTES },
     );
     expect(result.toolCalls[0]?.result).not.toHaveProperty('next');
+  });
+});
+
+describe('the prompt for a desktop application', () => {
+  // The words for a web page send the model to links, to `reticle_navigate` and to a network
+  // request. A desktop application that is read through the operating system has none of them.
+  const desktop = systemPrompt('save a note', ['/a'], true);
+
+  it('names what the model drives, and keeps the rules that do not depend on it', () => {
+    expect(desktop).toContain('a real desktop application');
+    expect(desktop).not.toContain('web application');
+    expect(desktop).toContain('BEFORE you act');
+    expect(desktop).toContain('reticle_act_sequence');
+    expect(desktop).toContain('reticle_flow_save');
+    expect(desktop).toContain(WRITING_RULE);
+    expect(desktop).toContain('Focus for this run: save a note');
+  });
+
+  it('sends the model to a file and a menu, not to a request, a link or an address', () => {
+    expect(desktop).toContain('file.written');
+    expect(desktop).toContain('menu');
+    expect(desktop).not.toContain('reticle_navigate');
+    expect(desktop).not.toContain('network');
+    expect(desktop).not.toContain('Pages this app has');
+  });
+
+  it('does not change one word of the prompt for a web application', () => {
+    expect(systemPrompt('save a note', ['/a'], false)).toBe(systemPrompt('save a note', ['/a']));
+    expect(systemPrompt('save a note', ['/a'])).toContain('a real web application');
   });
 });
