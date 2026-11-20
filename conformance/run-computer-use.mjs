@@ -13,7 +13,7 @@
  * nothing.
  */
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdirSync, mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
@@ -173,9 +173,7 @@ function client() {
         anomalies: (await realm.detect?.(window, observed)) ?? [],
         assertionsHeld: assertionsHeldUnder(declared.assertions, observed, coverage),
         consequenceHeldBefore:
-          'state' === entry.about
-            ? realm.existedBefore(window, heldPath(realm, window))
-            : undefined,
+          'state' === entry.about ? realm.existedBefore(window, join(watched, FILE)) : undefined,
       });
       if (args.includes('--verbose')) {
         console.error(
@@ -190,14 +188,6 @@ function client() {
       };
     },
   };
-}
-
-/** The path of the file as the snapshot names it, whatever form the folder's path took. */
-function heldPath(realm, window) {
-  for (const candidate of [FILE, join(realpathSync(tmpdir()), FILE)]) {
-    if (true === realm.existedBefore(window, candidate)) return candidate;
-  }
-  return FILE;
 }
 
 function dishonestIfSelfTesting(bound) {
