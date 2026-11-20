@@ -15,7 +15,11 @@ const Command = { TREE: 'tree', ACT: 'act' } as const;
 const HelperError = { NOT_TRUSTED: 'not-trusted' } as const;
 
 const ErrorSchema = z.object({ error: z.string() });
-const TreeSchema = z.object({ tree: AxNodeSchema, unread: z.number() });
+const TreeSchema = z.object({
+  tree: AxNodeSchema,
+  unread: z.number(),
+  windowsNotOnScreen: z.number().optional(),
+});
 const RefusedSchema = z.object({ refused: z.enum(ActRefusal), detail: z.string().optional() });
 const ActedSchema = z.object({
   delivered: z.boolean(),
@@ -92,7 +96,12 @@ export class MacDriver implements UiDriver {
   async read(): Promise<UiRead> {
     const answer = TreeSchema.parse(await this.#ask([Command.TREE, String(this.#input.pid)]));
     this.#last = answer.tree;
-    return toRead(answer.tree, answer.unread);
+    return {
+      ...toRead(answer.tree, answer.unread),
+      ...(answer.windowsNotOnScreen === undefined
+        ? {}
+        : { windowsNotOnScreen: answer.windowsNotOnScreen }),
+    };
   }
 
   async act(request: ActRequest): Promise<ActOutcome> {
