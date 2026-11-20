@@ -541,6 +541,11 @@ export class PeerCommands {
         `a person cannot reach ${target.node.role} "${target.node.name}": ${outcome.detail ?? 'another view or window'} is over it.`,
       );
     }
+    if (outcome.refused === ActRefusal.REACH_UNKNOWN) {
+      throw new Error(
+        `could not tell if a person can reach ${target.node.role} "${target.node.name}": ${outcome.detail ?? 'the operating system did not answer'}. The menu bar of an application is on the screen only when the application is in front. Bring ${this.#deps.driver.subject().app} to the front, or use a control in its window.`,
+      );
+    }
     if (outcome.refused !== undefined || !outcome.delivered) {
       throw new Error(
         `${target.node.role} "${target.node.name}" did not take the action: ${outcome.refused ?? 'the operating system refused it'}.`,

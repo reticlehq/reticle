@@ -628,6 +628,18 @@ describe('PeerCommands', () => {
     expect((await press(acted))['note']).toBe(undefined);
   });
 
+  // The menu bar of an application that is not in front is not on the screen. The operating
+  // system then cannot say what is at that place, and the refusal was only "reach-unknown".
+  it('says what to do when it cannot tell if a person can reach the element', async () => {
+    const { commands } = peer({ refused: ActRefusal.REACH_UNKNOWN, detail: 'the hit test failed' });
+    await expect(
+      commands.answer(ReticleCommand.ACT, {
+        ref: await refOf(commands, 'Save'),
+        action: ActionType.CLICK,
+      }),
+    ).rejects.toThrow(/could not tell if a person can reach button "Save".*in front/s);
+  });
+
   it('sends a signal when the action put something on the clipboard, with no content', async () => {
     const copied = peer({ clipboardChanged: true });
     await copied.commands.answer(ReticleCommand.ACT, {
