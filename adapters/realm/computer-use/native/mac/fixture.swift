@@ -8,6 +8,7 @@
 //   Items    a table of three rows. To choose a row changes the status text.
 //   Actions  a menu. Its items are not on the screen until it is open.
 //   Volume   a slider. Its value is a number, not text.
+//   Later    writes note.txt 800 ms after the press, and shows nothing.
 //   Export   writes the title to note.txt in the folder given as the first argument, then says so.
 //   Fake     says "Exported" and writes nothing.
 // The window floats and the application never takes the keyboard, so a run does not disturb the
@@ -87,6 +88,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
     actions.setAccessibilityLabel("Actions")
     window.contentView!.addSubview(actions)
     _ = button("Steps", 140, #selector(steps), y: 138)
+    _ = button("Later", 230, #selector(later), y: 138)
     _ = button("Export", 20, #selector(export), y: 20)
     _ = button("Fake", 100, #selector(fake), y: 20)
     window.orderFrontRegardless()
@@ -103,6 +105,13 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
   @objc func steps() {
     status.stringValue = "Working"
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.status.stringValue = "Steps done" }
+  }
+  @objc func later() {
+    let folder = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : NSTemporaryDirectory()
+    let text = field.stringValue
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+      try? text.write(toFile: folder + "/note.txt", atomically: true, encoding: .utf8)
+    }
   }
   @objc func fake() { status.stringValue = "Exported" }
   @objc func slow() {
