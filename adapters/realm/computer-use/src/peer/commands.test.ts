@@ -7,7 +7,7 @@ import {
 } from '@reticlehq/core';
 import { describe, expect, it } from 'vitest';
 
-import { ActRefusal } from '../driver.js';
+import { ActKind, ActRefusal } from '../driver.js';
 import type { ActOutcome, ActRequest, ReachAnswer, UiDriver, UiRead } from '../driver.js';
 import { UiRole } from '../ui-node.js';
 import type { UiNode } from '../ui-node.js';
@@ -516,6 +516,79 @@ describe('PeerCommands', () => {
     const real = await press();
     expect(real['domMutatedWithin']).toBe(2);
     expect(real['changedByItself']).toBe(2);
+  });
+
+  /**
+   * A field in a web view answers "done" when its value is set from outside, and keeps its old
+   * value. On the first real application, a fill was reported as delivered and the field was empty.
+   */
+  describe('a fill that the field did not take', () => {
+    const form = (value: string): UiRead => ({
+      root: node(UiRole.WINDOW, 'Todos', {
+        frame: [0, 0, 400, 300],
+        children: [node(UiRole.TEXTBOX, 'New todo', { frame: [10, 10, 200, 30], value })],
+      }),
+      unread: 0,
+      unmapped: [],
+    });
+    const fillInto = async (start: string, takesKeys: boolean) => {
+      let held = start;
+      let selected = false;
+      const kinds: string[] = [];
+      const commands = new PeerCommands({
+        driver: {
+          subject: () => ({ app: 'Todos', pid: 7 }),
+          read: () => Promise.resolve(form(held)),
+          reach: () => Promise.resolve({ reach: 'yes' }),
+          act: (request) => {
+            kinds.push(request.kind);
+            const before = form(held);
+            if (takesKeys && ActKind.KEY === request.kind && 'Meta+a' === request.value) {
+              selected = true;
+            } else if (takesKeys && ActKind.TYPE === request.kind) {
+              held = (selected ? '' : held) + (request.value ?? '');
+              selected = false;
+            }
+            return Promise.resolve({
+              delivered: true,
+              reachable: true,
+              settled: true,
+              before,
+              after: form(held),
+            });
+          },
+        },
+        emit: () => undefined,
+      });
+      const found = (await commands.answer(ReticleCommand.QUERY, { role: UiRole.TEXTBOX })) as {
+        elements: { ref: string }[];
+      };
+      const answer = commands.answer(ReticleCommand.ACT, {
+        ref: found.elements[0]?.ref ?? '',
+        action: ActionType.FILL,
+        args: { value: 'Buy milk' },
+      }) as Promise<{ effect: Record<string, unknown> }>;
+      return { answer, kinds, held: () => held };
+    };
+
+    it('types the value into an empty field, as a person does', async () => {
+      const fill = await fillInto('', true);
+      expect((await fill.answer).effect['valueChanged']).toBe(true);
+      expect(fill.kinds).toEqual([ActKind.SET, ActKind.TYPE]);
+      expect(fill.held()).toBe('Buy milk');
+    });
+
+    it('replaces other text: selects all of it, then types', async () => {
+      const fill = await fillInto('Old', true);
+      await fill.answer;
+      expect(fill.kinds).toEqual([ActKind.SET, ActKind.KEY, ActKind.TYPE]);
+      expect(fill.held()).toBe('Buy milk');
+    });
+
+    it('fails when the field takes no keys either', async () => {
+      const fill = await fillInto('', false);
+      await expect(fill.answer).rejects.toThrow(/holds ""/);
+    });
   });
 
   it('sends a signal when the action put something on the clipboard, with no content', async () => {

@@ -27,7 +27,7 @@ import type { Change } from '../effect.js';
 import { REWRITTEN, rewrittenSince, writeTimeOnDisk, writeTimesOf } from '../files.js';
 import type { WriteTimeOf, WriteTimes } from '../files.js';
 import { RefTable, writeWindows } from '../lines.js';
-import { UiRole, isAddressable, placeShown } from '../ui-node.js';
+import { UiRole, isAddressable, place, placeShown, quoted } from '../ui-node.js';
 import type { Placed, UiNode } from '../ui-node.js';
 
 export type Emit = (type: EventType, data: Record<string, unknown>) => void;
@@ -60,6 +60,17 @@ const DEFAULT_SETTLE_MS = 1500;
  * because the peer goes on looking: a change that comes after the action is sent when it comes.
  */
 const PEER_QUIET_MS = 150;
+/** The keys that select all the text of a field, and that remove what is selected. */
+const SELECT_ALL = 'Meta+a';
+const DELETE = 'Backspace';
+/** The roles whose value is the text a fill asks for. A slider's value is a number in another form. */
+const TEXT_ROLES: ReadonlySet<string> = new Set([UiRole.TEXTBOX, UiRole.COMBOBOX]);
+
+/** The value an element holds after an action. */
+function heldBy(outcome: ActOutcome, key: string): string {
+  return place(outcome.after.root).find((p) => p.key === key)?.node.value ?? '';
+}
+
 /** The looks after an action that teach nothing: a late effect of the action can be in them. */
 const LOOKS_AFTER_ACT = 2;
 /** The looks in which a place must change, with no action near, before it "changes by itself". */
@@ -697,10 +708,33 @@ export class PeerCommands {
       kind === ActKind.KEY && key !== undefined
         ? [...modifiers, key].join('+')
         : (text(more['value']) ?? key);
-    const { outcome, changes, byItself } = await this.#drive(target, ref, kind, value, {
+    const how = {
       delivery: Delivery.USER_PATH,
       budgetMs: 'number' === typeof more['settleMs'] ? more['settleMs'] : DEFAULT_SETTLE_MS,
-    });
+    };
+    let driven = await this.#drive(target, ref, kind, value, how);
+    if (kind === ActKind.SET && value !== undefined && TEXT_ROLES.has(target.node.role)) {
+      // A field in a web view answers "done" to a value set from outside, and keeps its old
+      // value. The field then gets the keys, as from a person: all of its text selected first,
+      // so that the new text replaces it.
+      const first = heldBy(driven.outcome, target.key);
+      if (first !== value) {
+        if ('' !== first) {
+          await this.#drive(target, ref, ActKind.KEY, SELECT_ALL, how);
+        }
+        driven =
+          '' === value
+            ? await this.#drive(target, ref, ActKind.KEY, DELETE, how)
+            : await this.#drive(target, ref, ActKind.TYPE, value, how);
+      }
+      const held = heldBy(driven.outcome, target.key);
+      if (held !== value) {
+        throw new Error(
+          `${target.node.role} "${target.node.name}" did not take the value: it holds ${quoted(held)}, not ${quoted(value)}. The realm set the value, then typed it.`,
+        );
+      }
+    }
+    const { outcome, changes, byItself } = driven;
     return {
       ok: true,
       ref,
