@@ -141,6 +141,7 @@ const peer = connectPeer({
   sessionId,
   projectId: plan.projectId ?? `cu-${plan.app}`.replace(/[^\w.-]/g, '-'),
   driver: new MacDriver({ helper, app: plan.app, pid }),
+  ...(warning === undefined ? {} : { noEffectNote: warning }),
   ...(0 === plan.watch.length ? {} : { workspace: nodeWorkspace(plan.watch, { exclude: [] }) }),
   now: () => Date.now(),
 });
