@@ -65,7 +65,7 @@ With `"count": 0` the same claim says that the application's own processes wrote
 | Tool action | What the realm does |
 | --- | --- |
 | `click` | Presses the element. On a row of a table, chooses the row. |
-| `fill` | Puts a value in the element. No key event is sent. |
+| `fill` | Puts a value in the element, then reads it. A text field that did not take the value (a field in a web view) gets keys: all its text is selected, and the value is typed. The action fails if the field still holds another value. |
 | `type` | Sends one key event for each character. A text field that takes the keyboard selects its text first, so the typed text replaces it. |
 | `press` | Sends one key with its modifiers: `Return`, `Meta+s`. |
 | `scroll` | Moves the scroll bar. See below. |
