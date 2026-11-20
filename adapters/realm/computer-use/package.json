@@ -40,6 +40,7 @@
     "bin",
     "dist",
     "native/mac/reticle-ax.swift",
+    "README.md",
     "NOTICE"
   ],
   "sideEffects": false,
