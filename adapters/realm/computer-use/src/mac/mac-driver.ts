@@ -1,8 +1,9 @@
 /**
  * The macOS driver: it runs the `reticle-ax` helper and turns its answers into the driver port.
  */
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
+import { spawn } from 'node:child_process';
+import type { ChildProcessWithoutNullStreams } from 'node:child_process';
+import { Socket } from 'node:net';
 
 import { z } from 'zod';
 
@@ -35,10 +36,64 @@ const ActedSchema = z.object({
 
 export type RunHelper = (file: string, args: readonly string[]) => Promise<string>;
 
-const runProcess: RunHelper = async (file, args) => {
-  const { stdout } = await promisify(execFile)(file, [...args], { maxBuffer: 64 * 1024 * 1024 });
-  return stdout;
-};
+const SERVE = 'serve';
+const HELPER_EXITED = JSON.stringify({ error: 'the helper process ended' });
+
+/**
+ * One helper process for the life of a driver. A command is one line to it, and its answer is one
+ * line back.
+ *
+ * A process for each command took about 70 ms to read a small window, and 5 ms of that was the
+ * read: the rest was the start of the process and its first word with the application.
+ *
+ * Commands go one at a time. The helper answers in order, and an answer has no name on it.
+ */
+function servingHelper(): RunHelper {
+  let child: ChildProcessWithoutNullStreams | undefined;
+  let buffered = '';
+  const waiting: ((line: string) => void)[] = [];
+  let last: Promise<unknown> = Promise.resolve();
+
+  const start = (file: string): ChildProcessWithoutNullStreams => {
+    const started = spawn(file, [SERVE]);
+    started.stdout.setEncoding('utf8');
+    started.stdout.on('data', (chunk: string) => {
+      buffered += chunk;
+      for (let end = buffered.indexOf('\n'); end !== -1; end = buffered.indexOf('\n')) {
+        waiting.shift()?.(buffered.slice(0, end));
+        buffered = buffered.slice(end + 1);
+      }
+    });
+    started.on('exit', () => {
+      child = undefined;
+      buffered = '';
+      for (const answer of waiting.splice(0)) {
+        answer(HELPER_EXITED);
+      }
+    });
+    // The helper must not keep the program open after its work is done.
+    started.unref();
+    for (const stream of [started.stdin, started.stdout, started.stderr]) {
+      if (stream instanceof Socket) {
+        stream.unref();
+      }
+    }
+    return started;
+  };
+
+  return (file, args) => {
+    const answer = last.then(
+      () =>
+        new Promise<string>((resolve) => {
+          child ??= start(file);
+          waiting.push(resolve);
+          child.stdin.write(`${JSON.stringify(args)}\n`);
+        }),
+    );
+    last = answer;
+    return answer;
+  };
+}
 
 export interface MacDriverInput {
   /** The path of the `reticle-ax` program. */
@@ -75,7 +130,7 @@ export class MacDriver implements UiDriver {
 
   constructor(input: MacDriverInput) {
     this.#input = input;
-    this.#run = input.run ?? runProcess;
+    this.#run = input.run ?? servingHelper();
   }
 
   subject(): { app: string; pid: number } {
