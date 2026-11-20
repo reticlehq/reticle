@@ -274,6 +274,8 @@ export interface HarnessOptions {
   inbox?: () => readonly string[];
   /** The pages the app's map knows: named up front, and offered after a route guess misses. */
   routes?: readonly string[];
+  /** A desktop application read through the operating system: no page, no address, no SDK. */
+  desktopApplication?: boolean;
   /**
    * The end the goal quotes, and the text the Harness wrote itself (never the app showing it): the
    * drive stops once a check has held and the page shows it. Driven over MCP: a model that reached
@@ -327,7 +329,14 @@ const OPENING = 'The app is loaded and connected. Begin by looking at the page, 
  * deterministically for a few hundred tokens, forever. That is the whole economics of this feature,
  * so it is an instruction and not a hope.
  */
-export function systemPrompt(focus?: string, routes: readonly string[] = []): string {
+export function systemPrompt(
+  focus?: string,
+  routes: readonly string[] = [],
+  desktopApplication = false,
+): string {
+  if (desktopApplication) {
+    return desktopPrompt(focus);
+  }
   return [
     'You are driving a real web application through a verification tool, to find out whether it actually works.',
     '',
@@ -373,6 +382,55 @@ export function systemPrompt(focus?: string, routes: readonly string[] = []): st
 }
 
 /**
+ * The same rules for a desktop application that is read through the operating system.
+ *
+ * It is a second text, not the first one with words changed, because what is different is what
+ * the model must do: there is no link, no address and no network request to assert. The strongest
+ * evidence is a file that the application wrote. The controls are in windows and in menus.
+ */
+function desktopPrompt(focus?: string): string {
+  return [
+    'You are driving a real desktop application through a verification tool, to find out whether it actually works.',
+    '',
+    'The loop is: look at the window, act on it, and state what should happen BEFORE you act. Naming the',
+    'expected consequence in advance is the difference between a check and a rationalisation.',
+    '',
+    'Use reticle_snapshot to see the window and get element refs, and reticle_query to find one control.',
+    'Use reticle_act_and_wait with `until` to act and get a verdict in one call — that is the tool',
+    'that proves something. reticle_act just performs an action and proves nothing. When an action',
+    'saves, exports or deletes a file, assert the file: `until` a signal named file.written,',
+    'file.modified or file.deleted, with `dataMatches` for the file name. Prefer that over asserting',
+    'that some text is on screen — the text can say "Saved" while nothing was written.',
+    '',
+    'Drive the app the way a user would: complete whole journeys, not single clicks. Fill the fields',
+    'by typing. To use a menu, press its name in the menu bar first, then read the window again: the',
+    'items of a closed menu are not shown and cannot be pressed. If something looks interactive, try',
+    'it — unless the focus below says not to: "without opening a file", "changes nothing" and the',
+    'like bind the whole drive.',
+    '',
+    'The tool presses only what a person could press. When it refuses a control because another',
+    'window is on top, or says that the application has no window on this screen, do not try the',
+    'same control again: say so and finish.',
+    '',
+    'RECORD WHAT YOU DRIVE. Before each journey call reticle_record { action: "start" }, drive it, then',
+    'reticle_flow_save with a short descriptive name. A saved flow replays deterministically on every',
+    'future run with no model in the loop, so an unrecorded drive is work that has to be paid for again.',
+    '',
+    'When several steps follow each other with no decision between them, send them in ONE',
+    'reticle_act_sequence with `steps`. Each call you make costs a turn, and turns are most of the time.',
+    '',
+    'You are NOT judging whether the app is correct — the engine records everything you do and decides',
+    'that afterwards. Your job is coverage: exercise as much real behaviour as you can, and state clear',
+    'expectations as you go. Do not report bugs; drive the app.',
+    '',
+    'Call `finish` when you have covered the app or cannot get further.',
+    '',
+    WRITING_RULE,
+    ...(focus === undefined ? [] : ['', `Focus for this run: ${focus}`]),
+  ].join('\n');
+}
+
+/**
  * Run the harness to completion.
  *
  * Pure orchestration: no network, no clock, no filesystem. Everything that touches the world arrives
@@ -399,7 +457,7 @@ async function driveToEnd(
   const maxSteps = options.maxSteps ?? DEFAULT_MAX_STEPS;
   const tools = [...toolset.tools, FINISH_TOOL];
   const routes = options.routes ?? [];
-  const system = systemPrompt(options.focus, routes);
+  const system = systemPrompt(options.focus, routes, true === options.desktopApplication);
   const history: HistoryEntry[] = [{ role: 'user', text: OPENING }];
   const toolCalls: ToolOutcome[] = [];
   const usage: TokenUsage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 };

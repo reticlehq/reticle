@@ -105,6 +105,7 @@ import {
   reconcileFlows,
   recordPersona,
   refusedByPlatform,
+  drivesDesktopApplication,
   steering,
   withProjectFlows,
   type ExploreOptions,
@@ -356,6 +357,7 @@ async function runPlan(
       const ahead = new Set(await reads.flows.list());
       const driven = await runHarness(driverFor(persona, goal).driver, toolset, {
         ...steering(options),
+        ...drivesDesktopApplication(deps, options.sessionId),
         maxSteps: Math.min(steps, maxSteps),
         routes: knownRoutes(map),
         focus: [planAsText(planFor(goal)), `Focus: ${goal}`].join('\n\n'),

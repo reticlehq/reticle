@@ -17,7 +17,14 @@ import {
   noteHarnessGoal,
   noteHarnessSpan,
 } from '@/judgement/runs/drive-run.js';
-import { ReticleEnv, ReticleTool, asProjectId, asRecord, type FlowFile } from '@reticlehq/core';
+import {
+  ReticleEnv,
+  ReticleTool,
+  asProjectId,
+  asRecord,
+  isPeerRealm,
+  type FlowFile,
+} from '@reticlehq/core';
 import { flowsForSession } from '@/language/flows/flow-store-for-session.js';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
 import type { ToolDeps } from './tool-kit.js';
@@ -286,6 +293,7 @@ export async function exploreApp(
   const driveStarted = deps.now();
   const drive = await runHarness(driver, toolset, {
     ...steering(options),
+    ...drivesDesktopApplication(deps, options.sessionId),
     maxSteps,
     routes: knownRoutes(map),
     // The plan rides in as standing instruction, so it is in front of the model on every turn
@@ -374,6 +382,23 @@ export async function exploreApp(
 }
 
 /** The stop and the words of whoever started the drive, for `runHarness`. */
+/**
+ * Whether the session to drive is a desktop application with no SDK in it. The Harness then uses
+ * the prompt for one. A session that cannot be found answers as a web page, as everywhere else.
+ */
+export function drivesDesktopApplication(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+): Pick<HarnessOptions, 'desktopApplication'> {
+  try {
+    return isPeerRealm(deps.sessions.resolve(sessionId).runtime)
+      ? { desktopApplication: true }
+      : {};
+  } catch {
+    return {};
+  }
+}
+
 export function steering(options: ExploreOptions): Pick<HarnessOptions, 'stopped' | 'inbox'> {
   return {
     ...(options.stopped === undefined ? {} : { stopped: options.stopped }),
