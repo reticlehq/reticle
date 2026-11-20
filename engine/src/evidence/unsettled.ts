@@ -110,13 +110,9 @@ function waitPhrase(predicate: Predicate): string {
           case 'unchanged':
             return 'text unchanged';
           case 'increased':
-            return s.by === undefined
-              ? 'text increased'
-              : `text increased by ${s.by.value}`;
+            return s.by === undefined ? 'text increased' : `text increased by ${s.by.value}`;
           case 'decreased':
-            return s.by === undefined
-              ? 'text decreased'
-              : `text decreased by ${s.by.value}`;
+            return s.by === undefined ? 'text decreased' : `text decreased by ${s.by.value}`;
         }
       }
       return `text containing '${predicate.contains}'${true === predicate.ignoreCase ? ', ignoring case' : ''}`;

@@ -255,6 +255,6 @@ describe('describeWaitTarget names a satisfies-only text check', () => {
         kind: PredicateKind.TEXT,
         satisfies: { property: 'matchesPattern', pattern: '\\d+ items' },
       }),
-    ).toBe("text matching /\\d+ items/");
+    ).toBe('text matching /\\d+ items/');
   });
 });
