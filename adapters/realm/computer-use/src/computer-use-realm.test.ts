@@ -162,4 +162,34 @@ describe('ComputerUseRealm', () => {
     const realm = new ComputerUseRealm({ driver: driver(), workspace, now: () => 0 });
     expect(realm.canProveAnything()).toBe(true);
   });
+
+  it('sees a file that was written again with the same bytes', async () => {
+    const fact = { hash: 'same', size: 4, mode: 0o644, linkTo: undefined };
+    const files = new Map([['/out/note.txt', fact]]);
+    let written = 100;
+    const realm = new ComputerUseRealm({
+      driver: driver(),
+      workspace: {
+        roots: ['/out'],
+        excluded: [],
+        snapshot: () => ({ files: new Map(files), unreadable: [] }),
+      },
+      writeTimeOf: () => written,
+      now: () => 0,
+    });
+    const quiet = realm.openWindow(1000);
+    expect(await realm.observe(realm.closeWindow(quiet))).toEqual([]);
+
+    const window = realm.openWindow(1000);
+    expect(realm.existedBefore(window, '/out/note.txt')).toBe(true);
+    written = 200;
+    const seen = await realm.observe(realm.closeWindow(window));
+    expect(seen.map((o) => [o.channel, o.summary, o.value])).toEqual([
+      [
+        CuChannel.FILES,
+        CuSummary.FS_WRITTEN,
+        { path: '/out/note.txt', kind: 'rewritten', size: 4 },
+      ],
+    ]);
+  });
 });

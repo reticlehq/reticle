@@ -9,6 +9,8 @@
  * application's own word. A claim gets a `yes` only from a channel the application does not
  * decide: here, the file system, when the caller names a folder to watch.
  */
+import { statSync } from 'node:fs';
+
 import { ChangeKind as FileChangeKind, diffSnapshots } from '@reticlehq/cli-realm';
 import type { Snapshot, WorkspacePort } from '@reticlehq/cli-realm';
 import {
@@ -48,6 +50,11 @@ export interface ComputerUseRealmDeps {
   /** A folder to watch. Without one the realm reports effects and can prove nothing. */
   readonly workspace?: WorkspacePort;
   readonly now: () => number;
+  /**
+   * When a file was last written, in milliseconds. The default asks the file system. A test gives
+   * its own.
+   */
+  readonly writeTimeOf?: (path: string) => number | undefined;
 }
 
 export interface Described {
@@ -131,6 +138,14 @@ export class ComputerUseRealm extends Realm {
   /** The files when each window opened, and the one look taken after it. */
   readonly #before = new Map<string, Snapshot>();
   readonly #after = new Map<string, Snapshot>();
+  /**
+   * When each watched file was last written, as each window opened.
+   *
+   * The snapshot compares what a file holds, not when it was written. An application that writes
+   * the same bytes again did write, and the snapshot shows no change. Without the time, the realm
+   * said that nothing was written.
+   */
+  readonly #writeTimes = new Map<string, Map<string, number | undefined>>();
   /**
    * What each action did, under the window that was open when it ran.
    *
@@ -280,7 +295,12 @@ export class ComputerUseRealm extends Realm {
     this.#windowSeq += 1;
     const id = `w${String(this.#windowSeq)}`;
     if (this.#deps.workspace !== undefined) {
-      this.#before.set(id, this.#deps.workspace.snapshot());
+      const before = this.#deps.workspace.snapshot();
+      this.#before.set(id, before);
+      this.#writeTimes.set(
+        id,
+        new Map([...before.files.keys()].map((path) => [path, this.#writeTime(path)])),
+      );
     }
     this.#openBudgetMs = budgetMs;
     this.#openWindowId = id;
@@ -315,6 +335,10 @@ export class ComputerUseRealm extends Realm {
 
   #outcomesIn(windowId: string): readonly ActOutcome[] {
     return this.#outcomes.get(windowId) ?? [];
+  }
+
+  #writeTime(path: string): number | undefined {
+    return (this.#deps.writeTimeOf ?? writeTimeOnDisk)(path);
   }
 
   #afterLook(window: Window): Snapshot | undefined {
@@ -375,6 +399,23 @@ export class ComputerUseRealm extends Realm {
         });
       }
     }
+    // A file with the same bytes and a new write time: the application wrote it again.
+    const changed = new Set(
+      before !== undefined && after !== undefined
+        ? diffSnapshots(before, after).map((change) => change.path)
+        : [],
+    );
+    for (const [path, was] of this.#writeTimes.get(window.id) ?? []) {
+      const fact = after?.files.get(path);
+      const now = fact === undefined ? undefined : this.#writeTime(path);
+      if (fact !== undefined && !changed.has(path) && now !== undefined && now !== was) {
+        add(CuChannel.FILES, 0 === fact.size ? CuSummary.FS_WRITTEN_EMPTY : CuSummary.FS_WRITTEN, {
+          path,
+          kind: REWRITTEN,
+          size: fact.size,
+        });
+      }
+    }
     return Promise.resolve(observations);
   }
 
@@ -430,6 +471,17 @@ export class ComputerUseRealm extends Realm {
       observed: this.channels().map((c) => c.id),
       blindSpots,
     });
+  }
+}
+
+/** The kind of a write that left the same bytes. The snapshot has no word for it. */
+const REWRITTEN = 'rewritten';
+
+function writeTimeOnDisk(path: string): number | undefined {
+  try {
+    return statSync(path).mtimeMs;
+  } catch {
+    return undefined;
   }
 }
 
