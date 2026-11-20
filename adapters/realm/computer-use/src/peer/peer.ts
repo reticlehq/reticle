@@ -22,6 +22,7 @@ const ORIGIN = 'http://localhost';
 const ADAPTER = 'computer-use';
 /** A session with no word for 12 s reads as throttled. The SDK in a page sends this at the same rate. */
 const HEARTBEAT_MS = 5000;
+const FILES_EVERY_MS = 1000;
 /** The bridge drops a result whose error is longer than 4,096 characters, and the command then waits. */
 const MAX_ERROR = 4000;
 const HealthReason = { CONNECT: 'connect', HEARTBEAT: 'heartbeat' } as const;
@@ -44,6 +45,8 @@ export interface PeerInput {
   driver: UiDriver;
   /** Folders to watch for files an action writes. */
   workspace?: WorkspacePort;
+  /** How often the watched folders are looked at between actions. The default is one second. */
+  filesEveryMs?: number;
   now: () => number;
 }
 
@@ -85,6 +88,7 @@ export function connectPeer(input: PeerInput): Peer {
     });
   };
   let heartbeat: ReturnType<typeof setInterval> | undefined;
+  let files: ReturnType<typeof setInterval> | undefined;
 
   const ready = new Promise<void>((resolve, reject) => {
     socket.once('error', reject);
@@ -115,6 +119,14 @@ export function connectPeer(input: PeerInput): Peer {
         health(HealthReason.HEARTBEAT);
       }, HEARTBEAT_MS);
       heartbeat.unref();
+      if (input.workspace !== undefined) {
+        // ponytail: a whole look at the folders each time. Watch them for changes when a folder
+        // is large enough for the look to cost more than the wait.
+        files = setInterval(() => {
+          commands.sendFileChanges();
+        }, input.filesEveryMs ?? FILES_EVERY_MS);
+        files.unref();
+      }
       resolve();
     });
   });
@@ -165,12 +177,14 @@ export function connectPeer(input: PeerInput): Peer {
   });
   socket.on('close', () => {
     clearInterval(heartbeat);
+    clearInterval(files);
   });
 
   return {
     ready,
     close: () => {
       clearInterval(heartbeat);
+      clearInterval(files);
       socket.close();
     },
   };

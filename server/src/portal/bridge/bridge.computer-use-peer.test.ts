@@ -37,6 +37,7 @@ class FakeApp implements UiDriver {
         node(UiRole.BUTTON, 'Dead', { frame: [100, 10, 80, 30] }),
         node(UiRole.BUTTON, 'Export', { frame: [10, 50, 80, 30] }),
         node(UiRole.BUTTON, 'Fake', { frame: [100, 50, 80, 30] }),
+        node(UiRole.BUTTON, 'Later', { frame: [190, 50, 80, 30] }),
         node(UiRole.TEXT, this.status, { frame: [10, 90, 200, 20] }),
       ],
     });
@@ -71,6 +72,13 @@ class FakeApp implements UiDriver {
     }
     if ('Fake' === request.target.node.name) {
       this.status = 'Exported';
+    }
+    // The file comes after the action is finished, as it does when an application saves in the
+    // background.
+    if ('Later' === request.target.node.name) {
+      setTimeout(() => {
+        this.files.set('/out/late.txt', { hash: 'h', size: 4, mode: 0o644, linkTo: undefined });
+      }, 300);
     }
     return Promise.resolve({
       delivered: true,
@@ -108,6 +116,7 @@ describe('a computer-use peer on the bridge', () => {
         excluded: [],
         snapshot: () => ({ files: new Map(app.files), unreadable: [] }),
       },
+      filesEveryMs: 100,
       now: () => Date.now(),
     });
     await peer.ready;
@@ -254,4 +263,16 @@ describe('a computer-use peer on the bridge', () => {
     expect(JSON.stringify(acted?.result)).toContain('"verified":"yes"');
     expect(app.status).toBe('Saved');
   }, 60_000);
+
+  it('proves a file that the application writes after the action is finished', async () => {
+    const page = (await callTool(deps, 'reticle_snapshot', {})) as { tree: string };
+    const later = /button "Later" \(ref=(e\d+)\)/.exec(page.tree)?.[1] ?? '';
+    const result = (await callTool(deps, 'reticle_act_and_wait', {
+      ref: later,
+      action: 'click',
+      timeout_ms: 3000,
+      until: { kind: 'signal', name: 'file.written', dataMatches: { file: 'late.txt' } },
+    })) as Verdict;
+    expect(result.verdict.pass, result.verdict.failureReason).toBe(true);
+  });
 });

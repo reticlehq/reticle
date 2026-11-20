@@ -37,6 +37,16 @@ function read(status: string): UiRead {
 /** What the fake operating system says when the peer asks if a person can see an element. */
 let reachAnswer: ReachAnswer = { reach: 'yes' };
 
+/** A driver for a test that asks the application nothing. */
+function fakeDriver(): UiDriver {
+  return {
+    subject: () => ({ app: 'Notes', pid: 7 }),
+    read: () => Promise.resolve(read('Ready')),
+    reach: () => Promise.resolve(reachAnswer),
+    act: () => Promise.reject(new Error('this test does not act')),
+  };
+}
+
 function peer(outcome: Partial<ActOutcome> = {}) {
   reachAnswer = { reach: 'yes' };
   const asked: ActRequest[] = [];
@@ -155,7 +165,8 @@ describe('PeerCommands', () => {
 
   it('sends a signal for a file the action wrote', async () => {
     const fact = { hash: 'h', size: 4, mode: 0o644, linkTo: undefined };
-    const looks = [new Map(), new Map([['/out/note.txt', fact]])];
+    // Three looks: at the start, before the action, and after it.
+    const looks = [new Map(), new Map(), new Map([['/out/note.txt', fact]])];
     const events: [string, Record<string, unknown>][] = [];
     const commands = new PeerCommands({
       driver: {
@@ -318,5 +329,28 @@ describe('PeerCommands', () => {
     // The operating system did not answer: the check fails with words, so the caller gets "not known".
     reachAnswer = { reach: 'unknown', detail: 'the hit test failed with -25200' };
     await expect(visible()).rejects.toThrow(/could not tell if a person can see button "Save"/);
+  });
+
+  it('sends a signal for a file that comes after the action is finished, and sends it once', () => {
+    const fact = { hash: 'h', size: 4, mode: 0o644, linkTo: undefined };
+    let files = new Map<string, typeof fact>([['/out/old.txt', fact]]);
+    const events: [string, Record<string, unknown>][] = [];
+    const commands = new PeerCommands({
+      driver: fakeDriver(),
+      emit: (type, data) => events.push([type, data]),
+      workspace: {
+        roots: ['/out'],
+        excluded: [],
+        snapshot: () => ({ files: new Map(files), unreadable: [] }),
+      },
+    });
+    // A file that was there at the start is not a change.
+    commands.sendFileChanges();
+    expect(events).toEqual([]);
+
+    files = new Map([...files, ['/out/late.txt', fact]]);
+    commands.sendFileChanges();
+    commands.sendFileChanges();
+    expect(events.map(([, data]) => data['name'])).toEqual(['file.written']);
   });
 });
