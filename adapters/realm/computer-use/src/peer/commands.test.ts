@@ -23,6 +23,7 @@ function read(status: string): UiRead {
       node(UiRole.BUTTON, 'Save', { frame: [10, 10, 80, 30] }),
       node(UiRole.BUTTON, 'Pay', { frame: [10, 50, 80, 30], states: [ElementState.DISABLED] }),
       node(UiRole.BUTTON, 'Below', { frame: [10, 900, 80, 30] }),
+      node(UiRole.BUTTON, 'Delete note', { frame: [100, 10, 80, 30] }),
       node(UiRole.TEXT, status, { frame: [10, 90, 200, 20] }),
     ],
   });
@@ -67,9 +68,9 @@ describe('PeerCommands', () => {
       truncated: boolean;
     };
     expect(snapshot.status).toEqual({ route: '/', title: 'Notes' });
-    expect(snapshot.nodes).toBe(5);
+    expect(snapshot.nodes).toBe(6);
     expect(snapshot.truncated).toBe(false);
-    expect(parseInteractive(snapshot.tree)).toHaveLength(5);
+    expect(parseInteractive(snapshot.tree)).toHaveLength(6);
   });
 
   it('matches by role and exact name, and by text with the case the caller asked for', async () => {
@@ -218,5 +219,16 @@ describe('PeerCommands', () => {
       ['type', 'Plan'],
       ['key', 'Meta+Shift+s'],
     ]);
+  });
+
+  it('presses no outward control that a Harness command did not ask for', async () => {
+    const { commands, asked } = peer();
+    const ref = await refOf(commands, 'Delete note');
+    const click = { ref, action: ActionType.CLICK };
+    await expect(commands.answer(ReticleCommand.ACT, click, [])).rejects.toThrow(/delete/i);
+    expect(asked).toEqual([]);
+    await commands.answer(ReticleCommand.ACT, click, ['delete']);
+    await commands.answer(ReticleCommand.ACT, click);
+    expect(asked).toHaveLength(2);
   });
 });

@@ -10,7 +10,15 @@ import { basename } from 'node:path';
 
 import { diffSnapshots } from '@reticlehq/cli-realm';
 import type { WorkspacePort } from '@reticlehq/cli-realm';
-import { ActionType, ElementState, EventType, QueryBy, ReticleCommand } from '@reticlehq/core';
+import {
+  ActionType,
+  ElementState,
+  EventType,
+  QueryBy,
+  ReticleCommand,
+  outwardActionOf,
+  outwardRefusal,
+} from '@reticlehq/core';
 
 import { ActKind, ActRefusal, Delivery } from '../driver.js';
 import type { UiDriver } from '../driver.js';
@@ -131,13 +139,18 @@ interface ActResult {
 export class PeerCommands {
   readonly #deps: PeerCommandsDeps;
   readonly #refs = new RefTable();
-
   constructor(deps: PeerCommandsDeps) {
     this.#deps = deps;
   }
 
-  /** The answer to one command. It throws when the command fails; the peer sends the words on. */
-  async answer(name: string, args: Args): Promise<unknown> {
+  /**
+   * The answer to one command. It throws when the command fails; the peer sends the words on.
+   *
+   * `outward` comes with a command the Harness sent: the outward actions (send, delete, pay) its
+   * journey asks for. No other outward control is pressed. Absent: an agent or a saved flow sent
+   * the command, and there is no limit here.
+   */
+  async answer(name: string, args: Args, outward?: readonly string[]): Promise<unknown> {
     switch (name) {
       case ReticleCommand.SNAPSHOT:
         return this.#snapshot();
@@ -148,9 +161,9 @@ export class PeerCommands {
       case ReticleCommand.INSPECT:
         return this.#inspect(text(args['ref']) ?? '');
       case ReticleCommand.ACT:
-        return this.#act(args);
+        return this.#act(args, outward);
       case ReticleCommand.ACT_SEQUENCE:
-        return this.#sequence(Array.isArray(args['steps']) ? args['steps'] : []);
+        return this.#sequence(Array.isArray(args['steps']) ? args['steps'] : [], outward);
       case ReticleCommand.CAPABILITIES:
         return { testids: [], signals: [], stores: [], flows: [] };
       default:
@@ -282,11 +295,11 @@ export class PeerCommands {
    * Several actions in one command, so a model turn drives more than one step. It stops at the
    * first action that fails, and the failure names the step.
    */
-  async #sequence(steps: readonly unknown[]): Promise<unknown> {
+  async #sequence(steps: readonly unknown[], outward?: readonly string[]): Promise<unknown> {
     const done: ActResult[] = [];
     for (const [index, step] of steps.entries()) {
       try {
-        done.push(await this.#act(record(step)));
+        done.push(await this.#act(record(step), outward));
       } catch (error) {
         const words = error instanceof Error ? error.message : String(error);
         throw new Error(`step ${String(index + 1)} of ${String(steps.length)}: ${words}`, {
@@ -302,7 +315,7 @@ export class PeerCommands {
     };
   }
 
-  async #act(args: Args): Promise<ActResult> {
+  async #act(args: Args, allowed?: readonly string[]): Promise<ActResult> {
     const ref = text(args['ref']) ?? '';
     const action = text(args['action']) ?? '';
     const kind = KIND_OF[action];
@@ -312,6 +325,12 @@ export class PeerCommands {
       );
     }
     const target = await this.#resolve(ref);
+    if (allowed !== undefined) {
+      const outward = outwardActionOf(target.node.name, target.node.role);
+      if (outward !== undefined && !allowed.includes(outward)) {
+        throw new Error(outwardRefusal(outward));
+      }
+    }
     const more = record(args['args']);
     const modifiers = Array.isArray(more['modifiers']) ? more['modifiers'].map(String) : [];
     const key = text(more['text']);

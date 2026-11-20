@@ -128,10 +128,19 @@ export function connectPeer(input: PeerInput): Peer {
       return;
     }
     const args = message['args'];
+    const outward = message['outward'];
+    const allowed =
+      'object' === typeof outward &&
+      outward !== null &&
+      'allowed' in outward &&
+      Array.isArray(outward.allowed)
+        ? outward.allowed.map(String)
+        : undefined;
     commands
       .answer(
         name,
         'object' === typeof args && args !== null ? (args as Record<string, unknown>) : {},
+        allowed,
       )
       .then(
         (result) => {
