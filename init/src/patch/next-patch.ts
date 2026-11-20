@@ -361,6 +361,21 @@ export const NEXT_PAGES_APP_CANDIDATES = [
  * root layouts and none could be chosen, so the manual step can name them; `unmounted` names the
  * other group root layouts when one was chosen, so init can say which routes go without it.
  */
+/** The App Router folders, in the order Next prefers them. */
+const ROOT_APP_LAYOUT = 'app/layout.tsx';
+const SRC_APP_LAYOUT = 'src/app/layout.tsx';
+
+/**
+ * Where the root layout would be, when none was found: `src/app` for an app that has it and no
+ * `app` folder (a `--src-dir` app), else `app`. The dev component lands beside this path, so a wrong
+ * guess writes it into a folder Next never reads.
+ */
+export function nextLayoutFallback(io: Pick<InitIo, 'listDirs'>): string {
+  const rootHasApp = io.listDirs('.').includes('app');
+  const srcHasApp = io.listDirs('src').includes('app');
+  return !rootHasApp && srcHasApp ? SRC_APP_LAYOUT : ROOT_APP_LAYOUT;
+}
+
 export function findNextMountFile(io: ListingIo & Pick<InitIo, 'exists'>): {
   path: string | null;
   candidates?: string[];

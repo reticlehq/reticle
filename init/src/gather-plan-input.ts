@@ -39,7 +39,7 @@ import {
   type PromptHookTarget,
 } from './register/prompt-hooks.js';
 import { CRA_ENV_PATH } from './patch/cra.js';
-import { findNextMountFile } from './patch/next-patch.js';
+import { findNextMountFile, nextLayoutFallback } from './patch/next-patch.js';
 import { tanstackStartConnectPath } from './patch/tanstack-start.js';
 import { installedViteMajor } from './patch/vite-owning-config.js';
 import { PRETTIERIGNORE_PATH } from './patch/prettier-ignore.js';
@@ -372,7 +372,7 @@ export function gatherPlanInput(options: InitOptions, io: InitIo, pkg: unknown):
   // And which LANGUAGE it is written in follows Next's rule, not `detection.typescript`: a
   // `typescript` devDependency in a jsconfig app is not a TypeScript project to Next (#1527).
   const devLocation = reticleDevLocation(
-    layoutPath ?? 'app/layout.tsx',
+    layoutPath ?? nextLayoutFallback(io),
     nextUsesTypeScript(layoutPath, rootFiles.has(TSCONFIG_FILE)),
   );
   // Read once: both the testid scan and the store scan want the same bounded set of files.
