@@ -78,6 +78,8 @@ const ROLE_OF: Readonly<Record<string, UiRole>> = {
   AXOutline: UiRole.LIST,
   AXImage: UiRole.IMAGE,
   [AxRole.STATIC_TEXT]: UiRole.TEXT,
+  AXHeading: UiRole.HEADING,
+  AXWebArea: UiRole.DOCUMENT,
   AXGroup: UiRole.GROUP,
   AXScrollArea: UiRole.GROUP,
   AXSplitGroup: UiRole.GROUP,

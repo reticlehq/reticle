@@ -33,7 +33,15 @@ export interface Change {
 
 export interface Effect {
   kind: EffectKind;
+  /** What appeared, went away or changed. A move of the keyboard alone is not here. */
   changes: Change[];
+  /**
+   * The element that has the keyboard after the action, when the keyboard moved. A press on a
+   * control in a web view moves the keyboard to it and can do nothing more. That is not an effect
+   * of the action, or every press in a web view has one, and an action that does nothing is never
+   * reported.
+   */
+  focusMovedTo?: string;
 }
 
 const MARK: Readonly<Record<ChangeKind, string>> = {
@@ -101,5 +109,32 @@ export function effectOf(before: UiNode, after: UiNode): Effect {
       changes.push({ kind: ChangeKind.NEW, ...who(p.node) });
     }
   }
-  return { kind: changes.length > 0 ? EffectKind.CHANGED : EffectKind.NONE, changes };
+  const real = changes.filter((change) => !isFocusOnly(change));
+  const taker = changes.find((change) => isFocusOnly(change) && tookFocus(change));
+  return {
+    kind: real.length > 0 ? EffectKind.CHANGED : EffectKind.NONE,
+    changes: real,
+    ...(taker === undefined ? {} : { focusMovedTo: taker.element }),
+  };
+}
+
+const FOCUSED = 'focused';
+const without = (states: string): string =>
+  states
+    .split(',')
+    .filter((state) => state !== FOCUSED && state.length > 0)
+    .join(',');
+
+/** A change that is the keyboard coming or going, and nothing else. */
+function isFocusOnly(change: Change): boolean {
+  return (
+    change.kind === ChangeKind.DIFFERENT &&
+    change.value === undefined &&
+    change.states !== undefined &&
+    without(change.states[0]) === without(change.states[1])
+  );
+}
+
+function tookFocus(change: Change): boolean {
+  return change.states?.[1].split(',').includes(FOCUSED) ?? false;
 }

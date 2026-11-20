@@ -330,6 +330,9 @@ let clipboard: NSPasteboard = {
   return NSPasteboard.general
 }()
 
+/// The applications this process has read once. See the first read, in `tree`.
+var readBefore = Set<pid_t>()
+
 /// Key codes of the ANSI keyboard. A letter here is the key at that place, for a shortcut.
 let keyCodes: [String: CGKeyCode] = [
   "return": 36, "enter": 36, "tab": 48, "space": 49, "escape": 53, "backspace": 51, "delete": 117,
@@ -355,7 +358,21 @@ func run(_ args: [String]) throws {
 
   if args[1] == "tree" {
     let started = Date()
-    let shot = snapshot(app)
+    var shot = snapshot(app)
+    // The first read of an application can be less than the application has. A web view makes
+    // its accessibility tree when it is first asked, and the first answer had an empty group
+    // where the page is. So the first read of each application is read again until two reads
+    // agree, for a second at most.
+    if !readBefore.contains(pid) {
+      readBefore.insert(pid)
+      for _ in 0..<8 {
+        Thread.sleep(forTimeInterval: 0.12)
+        let again = snapshot(app)
+        let same = again.json == shot.json
+        shot = again
+        if same { break }
+      }
+    }
     try emit([
       "tree": shot.tree, "unread": shot.unread, "windowsNotOnScreen": windowsNotOnScreen(pid),
       "readMs": Int(Date().timeIntervalSince(started) * 1000),

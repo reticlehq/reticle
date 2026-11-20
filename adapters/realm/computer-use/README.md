@@ -79,6 +79,7 @@ Read these before you rely on a result.
 
 - **macOS only.** There is no reader for Windows or Linux.
 - **Only the Space that is in front.** The accessibility interface lists the windows on the Space that the person looks at. An application on another Space reads as an application with no window. The realm says how many windows are not on the screen.
+- **A web view inside a native application is read.** The system web view (WebKit) gives its page as elements with no switch to set: headings, fields, buttons, links. It was tried on a small test application only. The first read of an application waits until two reads agree, because a web view makes its tree when it is first asked.
 - **An application must give an accessibility tree.** An Electron application and a browser give very little until a switch is set in them. This realm does not set that switch. A canvas and a game have no elements to read.
 - **A large window is slow to read.** The cost is for each element. A table is read only for the rows on the screen, and its line says how many rows are not shown.
 - **An action with its proof takes about 350 ms through the tools.** The peer calls an action finished after 150 ms with no change, and it goes on looking: a change that comes later is sent when it comes. A caller of the realm class looks once, so it waits for 500 ms with no change; `RETICLE_AX_QUIET_MS` sets that time.

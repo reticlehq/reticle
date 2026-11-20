@@ -26,6 +26,9 @@ export const UiRole = {
   LIST: 'list',
   IMAGE: 'img',
   TEXT: 'text',
+  HEADING: 'heading',
+  /** The page in a web view. */
+  DOCUMENT: 'document',
   GROUP: 'group',
 } as const;
 export type UiRole = (typeof UiRole)[keyof typeof UiRole];
