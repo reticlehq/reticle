@@ -108,6 +108,10 @@ describe('installConsole', () => {
       }).not.toThrow();
       console.error('still captured');
       expect(events.some((e) => EventType.CONSOLE_ERROR === e.type)).toBe(true);
+      window.dispatchEvent(
+        new ErrorEvent('error', { message: 'boom', error: new Error('boom'), bubbles: false }),
+      );
+      expect(events.filter((e) => e.type === EventType.ERROR_UNCAUGHT)).toHaveLength(1);
       t?.();
       expect(console.log).toBe(beforeLog);
       expect(Object.getOwnPropertyDescriptor(console, 'assert')).toBeUndefined();
