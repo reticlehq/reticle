@@ -16,8 +16,7 @@
 //
 // Output is one JSON object on stdout. The helper decides nothing. It reports what it read.
 //
-// ponytail: one process for each call. Keep one process open over stdio when the start cost shows
-// in a measurement.
+//   reticle-ax serve      (one command for each line on standard input, as a JSON list of words)
 import AppKit
 import ApplicationServices
 import Foundation
@@ -91,11 +90,13 @@ func snapshot(_ app: AXUIElement) -> (tree: [String: Any], unread: Int, json: Da
   return (tree, unread, json)
 }
 
-func emit(_ object: [String: Any]) -> Never {
-  let data = (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? Data()
-  FileHandle.standardOutput.write(data)
-  FileHandle.standardOutput.write("\n".data(using: .utf8)!)
-  exit(0)
+/// The answer to one command. A command ends when it throws its answer, at any depth.
+struct Answer: Error {
+  let body: [String: Any]
+}
+
+func emit(_ object: [String: Any]) throws -> Never {
+  throw Answer(body: object)
 }
 
 func child(_ element: AXUIElement, _ index: Int) -> AXUIElement? {
@@ -200,166 +201,197 @@ let modifierFlags: [String: CGEventFlags] = [
   "meta": .maskCommand, "shift": .maskShift, "alt": .maskAlternate, "control": .maskControl,
 ]
 
-let args = CommandLine.arguments
-guard args.count >= 3, let pid = Int32(args[2]) else {
-  emit(["error": "usage"])
-}
-guard AXIsProcessTrusted() else {
-  emit(["error": "not-trusted"])
-}
-let app = AXUIElementCreateApplication(pid)
+/// One command: `args` are the words of a command line, the program name first.
+func run(_ args: [String]) throws {
+  guard args.count >= 3, let pid = Int32(args[2]) else {
+    try emit(["error": "usage"])
+  }
+  guard AXIsProcessTrusted() else {
+    try emit(["error": "not-trusted"])
+  }
+  let app = AXUIElementCreateApplication(pid)
 
-if args[1] == "tree" {
+  if args[1] == "tree" {
+    let started = Date()
+    let shot = snapshot(app)
+    try emit([
+      "tree": shot.tree, "unread": shot.unread, "windowsNotOnScreen": windowsNotOnScreen(pid),
+      "readMs": Int(Date().timeIntervalSince(started) * 1000),
+    ])
+  }
+
+  let onlyReach = args[1] == "reach"
+  guard (args[1] == "act" && args.count >= 7) || (onlyReach && args.count >= 6) else {
+    try emit(["error": "usage"])
+  }
+  let path = args[3].split(separator: ".").compactMap { Int($0) }
+  let action = onlyReach ? "" : args[6]
+  let value = args.count > 7 ? args[7] : ""
+  let budgetMs = args.count > 8 ? Int(args[8]) ?? 1000 : 1000
+  let direct = args.count > 9 && args[9] == "direct"
+  let folders = Array(args.dropFirst(10))
+
+  /// The names, sizes and change times of every file in the watched folders, as one string.
+  func filesNow() -> String {
+    var out = ""
+    for folder in folders {
+      let keys: [URLResourceKey] = [.fileSizeKey, .contentModificationDateKey]
+      guard
+        let walk = FileManager.default.enumerator(
+          at: URL(fileURLWithPath: folder), includingPropertiesForKeys: keys)
+      else { continue }
+      for case let url as URL in walk {
+        let v = try? url.resourceValues(forKeys: Set(keys))
+        out += "\(url.path)|\(v?.fileSize ?? -1)|\(v?.contentModificationDate?.timeIntervalSince1970 ?? 0)\n"
+      }
+    }
+    return out
+  }
+
+  var target = app
+  for index in path {
+    guard let next = child(target, index) else {
+      try emit(["refused": "stale", "detail": "no element at the path"])
+    }
+    target = next
+  }
+  guard let now = values(target) else {
+    try emit(["refused": "stale", "detail": "the element does not answer"])
+  }
+  let nameNow = [text(now[2]), text(now[3])].compactMap { $0 }.first { !$0.isEmpty } ?? ""
+  guard text(now[0]) == args[4], nameNow == args[5] else {
+    try emit(["refused": "stale", "detail": "a different element is at the path"])
+  }
+  if onlyReach {
+    // Asks one thing and acts on nothing: can a person see and click this element now?
+    switch frame(now[7], now[8]).map({ reach(target, $0) }) ?? .unknown(code: -1) {
+    case .yes: try emit(["reach": "yes"])
+    case .no(let by): try emit(["reach": "no", "detail": by])
+    case .unknown(let code): try emit(["reach": "unknown", "detail": "the hit test failed with \(code)"])
+    }
+  }
+  if let enabled = now[5] as? Bool, !enabled {
+    try emit(["refused": "disabled"])
+  }
+
+  let before = snapshot(app)
+  let filesBefore = filesNow()
+  var canReach = false
+  var coveredBy = ""
+  switch frame(now[7], now[8]).map({ reach(target, $0) }) ?? .unknown(code: -1) {
+  case .yes: canReach = true
+  case .no(let by):
+    coveredBy = by
+    if !direct { try emit(["refused": "unreachable", "detail": by]) }
+  case .unknown(let code):
+    if !direct { try emit(["refused": "reach-unknown", "detail": "the hit test failed with \(code)"]) }
+  }
+
   let started = Date()
-  let shot = snapshot(app)
-  emit([
-    "tree": shot.tree, "unread": shot.unread, "windowsNotOnScreen": windowsNotOnScreen(pid),
-    "readMs": Int(Date().timeIntervalSince(started) * 1000),
+  let result: AXError
+  switch action {
+  case "press": result = AXUIElementPerformAction(target, kAXPressAction as CFString)
+  case "set":
+    // An element whose value is a number (a slider, a scroll bar) takes a number, not its text.
+    let number = now[4] is NSNumber ? Double(value).map { NSNumber(value: $0) } : nil
+    result = AXUIElementSetAttributeValue(
+      target, kAXValueAttribute as CFString, number ?? (value as CFString))
+  case "type":
+    // Key events, one for each character, sent to the application and not to the screen: the
+    // pointer and the keyboard of the person at the machine are not used. The element takes the
+    // keyboard first, as a click in it does. Delivery proves nothing here. The caller reads the
+    // value after it.
+    _ = AXUIElementSetAttributeValue(target, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+    let source = CGEventSource(stateID: .hidSystemState)
+    for unit in value.utf16 {
+      var character = [unit]
+      for down in [true, false] {
+        guard let event = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: down) else {
+          continue
+        }
+        event.keyboardSetUnicodeString(stringLength: 1, unicodeString: &character)
+        event.postToPid(pid)
+      }
+      usleep(4000)
+    }
+    result = .success
+  case "key":
+    // One key, with its modifiers: "Return", "Tab", "Meta+s". Sent to the application, as "type" is.
+    let parts = value.split(separator: "+").map(String.init)
+    guard let name = parts.last, let code = keyCodes[name.lowercased()] else {
+      try emit(["error": "unknown-key"])
+    }
+    var flags: CGEventFlags = []
+    for modifier in parts.dropLast() {
+      guard let flag = modifierFlags[modifier.lowercased()] else { try emit(["error": "unknown-key"]) }
+      flags.insert(flag)
+    }
+    _ = AXUIElementSetAttributeValue(target, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+    let source = CGEventSource(stateID: .hidSystemState)
+    for down in [true, false] {
+      guard let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down) else {
+        continue
+      }
+      event.flags = flags
+      event.postToPid(pid)
+    }
+    result = .success
+  default: try emit(["error": "unknown-action"])
+  }
+
+  // Wait for the application to finish. Notifications from AXObserver are not dependable from one
+  // application to the next, and a read is cheap, so read again until two reads in a row agree.
+  // When nothing has changed, spend the whole budget: an early "nothing changed" is a false result
+  // for every effect that takes longer than the first read.
+  var last = before.json
+  var lastFiles = filesBefore
+  var after = before
+  var stable = 0
+  func elapsedMs() -> Int { Int(Date().timeIntervalSince(started) * 1000) }
+  while elapsedMs() < budgetMs {
+    Thread.sleep(forTimeInterval: 0.025)
+    after = snapshot(app)
+    let files = filesNow()
+    stable = after.json == last && files == lastFiles ? stable + 1 : 0
+    last = after.json
+    lastFiles = files
+    if stable >= 2 && (after.json != before.json || files != filesBefore) { break }
+  }
+
+  try emit([
+    "delivered": result == .success, "axError": Int(result.rawValue), "reachable": canReach,
+    "coveredBy": coveredBy,
+    "settled": stable >= 2, "waitedMs": elapsedMs(), "budgetMs": budgetMs,
+    "before": before.tree, "after": after.tree, "unreadBefore": before.unread,
+    "unreadAfter": after.unread,
   ])
 }
 
-let onlyReach = args[1] == "reach"
-guard (args[1] == "act" && args.count >= 7) || (onlyReach && args.count >= 6) else {
-  emit(["error": "usage"])
-}
-let path = args[3].split(separator: ".").compactMap { Int($0) }
-let action = onlyReach ? "" : args[6]
-let value = args.count > 7 ? args[7] : ""
-let budgetMs = args.count > 8 ? Int(args[8]) ?? 1000 : 1000
-let direct = args.count > 9 && args[9] == "direct"
-let folders = Array(args.dropFirst(10))
-
-/// The names, sizes and change times of every file in the watched folders, as one string.
-func filesNow() -> String {
-  var out = ""
-  for folder in folders {
-    let keys: [URLResourceKey] = [.fileSizeKey, .contentModificationDateKey]
-    guard
-      let walk = FileManager.default.enumerator(
-        at: URL(fileURLWithPath: folder), includingPropertiesForKeys: keys)
-    else { continue }
-    for case let url as URL in walk {
-      let v = try? url.resourceValues(forKeys: Set(keys))
-      out += "\(url.path)|\(v?.fileSize ?? -1)|\(v?.contentModificationDate?.timeIntervalSince1970 ?? 0)\n"
-    }
-  }
-  return out
+func write(_ object: [String: Any]) {
+  let data = (try? JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])) ?? Data()
+  FileHandle.standardOutput.write(data)
+  FileHandle.standardOutput.write("\n".data(using: .utf8)!)
 }
 
-var target = app
-for index in path {
-  guard let next = child(target, index) else {
-    emit(["refused": "stale", "detail": "no element at the path"])
+func answer(_ args: [String]) -> [String: Any] {
+  do {
+    try run(args)
+  } catch let answer as Answer {
+    return answer.body
+  } catch {
+    return ["error": "\(error)"]
   }
-  target = next
-}
-guard let now = values(target) else {
-  emit(["refused": "stale", "detail": "the element does not answer"])
-}
-let nameNow = [text(now[2]), text(now[3])].compactMap { $0 }.first { !$0.isEmpty } ?? ""
-guard text(now[0]) == args[4], nameNow == args[5] else {
-  emit(["refused": "stale", "detail": "a different element is at the path"])
-}
-if onlyReach {
-  // Asks one thing and acts on nothing: can a person see and click this element now?
-  switch frame(now[7], now[8]).map({ reach(target, $0) }) ?? .unknown(code: -1) {
-  case .yes: emit(["reach": "yes"])
-  case .no(let by): emit(["reach": "no", "detail": by])
-  case .unknown(let code): emit(["reach": "unknown", "detail": "the hit test failed with \(code)"])
-  }
-}
-if let enabled = now[5] as? Bool, !enabled {
-  emit(["refused": "disabled"])
+  return ["error": "no-answer"]
 }
 
-let before = snapshot(app)
-let filesBefore = filesNow()
-var canReach = false
-var coveredBy = ""
-switch frame(now[7], now[8]).map({ reach(target, $0) }) ?? .unknown(code: -1) {
-case .yes: canReach = true
-case .no(let by):
-  coveredBy = by
-  if !direct { emit(["refused": "unreachable", "detail": by]) }
-case .unknown(let code):
-  if !direct { emit(["refused": "reach-unknown", "detail": "the hit test failed with \(code)"]) }
+// `reticle-ax serve` stays open: each line on standard input is one command, as a JSON list of its
+// words, and each answer is one line. Starting a process for each command costs more than most
+// commands do. Any other first word runs that one command and ends.
+if CommandLine.arguments.count > 1, CommandLine.arguments[1] == "serve" {
+  while let line = readLine() {
+    let words = (try? JSONSerialization.jsonObject(with: Data(line.utf8))) as? [String]
+    write(words.map { answer(["reticle-ax"] + $0) } ?? ["error": "usage"])
+  }
+} else {
+  write(answer(CommandLine.arguments))
 }
-
-let started = Date()
-let result: AXError
-switch action {
-case "press": result = AXUIElementPerformAction(target, kAXPressAction as CFString)
-case "set":
-  // An element whose value is a number (a slider, a scroll bar) takes a number, not its text.
-  let number = now[4] is NSNumber ? Double(value).map { NSNumber(value: $0) } : nil
-  result = AXUIElementSetAttributeValue(
-    target, kAXValueAttribute as CFString, number ?? (value as CFString))
-case "type":
-  // Key events, one for each character, sent to the application and not to the screen: the
-  // pointer and the keyboard of the person at the machine are not used. The element takes the
-  // keyboard first, as a click in it does. Delivery proves nothing here. The caller reads the
-  // value after it.
-  _ = AXUIElementSetAttributeValue(target, kAXFocusedAttribute as CFString, kCFBooleanTrue)
-  let source = CGEventSource(stateID: .hidSystemState)
-  for unit in value.utf16 {
-    var character = [unit]
-    for down in [true, false] {
-      guard let event = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: down) else {
-        continue
-      }
-      event.keyboardSetUnicodeString(stringLength: 1, unicodeString: &character)
-      event.postToPid(pid)
-    }
-    usleep(4000)
-  }
-  result = .success
-case "key":
-  // One key, with its modifiers: "Return", "Tab", "Meta+s". Sent to the application, as "type" is.
-  let parts = value.split(separator: "+").map(String.init)
-  guard let name = parts.last, let code = keyCodes[name.lowercased()] else {
-    emit(["error": "unknown-key"])
-  }
-  var flags: CGEventFlags = []
-  for modifier in parts.dropLast() {
-    guard let flag = modifierFlags[modifier.lowercased()] else { emit(["error": "unknown-key"]) }
-    flags.insert(flag)
-  }
-  _ = AXUIElementSetAttributeValue(target, kAXFocusedAttribute as CFString, kCFBooleanTrue)
-  let source = CGEventSource(stateID: .hidSystemState)
-  for down in [true, false] {
-    guard let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down) else {
-      continue
-    }
-    event.flags = flags
-    event.postToPid(pid)
-  }
-  result = .success
-default: emit(["error": "unknown-action"])
-}
-
-// Wait for the application to finish. Notifications from AXObserver are not dependable from one
-// application to the next, and a read is cheap, so read again until two reads in a row agree.
-// When nothing has changed, spend the whole budget: an early "nothing changed" is a false result
-// for every effect that takes longer than the first read.
-var last = before.json
-var lastFiles = filesBefore
-var after = before
-var stable = 0
-func elapsedMs() -> Int { Int(Date().timeIntervalSince(started) * 1000) }
-while elapsedMs() < budgetMs {
-  Thread.sleep(forTimeInterval: 0.025)
-  after = snapshot(app)
-  let files = filesNow()
-  stable = after.json == last && files == lastFiles ? stable + 1 : 0
-  last = after.json
-  lastFiles = files
-  if stable >= 2 && (after.json != before.json || files != filesBefore) { break }
-}
-
-emit([
-  "delivered": result == .success, "axError": Int(result.rawValue), "reachable": canReach,
-  "coveredBy": coveredBy,
-  "settled": stable >= 2, "waitedMs": elapsedMs(), "budgetMs": budgetMs,
-  "before": before.tree, "after": after.tree, "unreadBefore": before.unread,
-  "unreadAfter": after.unread,
-])
