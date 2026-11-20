@@ -41,6 +41,14 @@ To prove that a file was written, name the file:
 { "until": { "kind": "signal", "name": "file.written", "dataMatches": { "file": "note.txt" } } }
 ```
 
+When no folder is watched, a claim can still ask if the application wrote to disk at all. The operating system counts the bytes:
+
+```json
+{ "until": { "kind": "signal", "name": "disk.wrote" } }
+```
+
+With `"count": 0` the same claim says that the action wrote nothing.
+
 ## Actions
 
 | Tool action | What the realm does |

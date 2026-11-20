@@ -18,7 +18,13 @@ export { ActKind, ActRefusal, Delivery } from './driver.js';
 export type { ActOutcome, ActRequest, UiDriver, UiRead } from './driver.js';
 export { MacDriver } from './mac/mac-driver.js';
 export type { MacDriverInput, RunHelper } from './mac/mac-driver.js';
-export { PEER_ACTIONS, PEER_COMMANDS, PeerCommands } from './peer/commands.js';
+export {
+  DISK_WROTE_SIGNAL,
+  FILE_SIGNAL_PREFIX,
+  PEER_ACTIONS,
+  PEER_COMMANDS,
+  PeerCommands,
+} from './peer/commands.js';
 export type { Emit, PeerCommandsDeps } from './peer/commands.js';
 export { connectPeer } from './peer/peer.js';
 export type { Peer, PeerInput } from './peer/peer.js';
