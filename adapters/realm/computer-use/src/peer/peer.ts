@@ -24,6 +24,8 @@ const ADAPTER = 'computer-use';
 const HEARTBEAT_MS = 5000;
 const FILES_EVERY_MS = 1000;
 const TREE_EVERY_MS = 250;
+/** A look may take one part in this many of the time. */
+const LOOK_SHARE = 10;
 const RETRY_MS = 1000;
 const MAX_RETRY_MS = 10_000;
 /** The bridge drops a result whose error is longer than 4,096 characters, and the command then waits. */
@@ -36,6 +38,18 @@ const EVENTS = [
   EventType.DOM_ATTR,
   EventType.PAGE_HEALTH,
 ];
+
+/**
+ * How long to wait before the next look at the tree.
+ *
+ * A look is a whole read. For a small window it takes a few milliseconds. For a window with
+ * thousands of elements it takes hundreds, and four of those in a second would load the
+ * application more than the agent does. So the wait is at least ten times the last read: the
+ * looks take a tenth of the time at most, and a large window is looked at less often.
+ */
+export function nextLookMs(everyMs: number, lastReadMs: number): number {
+  return Math.max(everyMs, lastReadMs * LOOK_SHARE);
+}
 
 export interface PeerInput {
   /** `ws://localhost:4400/reticle`. */
@@ -76,7 +90,7 @@ export function connectPeer(input: PeerInput): Peer {
   let retry: ReturnType<typeof setTimeout> | undefined;
   let heartbeat: ReturnType<typeof setInterval> | undefined;
   let files: ReturnType<typeof setInterval> | undefined;
-  let tree: ReturnType<typeof setInterval> | undefined;
+  let tree: ReturnType<typeof setTimeout> | undefined;
 
   const send = (message: unknown): void => {
     if (socket?.readyState === WebSocket.OPEN) {
@@ -107,7 +121,7 @@ export function connectPeer(input: PeerInput): Peer {
   const stopTimers = (): void => {
     clearInterval(heartbeat);
     clearInterval(files);
-    clearInterval(tree);
+    clearTimeout(tree);
   };
 
   const announce = (): void => {
@@ -137,12 +151,17 @@ export function connectPeer(input: PeerInput): Peer {
       health(HealthReason.HEARTBEAT);
     }, HEARTBEAT_MS);
     heartbeat.unref();
-    // ponytail: a whole read each time. For a window with thousands of elements the read costs
-    // more than the wait; read less often there, or read only the window in front.
-    tree = setInterval(() => {
-      commands.sendTreeChanges().catch(() => undefined);
-    }, input.treeEveryMs ?? TREE_EVERY_MS);
-    tree.unref();
+    const look = (waitMs: number): void => {
+      tree = setTimeout(() => {
+        const started = input.now();
+        const again = (): void => {
+          look(nextLookMs(input.treeEveryMs ?? TREE_EVERY_MS, input.now() - started));
+        };
+        commands.sendTreeChanges().then(again, again);
+      }, waitMs);
+      tree.unref();
+    };
+    look(input.treeEveryMs ?? TREE_EVERY_MS);
     if (input.workspace !== undefined) {
       // ponytail: a whole look at the folders each time. Watch them for changes when a folder
       // is large enough for the look to cost more than the wait.
