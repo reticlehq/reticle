@@ -258,6 +258,28 @@ importers:
         specifier: workspace:*
         version: link:../../../open-verification
 
+  adapters/realm/computer-use:
+    dependencies:
+      '@reticlehq/cli-realm':
+        specifier: workspace:*
+        version: link:../cli
+      '@reticlehq/core':
+        specifier: workspace:*
+        version: link:../../../core
+      open-verification:
+        specifier: workspace:*
+        version: link:../../../open-verification
+      ws:
+        specifier: ^8.22.1
+        version: 8.22.1
+      zod:
+        specifier: ^4.6.6
+        version: 4.6.7
+    devDependencies:
+      '@types/ws':
+        specifier: ^8.18.2
+        version: 8.18.2
+
   adapters/realm/electron:
     dependencies:
       '@reticlehq/core':
@@ -777,6 +799,9 @@ importers:
         specifier: ^4.6.6
         version: 4.6.7
     devDependencies:
+      '@reticlehq/computer-use':
+        specifier: workspace:*
+        version: link:../adapters/realm/computer-use
       '@types/pngjs':
         specifier: ^6.0.5
         version: 6.0.5

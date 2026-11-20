@@ -1,0 +1,84 @@
+/**
+ * Writes a tree as the one-line-per-element text that `core`'s `parseInteractive` and the Harness
+ * read. The browser realm writes the same format from the DOM.
+ *
+ * ponytail: the format has two writers now. Move one pure writer into `core` when the browser
+ * adopts it.
+ */
+import { UiRole, isAddressable, label, place, quoted } from './ui-node.js';
+import type { Placed, UiNode } from './ui-node.js';
+
+const INDENT = '  ';
+
+/**
+ * Gives each element one ref for the life of a session. An element that goes away keeps its ref,
+ * so a ref from an old read never points at a different element.
+ */
+export class RefTable {
+  private readonly refOfKey = new Map<string, string>();
+  private readonly keyOfRef = new Map<string, string>();
+
+  refFor(key: string): string {
+    const known = this.refOfKey.get(key);
+    if (known !== undefined) {
+      return known;
+    }
+    const ref = `e${String(this.refOfKey.size + 1)}`;
+    this.refOfKey.set(key, ref);
+    this.keyOfRef.set(ref, key);
+    return ref;
+  }
+
+  /** The key a ref was given for, to find the element again in a new read. */
+  keyOf(ref: string): string | undefined {
+    return this.keyOfRef.get(ref);
+  }
+}
+
+export interface Written {
+  tree: string;
+  /** Elements left out because they are inside a closed menu. Zero when menus were asked for. */
+  omitted: number;
+}
+
+/**
+ * The tree without the items of closed menus. A menu bar is most of an application's elements,
+ * and an agent seldom needs it: it finds a menu item by name, or asks for the menus.
+ */
+export function writeWindows(root: UiNode, refs: RefTable): Written {
+  const placed = place(root);
+  const hidden = new Set<string>();
+  for (const p of placed) {
+    const parent =
+      p.parentKey === undefined ? undefined : placed.find((q) => q.key === p.parentKey);
+    if (
+      p.parentKey !== undefined &&
+      (hidden.has(p.parentKey) || parent?.node.role === UiRole.MENUITEM)
+    ) {
+      hidden.add(p.key);
+    }
+  }
+  return {
+    tree: writePlaced(
+      placed.filter((p) => !hidden.has(p.key)),
+      refs,
+    ),
+    omitted: hidden.size,
+  };
+}
+
+export function writeLines(root: UiNode, refs: RefTable): string {
+  return writePlaced(place(root), refs);
+}
+
+function writePlaced(placed: readonly Placed[], refs: RefTable): string {
+  return placed
+    .map(({ node, depth, key }) => {
+      const ref = isAddressable(node) ? ` (ref=${refs.refFor(key)})` : '';
+      const value =
+        node.value !== undefined && node.value.length > 0 ? ` [value=${quoted(node.value)}]` : '';
+      const states = node.states.length > 0 ? ` [${node.states.join(',')}]` : '';
+      return `${INDENT.repeat(depth)}- ${label(node)}${ref}${value}${states}`;
+    })
+    .join('\n');
+}

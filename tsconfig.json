@@ -7,6 +7,7 @@
     { "path": "init" },
     { "path": "adapters/realm/browser" },
     { "path": "adapters/realm/cli" },
+    { "path": "adapters/realm/computer-use" },
     { "path": "server" },
     { "path": "spec-runner" },
     { "path": "adapters/framework/react" },
