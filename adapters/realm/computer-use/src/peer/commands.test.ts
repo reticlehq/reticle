@@ -451,7 +451,12 @@ describe('PeerCommands', () => {
   });
 
   it('sends a signal for a setting that the action changed', async () => {
-    const changed = peer({ settingsChanged: [{ key: 'remember', old: '', new: '1' }] });
+    const changed = peer({
+      settingsChanged: [
+        { key: 'remember', old: '', new: '1' },
+        { key: 'recent', old: 'a'.repeat(200), new: 'a'.repeat(200), cut: true },
+      ],
+    });
     await changed.commands.answer(ReticleCommand.ACT, {
       ref: await refOf(changed.commands, 'Save'),
       action: ActionType.CLICK,
@@ -460,5 +465,11 @@ describe('PeerCommands', () => {
       EventType.SIGNAL,
       { name: 'settings.changed', data: { key: 'remember', old: '', value: '1' } },
     ]);
+    // A long value is given in part, and the signal says so: the two texts are the same here, and
+    // the values are not.
+    const long = changed.events.find(
+      ([, data]) => 'recent' === (data['data'] as { key?: string } | undefined)?.key,
+    );
+    expect(long?.[1]['data']).toMatchObject({ cut: true });
   });
 });

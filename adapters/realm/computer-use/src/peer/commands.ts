@@ -514,7 +514,12 @@ export class PeerCommands {
     for (const setting of outcome.settingsChanged ?? []) {
       this.#deps.emit(EventType.SIGNAL, {
         name: SETTINGS_CHANGED_SIGNAL,
-        data: { key: setting.key, old: setting.old, value: setting.new },
+        data: {
+          key: setting.key,
+          old: setting.old,
+          value: setting.new,
+          ...(true === setting.cut ? { cut: true } : {}),
+        },
       });
     }
     if (outcome.bytesWritten !== undefined && outcome.bytesWritten > 0) {

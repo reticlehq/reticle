@@ -34,7 +34,14 @@ const ActedSchema = z.object({
   unreadAfter: z.number(),
   bytesWritten: z.number().optional(),
   settingsChanged: z
-    .array(z.object({ key: z.string(), old: z.string(), new: z.string() }))
+    .array(
+      z.object({
+        key: z.string(),
+        old: z.string(),
+        new: z.string(),
+        cut: z.boolean().optional(),
+      }),
+    )
     .optional(),
 });
 
@@ -243,7 +250,13 @@ export class MacDriver implements UiDriver {
       before: toRead(acted.before, acted.unreadBefore),
       after: toRead(acted.after, acted.unreadAfter),
       ...(acted.bytesWritten === undefined ? {} : { bytesWritten: acted.bytesWritten }),
-      ...(acted.settingsChanged === undefined ? {} : { settingsChanged: acted.settingsChanged }),
+      ...(acted.settingsChanged === undefined
+        ? {}
+        : {
+            settingsChanged: acted.settingsChanged.map(({ cut, ...change }) =>
+              true === cut ? { ...change, cut } : change,
+            ),
+          }),
     };
   }
 }

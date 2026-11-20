@@ -65,6 +65,14 @@ export interface ActRequest {
   watch: readonly string[];
 }
 
+export interface SettingChange {
+  key: string;
+  old: string;
+  new: string;
+  /** The values are longer than what is given here. They were compared whole. */
+  cut?: boolean;
+}
+
 export interface ActOutcome {
   refused?: ActRefusal;
   /** More about a refusal: for `unreachable`, the element that is on top. */
@@ -89,7 +97,7 @@ export interface ActOutcome {
    * the settings were read and none changed. Absent: the settings cannot be read from outside the
    * application (an application in a sandbox), and nothing is known about them.
    */
-  settingsChanged?: readonly { key: string; old: string; new: string }[];
+  settingsChanged?: readonly SettingChange[];
 }
 
 /** Whether a person can see and click an element now. */
