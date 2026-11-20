@@ -17,7 +17,7 @@ import { WebSocket } from 'ws';
 import type { UiDriver } from '../driver.js';
 import { PEER_ACTIONS, PEER_COMMANDS, PeerCommands } from './commands.js';
 
-/** The bridge admits a dial with no Origin only when it has a token. A loopback Origin always passes. */
+/** For a bridge with no token: it admits a dial with no Origin only when it has one. */
 const ORIGIN = 'http://localhost';
 const ADAPTER = 'computer-use';
 /** A session with no word for 12 s reads as throttled. The SDK in a page sends this at the same rate. */
@@ -227,7 +227,10 @@ export function connectPeer(input: PeerInput): Peer {
    * disappear for the agent with no word.
    */
   const dial = (onFirst?: { resolve: () => void; reject: (error: unknown) => void }): void => {
-    const next = new WebSocket(input.url, { origin: ORIGIN });
+    // With a token, no Origin: the bridge then knows that a program dialled, and not a page. A
+    // page cannot leave the Origin out, so it cannot be taken for this realm. A bridge with no
+    // token admits only a dial that has an Origin; the session then gets no rule of its own.
+    const next = new WebSocket(input.url, input.token === undefined ? { origin: ORIGIN } : {});
     socket = next;
     next.once('open', () => {
       joinedOnce = true;

@@ -29,7 +29,7 @@ import { SessionNonces } from './session-nonces.js';
 import { FollowRefusal, OriginFollower, normalizeOrigin } from './origin/origin-follow.js';
 import type { FollowNavigation } from './origin/origin-follow.js';
 import { admitHello } from '@/portal/production/production-hello.js';
-import { forgetRecordedGaps } from '@/portal/session/recorded-gaps.js';
+import { forgetRecordedGaps, noteDial } from '@/portal/session/recorded-gaps.js';
 import { tokensMatch } from './token-auth.js';
 import { noteWrongPathUpgrades, wrongPathReason } from './wrong-path.js';
 import {
@@ -646,6 +646,7 @@ export class Bridge {
           clearTimeout(helloTimer);
           releasePending();
           session = new Session(parsed, socket, this.#clock);
+          noteDial(parsed.sessionId, origin);
           session.production = admission.production;
           const drive = admission.production;
           if (drive !== undefined) {

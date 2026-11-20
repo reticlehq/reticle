@@ -154,6 +154,11 @@ if (plan.electronSwitch) {
 }
 say(`${plan.app} (${String(pid)}) is joined to ${plan.url}.`);
 say(`Give this on each tool call: sessionId "${sessionId}". Stop with Ctrl-C.`);
+if (plan.token === undefined) {
+  say(
+    'No pairing token was found. The session is joined, but a file or a setting that changes with nothing else is then not proof: the bridge cannot tell this command from a page. Start the daemon with `reticle serve`, which writes the token.',
+  );
+}
 if (plan.projectId === undefined) {
   say(
     'No project: the runs and flows of this session stay on this machine and do not reach the dashboard. Give --project <folder> with the folder of the application that has a .reticle.json.',

@@ -103,11 +103,14 @@ describe('a computer-use peer on the bridge', () => {
   const app = new FakeApp();
 
   beforeAll(async () => {
-    bridge = new Bridge({ port: 0 });
+    // With a token, as the daemon has: the peer then dials with no Origin, and only such a
+    // session gets the rule that a signal is a thing an observer saw.
+    bridge = new Bridge({ port: 0, token: 'peer-test-token' });
     const port = await bridge.ready;
     deps = makeDeps(bridge);
     peer = connectPeer({
       url: `ws://${LOOPBACK_HOST}:${String(port)}${RETICLE_WS_PATH}`,
+      token: 'peer-test-token',
       sessionId: 'cu-notes',
       projectId: 'notes-app',
       driver: app,
