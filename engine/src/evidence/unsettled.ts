@@ -54,7 +54,7 @@ const WORDED: Readonly<Record<string, readonly string[]>> = {
   [PredicateKind.NET]: ['method', 'urlContains'],
   [PredicateKind.ROUTE]: ['pathname', 'contains'],
   [PredicateKind.STATE]: ['path'],
-  [PredicateKind.TEXT]: ['contains', 'ignoreCase'],
+  [PredicateKind.TEXT]: ['contains', 'ignoreCase', 'satisfies'],
   [PredicateKind.ELEMENT]: ['query', 'state'],
   [PredicateKind.ANIMATION]: ['name'],
 };
@@ -71,6 +71,37 @@ function otherConditions(predicate: Predicate): string {
     ([key, value]) => value !== undefined && !NEVER_WORDED.has(key) && !worded.includes(key),
   );
   return 0 === rest.length ? '' : ` where ${JSON.stringify(Object.fromEntries(rest))}`;
+}
+
+type TextProperty = NonNullable<
+  Extract<Predicate, { kind: typeof PredicateKind.TEXT }>['satisfies']
+>;
+
+function describeTextProperty(assertion: TextProperty): string {
+  switch (assertion.property) {
+    case 'matchesPattern':
+      return `matching /${assertion.pattern}/`;
+    case 'nonEmpty':
+      return 'that is non-empty';
+    case 'oneOf':
+      return `matching one of ${JSON.stringify(assertion.values)}`;
+    case 'withinTolerance':
+      return `within ${String(assertion.tolerance)} of ${String(assertion.of)}`;
+    case 'type':
+      return `of type ${assertion.is}`;
+    case 'changed':
+      return 'that changed';
+    case 'unchanged':
+      return 'that is unchanged';
+    case 'increased':
+      return assertion.by === undefined
+        ? 'that increased'
+        : `increased by ${assertion.by.op} ${String(assertion.by.value)}`;
+    case 'decreased':
+      return assertion.by === undefined
+        ? 'that decreased'
+        : `decreased by ${assertion.by.op} ${String(assertion.by.value)}`;
+  }
 }
 
 function waitPhrase(predicate: Predicate): string {
@@ -91,8 +122,17 @@ function waitPhrase(predicate: Predicate): string {
       return `state at '${predicate.path}'`;
     // Every part that decides the claim stays in it: the label is the check's title downstream, and
     // one that dropped `ignoreCase` or the wanted state read as a different check from its own result.
-    case PredicateKind.TEXT:
-      return `text containing '${predicate.contains}'${true === predicate.ignoreCase ? ', ignoring case' : ''}`;
+    case PredicateKind.TEXT: {
+      const parts: string[] = [];
+      if (predicate.contains !== undefined) {
+        parts.push(`containing '${predicate.contains}'`);
+      }
+      if (predicate.satisfies !== undefined) {
+        parts.push(describeTextProperty(predicate.satisfies));
+      }
+      const desc = parts.length > 0 ? parts.join(' ') : 'present';
+      return `text ${desc}${true === predicate.ignoreCase ? ', ignoring case' : ''}`;
+    }
     case PredicateKind.ELEMENT:
       return `an element matching ${JSON.stringify(predicate.query)}${
         predicate.state === undefined ? '' : ` in state '${predicate.state}'`

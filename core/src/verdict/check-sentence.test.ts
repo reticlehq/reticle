@@ -29,6 +29,12 @@ describe('a check in words, when the agent gave none', () => {
     );
     expect(failureSentence({ kind: PredicateKind.NET })).toBe('No request was made');
     expect(failureSentence(text('Copied'))).toBe('The text "Copied" never appeared');
+    expect(
+      failureSentence({
+        kind: PredicateKind.TEXT,
+        satisfies: { property: 'matchesPattern', pattern: '\\d+ items' },
+      }),
+    ).toBe('Text matching /\\d+ items/ never appeared');
     expect(failureSentence({ kind: PredicateKind.ROUTE, pathname: '/welcome' })).toBe(
       'The page never moved to /welcome',
     );
