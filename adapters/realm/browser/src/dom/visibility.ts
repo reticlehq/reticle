@@ -589,6 +589,14 @@ export function isHiddenSubtree(el: Element, memo?: Map<Element, boolean>): bool
   return ownVisibilityInfo(el, visibilityInfoMemo(memo)).hidden;
 }
 
+/**
+ * Whether CSS or HTML hides the element or an ancestor from view: `display: none`, `[hidden]`,
+ * `opacity: 0`, a clip. `aria-hidden` does not count, because it hides nothing on screen.
+ */
+export function isCssHiddenSubtree(el: Element): boolean {
+  return ownVisibilityInfo(el, new Map(), true).hidden;
+}
+
 function geometryVisible(el: Element, info: Map<Element, VisibilityInfo>): boolean {
   return (
     null !== visibleBounds(el, info, undefined, true) &&

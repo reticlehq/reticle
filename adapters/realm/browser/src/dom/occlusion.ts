@@ -1,4 +1,5 @@
 import { isReticleUi } from './dom-ignore.js';
+import { isCssHiddenSubtree } from './visibility.js';
 
 /**
  * Where to look. The centre, plus four points inset from the corners.
@@ -61,14 +62,21 @@ export function hitTestOccluder(el: Element, rect: DOMRect): Element | null {
    * APP element underneath is blamed for covering it. Kept, it lands on the `top === el` branch
    * below: "not occluded", like any target that is on top of itself.
    */
-  const isOursButNotTheTarget = (candidate: Element): boolean =>
-    isReticleUi(candidate) &&
-    candidate !== el &&
-    !el.contains(candidate) &&
-    !candidate.contains(el);
+  const isForeign = (candidate: Element): boolean =>
+    candidate !== el && !el.contains(candidate) && !candidate.contains(el);
+  /*
+   * An element that a person can neither see nor point at covers nothing (#2402). A transparent
+   * layer or a `pointer-events: none` overlay was blamed for covering a button that the screenshot
+   * showed bare. Only foreign elements are skipped: the target in a faded wrapper is still on top.
+   */
+  const coversNothing = (candidate: Element): boolean =>
+    'none' === candidate.ownerDocument.defaultView?.getComputedStyle(candidate).pointerEvents ||
+    isCssHiddenSubtree(candidate);
+  const isSkipped = (candidate: Element): boolean =>
+    isForeign(candidate) && (isReticleUi(candidate) || coversNothing(candidate));
   const topAt = (x: number, y: number): Element | null => {
     const found = withStack.elementsFromPoint?.(x, y) ?? [doc.elementFromPoint(x, y)];
-    return found.find((c): c is Element => null !== c && !isOursButNotTheTarget(c)) ?? null;
+    return found.find((c): c is Element => null !== c && !isSkipped(c)) ?? null;
   };
 
   // Counted by element, so the answer names the thing actually covering the control rather than
