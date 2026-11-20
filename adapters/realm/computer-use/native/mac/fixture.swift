@@ -13,6 +13,7 @@
 //   Later    writes note.txt 800 ms after the press, and shows nothing.
 //   Export   writes the title to note.txt in the folder given as the first argument, then says so.
 //   Fake     says "Exported" and writes nothing.
+//   Quit     ends the application 100 ms after the press, as a crash does.
 //   Clock    a count that goes up every 400 ms with no action. Only with a second argument `clock`.
 // The window floats and the application never takes the keyboard, so a run does not disturb the
 // person at the machine.
@@ -98,6 +99,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
     window.contentView!.addSubview(remember)
     _ = button("Export", 20, #selector(export), y: 20)
     _ = button("Fake", 100, #selector(fake), y: 20)
+    _ = button("Quit", 350, #selector(quit), y: 20)
     if CommandLine.arguments.count > 2 && CommandLine.arguments[2] == "clock" {
       // In a group of its own: the realm learns the PLACE that changes, and the place of a
       // label that lies in the window is the whole window.
@@ -118,6 +120,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
     window.orderFrontRegardless()
   }
 
+  @objc func quit() { DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { exit(0) } }
   @objc func save() { status.stringValue = "Saved: \(field.stringValue)" }
   @objc func export() {
     let folder = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : NSTemporaryDirectory()

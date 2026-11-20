@@ -14,7 +14,7 @@ import type { AxNode } from './from-ax.js';
 import type { Placed } from '../ui-node.js';
 
 const Command = { TREE: 'tree', ACT: 'act', REACH: 'reach' } as const;
-const HelperError = { NOT_TRUSTED: 'not-trusted' } as const;
+const HelperError = { NOT_TRUSTED: 'not-trusted', APP_GONE: 'app-gone' } as const;
 
 const ErrorSchema = z.object({ error: z.string() });
 const TreeSchema = z.object({
@@ -32,6 +32,7 @@ const ActedSchema = z.object({
   after: AxNodeSchema,
   unreadBefore: z.number(),
   unreadAfter: z.number(),
+  appGone: z.boolean().optional(),
   bytesWritten: z.number().optional(),
   clipboardChanged: z.boolean().optional(),
   settingsChanged: z
@@ -166,6 +167,11 @@ export class MacDriver implements UiDriver {
   async #ask(args: readonly string[]): Promise<unknown> {
     const answer: unknown = JSON.parse(await this.#run(this.#input.helper, args));
     const failed = ErrorSchema.safeParse(answer);
+    if (failed.success && failed.data.error === HelperError.APP_GONE) {
+      throw new Error(
+        `${this.#input.app} (${String(this.#input.pid)}) is not running. It was closed, or it ended by itself. Open it and join it again.`,
+      );
+    }
     if (failed.success) {
       throw new Error(
         failed.data.error === HelperError.NOT_TRUSTED
@@ -248,6 +254,7 @@ export class MacDriver implements UiDriver {
       delivered: acted.delivered,
       reachable: acted.reachable,
       settled: acted.settled,
+      ...(true === acted.appGone ? { appGone: true as const } : {}),
       before: toRead(acted.before, acted.unreadBefore),
       after: toRead(acted.after, acted.unreadAfter),
       ...(acted.bytesWritten === undefined ? {} : { bytesWritten: acted.bytesWritten }),

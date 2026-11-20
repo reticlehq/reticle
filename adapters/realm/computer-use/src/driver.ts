@@ -79,6 +79,11 @@ export interface ActOutcome {
   detail?: string;
   /** The operating system accepted the action. It says nothing about an effect. */
   delivered: boolean;
+  /**
+   * The application ended while the action ran: it quit, or it crashed. `delivered` is then not
+   * to be believed: the application can end before it answers a press that it took.
+   */
+  appGone?: true;
   /** A person who clicks the middle of the element reaches it. */
   reachable: boolean;
   /** Two reads in a row agreed before the budget ran out. */

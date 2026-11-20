@@ -28,4 +28,7 @@ export const COMPUTER_USE_FIXTURE_SUBJECT = Object.freeze({
   'nothing-declared': { press: ['Dead'], declareNothing: true },
 
   'claim-written-after-the-action': { press: ['Export'], declaredAfter: true },
+
+  // Quit ends the application 100 ms after the press. The realm cannot read it after that.
+  'subject-disappears-mid-window': { press: ['Quit'] },
 });

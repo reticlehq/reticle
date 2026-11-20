@@ -97,6 +97,23 @@ describe('ComputerUseRealm', () => {
     ]);
   });
 
+  // An application that ends in the middle of a press can end before it answers the press. The
+  // press was then "not delivered", the realm kept nothing of it, and a claim about a file got
+  // "no" from a view that was cut off. The observer left: that is not the application's fault.
+  it('says that its view was cut off when the application ended during the action', async () => {
+    const realm = new ComputerUseRealm({
+      driver: driver({ delivered: false, appGone: true }),
+      now: () => 0,
+    });
+    const window = realm.openWindow(1000);
+    const receipt = await realm.perform(press(await refOf(realm, 'Save')));
+    expect(receipt.dispatched).toBe(true);
+    const coverage = await realm.coverage(realm.closeWindow(window));
+    expect(coverage.blindSpots).toContainEqual(
+      expect.objectContaining({ kind: 'boundary-uncrossable', impeaching: true }),
+    );
+  });
+
   it('says so when a delivered action changed nothing', async () => {
     const realm = new ComputerUseRealm({ driver: driver({ after: read('Ready') }), now: () => 0 });
     const window = realm.openWindow(1000);
