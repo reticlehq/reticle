@@ -309,6 +309,14 @@ describe('PeerCommands', () => {
       ['set', '1', 'scrollbar'],
       ['set', '0.6', 'scrollbar'],
     ]);
+    // The tools send a scroll as an action too. It is the same scroll, and the answer says so.
+    const acted = (await commands.answer(ReticleCommand.ACT, {
+      ref: row,
+      action: ActionType.SCROLL,
+      args: { fraction: 0 },
+    })) as { ok: boolean; effect: { scrolled: boolean; atEnd: boolean; fraction: number } };
+    expect(acted.ok).toBe(true);
+    expect(acted.effect).toMatchObject({ scrolled: true, atEnd: true, fraction: 0 });
     await expect(peer().commands.answer(ReticleCommand.SCROLL, {})).rejects.toThrow(
       /no scroll bar/,
     );
