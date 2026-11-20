@@ -357,8 +357,9 @@ export class ComputerUseRealm extends Realm {
    *
    * With a count of bytes from the operating system it is a fact, and it goes one of two ways.
    * The process wrote bytes and no watched file changed: the write is somewhere else, so a missing
-   * file here is not held against the application. The process wrote nothing: there is no write
-   * anywhere, and nothing is hidden. Without a count it is only a thing that cannot be seen.
+   * file here is not held against the application. The process and its children wrote nothing:
+   * that is said as it is, with its limit. A helper that the system runs for the application is
+   * not counted, so zero is not "no write anywhere". Without a count nothing is known.
    */
   #elsewhere(window: Window): BlindSpot {
     const counts = this.#outcomesIn(window.id).map((o) => o.bytesWritten);
@@ -377,7 +378,7 @@ export class ComputerUseRealm extends Realm {
         return {
           kind: BlindSpotKind.EFFECT_ELSEWHERE,
           detail:
-            'the process wrote nothing to disk in this window, so no write is outside the watched folders',
+            'the application and the processes it started wrote nothing to disk in this window. A helper process that the system runs for the application, and a process that ended, are not counted',
           impeaching: false,
         };
       }

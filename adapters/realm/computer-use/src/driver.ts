@@ -72,9 +72,10 @@ export interface ActOutcome {
   before: UiRead;
   after: UiRead;
   /**
-   * The bytes that the application's process wrote to disk in the action, as the operating system
-   * counts them. Zero is a fact: nothing was written, in any folder. Absent: the driver cannot
-   * count.
+   * The bytes that the application's process, and the processes it started, wrote to disk in the
+   * action, as the operating system counts them. Zero says that they wrote nothing. It does not
+   * say that no file was written: a helper that the system runs for the application is not
+   * counted. Absent: the driver cannot count.
    */
   bytesWritten?: number;
 }
