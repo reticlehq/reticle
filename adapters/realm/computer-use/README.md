@@ -32,6 +32,8 @@ The application is now a Reticle session. The tools an agent already has for a w
 
 The session is not in the default list of sessions. Give its `sessionId` on each call. The command prints it.
 
+A desktop application has no project of its own. Give `--project <folder>` with the folder that has the `.reticle.json` of the application, and its runs and flows go to that project. Without it they stay on this machine and do not reach the dashboard; the command says so.
+
 To prove that a file was written, name the file:
 
 ```json

@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { attachPlan } from './attach.js';
 
-const files: Record<string, string> = { '/home/.reticle/pairing-token': 'tok-file\n' };
+const files: Record<string, string> = {
+  '/home/.reticle/pairing-token': 'tok-file\n',
+  '/code/notes/.reticle.json': '{ "framework": "appkit", "projectId": "notes-1a2b" }',
+  '/code/empty/.reticle.json': '{}',
+};
 const read = (path: string): string | undefined => files[path];
 
 describe('attachPlan', () => {
@@ -31,5 +35,19 @@ describe('attachPlan', () => {
     expect(attachPlan([], {}, '/home', read)).toEqual({
       error: 'Name the application: --app <name>.',
     });
+  });
+
+  it('ties the application to the project of a folder, and says so when the folder has none', () => {
+    const tied = attachPlan(['--app', 'Notes', '--project', '/code/notes'], {}, '/home', read);
+    expect(tied).toMatchObject({ projectId: 'notes-1a2b' });
+
+    // No folder named: no project. The caller is told what that means, not given a made-up id.
+    expect(attachPlan(['--app', 'Notes'], {}, '/home', read)).not.toHaveProperty('projectId');
+
+    for (const folder of ['/code/empty', '/code/nowhere']) {
+      const refused = attachPlan(['--app', 'Notes', '--project', folder], {}, '/home', read);
+      expect(refused).toHaveProperty('error');
+      expect(JSON.stringify(refused)).toContain('reticle init');
+    }
   });
 });
