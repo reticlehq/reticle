@@ -54,7 +54,7 @@ const WORDED: Readonly<Record<string, readonly string[]>> = {
   [PredicateKind.NET]: ['method', 'urlContains'],
   [PredicateKind.ROUTE]: ['pathname', 'contains'],
   [PredicateKind.STATE]: ['path'],
-  [PredicateKind.TEXT]: ['contains', 'ignoreCase'],
+  [PredicateKind.TEXT]: ['contains', 'ignoreCase', 'satisfies'],
   [PredicateKind.ELEMENT]: ['query', 'state'],
   [PredicateKind.ANIMATION]: ['name'],
 };
@@ -92,6 +92,33 @@ function waitPhrase(predicate: Predicate): string {
     // Every part that decides the claim stays in it: the label is the check's title downstream, and
     // one that dropped `ignoreCase` or the wanted state read as a different check from its own result.
     case PredicateKind.TEXT:
+      if (predicate.contains === undefined && predicate.satisfies !== undefined) {
+        const s = predicate.satisfies;
+        switch (s.property) {
+          case 'matchesPattern':
+            return `text matching /${s.pattern}/`;
+          case 'nonEmpty':
+            return 'text non-empty';
+          case 'oneOf':
+            return `text one of ${JSON.stringify(s.values)}`;
+          case 'withinTolerance':
+            return `text within ${s.tolerance} of ${s.of}`;
+          case 'type':
+            return `text of type ${s.is}`;
+          case 'changed':
+            return 'text changed';
+          case 'unchanged':
+            return 'text unchanged';
+          case 'increased':
+            return s.by === undefined
+              ? 'text increased'
+              : `text increased by ${s.by.value}`;
+          case 'decreased':
+            return s.by === undefined
+              ? 'text decreased'
+              : `text decreased by ${s.by.value}`;
+        }
+      }
       return `text containing '${predicate.contains}'${true === predicate.ignoreCase ? ', ignoring case' : ''}`;
     case PredicateKind.ELEMENT:
       return `an element matching ${JSON.stringify(predicate.query)}${
