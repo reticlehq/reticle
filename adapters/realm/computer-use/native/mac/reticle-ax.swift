@@ -82,6 +82,13 @@ func readElement(_ element: AXUIElement, _ depth: Int, _ unread: inout Int) -> [
   // many rows were left out.
   var places: [Int]?
   let role = text(v[0]) ?? ""
+  // The menu bar of an application that is not in front is not on the screen: a person cannot
+  // see it or press it, and a press on it is refused. It is given no size and its menus are not
+  // read. They are most of the elements of an application, and each one costs a call.
+  if role == "AXMenuBar" && !menuBarOnScreen {
+    children = []
+    if let r = frame(v[7], v[8]) { node["frame"] = [r.origin.x, r.origin.y, 0, 0] }
+  }
   if role == "AXTable" || role == "AXOutline" {
     var visible: AnyObject?
     if AXUIElementCopyAttributeValue(element, kAXVisibleRowsAttribute as CFString, &visible)
@@ -110,8 +117,23 @@ func readElement(_ element: AXUIElement, _ depth: Int, _ unread: inout Int) -> [
   return node
 }
 
+/// True when the application has the topmost ordinary window on the screen. Its menu bar is then
+/// the one on the screen. Asked of the window server, which answers with no run loop.
+func isInFront(_ pid: pid_t) -> Bool {
+  let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+  let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
+  let top = list.first { ($0[kCGWindowLayer as String] as? Int) == 0 }
+  return (top?[kCGWindowOwnerPID as String] as? pid_t) == pid
+}
+
+/// The menu bar of the application being read is on the screen. Set for each read.
+var menuBarOnScreen = true
+
 func snapshot(_ app: AXUIElement) -> (tree: [String: Any], unread: Int, json: Data) {
   var unread = 0
+  var pid: pid_t = 0
+  AXUIElementGetPid(app, &pid)
+  menuBarOnScreen = isInFront(pid)
   var tree = readElement(app, 0, &unread)
   // An application that is busy can refuse its first read. Ask once more before the caller gets
   // a tree with nothing in it. A second refusal is reported as it is, in `unread`.
