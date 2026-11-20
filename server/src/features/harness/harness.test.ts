@@ -453,6 +453,10 @@ describe('the prompt for a desktop application', () => {
   it('sends the model to a file and a menu, not to a request, a link or an address', () => {
     expect(desktop).toContain('file.written');
     // Every kind of evidence the realm sends as a signal is named, or the model does not ask for it.
+    // A count of zero bytes is for the application's own processes. The prompt must not offer it
+    // as proof that nothing was written.
+    expect(desktop).not.toContain('"wrote nothing");');
+    expect(desktop).toContain('Do not claim "wrote nothing"');
     // The names come from the realm, so a name that changes there fails here.
     for (const signal of [DISK_WROTE_SIGNAL, SETTINGS_CHANGED_SIGNAL, CLIPBOARD_CHANGED_SIGNAL]) {
       expect(desktop).toContain(signal);
