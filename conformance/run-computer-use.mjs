@@ -85,6 +85,11 @@ function client() {
     }
   };
 
+  // The fixture must not stay open after the run, whatever way the run ends. A run in self-test
+  // mode never calls `verify`, and it left its last window on the screen: the window was over the
+  // next run's window, and that run failed for it.
+  process.on('exit', end);
+
   return {
     hello: () => Promise.resolve({ ...REGISTRATION, commands: ['plant'] }),
 
