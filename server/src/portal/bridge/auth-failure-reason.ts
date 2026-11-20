@@ -50,7 +50,9 @@ const DIFFERENT_PROJECT_PREFIX = 'this daemon serves a different project';
  * the caller answers with `connectedSinceLastClosure`.
  */
 export function isAuthRefusalReason(reason: string | undefined): boolean {
-  if (reason === undefined) return false;
+  if (reason === undefined) {
+    return false;
+  }
   return reason.startsWith('authentication failed') || reason.startsWith(DIFFERENT_PROJECT_PREFIX);
 }
 
@@ -78,7 +80,9 @@ export function authFailureReason(
     const reason = `${DIFFERENT_PROJECT_PREFIX} — set a free "port" in .reticle.json, then restart the dev server`;
     return Buffer.byteLength(reason, 'utf8') <= MAX_REASON_BYTES ? reason : PLAIN;
   }
-  if (helloToken === undefined || 0 === helloToken.length) return NO_TOKEN;
+  if (helloToken === undefined || 0 === helloToken.length) {
+    return NO_TOKEN;
+  }
   return Buffer.byteLength(WRONG_TOKEN, 'utf8') <= MAX_REASON_BYTES ? WRONG_TOKEN : PLAIN;
 }
 
@@ -94,10 +98,17 @@ export function authFailureReason(
  * The origin is IN the message because it is the fix: it is either the alias to allow-list, or the
  * proof that the page is not being served from where the developer thinks it is.
  */
+const ORIGIN_REJECTED_PREFIX = 'a browser dialled this daemon and was REFUSED at the origin gate';
+
+/** Whether a recorded closure is the origin gate's refusal. It carries no page: no hello came. */
+export function isOriginRefusalReason(reason: string | undefined): boolean {
+  return true === reason?.startsWith(ORIGIN_REJECTED_PREFIX);
+}
+
 export function originRejectedReason(origin: string | undefined): string {
   const named = origin === undefined || 0 === origin.length ? 'a page sending no Origin' : origin;
   return (
-    `a browser dialled this daemon and was REFUSED at the origin gate: ${named} is not allowed. ` +
+    `${ORIGIN_REJECTED_PREFIX}: ${named} is not allowed. ` +
     'Off localhost the SDK needs BOTH `allowNonLocalhost: true` AND a pairing token, and the ' +
     'daemon needs that origin allow-listed (RETICLE_ALLOWED_ORIGINS). The app is running and ' +
     'instrumented — it was turned away, so do not go looking for a stopped dev server.'
