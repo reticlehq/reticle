@@ -60,6 +60,28 @@ describe('ComputerUseRealm', () => {
     ]);
   });
 
+  it('offers no target that has no place on the screen, and counts the windows', async () => {
+    const menuOnly: UiRead = {
+      root: node(UiRole.APPLICATION, 'Calculator', [
+        node(UiRole.MENU, '', [
+          { ...node(UiRole.MENUITEM, '7'), frame: [0, 900, 0, 0] },
+          { ...node(UiRole.MENUITEM, 'View'), frame: [10, 0, 40, 30] },
+        ]),
+      ]),
+      unread: 0,
+      unmapped: [],
+    };
+    const realm = new ComputerUseRealm({
+      driver: { ...driver(), read: () => Promise.resolve(menuOnly) },
+      now: () => 0,
+    });
+    expect(await realm.locate({ name: '7' })).toEqual([]);
+    expect(await realm.locate({ name: 'View' })).toHaveLength(1);
+    const described = await realm.describe();
+    expect(described.windows).toBe(0);
+    expect(described.omitted).toBe(1);
+  });
+
   it('reports what an action changed', async () => {
     const realm = new ComputerUseRealm({ driver: driver(), now: () => 0 });
     const window = realm.openWindow(1000);

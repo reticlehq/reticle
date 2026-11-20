@@ -25,7 +25,7 @@ import type { ActOutcome, UiDriver } from '../driver.js';
 import { ChangeKind, effectOf } from '../effect.js';
 import type { Change } from '../effect.js';
 import { RefTable, writeWindows } from '../lines.js';
-import { UiRole, isAddressable, place } from '../ui-node.js';
+import { UiRole, isAddressable, placeShown } from '../ui-node.js';
 import type { Placed, UiNode } from '../ui-node.js';
 
 export type Emit = (type: EventType, data: Record<string, unknown>) => void;
@@ -100,8 +100,9 @@ interface Seen extends Placed {
   dialog: string;
 }
 
+/** What is on the screen. An element with no place on it, as in a closed menu, is not here. */
 function see(root: UiNode): Seen[] {
-  const placed = place(root);
+  const placed = placeShown(root).shown;
   const byKey = new Map(placed.map((p) => [p.key, p]));
   return placed.map((p) => {
     let window: Placed | undefined = p;
@@ -198,8 +199,10 @@ export class PeerCommands {
       status: { route: ROUTE, title: this.#deps.driver.subject().app },
       nodes: written.tree.split('\n').length,
       truncated: false,
-      // Elements in closed menus are left out. `query` and `match` still find them.
+      // Elements with no place on the screen (closed menus) are left out, here and in a search.
       omitted: written.omitted,
+      // Zero: the window is closed, or it is on another Space, which this realm cannot read.
+      windows: see(read.root).filter((s) => s.node.role === UiRole.WINDOW).length,
       unread: read.unread,
     };
   }
