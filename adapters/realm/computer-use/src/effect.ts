@@ -11,6 +11,11 @@ export const EffectKind = {
   /** No element appeared, went away or changed. */
   NONE: 'none',
   CHANGED: 'changed',
+  /**
+   * Something changed, and only in places that change with no action. The realm cannot say that
+   * the action did it, and cannot say that it did not.
+   */
+  AMBIENT_ONLY: 'ambient-only',
 } as const;
 export type EffectKind = (typeof EffectKind)[keyof typeof EffectKind];
 
@@ -29,6 +34,10 @@ export interface Change {
   value?: readonly [string, string];
   /** For a changed element: the states before and after, when they changed. */
   states?: readonly [string, string];
+  /** The key of the element that holds this one: the place of the change. */
+  within: string;
+  /** The change is in a place that changes with no action. The action may not be its cause. */
+  ambient?: true;
 }
 
 export interface Effect {
@@ -72,8 +81,13 @@ function difference(before: UiNode, after: UiNode): Pick<Change, 'detail' | 'val
   return parts.length > 0 ? { ...out, detail: parts.join('; ') } : {};
 }
 
-function who(node: UiNode): Pick<Change, 'element' | 'role' | 'name'> {
-  return { element: label(node), role: node.role, name: node.name };
+function who(p: Placed): Pick<Change, 'element' | 'role' | 'name' | 'within'> {
+  return {
+    element: label(p.node),
+    role: p.node.role,
+    name: p.node.name,
+    within: p.parentKey ?? '',
+  };
 }
 
 function byKey(placed: readonly Placed[]): Map<string, Placed> {
@@ -85,7 +99,11 @@ function isTopOf(p: Placed, other: ReadonlyMap<string, Placed>): boolean {
   return p.parentKey === undefined || other.has(p.parentKey);
 }
 
-export function effectOf(before: UiNode, after: UiNode): Effect {
+export function effectOf(
+  before: UiNode,
+  after: UiNode,
+  restless: ReadonlySet<string> = new Set(),
+): Effect {
   const was = place(before);
   const is = place(after);
   const wasByKey = byKey(was);
@@ -95,27 +113,39 @@ export function effectOf(before: UiNode, after: UiNode): Effect {
     const now = isByKey.get(p.key);
     if (now === undefined) {
       if (isTopOf(p, isByKey)) {
-        changes.push({ kind: ChangeKind.GONE, ...who(p.node) });
+        changes.push({ kind: ChangeKind.GONE, ...who(p) });
       }
     } else {
       const diff = difference(p.node, now.node);
       if (diff.detail !== undefined) {
-        changes.push({ kind: ChangeKind.DIFFERENT, ...who(p.node), ...diff });
+        changes.push({ kind: ChangeKind.DIFFERENT, ...who(p), ...diff });
       }
     }
   }
   for (const p of is) {
     if (!wasByKey.has(p.key) && isTopOf(p, wasByKey)) {
-      changes.push({ kind: ChangeKind.NEW, ...who(p.node) });
+      changes.push({ kind: ChangeKind.NEW, ...who(p) });
     }
   }
-  const real = changes.filter((change) => !isFocusOnly(change));
+  const real = changes
+    .filter((change) => !isFocusOnly(change))
+    .map((change) =>
+      restless.has(change.within) ? { ...change, ambient: true as const } : change,
+    );
+  const caused = real.filter((change) => change.ambient === undefined);
   const taker = changes.find((change) => isFocusOnly(change) && tookFocus(change));
   return {
-    kind: real.length > 0 ? EffectKind.CHANGED : EffectKind.NONE,
+    kind: kindOf(real.length, caused.length),
     changes: real,
     ...(taker === undefined ? {} : { focusMovedTo: taker.element }),
   };
+}
+
+function kindOf(all: number, caused: number): EffectKind {
+  if (caused > 0) {
+    return EffectKind.CHANGED;
+  }
+  return all > 0 ? EffectKind.AMBIENT_ONLY : EffectKind.NONE;
 }
 
 const FOCUSED = 'focused';

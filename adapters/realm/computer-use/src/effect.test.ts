@@ -57,4 +57,51 @@ describe('effectOf', () => {
     expect(saved.changes.map(changeLine)).toEqual(['- text "Ready"', '+ text "Saved"']);
     expect(saved.focusMovedTo).toBe('button "Save"');
   });
+
+  /**
+   * An application changes with no action: a clock, a tip that rotates, a count that updates. On
+   * the first real application the realm was tried on, a press reported the tips of a panel as
+   * what the press did. The realm learns the places that change by themselves, from two reads
+   * with no action between them, and says so for a change in such a place.
+   */
+  describe('a place that changes by itself', () => {
+    const app = (tip: string, status: string): UiNode =>
+      node(UiRole.WINDOW, 'Todos', {
+        children: [
+          node(UiRole.GROUP, 'Tips', { children: [node(UiRole.TEXT, tip)] }),
+          node(UiRole.GROUP, 'List', { children: [node(UiRole.TEXT, status)] }),
+        ],
+      });
+    const restless = new Set(
+      effectOf(app('Tip one', '2 todos'), app('Tip two', '2 todos')).changes.map((c) => c.within),
+    );
+
+    it('is learned from two reads with no action between them', () => {
+      expect(restless.size).toBe(1);
+    });
+
+    it('is marked in the effect of an action, and the real effect is still an effect', () => {
+      const effect = effectOf(app('Tip two', '2 todos'), app('Tip three', '3 todos'), restless);
+      expect(effect.kind).toBe(EffectKind.CHANGED);
+      expect(effect.changes.filter((c) => true === c.ambient).map((c) => c.name)).toEqual([
+        'Tip two',
+        'Tip three',
+      ]);
+      expect(effect.changes.filter((c) => true !== c.ambient).map((c) => c.name)).toEqual([
+        '2 todos',
+        '3 todos',
+      ]);
+    });
+
+    it('is not called an effect, and not called no effect, when it is all that changed', () => {
+      const effect = effectOf(app('Tip two', '2 todos'), app('Tip three', '2 todos'), restless);
+      expect(effect.kind).toBe(EffectKind.AMBIENT_ONLY);
+    });
+
+    it('changes nothing for a caller that learned no place', () => {
+      const effect = effectOf(app('Tip two', '2 todos'), app('Tip three', '2 todos'));
+      expect(effect.kind).toBe(EffectKind.CHANGED);
+      expect(effect.changes.every((c) => c.ambient === undefined)).toBe(true);
+    });
+  });
 });

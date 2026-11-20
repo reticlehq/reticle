@@ -450,6 +450,74 @@ describe('PeerCommands', () => {
     expect(events.map(([, data]) => data['name'])).toEqual(['Ready', 'Working', 'Working', 'Done']);
   });
 
+  it('does not report a change the application makes by itself as the effect of an action', async () => {
+    // A window with a tip that rotates, in its own group, and a status that only an action changes.
+    const shown = (tip: string, status: string): UiRead => ({
+      root: node(UiRole.WINDOW, 'Notes', {
+        frame: [0, 0, 400, 300],
+        children: [
+          node(UiRole.BUTTON, 'Save', { frame: [10, 10, 80, 30] }),
+          node(UiRole.GROUP, 'Tips', {
+            frame: [10, 50, 200, 20],
+            children: [node(UiRole.TEXT, tip, { frame: [10, 50, 200, 20] })],
+          }),
+          node(UiRole.TEXT, status, { frame: [10, 90, 200, 20] }),
+        ],
+      }),
+      unread: 0,
+      unmapped: [],
+    });
+    let now = shown('Tip 0', 'Ready');
+    let after = now;
+    const commands = new PeerCommands({
+      driver: {
+        subject: () => ({ app: 'Notes', pid: 7 }),
+        read: () => Promise.resolve(now),
+        reach: () => Promise.resolve({ reach: 'yes' }),
+        act: () =>
+          Promise.resolve({
+            delivered: true,
+            reachable: true,
+            settled: true,
+            before: now,
+            after,
+          }),
+      },
+      emit: () => undefined,
+    });
+    const press = async () => {
+      const result = (await commands.answer(ReticleCommand.ACT, {
+        ref: await refOf(commands, 'Save'),
+        action: ActionType.CLICK,
+      })) as { effect: Record<string, unknown> };
+      now = after;
+      return result.effect;
+    };
+
+    // Before the peer watched the application, it cannot know: the tip counts as an effect.
+    after = shown('Tip 1', 'Ready');
+    expect((await press())['domMutatedWithin']).toBe(2);
+
+    // The peer looks while nothing acts. The first looks after an action teach nothing: a late
+    // effect of the action can be in them. One change teaches nothing either.
+    for (let tip = 2; tip < 8; tip += 1) {
+      now = shown(`Tip ${String(tip)}`, 'Ready');
+      await commands.sendTreeChanges();
+    }
+
+    // Only the tip changed during the action: no effect is claimed, and the answer says why.
+    after = shown('Tip 8', 'Ready');
+    const idle = await press();
+    expect(idle['domMutatedWithin']).toBe(0);
+    expect(idle['changedByItself']).toBe(2);
+
+    // The real effect is still counted, next to the tip.
+    after = shown('Tip 9', 'Saved');
+    const real = await press();
+    expect(real['domMutatedWithin']).toBe(2);
+    expect(real['changedByItself']).toBe(2);
+  });
+
   it('sends a signal when the action put something on the clipboard, with no content', async () => {
     const copied = peer({ clipboardChanged: true });
     await copied.commands.answer(ReticleCommand.ACT, {
