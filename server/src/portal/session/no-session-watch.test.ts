@@ -645,3 +645,79 @@ describe('a process in the project folder listens on a port no file names', () =
     expect(hint).not.toContain('processes in this folder listen');
   });
 });
+
+/**
+ * #2341: the session list advised a daemon split to a prior port, while a lease on the current app
+ * URL connected and verified. `.reticle.json` names this daemon's port, so the page dials here; the
+ * live daemon on the old port only remembers an earlier session.
+ */
+describe('a daemon left on the port this project used before', () => {
+  function stateWith(ports: readonly number[], projectId: string): string {
+    const dir = mkdtempSync(join(tmpdir(), 'reticle-state-'));
+    dirs.push(dir);
+    for (const port of ports) {
+      // This process stands in for both daemons, so both read as alive.
+      const entry = { port, pid: process.pid, cwd: dir, startedAt: 1, projectId };
+      writeFileSync(join(dir, `daemon-${String(port)}.json`), JSON.stringify(entry), 'utf8');
+      writeFileSync(
+        join(dir, `connected-${String(port)}.json`),
+        JSON.stringify([projectId]),
+        'utf8',
+      );
+    }
+    return dir;
+  }
+
+  function watch(configuredPort: number): { next: NoSessionNextAction | undefined; hint: string } {
+    const dir = projectDir(JSON.stringify({ projectId: 'app-2341', port: configuredPort }));
+    const { manager, hint, next } = stubSessions();
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4442,
+      initialized: true,
+      directory: dir,
+      stateDir: stateWith([4441, 4442], 'app-2341'),
+      probe: () => Promise.resolve([]),
+    });
+    const answer = { next: next(), hint: hint() };
+    stop();
+    return answer;
+  }
+
+  it('gives no split or restart advice when the configured port is this daemon', () => {
+    const { next, hint } = watch(4442);
+    expect(next?.action).not.toBe(NoSessionAction.DAEMON_SPLIT);
+    expect(hint).not.toContain('DIFFERENT Reticle daemon');
+  });
+
+  /**
+   * The old daemon was started from the project folder, so the listener scan saw a process in this
+   * folder on :4441. That process is Reticle itself, never the app, and must not be offered as one.
+   */
+  it('does not offer the old daemon’s port as a process that could be the app', async () => {
+    const dir = projectDir(JSON.stringify({ projectId: 'app-2341', port: 4442 }));
+    const { manager, hint, next } = stubSessions();
+    const stop = startNoSessionWatch({
+      sessions: manager,
+      port: 4442,
+      initialized: true,
+      directory: dir,
+      stateDir: stateWith([4441, 4442], 'app-2341'),
+      probe: () => Promise.resolve([]),
+      occupiedSiblings: () => Promise.resolve([]),
+      listeningPorts: () => [4441],
+      listenerDirectory: () => dir,
+    });
+    // One macrotask: every step of the injected scan resolves at once, so it has run by then.
+    await new Promise((r) => setTimeout(r, 0));
+    expect(hint()).not.toContain(':4441');
+    expect(next()?.action).not.toBe(NoSessionAction.DAEMON_SPLIT);
+    stop();
+  });
+
+  it('still reports the split when the configured port is the other daemon', () => {
+    const { next, hint } = watch(4441);
+    expect(next?.action).toBe(NoSessionAction.DAEMON_SPLIT);
+    expect(hint).toContain('DIFFERENT Reticle daemon (:4441)');
+  });
+});

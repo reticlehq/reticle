@@ -45,6 +45,7 @@ import {
   daemonsServingProjectElsewhere,
   projectDaemonsElsewhere,
   projectlessNote,
+  readDaemonRegistry,
   splitBrainNote,
 } from '@/command/daemon/daemon-resolve.js';
 import { stallUptime } from './stall-clock.js';
@@ -307,8 +308,13 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
     }
     return splitBrainNote(
       options.port,
-      daemonsServingProjectElsewhere(projectId, options.port, stateDir, isAlive, (port) =>
-        hasProjectConnectedBefore(stateDir, port, projectId),
+      daemonsServingProjectElsewhere(
+        projectId,
+        options.port,
+        stateDir,
+        isAlive,
+        (port) => hasProjectConnectedBefore(stateDir, port, projectId),
+        readProjectPort(dir),
       ),
       { projectId, home: stateDir },
     );
@@ -481,7 +487,18 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
             : options.probe === undefined
               ? await findOccupiedSiblings(options.port, probeDaemon)
               : [];
-        const reported = new Set([options.port, ...siblingListeners, ...ports, ...slowListeners]);
+        // A live Reticle daemon is never the app. One started from this folder on a port the
+        // project used before would otherwise be offered as "maybe this app" (#2341).
+        const daemons = readDaemonRegistry(stateDir)
+          .filter((entry) => isAlive(entry.pid))
+          .map((entry) => entry.port);
+        const reported = new Set([
+          options.port,
+          ...siblingListeners,
+          ...ports,
+          ...slowListeners,
+          ...daemons,
+        ]);
         unscannedFolders = listenerFolders(
           listeningPorts().filter((port) => !reported.has(port)),
           unscannedFolders,

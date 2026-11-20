@@ -104,14 +104,23 @@ function asIdentity(payload: unknown): DaemonIdentity {
  */
 function splitBrainLine(port: number, projectId: string | undefined): string | undefined {
   const home = reticleStateHome();
+  const configured = readProjectPort(process.cwd());
   const elsewhere = splitBrainNote(
     port,
-    daemonsServingProjectElsewhere(projectId, port, home, isAlive, (other) =>
-      hasProjectConnectedBefore(home, other, projectId),
+    daemonsServingProjectElsewhere(
+      projectId,
+      port,
+      home,
+      isAlive,
+      (other) => hasProjectConnectedBefore(home, other, projectId),
+      configured,
     ),
     { projectId, home },
   );
-  return elsewhere ?? wrongDaemonNote(port, resolveDaemonForProject(projectId, home, isAlive));
+  return (
+    elsewhere ??
+    wrongDaemonNote(port, resolveDaemonForProject(projectId, home, isAlive, configured))
+  );
 }
 
 const writeLine = (s: string): void => {
