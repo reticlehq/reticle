@@ -20,7 +20,7 @@ import {
   outwardRefusal,
 } from '@reticlehq/core';
 
-import { ActKind, ActRefusal, Delivery } from '../driver.js';
+import { ActKind, ActRefusal, Delivery, Reach } from '../driver.js';
 import type { ActOutcome, UiDriver } from '../driver.js';
 import { ChangeKind, effectOf } from '../effect.js';
 import type { Change } from '../effect.js';
@@ -46,6 +46,8 @@ const ROUTE = '/';
 const DEFAULT_SETTLE_MS = 1000;
 /** How far one `dy` scroll moves the bar: a tenth of its range. */
 const SCROLL_STEP = 0.1;
+/** Each check is one question to the operating system. A search this wide is not a check. */
+const MAX_REACH_CHECKS = 8;
 const SettleReason = { TIMEOUT: 'timeout' } as const;
 const Field = { VALUE: 'value', STATES: 'states' } as const;
 
@@ -263,9 +265,41 @@ export class PeerCommands {
         throw new Error(`the state ${state} is not read by the computer-use realm`);
       }
       found = found.filter(holds);
+      if (state === ElementState.VISIBLE) {
+        found = await this.#uncovered(found);
+      }
     }
     const limit = 'number' === typeof args['limit'] ? args['limit'] : found.length;
     return { elements: found.slice(0, limit).map((s) => this.#describe(s)), count: found.length };
+  }
+
+  /**
+   * Of the elements that have a size and are in their window, those that nothing is on top of.
+   *
+   * "Visible" means a person can see it. A window of another application over this one hides an
+   * element as well as a closed dialog does, and the tree does not say so: the window server does.
+   * When the operating system cannot say, the check fails with words, and the caller gets "not
+   * known". It never gets a `yes` for an element nobody could see.
+   */
+  async #uncovered(found: readonly Seen[]): Promise<Seen[]> {
+    if (found.length > MAX_REACH_CHECKS) {
+      throw new Error(
+        `${String(found.length)} elements match. The computer-use realm checks each one for a window on top, and it checks ${String(MAX_REACH_CHECKS)} at most. Name one element.`,
+      );
+    }
+    const seen: Seen[] = [];
+    for (const candidate of found) {
+      const answer = await this.#deps.driver.reach(candidate);
+      if (answer.reach === Reach.UNKNOWN) {
+        throw new Error(
+          `could not tell if a person can see ${candidate.node.role} "${candidate.node.name}": ${answer.detail ?? 'the operating system did not answer'}`,
+        );
+      }
+      if (answer.reach === Reach.YES) {
+        seen.push(candidate);
+      }
+    }
+    return seen;
   }
 
   async #match(args: Args): Promise<unknown> {
