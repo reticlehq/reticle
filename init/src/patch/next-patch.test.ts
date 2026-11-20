@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   findRouteGroupRootLayout,
+  nextLayoutFallback,
   patchNextConfig,
   patchRootLayout,
   patchPagesApp,
@@ -382,5 +383,28 @@ describe('findRouteGroupRootLayout', () => {
         project({ 'pages/_app.tsx': '', 'app/dashboard/layout.tsx': LAYOUT }),
       ),
     ).toBeNull();
+  });
+});
+
+/**
+ * Reported from the field (3.10.7): in a monorepo app whose App Router lives in `src/app`, init found
+ * no root layout it could patch, fell back to `app/layout.tsx`, and wrote `app/reticle-dev.tsx` into
+ * a folder the app does not have. The user moved the file and mounted it by hand.
+ */
+describe('nextLayoutFallback', () => {
+  const dirs = (tree: Record<string, string[]>) => ({ listDirs: (d: string) => tree[d] ?? [] });
+
+  it('names src/app when the app has src/app and no app folder', () => {
+    expect(nextLayoutFallback(dirs({ '.': ['src', 'public'], src: ['app', 'lib'] }))).toBe(
+      'src/app/layout.tsx',
+    );
+  });
+
+  it('keeps app/ when the app has an app folder', () => {
+    expect(nextLayoutFallback(dirs({ '.': ['app', 'src'], src: ['app'] }))).toBe('app/layout.tsx');
+  });
+
+  it('keeps app/ when neither folder exists yet', () => {
+    expect(nextLayoutFallback(dirs({ '.': ['public'] }))).toBe('app/layout.tsx');
   });
 });
