@@ -1,7 +1,7 @@
 // reticle-ax: reads and drives one macOS application through the Accessibility API.
 //
 //   reticle-ax tree <pid>
-//   reticle-ax act  <pid> <path> <role> <name> press|set [value] [budgetMs] [user-path|direct] [folder...]
+//   reticle-ax act  <pid> <path> <role> <name> press|set|type|key [value] [budgetMs] [user-path|direct] [folder...]
 //
 // <path> is the child index at each level from the application element, joined by ".", "" for the
 // application. <role> and <name> are what the caller last read there. If the element at <path> is
@@ -169,6 +169,19 @@ func reach(_ target: AXUIElement, _ rect: CGRect) -> Reach {
   return .unknown(code: Int(code.rawValue))
 }
 
+/// Key codes of the ANSI keyboard. A letter here is the key at that place, for a shortcut.
+let keyCodes: [String: CGKeyCode] = [
+  "return": 36, "enter": 36, "tab": 48, "space": 49, "escape": 53, "backspace": 51, "delete": 117,
+  "arrowleft": 123, "arrowright": 124, "arrowdown": 125, "arrowup": 126, "home": 115, "end": 119,
+  "pageup": 116, "pagedown": 121,
+  "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9, "b": 11, "q": 12,
+  "w": 13, "e": 14, "r": 15, "y": 16, "t": 17, "o": 31, "u": 32, "i": 34, "p": 35, "l": 37, "j": 38,
+  "k": 40, "n": 45, "m": 46,
+]
+let modifierFlags: [String: CGEventFlags] = [
+  "meta": .maskCommand, "shift": .maskShift, "alt": .maskAlternate, "control": .maskControl,
+]
+
 let args = CommandLine.arguments
 guard args.count >= 3, let pid = Int32(args[2]) else {
   emit(["error": "usage"])
@@ -251,6 +264,46 @@ switch action {
 case "press": result = AXUIElementPerformAction(target, kAXPressAction as CFString)
 case "set":
   result = AXUIElementSetAttributeValue(target, kAXValueAttribute as CFString, value as CFString)
+case "type":
+  // Key events, one for each character, sent to the application and not to the screen: the
+  // pointer and the keyboard of the person at the machine are not used. The element takes the
+  // keyboard first, as a click in it does. Delivery proves nothing here. The caller reads the
+  // value after it.
+  _ = AXUIElementSetAttributeValue(target, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+  let source = CGEventSource(stateID: .hidSystemState)
+  for unit in value.utf16 {
+    var character = [unit]
+    for down in [true, false] {
+      guard let event = CGEvent(keyboardEventSource: source, virtualKey: 0, keyDown: down) else {
+        continue
+      }
+      event.keyboardSetUnicodeString(stringLength: 1, unicodeString: &character)
+      event.postToPid(pid)
+    }
+    usleep(4000)
+  }
+  result = .success
+case "key":
+  // One key, with its modifiers: "Return", "Tab", "Meta+s". Sent to the application, as "type" is.
+  let parts = value.split(separator: "+").map(String.init)
+  guard let name = parts.last, let code = keyCodes[name.lowercased()] else {
+    emit(["error": "unknown-key"])
+  }
+  var flags: CGEventFlags = []
+  for modifier in parts.dropLast() {
+    guard let flag = modifierFlags[modifier.lowercased()] else { emit(["error": "unknown-key"]) }
+    flags.insert(flag)
+  }
+  _ = AXUIElementSetAttributeValue(target, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+  let source = CGEventSource(stateID: .hidSystemState)
+  for down in [true, false] {
+    guard let event = CGEvent(keyboardEventSource: source, virtualKey: code, keyDown: down) else {
+      continue
+    }
+    event.flags = flags
+    event.postToPid(pid)
+  }
+  result = .success
 default: emit(["error": "unknown-action"])
 }
 

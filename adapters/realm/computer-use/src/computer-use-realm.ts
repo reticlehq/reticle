@@ -94,7 +94,10 @@ const REFUSAL_OF: Readonly<Record<ActRefusal, RefusalReason>> = {
   [ActRefusal.REACH_UNKNOWN]: RefusalReason.UNAVAILABLE,
 };
 
-const TARGET_PARAMETERS = { value: 'string, for set', delivery: Object.values(Delivery) };
+const TARGET_PARAMETERS = {
+  value: 'string, for set, type and key',
+  delivery: Object.values(Delivery),
+};
 
 interface Parameters {
   value?: string;
@@ -110,7 +113,7 @@ function parametersOf(raw: unknown): Parameters {
 }
 
 function isActKind(name: string): name is ActKind {
-  return name === ActKind.PRESS || name === ActKind.SET;
+  return (Object.values(ActKind) as string[]).includes(name);
 }
 
 export class ComputerUseRealm extends Realm {
@@ -159,6 +162,18 @@ export class ComputerUseRealm extends Realm {
       {
         name: ActKind.PRESS,
         meaning: 'press one element, as a click does',
+        mutating: true,
+        parameters: TARGET_PARAMETERS,
+      },
+      {
+        name: ActKind.TYPE,
+        meaning: 'type text in one element, one key event for each character',
+        mutating: true,
+        parameters: TARGET_PARAMETERS,
+      },
+      {
+        name: ActKind.KEY,
+        meaning: 'press one key in one element, with its modifiers: Return, Meta+s',
         mutating: true,
         parameters: TARGET_PARAMETERS,
       },
