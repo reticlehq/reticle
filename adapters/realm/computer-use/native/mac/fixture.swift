@@ -2,6 +2,7 @@
 //   Save     changes the status text at once.
 //   Slow     changes the status text after 400 ms.
 //   Dead     does nothing.
+//   Steps    changes the status text at once, and again 300 ms later.
 //   Covered  works, but a view lies over it, so a person cannot click it.
 //   Title    a text field. The Return key in it changes the status text.
 //   Items    a table of three rows. To choose a row changes the status text.
@@ -85,6 +86,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
     actions.item(at: 1)?.action = #selector(markDone)
     actions.setAccessibilityLabel("Actions")
     window.contentView!.addSubview(actions)
+    _ = button("Steps", 140, #selector(steps), y: 138)
     _ = button("Export", 20, #selector(export), y: 20)
     _ = button("Fake", 100, #selector(fake), y: 20)
     window.orderFrontRegardless()
@@ -98,6 +100,10 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
   }
   @objc func entered() { status.stringValue = "Entered: \(field.stringValue)" }
   @objc func markDone() { status.stringValue = "Marked done" }
+  @objc func steps() {
+    status.stringValue = "Working"
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { self.status.stringValue = "Steps done" }
+  }
   @objc func fake() { status.stringValue = "Exported" }
   @objc func slow() {
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self.status.stringValue = "Slow done" }

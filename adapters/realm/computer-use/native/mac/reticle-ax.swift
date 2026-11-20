@@ -220,9 +220,9 @@ func reach(_ target: AXUIElement, _ rect: CGRect) -> Reach {
 }
 
 /// How long the application must show no change before an action is called finished: 500 ms, the
-/// quiet time the engine uses for a web page. Measured on the fixture's menu, which shows its choice
-/// for a moment before it closes: 250 ms failed one run in four, and 400 ms failed none. The
-/// environment can set it: an application with long animations needs more.
+/// quiet time the engine uses for a web page. The fixture holds it: an effect in two steps, 300 ms
+/// apart, is cut off after the first step with a quiet time of 100 ms. A caller that knows its
+/// application can set another time in the environment.
 let quietNeededMs = Int(ProcessInfo.processInfo.environment["RETICLE_AX_QUIET_MS"] ?? "") ?? 500
 
 /// Key codes of the ANSI keyboard. A letter here is the key at that place, for a shortcut.
@@ -392,6 +392,27 @@ func run(_ args: [String]) throws {
   //
   // When nothing has changed at all, spend the whole budget: an early "nothing changed" is a false
   // result for every effect that takes longer than the first read.
+  // A choice in a menu is not finished while its menu is on the screen. The menu shows the choice
+  // for a moment, closes, and only then runs the action. No length of quiet time is right for
+  // every application here, so this is a fact that is read: the menu that held the target.
+  var menu: AXUIElement?
+  var up: AXUIElement = target
+  for _ in 0..<6 {
+    var parent: AnyObject?
+    guard AXUIElementCopyAttributeValue(up, kAXParentAttribute as CFString, &parent) == .success,
+      let next = parent, CFGetTypeID(next) == AXUIElementGetTypeID()
+    else { break }
+    up = next as! AXUIElement
+    if let v = values(up), text(v[0]) == "AXMenu" {
+      menu = up
+      break
+    }
+  }
+  func menuShows() -> Bool {
+    guard let menu, let v = values(menu), let rect = frame(v[7], v[8]) else { return false }
+    return rect.width > 0 && rect.height > 0
+  }
+
   var last = before.json
   var lastFiles = filesBefore
   var after = before
@@ -402,7 +423,7 @@ func run(_ args: [String]) throws {
     Thread.sleep(forTimeInterval: 0.025)
     after = snapshot(app)
     let files = filesNow()
-    if after.json != last || files != lastFiles { quietSince = Date() }
+    if after.json != last || files != lastFiles || menuShows() { quietSince = Date() }
     last = after.json
     lastFiles = files
     if quietMs() >= quietNeededMs && (after.json != before.json || files != filesBefore) { break }
