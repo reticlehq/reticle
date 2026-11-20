@@ -76,4 +76,6 @@ node native/mac/selfcheck.mjs
 
 `native/mac/measure.mjs` prints how long a read, a press and a refusal take on the same small application. It asserts nothing: use it to compare two builds on one machine.
 
+`pnpm gate:conformance:computer-use` runs the scenarios of the Open Verification Protocol against the realm, with the same small application as the subject. It is not part of `pnpm gate:conformance`, which runs on Linux. Two scenarios fail today: a second write of the same bytes is not seen, and the realm has no rule for a success message with no effect behind it.
+
 The check needs a quiet screen. When another window is over the small window, the realm refuses the action, and the check fails for that reason.

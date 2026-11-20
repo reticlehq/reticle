@@ -131,6 +131,13 @@ describe('ComputerUseRealm', () => {
     const window = realm.openWindow(1000);
     await realm.perform(press(await refOf(realm, 'Save')));
     expect(realm.closeWindow(window).closedBy).toBe(CloseCondition.BUDGET_EXHAUSTED);
+    // And it says that it stopped before the application did, so nothing missing is held against
+    // the application.
+    const coverage = await realm.coverage(realm.closeWindow(window));
+    expect(coverage.blindSpots.map((b) => [b.kind, b.impeaching])).toContainEqual([
+      BlindSpotKind.STILL_IN_FLIGHT,
+      true,
+    ]);
   });
 
   it('cannot prove anything from the tree alone, and says what it did not see', async () => {

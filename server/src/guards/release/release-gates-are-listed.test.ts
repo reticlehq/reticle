@@ -42,6 +42,11 @@ function gateScripts(): string[] {
 
 /** Gates a release does not need to run, each with the reason it is safe to skip. */
 const NOT_A_RELEASE_GATE: Record<string, string> = {
+  // The scenarios against the computer-use realm. The package is private and is not in a release.
+  // The gate needs a Mac that a person gave Accessibility permission, so no release machine can
+  // run it. Add it to RELEASING.md on the day `@reticlehq/computer-use` is published.
+  'gate:conformance:computer-use':
+    'the computer-use package is private and not released; the gate needs a Mac with Accessibility permission',
   'gate:multi':
     'a multi-agent simulation that measures behaviour under concurrent drivers. It reports, it ' +
     'does not pass or fail, so there is nothing for a release to read from it.',

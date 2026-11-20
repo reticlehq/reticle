@@ -293,6 +293,16 @@ export class ComputerUseRealm extends Realm {
     };
   }
 
+  /**
+   * Was this path there before the window opened? `undefined` means nobody looked: no folder is
+   * watched. A caller gives the answer to the adjudicator, so that a file that was there already
+   * does not prove an action that did nothing.
+   */
+  existedBefore(window: Window, path: string): boolean | undefined {
+    const before = this.#before.get(window.id);
+    return before === undefined ? undefined : before.files.has(path);
+  }
+
   /** Closed by quiet when every action in it settled, and by the budget when one did not. */
   closeWindow(window: Window): Window {
     const settled = this.#outcomesIn(window.id).every((o) => o.settled);
@@ -394,6 +404,17 @@ export class ComputerUseRealm extends Realm {
           impeaching: true,
         });
       }
+    }
+    // An action that was not quiet when its time ran out is still in progress. What is missing
+    // then is missing because the realm stopped looking, and an absence must not count against
+    // the application: a slow application is not a broken one.
+    if (this.#outcomesIn(window.id).some((o) => !o.settled)) {
+      blindSpots.push({
+        kind: BlindSpotKind.STILL_IN_FLIGHT,
+        detail: 'the application was not quiet when the time for the action ran out',
+        impeaching: true,
+        remedy: 'give the action more time',
+      });
     }
     const unread = this.#outcomesIn(window.id).reduce((sum, o) => sum + unreadIn(o), 0);
     if (unread > 0) {
