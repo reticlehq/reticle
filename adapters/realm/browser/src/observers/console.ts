@@ -7,7 +7,7 @@ import {
 } from '@reticlehq/core/page';
 import { observeSafely, type Emit, type Teardown } from './types.js';
 import { safeStringify } from '@/security/serialization.js';
-import { requireCapturedMethod } from '@/util/captured-method.js';
+import { capturedMethod, requireCapturedMethod } from '@/util/captured-method.js';
 import { createRepeatLimiter, type ErrorIdentity } from './error-repeats.js';
 import { errorText } from '@/util/error-text.js';
 
@@ -115,7 +115,16 @@ export function installConsole(emit: Emit): Teardown {
     // Store the true original for teardown identity; call through a bound copy. Read as a stored
     // VALUE rather than a method reference — see capturedMethod for why that distinction is the
     // honest way to say "I am detaching this deliberately and putting it back".
-    const original = requireCapturedMethod<(...args: unknown[]) => void>(console, method);
+    // `assert` is the one method a page's own console shim can legitimately lack, so a missing one
+    // is skipped rather than thrown on: a throw here would leave the five methods already patched
+    // with no teardown and the window listeners never registered.
+    const original =
+      'assert' === method
+        ? capturedMethod<(...args: unknown[]) => void>(console, method)
+        : requireCapturedMethod<(...args: unknown[]) => void>(console, method);
+    if (undefined === original) {
+      continue;
+    }
     const callOriginal = original.bind(console);
     const wrapper = (...args: unknown[]): void => {
       // The message reaches the console FIRST, outside the guard — storage.ts's ordering, and for the
