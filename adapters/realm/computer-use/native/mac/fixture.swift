@@ -4,6 +4,7 @@
 //   Dead     does nothing.
 //   Covered  works, but a view lies over it, so a person cannot click it.
 //   Title    a text field. The Return key in it changes the status text.
+//   Volume   a slider. Its value is a number, not text.
 //   Export   writes the title to note.txt in the folder given as the first argument, then says so.
 //   Fake     says "Exported" and writes nothing.
 // The window floats and the application never takes the keyboard, so a run does not disturb the
@@ -51,6 +52,10 @@ final class Fixture: NSObject, NSApplicationDelegate {
     _ = button("Dead", 180, nil)
     let covered = button("Covered", 260, #selector(save))
     window.contentView!.addSubview(Cover(frame: covered.frame))
+    let slider = NSSlider(value: 0, minValue: 0, maxValue: 1, target: nil, action: nil)
+    slider.frame = NSRect(x: 190, y: 24, width: 150, height: 24)
+    slider.setAccessibilityLabel("Volume")
+    window.contentView!.addSubview(slider)
     _ = button("Export", 20, #selector(export), y: 20)
     _ = button("Fake", 100, #selector(fake), y: 20)
     window.orderFrontRegardless()

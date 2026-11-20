@@ -24,6 +24,10 @@ function read(status: string): UiRead {
       node(UiRole.BUTTON, 'Pay', { frame: [10, 50, 80, 30], states: [ElementState.DISABLED] }),
       node(UiRole.BUTTON, 'Below', { frame: [10, 900, 80, 30] }),
       node(UiRole.BUTTON, 'Delete note', { frame: [100, 10, 80, 30] }),
+      node(UiRole.DIALOG, 'Send the report?', {
+        frame: [50, 50, 200, 100],
+        children: [node(UiRole.BUTTON, 'OK', { frame: [60, 100, 60, 30] })],
+      }),
       node(UiRole.TEXT, status, { frame: [10, 90, 200, 20] }),
     ],
   });
@@ -68,9 +72,9 @@ describe('PeerCommands', () => {
       truncated: boolean;
     };
     expect(snapshot.status).toEqual({ route: '/', title: 'Notes' });
-    expect(snapshot.nodes).toBe(6);
+    expect(snapshot.nodes).toBe(8);
     expect(snapshot.truncated).toBe(false);
-    expect(parseInteractive(snapshot.tree)).toHaveLength(6);
+    expect(parseInteractive(snapshot.tree)).toHaveLength(8);
   });
 
   it('matches by role and exact name, and by text with the case the caller asked for', async () => {
@@ -229,6 +233,10 @@ describe('PeerCommands', () => {
     expect(asked).toEqual([]);
     await commands.answer(ReticleCommand.ACT, click, ['delete']);
     await commands.answer(ReticleCommand.ACT, click);
+    expect(asked).toHaveLength(2);
+    // A plain name in a dialog that asks about an outward action.
+    const ok = { ref: await refOf(commands, 'OK'), action: ActionType.CLICK };
+    await expect(commands.answer(ReticleCommand.ACT, ok, [])).rejects.toThrow(/send/i);
     expect(asked).toHaveLength(2);
   });
 });

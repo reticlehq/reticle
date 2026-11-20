@@ -73,6 +73,7 @@ const ROLE_OF: Readonly<Record<string, UiRole>> = {
   AXSplitGroup: UiRole.GROUP,
   AXTabGroup: UiRole.GROUP,
   AXRadioGroup: UiRole.GROUP,
+  AXValueIndicator: UiRole.GROUP,
   AXToolbar: UiRole.GROUP,
   AXUnknown: UiRole.GROUP,
 };

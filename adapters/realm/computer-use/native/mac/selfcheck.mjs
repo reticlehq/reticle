@@ -136,6 +136,11 @@ try {
   assert.deepEqual(entered.summaries, [CuSummary.UI_GONE, CuSummary.UI_APPEARED]);
   assert.equal(entered.observed[1].value.element, 'text "Entered: Plan B"');
 
+  // A slider takes a number. The same path moves a scroll bar, which is how this realm scrolls.
+  const slid = await step('Volume', ActKind.SET, { value: '0.5' });
+  // Two elements change: the slider, and the mark on it that shows the value.
+  assert.deepEqual(slid.summaries, [CuSummary.UI_CHANGED, CuSummary.UI_CHANGED]);
+
   const saved = await step('Save', ActKind.PRESS);
   assert.deepEqual(saved.summaries, [CuSummary.UI_GONE, CuSummary.UI_APPEARED]);
 
@@ -174,7 +179,7 @@ try {
   report.push(
     `Fake   -> verdict ${lied.verdict} (${lied.ground})`,
     `Export -> verdict ${proved.verdict} (${proved.ground})`,
-    'computer-use selfcheck: 11 of 11 cases held',
+    'computer-use selfcheck: 12 of 12 cases held',
     '',
   );
   process.stdout.write(report.join('\n'));

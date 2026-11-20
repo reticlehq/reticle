@@ -263,7 +263,10 @@ let result: AXError
 switch action {
 case "press": result = AXUIElementPerformAction(target, kAXPressAction as CFString)
 case "set":
-  result = AXUIElementSetAttributeValue(target, kAXValueAttribute as CFString, value as CFString)
+  // An element whose value is a number (a slider, a scroll bar) takes a number, not its text.
+  let number = now[4] is NSNumber ? Double(value).map { NSNumber(value: $0) } : nil
+  result = AXUIElementSetAttributeValue(
+    target, kAXValueAttribute as CFString, number ?? (value as CFString))
 case "type":
   // Key events, one for each character, sent to the application and not to the screen: the
   // pointer and the keyboard of the person at the machine are not used. The element takes the
