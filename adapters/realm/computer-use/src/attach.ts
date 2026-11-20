@@ -6,7 +6,13 @@ import { join } from 'node:path';
 
 import { RETICLE_DEFAULT_PORT, bridgeWsUrl } from '@reticlehq/core';
 
-const Flag = { APP: '--app', PORT: '--port', WATCH: '--watch', PROJECT: '--project' } as const;
+const Flag = {
+  APP: '--app',
+  PORT: '--port',
+  WATCH: '--watch',
+  PROJECT: '--project',
+  ELECTRON_SWITCH: '--electron-switch',
+} as const;
 const Env = {
   TOKEN: 'RETICLE_TOKEN',
   PORT: 'RETICLE_PORT',
@@ -46,6 +52,12 @@ export interface AttachPlan {
    * a folder for sessions with no project, and they do not reach the dashboard.
    */
   projectId?: string;
+  /**
+   * Turn on the accessibility switch of an Electron application, and turn it off at the end.
+   * With the switch off, an Electron application shows its elements and does nothing for a press.
+   * The switch costs that application some speed, so the person asks for it.
+   */
+  electronSwitch: boolean;
 }
 
 export function attachPlan(
@@ -80,5 +92,27 @@ export function attachPlan(
     ...(token === undefined || 0 === token.length ? {} : { token }),
     watch: valuesOf(Flag.WATCH),
     ...(projectId === undefined ? {} : { projectId }),
+    electronSwitch: argv.includes(Flag.ELECTRON_SWITCH),
   };
+}
+
+/** The file that every Electron application has in its bundle. */
+const ELECTRON_MARK = 'Contents/Frameworks/Electron Framework.framework';
+const BUNDLE = /^(.*?\.app)\//;
+
+/**
+ * What to say when an Electron application is joined with its switch off. `program` is the path
+ * of the program of the process. Absent answer: the application is not Electron, or the switch
+ * is asked for.
+ */
+export function electronWarning(
+  program: string,
+  plan: Pick<AttachPlan, 'app' | 'electronSwitch'>,
+  exists: (path: string) => boolean,
+): string | undefined {
+  const bundle = BUNDLE.exec(program)?.[1];
+  if (plan.electronSwitch || bundle === undefined || !exists(join(bundle, ELECTRON_MARK))) {
+    return undefined;
+  }
+  return `${plan.app} is an Electron application. It shows its elements, and it does NOTHING for a press until its accessibility switch is on. Run again with ${Flag.ELECTRON_SWITCH}: the switch is set now and set back when you stop. It costs ${plan.app} some speed.`;
 }

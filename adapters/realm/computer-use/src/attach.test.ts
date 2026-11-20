@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { attachPlan } from './attach.js';
+import { attachPlan, electronWarning } from './attach.js';
 
 const files: Record<string, string> = {
   '/home/.reticle/pairing-token': 'tok-file\n',
@@ -22,6 +22,7 @@ describe('attachPlan', () => {
       url: 'ws://localhost:14400/reticle',
       token: 'tok-file',
       watch: ['/out'],
+      electronSwitch: false,
     });
   });
 
@@ -49,5 +50,28 @@ describe('attachPlan', () => {
       expect(refused).toHaveProperty('error');
       expect(JSON.stringify(refused)).toContain('reticle init');
     }
+  });
+
+  /**
+   * An Electron application gave its elements, answered "done" to a press, and did nothing.
+   * The person must hear that before the first press, not find it from actions with no effect.
+   */
+  it('warns for an Electron application that is joined with its switch off', () => {
+    const program = '/Applications/Notes.app/Contents/MacOS/Notes';
+    const electron = (path: string) =>
+      '/Applications/Notes.app/Contents/Frameworks/Electron Framework.framework' === path;
+    const off = { app: 'Notes', electronSwitch: false };
+    expect(electronWarning(program, off, electron)).toMatch(/--electron-switch/);
+    expect(electronWarning(program, { ...off, electronSwitch: true }, electron)).toBeUndefined();
+    expect(electronWarning(program, off, () => false)).toBeUndefined();
+    expect(electronWarning('/usr/bin/tool', off, electron)).toBeUndefined();
+  });
+
+  it('reads the switch for Electron from the arguments', () => {
+    const read = () => undefined;
+    const on = attachPlan(['--app', 'Notes', '--electron-switch'], {}, '/home', read);
+    const off = attachPlan(['--app', 'Notes'], {}, '/home', read);
+    expect(on).toMatchObject({ electronSwitch: true });
+    expect(off).toMatchObject({ electronSwitch: false });
   });
 });
