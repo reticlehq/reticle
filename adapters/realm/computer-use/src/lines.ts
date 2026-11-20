@@ -57,8 +57,10 @@ function writePlaced(placed: readonly Placed[], refs: RefTable): string {
       const ref = isAddressable(node) ? ` (ref=${refs.refFor(key)})` : '';
       const value =
         node.value !== undefined && node.value.length > 0 ? ` [value=${quoted(node.value)}]` : '';
+      // A loss is said on the line that has it: scroll to read the rows that are not here.
+      const left = node.notShown === undefined ? '' : ` [not shown: ${String(node.notShown)}]`;
       const states = node.states.length > 0 ? ` [${node.states.join(',')}]` : '';
-      return `${INDENT.repeat(depth)}- ${label(node)}${ref}${value}${states}`;
+      return `${INDENT.repeat(depth)}- ${label(node)}${ref}${value}${left}${states}`;
     })
     .join('\n');
 }

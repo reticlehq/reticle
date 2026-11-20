@@ -56,7 +56,7 @@ func frame(_ position: AnyObject, _ size: AnyObject) -> CGRect? {
 
 /// The element as a dictionary. `unread` counts elements the API refused to describe, so a reader
 /// can tell a small tree from a tree with holes in it.
-func read(_ element: AXUIElement, _ depth: Int, _ unread: inout Int) -> [String: Any] {
+func readElement(_ element: AXUIElement, _ depth: Int, _ unread: inout Int) -> [String: Any] {
   guard let v = values(element) else {
     unread += 1
     return ["role": "", "children": [Any]()]
@@ -72,19 +72,44 @@ func read(_ element: AXUIElement, _ depth: Int, _ unread: inout Int) -> [String:
     node["frame"] = [r.origin.x, r.origin.y, r.size.width, r.size.height]
   }
   if let s = text(v[10]), !s.isEmpty { node["id"] = s }
-  let children = depth < 80 ? (v[9] as? [AXUIElement]) ?? [] : []
-  node["children"] = children.map { read($0, depth + 1, &unread) }
+  var children = depth < 80 ? (v[9] as? [AXUIElement]) ?? [] : []
+  // A table gives every row it has, and makes each one when it is asked. A table of 5,000 rows
+  // did not answer in four minutes. A person sees the rows that are on the screen, so those are
+  // the rows that are read. Each keeps its place in the whole list as "i", and "notShown" says how
+  // many elements of the table were left out: the other rows, and the columns, which hold the
+  // same cells a second time.
+  var places: [Int]?
+  let role = text(v[0]) ?? ""
+  if role == "AXTable" || role == "AXOutline" {
+    var visible: AnyObject?
+    if AXUIElementCopyAttributeValue(element, kAXVisibleRowsAttribute as CFString, &visible)
+      == .success, let rows = visible as? [AXUIElement]
+    {
+      let all = children
+      let found = rows.compactMap { row in all.firstIndex { CFEqual($0, row) } }
+      places = found
+      children = found.map { all[$0] }
+      node["notShown"] = all.count - children.count
+    }
+  }
+  var kids: [[String: Any]] = []
+  for (order, child) in children.enumerated() {
+    var one = readElement(child, depth + 1, &unread)
+    if let places { one["i"] = places[order] }
+    kids.append(one)
+  }
+  node["children"] = kids
   return node
 }
 
 func snapshot(_ app: AXUIElement) -> (tree: [String: Any], unread: Int, json: Data) {
   var unread = 0
-  var tree = read(app, 0, &unread)
+  var tree = readElement(app, 0, &unread)
   // An application that is busy can refuse its first read. Ask once more before the caller gets
   // a tree with nothing in it. A second refusal is reported as it is, in `unread`.
   if (tree["role"] as? String) == "" {
     unread = 0
-    tree = read(app, 0, &unread)
+    tree = readElement(app, 0, &unread)
   }
   let json = (try? JSONSerialization.data(withJSONObject: tree, options: [.sortedKeys])) ?? Data()
   return (tree, unread, json)

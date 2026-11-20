@@ -71,14 +71,24 @@ function servingHelper(): RunHelper {
         answer(HELPER_EXITED);
       }
     });
-    // The helper must not keep the program open after its work is done.
-    started.unref();
-    for (const stream of [started.stdin, started.stdout, started.stderr]) {
-      if (stream instanceof Socket) {
-        stream.unref();
+    return started;
+  };
+
+  // The helper keeps the program open while a command waits for its answer, and only then. A
+  // program whose one open thing was a helper with no hold on it ended in the middle of a read.
+  const hold = (on: boolean): void => {
+    if (child === undefined) {
+      return;
+    }
+    for (const part of [child, child.stdin, child.stdout, child.stderr]) {
+      if (part instanceof Socket || part === child) {
+        if (on) {
+          part.ref();
+        } else {
+          part.unref();
+        }
       }
     }
-    return started;
   };
 
   return (file, args) => {
@@ -86,7 +96,11 @@ function servingHelper(): RunHelper {
       () =>
         new Promise<string>((resolve) => {
           child ??= start(file);
-          waiting.push(resolve);
+          hold(true);
+          waiting.push((line) => {
+            hold(waiting.length > 0);
+            resolve(line);
+          });
           child.stdin.write(`${JSON.stringify(args)}\n`);
         }),
     );
@@ -165,7 +179,8 @@ export class MacDriver implements UiDriver {
   #rawAt(path: readonly number[]): AxNode | undefined {
     let raw: AxNode | undefined = this.#last;
     for (const index of path) {
-      raw = raw?.children[index];
+      // A child that has "i" is found by it: the helper left some of its siblings out.
+      raw = raw?.children.find((child, order) => (child.i ?? order) === index);
     }
     return raw;
   }

@@ -20,6 +20,10 @@ export interface AxNode {
   focused?: boolean | undefined;
   id?: string | undefined;
   frame?: number[] | undefined;
+  /** The place among all the children of the parent, when the helper left some out. */
+  i?: number | undefined;
+  /** Children the helper left out. */
+  notShown?: number | undefined;
   children: AxNode[];
 }
 
@@ -34,6 +38,8 @@ export const AxNodeSchema: z.ZodType<AxNode> = z.lazy(() =>
     focused: z.boolean().optional(),
     id: z.string().optional(),
     frame: z.array(z.number()).optional(),
+    i: z.number().optional(),
+    notShown: z.number().optional(),
     children: z.array(AxNodeSchema),
   }),
 );
@@ -121,6 +127,8 @@ export function fromAx(ax: AxNode): FromAx {
       ...(value === undefined ? {} : { value }),
       states: statesOf(node),
       ...(frame === undefined ? {} : { frame }),
+      ...(node.i === undefined ? {} : { index: node.i }),
+      ...(node.notShown === undefined || 0 === node.notShown ? {} : { notShown: node.notShown }),
       children: node.children.map(convert),
     };
   };

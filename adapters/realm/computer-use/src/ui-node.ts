@@ -38,6 +38,13 @@ export interface UiNode {
   states: readonly ElementState[];
   /** Where the element is on the screen: x, y, width, height. Absent when the reader has none. */
   frame?: readonly [number, number, number, number];
+  /**
+   * The place of the element among ALL the children of its parent, when the reader left some out.
+   * Absent: the reader gave every child, and the place is the order here.
+   */
+  index?: number;
+  /** Children the reader left out: the rows of a table that are not on the screen. */
+  notShown?: number;
   children: readonly UiNode[];
 }
 
@@ -52,6 +59,8 @@ const INTERACTIVE: ReadonlySet<UiRole> = new Set([
   UiRole.LINK,
   UiRole.MENUITEM,
   UiRole.TAB,
+  // A row has no name of its own, and a person clicks it to choose it.
+  UiRole.ROW,
 ]);
 
 export function isAddressable(node: UiNode): boolean {
@@ -96,11 +105,14 @@ export function place(root: UiNode): Placed[] {
   ): void => {
     out.push({ node, depth: path.length, key, parentKey, path });
     const seen = new Map<string, number>();
-    node.children.forEach((child, index) => {
+    node.children.forEach((child, order) => {
       const own = label(child);
-      const nth = seen.get(own) ?? 0;
-      seen.set(own, nth + 1);
-      visit(child, [...path, index], `${key}/${own}#${String(nth)}`, key);
+      const twin = seen.get(own) ?? 0;
+      seen.set(own, twin + 1);
+      // A row of a table keeps its place in the whole table. After a scroll the first row that
+      // shows is another row, and it must not get the key, and so the ref, of the row before it.
+      const nth = child.index === undefined ? String(twin) : `i${String(child.index)}`;
+      visit(child, [...path, child.index ?? order], `${key}/${own}#${nth}`, key);
     });
   };
   visit(root, [], label(root), undefined);
