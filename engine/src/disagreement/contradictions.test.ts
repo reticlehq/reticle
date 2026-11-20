@@ -905,6 +905,27 @@ describe('the app announced a consequence and nothing else moved', () => {
   });
 
   /**
+   * The rule reads a lone signal as the application's own word. That is true when the SDK is in
+   * the application, because the application sends its signals. In a session with no SDK in the
+   * application (a desktop application read through the operating system) the application cannot
+   * send one. Each signal there is a thing that the realm's observer saw: a file in a watched
+   * folder, or a count of bytes from the kernel. Found with the real tools: an action that wrote a
+   * file and changed nothing on the screen got `unknown`, for evidence the application had no part
+   * in.
+   */
+  it('says nothing when the signals come from an observer and not from the application', () => {
+    const observed = findContradictions([signal('file.written')], {
+      actionSince: 0,
+      signalsAreObserved: true,
+    }).map((c) => c.kind);
+    expect(observed).not.toContain(ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE);
+    // The fact is a statement about the session. Without it the rule is as it was.
+    expect(afterAction([signal('file.written')])).toContain(
+      ContradictionKind.SIGNAL_WITHOUT_CONSEQUENCE,
+    );
+  });
+
+  /**
    * The negative control, and the reason the rule is this narrow: the SAME click on the healthy
    * build moves the store. One corroborating channel is enough — the claim is not "the signal must
    * be visual", it is "the signal must not be the only thing that happened".

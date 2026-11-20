@@ -24,6 +24,14 @@ export type OwnContradiction = Contradiction & { kind: ContradictionKind };
 
 export interface ContradictionOptions {
   /**
+   * The signals of this session come from an observer outside the application, and not from the
+   * application. True for a realm with no SDK in the subject: the application cannot send a
+   * signal there, so a signal is never "the application saying so". The rule
+   * `signal-without-consequence` does not apply then. Absent: the SDK is in the application, and
+   * its signals are its own word.
+   */
+  signalsAreObserved?: boolean;
+  /**
    * Somewhere to record a rule that threw while it ran. See engine-host.ts.
    *
    * Optional: leave it out and the crash is still collected and surfaced by `crashedRuleNotes`, it

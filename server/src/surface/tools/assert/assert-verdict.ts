@@ -46,7 +46,7 @@ import {
 import { gradeOfPredicate } from './assert-grade.js';
 import { assertSource, stampedSourceIn } from './assert-source.js';
 import { VerdictAttribution, verdictAttributionOf } from '@reticlehq/core';
-import { noteSourceSeen, sdkFacts } from '@/portal/session/recorded-gaps.js';
+import { noteSourceSeen, sdkView } from '@/portal/session/recorded-gaps.js';
 import { diagnoseTimeout } from '@/surface/tools/act/act-observation.js';
 
 /**
@@ -138,6 +138,7 @@ export async function assertVerdict(
   // lived only on the act path would leave the sibling caller broken.
   const declared = declaredExpectations(predicate);
   const contradictions = findContradictions(windowEvents, {
+    ...sdkView(session).signals,
     prior,
     currentDocumentId: session.currentDocumentId,
     currentEditEpoch: session.currentEditEpoch,
@@ -293,7 +294,7 @@ export async function assertVerdict(
     source: source ?? stampedSourceIn(evidence) ?? session.lastAct.source(),
     stateAsked: declaresState(predicate),
     stateUnwatched: isStateUnwatched(spots),
-    ...sdkFacts(session),
+    ...sdkView(session).facts,
     domMutated: false,
     signalsFired: 0,
   });
