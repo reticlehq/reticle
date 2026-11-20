@@ -86,6 +86,12 @@ export interface ActionInstrumentationFacts {
    */
   sourceMappingDisabled?: boolean;
   /**
+   * The subject has no SDK in it: a desktop application read through the operating system, for
+   * one. It has no build plugin, no store to register and no signal to fire, so advice to add
+   * them is advice nobody can act on. What the run still owes is reported as usual.
+   */
+  noSdk?: boolean;
+  /**
    * How long the OLDEST open intent has been owed, in ms.
    *
    * A count alone cannot tell "you declared this a minute ago and have not proved it yet" from
@@ -98,6 +104,7 @@ export interface ActionInstrumentationFacts {
 
 export function gapsForAction(facts: ActionInstrumentationFacts): InstrumentationGap[] {
   const gaps: InstrumentationGap[] = [];
+  const sdk = true !== facts.noSdk;
 
   // A red verdict names the control and cannot name the line that renders it. That is the round trip
   // the agent is about to spend, and the one a build plugin removes permanently.
@@ -108,7 +115,7 @@ export function gapsForAction(facts: ActionInstrumentationFacts): Instrumentatio
   // a build plugin that was already there. Only a definite `false` counts — an SDK that says nothing
   // is unknown, and reading silence as an opt-out would mute the honest gap for every app that
   // simply has no source mapping at all.
-  if (!facts.pass && facts.source === undefined) {
+  if (sdk && !facts.pass && facts.source === undefined) {
     const off = true === facts.sourceMappingDisabled;
     gaps.push(
       instrumentationGap(
@@ -150,7 +157,7 @@ export function gapsForAction(facts: ActionInstrumentationFacts): Instrumentatio
   // The kind is NO_STORE_REGISTERED and every sentence it carries is about stores, so the store
   // registry is what it must be keyed on. An undeclared-capabilities app with a working store is a
   // different observation, and if it is worth reporting it needs its own kind and its own words.
-  if (facts.stateUnwatched && (false === facts.hasCapabilities || facts.stateAsked)) {
+  if (sdk && facts.stateUnwatched && (false === facts.hasCapabilities || facts.stateAsked)) {
     // Same missing thing, two ways of meeting it — and the sentence has to say which. Describing an
     // assertion about state to an agent that made no such assertion is a false explanation, and a
     // gap nobody can act on is worse than no gap: it costs the trip and teaches the wrong lesson.
@@ -175,7 +182,7 @@ export function gapsForAction(facts: ActionInstrumentationFacts): Instrumentatio
   }
 
   // The app moved and said nothing, and Reticle could not prove the outcome another way.
-  if (facts.domMutated && 0 === facts.signalsFired && true !== facts.proved) {
+  if (sdk && facts.domMutated && 0 === facts.signalsFired && true !== facts.proved) {
     gaps.push(
       instrumentationGap(
         InstrumentationGapKind.NO_SIGNAL_ON_MUTATION,

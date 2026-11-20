@@ -6,6 +6,7 @@
  *
  * Deduped by kind + missing, newest first, bounded per session.
  */
+import type { ActionInstrumentationFacts } from '@reticlehq/engine/evidence/instrumentation-gaps.js';
 import { withRunningDrive } from '@/features/harness/drive-runs.js';
 import { agentLinkOf } from './agent-link.js';
 import type { InboxMessage } from './human/live-control.js';
@@ -15,6 +16,7 @@ import {
   LINK_APP_GAPS_MAX,
   ReticleCommand,
   agentPromptFor,
+  isPeerRealm,
   coverageOf,
   coveragePercent,
   type Coverage,
@@ -348,4 +350,30 @@ export function withInstrumentation(
     agent: agentLinkOf(tab.inboxHistory?.() ?? []),
   };
   return withRunningDrive(pushed, tab.id) ?? pushed;
+}
+
+/**
+ * What a session says about the SDK in its application, in the shape `gapsForAction` reads.
+ *
+ * One function for the two places that build a verdict's instrumentation gaps, so they cannot
+ * disagree about the same session.
+ */
+interface SdkSession {
+  readonly hasCapabilities: boolean;
+  readonly sourceMapping?: boolean | undefined;
+  readonly runtime?: string | undefined;
+}
+
+export function sdkFacts(
+  session: SdkSession,
+): Pick<ActionInstrumentationFacts, 'hasCapabilities' | 'sourceMappingDisabled' | 'noSdk'> {
+  return {
+    // What the app DECLARED, so an under-instrumented one is told without having to be asked.
+    hasCapabilities: session.hasCapabilities,
+    // Whether the build TURNED the source stamp off, so a red with no file:line prescribes the
+    // right fix. `false` from the page is the only value that means anything; absent is unknown.
+    ...(false === session.sourceMapping ? { sourceMappingDisabled: true } : {}),
+    // A realm with no SDK in the application: advice to instrument it does not apply.
+    ...(isPeerRealm(session.runtime) ? { noSdk: true } : {}),
+  };
 }

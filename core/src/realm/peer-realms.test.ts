@@ -1,6 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { Surface } from 'open-verification';
-import { COMPUTER_USE_RUNTIME, isKnownRealm, isRealmName, realmOf } from './registry.js';
+import {
+  COMPUTER_USE_RUNTIME,
+  isKnownRealm,
+  isPeerRealm,
+  isRealmName,
+  realmOf,
+} from './registry.js';
 import { AppRuntime } from '@/telemetry-feedback.js';
 
 /**
@@ -12,6 +18,9 @@ describe('a realm that reaches the bridge as a peer', () => {
   it('is a realm name, and is not an SDK runtime', () => {
     expect(isRealmName(COMPUTER_USE_RUNTIME)).toBe(true);
     expect(isKnownRealm(COMPUTER_USE_RUNTIME)).toBe(false);
+    expect(isPeerRealm(COMPUTER_USE_RUNTIME)).toBe(true);
+    expect(isPeerRealm(AppRuntime.WEB)).toBe(false);
+    expect(isPeerRealm(undefined)).toBe(false);
     expect(Object.values(AppRuntime)).not.toContain(COMPUTER_USE_RUNTIME);
   });
 

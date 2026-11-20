@@ -214,6 +214,14 @@ export function isRealmName(runtime: string | undefined): runtime is string {
 }
 
 /**
+ * True for a realm that reaches the bridge as a peer, with no SDK in the subject. Advice to
+ * instrument the application (a build plugin, a store, a signal) does not apply to it.
+ */
+export function isPeerRealm(runtime: string | undefined): boolean {
+  return runtime !== undefined && Object.hasOwn(PEER_REALMS, runtime);
+}
+
+/**
  * The runtime that a computer-use peer reports: a whole application, read through the operating
  * system, with no SDK in it. It has the extension prefix while `@reticlehq/computer-use` is
  * private.
