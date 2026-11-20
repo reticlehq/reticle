@@ -204,7 +204,7 @@ const fakeSession = {
   // The page SDK version from the handshake. Verdicts on this session carry it.
   sdkVersion: '3.8.0',
 };
-const deps = { sessions: { resolve: () => fakeSession } };
+const deps = { sessions: { resolve: () => fakeSession, list: () => [{ sessionId: fakeSession.id }] } };
 
 // A verification tool returning a caught false green: assertion passed, verdict refused it.
 const falseGreenTool = {

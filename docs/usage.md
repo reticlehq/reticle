@@ -765,7 +765,7 @@ Those let an agent drive/ inspect a _separate_ browser; Reticle verifies your _o
 
 ### Multiple tabs/apps?
 
-Each tab is a session. Omit `sessionId`, and Reticle picks the active tab of your project. It refuses when the choice is ambiguous. Then pass a `sessionId` from `reticle_session { action: "list" }`.
+Each tab is a session. Omit `sessionId`, and Reticle picks the active tab of your project for a read or a single action. It refuses when the choice is ambiguous. A tool that gives a verdict (`reticle_assert`, `reticle_act_and_wait`, `reticle_verify`, a sequence of steps) never guesses: with more than one tab connected, it refuses and lists the tabs. Then pass a `sessionId` from `reticle_session { action: "list" }`.
 
 ---
 

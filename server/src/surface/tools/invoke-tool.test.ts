@@ -50,7 +50,10 @@ function throttledSession(overrides: Partial<Session> = {}): Session {
 }
 
 function fakeDeps(session: Session = throttledSession()): ToolDeps {
-  const sessions: Partial<SessionManager> = { resolve: () => session };
+  const sessions: Partial<SessionManager> = {
+    resolve: () => session,
+    list: () => [{ sessionId: session.id }] as ReturnType<SessionManager['list']>,
+  };
   const fs = createNodeFileSystem();
   return {
     sessions: sessions as SessionManager,

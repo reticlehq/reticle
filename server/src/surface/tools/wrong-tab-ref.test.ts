@@ -79,7 +79,7 @@ describe('a ref spent in a tab it was not taken from', () => {
     await runTool(tool(ReticleTool.SNAPSHOT, { ok: true }), deps(tabB, [tabA]), {
       sessionId: 'sA',
     });
-    const r = (await runTool(tool(ReticleTool.ACT_AND_WAIT, { ok: true }), deps(tabB, [tabA]), {
+    const r = (await runTool(tool(ReticleTool.ACT, { ok: true }), deps(tabB, [tabA]), {
       ref: 'e120005',
       action: 'click',
     })) as { error?: string };
@@ -90,7 +90,7 @@ describe('a ref spent in a tab it was not taken from', () => {
 
   it('leaves the ordinary drive alone — one tab looked at, the same tab acted on', async () => {
     await runTool(tool(ReticleTool.SNAPSHOT, { ok: true }), deps(tabA, [tabB]), {});
-    const r = (await runTool(tool(ReticleTool.ACT_AND_WAIT, { ok: true }), deps(tabA, [tabB]), {
+    const r = (await runTool(tool(ReticleTool.ACT, { ok: true }), deps(tabA, [tabB]), {
       ref: 'e5',
       action: 'click',
     })) as { error?: string; ok?: boolean };
@@ -107,12 +107,14 @@ describe('a ref spent in a tab it was not taken from', () => {
     await runTool(tool(ReticleTool.SNAPSHOT, { ok: true }), deps(tabB, [tabA]), {
       sessionId: 'sA',
     });
-    const r = (await runTool(tool(ReticleTool.ACT_SEQUENCE, { ok: true }), deps(tabB, [tabA]), {
+    // A sequence is a verdict, so with two tabs and no sessionId it is refused before the ref is
+    // even read: the refusal names both tabs and asks for a sessionId, and never blames the DOM.
+    const r = runTool(tool(ReticleTool.ACT_SEQUENCE, { ok: true }), deps(tabB, [tabA]), {
       steps: [{ ref: 'e120005', action: 'fill', args: { value: 'a' } }],
-    })) as { error?: string };
-    expect(r.error).toContain('sA');
-    expect(r.error).toContain('sessionId');
-    expect(r.error).not.toMatch(/stale/i);
+    });
+    await expect(r).rejects.toThrow(/sA/);
+    await expect(r).rejects.toThrow(/sessionId/);
+    await expect(r).rejects.not.toThrow(/stale/i);
   });
 
   it('a sequence that names the minting tab is driven, not refused', async () => {
