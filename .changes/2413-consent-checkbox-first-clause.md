@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/core` — the destructive-action guard blocked a consent checkbox whose label mentioned data deletion.** A sign-up checkbox labelled "I agree to the Terms. You can export or delete it at any time" was refused as destructive because of the `delete` in its second clause, so the agent could not complete the sign-up. Checkboxes stay in the guard, since one can be a one-click delete confirmation, but the classifier now judges only the first clause of a checkbox label, up to the first `.`, `;`, `:` or `,`. A standalone "Delete this repository" or "I understand this will permanently delete my account" is still refused. Closes [#2413](https://github.com/reticlehq/reticle/issues/2413).

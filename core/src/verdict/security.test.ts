@@ -71,6 +71,49 @@ describe('isDangerousActionText', () => {
 });
 
 /**
+ * A consent checkbox can carry a long label whose later clauses describe data rights: "I agree to
+ * the Terms. You can export or delete it at any time". `delete` there is a right the sign-up gives,
+ * not the act the checkbox performs. Reticle refused the checkbox, so the agent could not sign up.
+ *
+ * A checkbox is still a one-click confirmation when it stands alone ("Delete this repository"), so
+ * it stays in the guard. Only its first clause up to a `.`, `;`, `:` or `,` is judged. The guard is
+ * asymmetric: a false block costs a round trip, but a missed one cannot be undone, so a clause
+ * boundary never removes a dangerous verb that is in the clause naming the act.
+ */
+describe('a checkbox is judged by the first clause of its label', () => {
+  it.each([
+    'I agree to the Terms. You can export or delete it at any time',
+    'I agree to the Terms; you can delete it at any time',
+    'I agree to the Terms: you can delete it at any time',
+    'I agree to the Terms, you can delete it at any time',
+  ])('does not block %s when it is a checkbox', (label) => {
+    expect(isDangerousActionText(label, 'checkbox')).toBe(false);
+  });
+
+  it.each([
+    'Delete this repository',
+    'I understand this will permanently delete my account',
+    'Delete my account',
+  ])('still blocks %s when it is a checkbox', (label) => {
+    expect(isDangerousActionText(label, 'checkbox')).toBe(true);
+  });
+
+  it('still judges the whole label when the control is not a checkbox', () => {
+    expect(isDangerousActionText('I agree to the Terms. You can delete it at any time')).toBe(true);
+    expect(
+      isDangerousActionText('I agree to the Terms. You can delete it at any time', 'button'),
+    ).toBe(true);
+  });
+
+  it('names no dangerous word for a consent checkbox, so the refusal stays consistent', () => {
+    expect(
+      dangerousActionWord('I agree to the Terms. You can delete it at any time', 'checkbox'),
+    ).toBeUndefined();
+    expect(dangerousActionWord('Delete this repository', 'checkbox')).toBe('delete');
+  });
+});
+
+/**
  * "Send" is not a destructive verb, and treating it as one taxed ordinary buttons.
  *
  * Reported from the field: `Send check-in` (POST that logs a text message) and `I'm safe / arrived`
