@@ -384,6 +384,35 @@ describe('findRouteGroupRootLayout', () => {
       ),
     ).toBeNull();
   });
+
+  // Reported from the field: a next-intl app keeps its root layout at
+  // `app/[locale]/layout.tsx` (it renders <html> and <body>), and init said there was no root layout.
+  it('takes a top-level dynamic segment whose layout renders <html> (next-intl)', () => {
+    const io = project({
+      'app/[locale]/layout.tsx': LAYOUT,
+      'app/[locale]/page.tsx': 'export default function P() { return null; }',
+    });
+    expect(findRouteGroupRootLayout(io)).toEqual({
+      path: 'app/[locale]/layout.tsx',
+      unmounted: [],
+    });
+  });
+
+  it('does the same under src/app', () => {
+    const io = project({ 'src/app/[locale]/layout.tsx': LAYOUT });
+    expect(findRouteGroupRootLayout(io)).toEqual({
+      path: 'src/app/[locale]/layout.tsx',
+      unmounted: [],
+    });
+  });
+
+  it('never takes a dynamic segment layout that is not a root layout', () => {
+    const io = project({
+      'app/[id]/layout.tsx':
+        'export default function L({ children }) { return <section>{children}</section>; }',
+    });
+    expect(findRouteGroupRootLayout(io)).toBeNull();
+  });
 });
 
 /**
