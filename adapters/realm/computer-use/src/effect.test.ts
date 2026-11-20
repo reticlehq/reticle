@@ -80,6 +80,13 @@ describe('effectOf', () => {
       expect(effectOf(menu(false, []), menu(false, ['Look Up'])).kind).toBe(EffectKind.NONE);
     });
 
+    it('is counted, so that a caller knows something changed where nobody sees it', () => {
+      expect(effectOf(menu(false, []), menu(false, ['Look Up'])).offScreen).toBe(1);
+      expect(effectOf(menu(false, ['Look Up']), menu(false, ['Look Up'])).offScreen).toBe(0);
+      // An element that came on the screen is an effect, and is not counted here too.
+      expect(effectOf(menu(false, ['Look Up']), menu(true, ['Look Up'])).offScreen).toBe(0);
+    });
+
     it('is an effect when it comes on the screen, and when it goes', () => {
       const opened = effectOf(menu(false, ['Look Up']), menu(true, ['Look Up']));
       expect(opened.changes.map(changeLine)).toEqual(['+ menu "Services"']);

@@ -4,7 +4,7 @@
  * "Nothing changed" is a result here, not an absence of one. An agent that acts and gets no word
  * back cannot tell a click that did nothing from a click that worked.
  */
-import { label, placeShown, quoted } from './ui-node.js';
+import { label, place, placeShown, quoted } from './ui-node.js';
 import type { Placed, UiNode } from './ui-node.js';
 
 export const EffectKind = {
@@ -51,6 +51,11 @@ export interface Effect {
    * reported.
    */
   focusMovedTo?: string;
+  /**
+   * How many elements changed, came or went with no place on the screen in both reads: an item
+   * of a closed menu. They are not in `changes`. This is the count of what was left out.
+   */
+  offScreen: number;
 }
 
 const MARK: Readonly<Record<ChangeKind, string>> = {
@@ -108,6 +113,7 @@ export function effectOf(
   // opened was "no change", and an item put in a closed menu was an effect nobody saw.
   const was = placeShown(before).shown;
   const is = placeShown(after).shown;
+  const offScreen = offScreenChanges(before, was, after, is);
   const wasByKey = byKey(was);
   const isByKey = byKey(is);
   const changes: Change[] = [];
@@ -139,8 +145,37 @@ export function effectOf(
   return {
     kind: kindOf(real.length, caused.length),
     changes: real,
+    offScreen,
     ...(taker === undefined ? {} : { focusMovedTo: taker.element }),
   };
+}
+
+/**
+ * How many elements changed, came or went with no place on the screen in both reads.
+ * An element that is on the screen in one of the reads is not counted: it is in `changes`.
+ */
+function offScreenChanges(
+  before: UiNode,
+  wasShown: readonly Placed[],
+  after: UiNode,
+  isShown: readonly Placed[],
+): number {
+  const seen = new Set([...wasShown, ...isShown].map((p) => p.key));
+  const was = byKey(place(before).filter((p) => !seen.has(p.key)));
+  const is = byKey(place(after).filter((p) => !seen.has(p.key)));
+  let count = 0;
+  for (const [key, p] of was) {
+    const now = is.get(key);
+    if (now === undefined || difference(p.node, now.node).detail !== undefined) {
+      count += 1;
+    }
+  }
+  for (const key of is.keys()) {
+    if (!was.has(key)) {
+      count += 1;
+    }
+  }
+  return count;
 }
 
 function kindOf(all: number, caused: number): EffectKind {
