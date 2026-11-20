@@ -353,10 +353,11 @@ export function withInstrumentation(
 }
 
 /**
- * What a session says about the SDK in its application, in the shape `gapsForAction` reads.
+ * What a session says about the SDK in its application, for the two things that judge a window.
  *
- * One function for the two places that build a verdict's instrumentation gaps, so they cannot
- * disagree about the same session.
+ * `facts` is in the shape `gapsForAction` reads. `signals` is for `findContradictions`: see
+ * `ContradictionOptions.signalsAreObserved`. One function for the two places that build a verdict,
+ * so they cannot disagree about the same session.
  */
 interface SdkSession {
   readonly hasCapabilities: boolean;
@@ -364,16 +365,22 @@ interface SdkSession {
   readonly runtime?: string | undefined;
 }
 
-export function sdkFacts(
-  session: SdkSession,
-): Pick<ActionInstrumentationFacts, 'hasCapabilities' | 'sourceMappingDisabled' | 'noSdk'> {
+export function sdkView(session: SdkSession): {
+  facts: Pick<ActionInstrumentationFacts, 'hasCapabilities' | 'sourceMappingDisabled' | 'noSdk'>;
+  signals: { signalsAreObserved?: true };
+} {
+  // A realm with no SDK in the application: advice to instrument it does not apply, and the
+  // application cannot send a signal, so each signal is a thing an observer saw.
+  const noSdk = isPeerRealm(session.runtime);
   return {
-    // What the app DECLARED, so an under-instrumented one is told without having to be asked.
-    hasCapabilities: session.hasCapabilities,
-    // Whether the build TURNED the source stamp off, so a red with no file:line prescribes the
-    // right fix. `false` from the page is the only value that means anything; absent is unknown.
-    ...(false === session.sourceMapping ? { sourceMappingDisabled: true } : {}),
-    // A realm with no SDK in the application: advice to instrument it does not apply.
-    ...(isPeerRealm(session.runtime) ? { noSdk: true } : {}),
+    facts: {
+      // What the app DECLARED, so an under-instrumented one is told without having to be asked.
+      hasCapabilities: session.hasCapabilities,
+      // Whether the build TURNED the source stamp off, so a red with no file:line prescribes the
+      // right fix. `false` from the page is the only value that means anything; absent is unknown.
+      ...(false === session.sourceMapping ? { sourceMappingDisabled: true } : {}),
+      ...(noSdk ? { noSdk: true } : {}),
+    },
+    signals: noSdk ? { signalsAreObserved: true } : {},
   };
 }

@@ -111,7 +111,7 @@ import { hiddenTargetField } from './act/resolve-target.js';
 import { screenRequestFindings, withAdvisories } from './act/screen-request.js';
 import { gradeOfPredicate } from './assert/assert-grade.js';
 import { readAlreadyTrueOrUnknown } from './act/already-true.js';
-import { engineBlindSpotsField, noteSourceSeen, sdkFacts } from '@/portal/session/recorded-gaps.js';
+import { engineBlindSpotsField, noteSourceSeen, sdkView } from '@/portal/session/recorded-gaps.js';
 
 /**
  * The action vocabulary, derived from ActionType — never retyped: a hand-copied list once omitted
@@ -745,6 +745,7 @@ export const ACT_TOOLS: ToolDef[] = [
           // not evidence the destination rendered or the route moved — `alreadyTrue` decides that, once.
           ...provedConsequences(declared, verdict.pass && !alreadyTrue),
           ...session.lastAct.effect(),
+          ...sdkView(session).signals,
           ...namedReactions(declared),
           currentDocumentId: session.currentDocumentId,
           currentEditEpoch: session.currentEditEpoch,
@@ -843,7 +844,7 @@ export const ACT_TOOLS: ToolDef[] = [
           ref: asString(args['ref']),
           stateAsked: declaresState(until),
           stateUnwatched,
-          ...sdkFacts(session),
+          ...sdkView(session).facts,
           // What the run still owes. A green that leaves this above zero is not the same as done.
           // MINUS the one this verdict is about to discharge.
           //

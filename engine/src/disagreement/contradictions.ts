@@ -698,8 +698,13 @@ function findWindowContradictions(
   // one signal is an ordinary read, not a claim nothing backs. Without this the rule reddened eight
   // existing tests that assert exactly that, which is the false-positive class this scoping exists
   // to prevent.
+  //
+  // And not when the signals are observed from outside the application. The rule convicts "the
+  // app saying so"; an application with no SDK in it says nothing, and the signal is a file or a
+  // count of bytes that an observer saw.
   if (
     options.actionSince !== undefined &&
+    true !== options.signalsAreObserved &&
     false === advanced &&
     0 === settled.length &&
     successSignals.length > 0

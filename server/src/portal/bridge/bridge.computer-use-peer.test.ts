@@ -199,6 +199,9 @@ describe('a computer-use peer on the bridge', () => {
       until: fileWritten,
     })) as Verdict;
     expect(real.verdict.pass, real.verdict.failureReason).toBe(true);
+    // The status text was "Exported" before the press, so the file is the only thing that changed.
+    // The signal is the realm's own observation, and the verdict is `yes`, not "not known".
+    expect((real as { verified?: string }).verified).toBe('yes');
   });
 
   it('does not prove a text that a window of another application covers', async () => {
