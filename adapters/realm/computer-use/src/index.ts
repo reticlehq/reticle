@@ -32,3 +32,5 @@ export { connectPeer } from './peer/peer.js';
 export type { Peer, PeerInput } from './peer/peer.js';
 export { attachPlan } from './attach.js';
 export type { AttachPlan } from './attach.js';
+export { doctorReport } from './doctor.js';
+export type { DoctorFacts, DoctorReport } from './doctor.js';

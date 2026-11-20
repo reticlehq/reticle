@@ -27,6 +27,14 @@ reticle-computer-use --app Notes --watch ~/Documents/out
 
 The command needs the Xcode command-line tools the first time, because it compiles its helper. It stays open until you stop it.
 
+When it does not work, ask it why:
+
+```
+reticle-computer-use --app Notes --doctor
+```
+
+It checks the permission, the helper, the application and its windows, and the daemon. For each one that is wrong it says what to do.
+
 The application is now a Reticle session. The tools an agent already has for a web page work on it:
 
 - `reticle_look { action: "page" }` gives the tree.
