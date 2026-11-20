@@ -60,6 +60,10 @@ const DEFAULT_SETTLE_MS = 1500;
  * because the peer goes on looking: a change that comes after the action is sent when it comes.
  */
 const PEER_QUIET_MS = 150;
+/** The looks after an action that teach nothing: a late effect of the action can be in them. */
+const LOOKS_AFTER_ACT = 2;
+/** The looks in which a place must change, with no action near, before it "changes by itself". */
+const RESTLESS_LOOKS = 2;
 const SCROLL_STEP = 0.1;
 /** Each check is one question to the operating system. A search this wide is not a check. */
 const MAX_REACH_CHECKS = 8;
@@ -196,6 +200,17 @@ export class PeerCommands {
   /** Actions in progress. An action says its own changes, so the look between actions waits. */
   #acting = 0;
   #looking = false;
+  /** Looks since the last action. The first ones can hold a late effect of that action. */
+  #looksSinceAct = 0;
+  /**
+   * How many looks, with no action near, saw each place change. A place that changed in two of
+   * them changes by itself: a clock, a tip that rotates. A change there during an action is not
+   * counted as the effect of the action.
+   * ponytail: a place is the PARENT of what changed. A real effect in the same parent is then
+   * counted as "changed by itself": a missing yes, never a wrong one. Use the element's own key
+   * when a reader gives a stable identifier.
+   */
+  readonly #restless = new Map<string, number>();
   constructor(deps: PeerCommandsDeps) {
     this.#deps = deps;
     // The first look. A file that is there now is not a change.
@@ -220,8 +235,15 @@ export class PeerCommands {
       // An action that began while the read was out says its own changes from its own reads.
       if (0 === this.#acting) {
         if (this.#tree !== undefined) {
-          for (const change of effectOf(this.#tree, read.root).changes) {
+          const { changes } = effectOf(this.#tree, read.root);
+          for (const change of changes) {
             this.#send(change);
+          }
+          this.#looksSinceAct += 1;
+          if (this.#looksSinceAct > LOOKS_AFTER_ACT) {
+            for (const place of new Set(changes.map((change) => change.within))) {
+              this.#restless.set(place, (this.#restless.get(place) ?? 0) + 1);
+            }
           }
         }
         this.#tree = read.root;
@@ -473,7 +495,7 @@ export class PeerCommands {
     kind: ActKind,
     value: string | undefined,
     how: { delivery: Delivery; budgetMs: number },
-  ): Promise<{ outcome: ActOutcome; changes: Change[] }> {
+  ): Promise<{ outcome: ActOutcome; changes: Change[]; byItself: number }> {
     const workspace = this.#deps.workspace;
     // What changed before this action is not its effect: say it first, on its own.
     this.sendFileChanges();
@@ -491,6 +513,7 @@ export class PeerCommands {
       if (outcome.refused === undefined) {
         this.#tree = outcome.after.root;
       }
+      this.#looksSinceAct = 0;
     } finally {
       this.#acting -= 1;
     }
@@ -507,10 +530,16 @@ export class PeerCommands {
         `${target.node.role} "${target.node.name}" did not take the action: ${outcome.refused ?? 'the operating system refused it'}.`,
       );
     }
-    const { changes } = effectOf(outcome.before.root, outcome.after.root);
-    for (const change of changes) {
+    const restless = new Set(
+      [...this.#restless].filter(([, looks]) => looks >= RESTLESS_LOOKS).map(([place]) => place),
+    );
+    const all = effectOf(outcome.before.root, outcome.after.root, restless).changes;
+    // Every change is sent: it did happen. Only the count of what the action did leaves out the
+    // places that change by themselves.
+    for (const change of all) {
       this.#send(change);
     }
+    const changes = all.filter((change) => change.ambient === undefined);
     // The bytes that the process wrote to disk, when the driver counts them. A signal only when
     // there were some: a claim with `count: 0` then says "the application wrote nothing".
     // A setting that the action changed. It is often not on the screen and in no watched file.
@@ -535,7 +564,7 @@ export class PeerCommands {
       });
     }
     this.sendFileChanges();
-    return { outcome, changes };
+    return { outcome, changes, byItself: all.length - changes.length };
   }
 
   /**
@@ -668,7 +697,7 @@ export class PeerCommands {
       kind === ActKind.KEY && key !== undefined
         ? [...modifiers, key].join('+')
         : (text(more['value']) ?? key);
-    const { outcome, changes } = await this.#drive(target, ref, kind, value, {
+    const { outcome, changes, byItself } = await this.#drive(target, ref, kind, value, {
       delivery: Delivery.USER_PATH,
       budgetMs: 'number' === typeof more['settleMs'] ? more['settleMs'] : DEFAULT_SETTLE_MS,
     });
@@ -687,6 +716,8 @@ export class PeerCommands {
         valueChanged: changes.some((c) => c.value !== undefined),
         // Every change in the application, not only those inside the target.
         domMutatedWithin: changes.length,
+        // Changes in a place that changes with no action. The action may not be their cause.
+        ...(byItself > 0 ? { changedByItself: byItself } : {}),
         occluded: !outcome.reachable,
       },
       role: target.node.role,
