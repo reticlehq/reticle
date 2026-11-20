@@ -51,7 +51,7 @@ for (const name of ['reticle-ax', 'fixture']) {
 const FILE = 'note.txt';
 const REGISTRATION = {
   name: '@reticlehq/computer-use',
-  version: '3.10.7',
+  version: '3.10.8',
   platform: 'native',
   channels: [CuChannel.UI, CuChannel.FILES, CuChannel.FILES_CONTENT],
   profile: undefined,
