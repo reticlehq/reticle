@@ -4,7 +4,7 @@
  * "Nothing changed" is a result here, not an absence of one. An agent that acts and gets no word
  * back cannot tell a click that did nothing from a click that worked.
  */
-import { label, place, quoted } from './ui-node.js';
+import { label, placeShown, quoted } from './ui-node.js';
 import type { Placed, UiNode } from './ui-node.js';
 
 export const EffectKind = {
@@ -104,8 +104,10 @@ export function effectOf(
   after: UiNode,
   restless: ReadonlySet<string> = new Set(),
 ): Effect {
-  const was = place(before);
-  const is = place(after);
+  // Only what is on the screen. An element with no size was there in both reads, so a menu that
+  // opened was "no change", and an item put in a closed menu was an effect nobody saw.
+  const was = placeShown(before).shown;
+  const is = placeShown(after).shown;
   const wasByKey = byKey(was);
   const isByKey = byKey(is);
   const changes: Change[] = [];
