@@ -53,7 +53,7 @@ import type { SessionManager } from './session-manager.js';
 import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
 import { findOccupiedSiblings } from '@/command/cli/ports/sibling-ports.js';
 import { captureLookup, findListeningPorts } from '@/command/cli/ports/port-holder.js';
-import { isAuthRefusalReason } from '@/portal/bridge/auth-failure-reason.js';
+import { isAuthRefusalReason, isOriginRefusalReason } from '@/portal/bridge/auth-failure-reason.js';
 import { devServersForProject } from '@reticlehq/core';
 import { readDevServers } from '@/command/daemon/dev-servers.js';
 import { listenerFolders, servingDirectoryOf } from './serving-directory.js';
@@ -552,13 +552,18 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
   /**
    * A hello refused for anything but its token, while it is still the bridge's current state.
    *
-   * Only closures that carry the refused page count: the bridge attaches one exactly when a HELLO
-   * was turned away, so an origin or handshake-pool refusal (which has its own sentence on
-   * `resolve`) is not mistaken for one. Same ordering clause as the token refusal above.
+   * Closures that carry the refused page count: the bridge attaches one exactly when a HELLO was
+   * turned away. The origin gate's refusal counts too, though it carries no page (it refuses before
+   * any hello): left out, a page refused at the gate after an earlier session was diagnosed as a
+   * closed tab, "so the wiring is correct", and the allow-list that fixes it was only in the daemon
+   * log. A handshake-pool refusal is still not one. Same ordering clause as the token refusal above.
    */
   const currentHelloRefusal = (): NoSessionFacts['helloRefused'] => {
     const closure = options.sessions.lastClosure?.();
-    if (closure?.page === undefined || isAuthRefusalReason(closure.reason)) {
+    if (closure === undefined || isAuthRefusalReason(closure.reason)) {
+      return undefined;
+    }
+    if (closure.page === undefined && !isOriginRefusalReason(closure.reason)) {
       return undefined;
     }
     if (true === options.sessions.connectedSinceLastClosure?.()) {
