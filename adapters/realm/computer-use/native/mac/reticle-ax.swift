@@ -384,12 +384,24 @@ let modifierFlags: [String: CGEventFlags] = [
 ]
 
 /// One command: `args` are the words of a command line, the program name first.
+/// The process is there. A process that ended and was not yet collected by its parent still has
+/// its number, so the list of running applications is asked too.
+func isRunning(_ pid: pid_t) -> Bool {
+  if kill(pid, 0) != 0 && errno == ESRCH { return false }
+  return NSRunningApplication(processIdentifier: pid) != nil
+}
+
 func run(_ args: [String]) throws {
   guard args.count >= 3, let pid = Int32(args[2]) else {
     try emit(["error": "usage"])
   }
   guard AXIsProcessTrusted() else {
     try emit(["error": "not-trusted"])
+  }
+  // An application that ended gives a read with nothing in it, and that looked like an
+  // application with no window. Say that it ended.
+  guard isRunning(pid) else {
+    try emit(["error": "app-gone"])
   }
   let app = AXUIElementCreateApplication(pid)
 
@@ -624,6 +636,8 @@ func run(_ args: [String]) throws {
 
   try emit([
     "delivered": result == .success, "axError": Int(result.rawValue), "reachable": canReach,
+    // The application ended while the action ran: it quit, or it crashed.
+    "appGone": !isRunning(pid),
     "coveredBy": coveredBy,
     "settled": settled, "waitedMs": elapsedMs(), "budgetMs": budgetMs,
     "before": before.tree, "after": after.tree, "unreadBefore": before.unread,

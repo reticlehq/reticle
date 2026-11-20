@@ -553,6 +553,11 @@ export class PeerCommands {
         `a person cannot reach ${target.node.role} "${target.node.name}": ${outcome.detail ?? 'another view or window'} is over it.`,
       );
     }
+    if (true === outcome.appGone) {
+      throw new Error(
+        `${this.#deps.driver.subject().app} ended while the action on ${target.node.role} "${target.node.name}" ran: it quit, or it crashed. The action can be the cause. Do not send it again before you know.`,
+      );
+    }
     if (outcome.refused === ActRefusal.REACH_UNKNOWN) {
       throw new Error(
         `could not tell if a person can reach ${target.node.role} "${target.node.name}": ${outcome.detail ?? 'the operating system did not answer'}. The menu bar of an application is on the screen only when the application is in front. Bring ${this.#deps.driver.subject().app} to the front, or use a control in its window.`,

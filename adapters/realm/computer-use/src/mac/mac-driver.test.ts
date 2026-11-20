@@ -97,4 +97,14 @@ describe('MacDriver', () => {
     });
     await expect(driver.read()).rejects.toThrow(/Accessibility/);
   });
+
+  it('says that the application is not running, when the helper finds no process', async () => {
+    const driver = new MacDriver({
+      helper: 'reticle-ax',
+      app: 'fixture',
+      pid: 7,
+      run: () => Promise.resolve(JSON.stringify({ error: 'app-gone' })),
+    });
+    await expect(driver.read()).rejects.toThrow(/fixture \(7\) is not running/);
+  });
 });

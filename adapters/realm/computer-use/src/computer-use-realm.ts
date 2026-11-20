@@ -318,7 +318,9 @@ export class ComputerUseRealm extends Realm {
         `${outcome.refused}: ${label(target.node)}${why}`,
       );
     }
-    if (!outcome.delivered) {
+    // An application that ended can end before it answers a press that it took. That is not a
+    // refusal: the outcome is kept, and the coverage says that the view was cut off.
+    if (!outcome.delivered && true !== outcome.appGone) {
       return this.refuse(action, RefusalReason.UNAVAILABLE, 'the operating system did not take it');
     }
     this.#countsDisk ||= outcome.bytesWritten !== undefined;
@@ -562,6 +564,13 @@ export class ComputerUseRealm extends Realm {
         detail: 'the application was not quiet when the time for the action ran out',
         impeaching: true,
         remedy: 'give the action more time',
+      });
+    }
+    if (this.#outcomesIn(window.id).some((o) => true === o.appGone)) {
+      blindSpots.push({
+        kind: BlindSpotKind.BOUNDARY_UNCROSSABLE,
+        detail: 'the application ended while the action ran: it quit, or it crashed',
+        impeaching: true,
       });
     }
     const unread = this.#outcomesIn(window.id).reduce((sum, o) => sum + unreadIn(o), 0);

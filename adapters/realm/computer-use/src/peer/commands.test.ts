@@ -689,6 +689,18 @@ describe('PeerCommands', () => {
     });
   });
 
+  // An application that ended in the middle of a press answered nothing to it. The peer said
+  // that the operating system refused the press, and a caller then sent the press again.
+  it('says that the application ended, not that the action was refused', async () => {
+    const { commands } = peer({ delivered: false, appGone: true });
+    await expect(
+      commands.answer(ReticleCommand.ACT, {
+        ref: await refOf(commands, 'Save'),
+        action: ActionType.CLICK,
+      }),
+    ).rejects.toThrow(/Notes ended while the action on button "Save" ran/);
+  });
+
   it('says why a press can have no effect, when the peer was told a reason', async () => {
     const still = { before: read('Ready'), after: read('Ready') };
     const press = async (commands: PeerCommands) =>
