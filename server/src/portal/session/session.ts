@@ -25,7 +25,7 @@ import { PendingCommands, CommandTimeoutError } from './page-commands/pending-co
 import { span } from '@/trace.js';
 import { keepCallerContextInDaemon, noteToDaemonLog } from './daemon-answers.js';
 import {
-  isKnownRealm,
+  isRealmName,
   EventType,
   HumanControlDataSchema,
   HumanControlKind,
@@ -241,7 +241,7 @@ export class Session implements HandshakeFacts {
     // Asked of the table, not listed again here. A realm missing from a repeated list is not
     // rejected loudly -- its name is dropped, and every later question about this session answers as
     // though the page never said what it was.
-    if (isKnownRealm(runtime)) {
+    if (isRealmName(runtime)) {
       this.#runtime = runtime;
     }
     if (engine !== undefined) this.#engine = engine;

@@ -106,13 +106,15 @@ describe('a computer-use peer on the bridge', () => {
     await bridge.close();
   });
 
-  it('is a session with no version skew', async () => {
+  it('is a session with no version skew, and says what kind of application it is', async () => {
+    await waitUntil(() => undefined !== bridge.sessions.get('cu-notes')?.runtime);
     const listed = (await callTool(deps, 'reticle_sessions', {})) as {
-      sessions: { sessionId: string; versionSkew?: string }[];
+      sessions: { sessionId: string; versionSkew?: string; runtime?: string }[];
     };
     const mine = listed.sessions.find((s) => 'cu-notes' === s.sessionId);
     expect(mine).toBeDefined();
     expect(mine?.versionSkew).toBeUndefined();
+    expect(mine?.runtime).toBe('x-computer-use');
   });
 
   it('gives the application as a tree the tools can act on', async () => {

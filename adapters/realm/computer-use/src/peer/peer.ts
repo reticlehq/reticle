@@ -3,6 +3,7 @@
  * a page reaches a desktop application. There is no code in the application.
  */
 import {
+  COMPUTER_USE_RUNTIME,
   CONTRACT_FINGERPRINT,
   CONTRACT_PARTS,
   EventType,
@@ -76,7 +77,12 @@ export function connectPeer(input: PeerInput): Peer {
     ...(input.workspace === undefined ? {} : { workspace: input.workspace }),
   });
   const health = (reason: string): void => {
-    emit(EventType.PAGE_HEALTH, { hidden: false, focused: true, reason });
+    emit(EventType.PAGE_HEALTH, {
+      hidden: false,
+      focused: true,
+      reason,
+      runtime: COMPUTER_USE_RUNTIME,
+    });
   };
   let heartbeat: ReturnType<typeof setInterval> | undefined;
 
