@@ -216,7 +216,13 @@ func reach(_ target: AXUIElement, _ rect: CGRect) -> Reach {
     let app = NSRunningApplication(processIdentifier: owner)?.localizedName ?? "pid \(owner)"
     let front = windowOwner(at: CGPoint(x: rect.midX, y: rect.midY))
     let server = front.map { "; front window: \($0.name) layer \($0.layer)" } ?? "; front window: none"
-    return .no(by: "\(role) \"\(name)\" of \(app)\(server)")
+    // The words of an element of ANOTHER application are not said: they are what the person has
+    // open there (the subject of a mail was reported once), and the caller needs only the
+    // application to know what covers the target.
+    var own: pid_t = 0
+    AXUIElementGetPid(target, &own)
+    let what = owner == own ? "\(role) \"\(name)\"" : "a \(role)"
+    return .no(by: "\(what) of \(app)\(server)")
   }
   return .unknown(code: Int(code.rawValue))
 }
