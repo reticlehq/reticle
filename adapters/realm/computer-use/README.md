@@ -72,6 +72,7 @@ With `"count": 0` the same claim says that the application's own processes wrote
 | `clear` | A `fill` with no text. |
 | `check`, `uncheck` | Presses a checkbox or a radio button, then reads its state. Sends nothing when the box is in that state already, and says so (`alreadyAtValue`). Fails when the box did not change. |
 | `submit` | Sends the Return key to the element. |
+| `select` | For a pop-up: presses it, reads its choices, and presses the one named in `value`. When that choice is not there, it closes the pop-up and names the choices that are. |
 | `scroll` | Moves the scroll bar. See below. |
 
 Other actions are refused by name.

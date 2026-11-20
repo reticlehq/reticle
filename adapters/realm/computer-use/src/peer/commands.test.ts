@@ -799,6 +799,94 @@ describe('PeerCommands', () => {
     });
   });
 
+  /**
+   * A pop-up menu has its choices in a menu that is closed. A person presses the pop-up, reads
+   * the choices and presses one. `select` was refused by name.
+   */
+  describe('select', () => {
+    const popup = (open: boolean, chosen: string): UiRead => ({
+      root: node(UiRole.WINDOW, 'Tasks', {
+        frame: [0, 0, 400, 300],
+        children: [
+          node(UiRole.COMBOBOX, 'Priority', {
+            frame: [10, 10, 120, 30],
+            value: chosen,
+            children: [
+              node(UiRole.MENU, '', {
+                frame: open ? [10, 40, 120, 60] : [10, 40, 0, 0],
+                children: ['Low', 'High'].map((name, row) =>
+                  node(UiRole.MENUITEM, name, {
+                    frame: open ? [10, 40 + 20 * row, 120, 20] : [10, 40, 0, 0],
+                  }),
+                ),
+              }),
+            ],
+          }),
+        ],
+      }),
+      unread: 0,
+      unmapped: [],
+    });
+    const fake = () => {
+      const state = { open: false, chosen: 'Low' };
+      const pressed: string[] = [];
+      const commands = new PeerCommands({
+        driver: {
+          subject: () => ({ app: 'Tasks', pid: 7 }),
+          read: () => Promise.resolve(popup(state.open, state.chosen)),
+          reach: () => Promise.resolve({ reach: 'yes' }),
+          act: (request) => {
+            const before = popup(state.open, state.chosen);
+            const name = request.target.node.name;
+            pressed.push(ActKind.KEY === request.kind ? `key ${request.value ?? ''}` : name);
+            if ('Priority' === name && ActKind.PRESS === request.kind) {
+              state.open = true;
+            } else if (ActKind.KEY === request.kind) {
+              state.open = false;
+            } else {
+              state.chosen = name;
+              state.open = false;
+            }
+            return Promise.resolve({
+              delivered: true,
+              reachable: true,
+              settled: true,
+              before,
+              after: popup(state.open, state.chosen),
+            });
+          },
+        },
+        emit: () => undefined,
+      });
+      const select = async (value: string) => {
+        const found = (await commands.answer(ReticleCommand.QUERY, { role: UiRole.COMBOBOX })) as {
+          elements: { ref: string }[];
+        };
+        return commands.answer(ReticleCommand.ACT, {
+          ref: found.elements[0]?.ref ?? '',
+          action: ActionType.SELECT,
+          args: { value },
+        }) as Promise<{ effect: Record<string, unknown> }>;
+      };
+      return { select, pressed, state };
+    };
+
+    it('opens the pop-up and presses the choice', async () => {
+      const { select, pressed, state } = fake();
+      const answer = await select('High');
+      expect(pressed).toEqual(['Priority', 'High']);
+      expect(state.chosen).toBe('High');
+      expect(answer.effect['domMutatedWithin']).toBeGreaterThan(0);
+    });
+
+    it('closes the pop-up and names the choices when the one asked for is not there', async () => {
+      const { select, pressed, state } = fake();
+      await expect(select('Urgent')).rejects.toThrow(/no choice "Urgent".*"Low", "High"/s);
+      expect(pressed).toEqual(['Priority', 'key Escape']);
+      expect(state.open).toBe(false);
+    });
+  });
+
   it('says why a press can have no effect, when the peer was told a reason', async () => {
     const still = { before: read('Ready'), after: read('Ready') };
     const press = async (commands: PeerCommands) =>
