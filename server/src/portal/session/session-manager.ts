@@ -20,7 +20,11 @@ import {
   pickDocumentSuccessor,
   type SessionIdentity,
 } from './session-successor.js';
-import { SESSION_DISCONNECTED_REASON, SESSION_PARKED_REASON } from './facts/session-replaced.js';
+import {
+  SESSION_DISCONNECTED_REASON,
+  SESSION_PARKED_REASON,
+  sessionReplacedReason,
+} from './facts/session-replaced.js';
 import { isErrorDocument } from './session-info.js';
 import {
   carryOnNewDocument,
@@ -201,6 +205,7 @@ export class SessionManager {
    * tab's next document connects (#1944). Bounded with the tombstones. See departed-network.ts.
    */
   readonly #departedNetwork = new Map<string, DepartedNetwork>();
+  readonly #departed = new Map<string, Session>(); // beside its tombstone; see add() (#2302)
   /**
    * The active project's scope, set once from the daemon's .reticle.json. When a tool resolves a session
    * without passing its own scope, this is applied — so auto-selection is project-scoped by default
@@ -246,6 +251,11 @@ export class SessionManager {
     this.#recordConnection?.(session.projectId);
     const previous = this.#sessions.get(session.id);
     this.#sessions.set(session.id, session);
+    // A reload closed the old socket before this hello: its handle and pending reads move here (#2302).
+    const departed = this.#departed.get(session.id);
+    departed?.succeededBy(session);
+    departed?.rejectAll(sessionReplacedReason(session.id, session.url), true);
+    this.#departed.delete(session.id);
     // Who can SEE this session's HUD feed. Wired here because `add` is the one method every path
     // that registers a session goes through, and read lazily so a tab that opens later still counts.
     // Optional-call for the same reason `pushImpact` is one at the dispatch chokepoint: a test
@@ -304,6 +314,7 @@ export class SessionManager {
     this.remove(session);
     this.#tombstones.delete(session.id);
     this.#departedNetwork.delete(session.id);
+    this.#departed.delete(session.id);
   }
 
   isParked(sessionId: string): boolean {
@@ -328,6 +339,9 @@ export class SessionManager {
       : undefined;
     if (departedNetwork !== undefined) {
       this.#departedNetwork.set(session.id, departedNetwork);
+    }
+    if (this.#tombstones.has(session.id)) {
+      this.#departed.set(session.id, session);
     }
     return this.#sessions.delete(session.id);
   }
@@ -364,6 +378,7 @@ export class SessionManager {
       this.#tombstones.delete(oldest);
       this.#siblingsAtDeparture.delete(oldest);
       this.#departedNetwork.delete(oldest);
+      this.#departed.delete(oldest);
     }
   }
 
