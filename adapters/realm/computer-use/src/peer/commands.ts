@@ -93,6 +93,8 @@ function intersects(a: UiNode['frame'], b: UiNode['frame']): boolean {
 interface Seen extends Placed {
   /** The element has a size and is inside its window. It says nothing about a window on top. */
   visible: boolean;
+  /** The name of the dialog the element is in, or an empty string. */
+  dialog: string;
 }
 
 function see(root: UiNode): Seen[] {
@@ -107,10 +109,22 @@ function see(root: UiNode): Seen[] {
     ) {
       window = byKey.get(window.parentKey);
     }
+    let dialog: Placed | undefined = p;
+    while (
+      dialog !== undefined &&
+      dialog.node.role !== 'dialog' &&
+      dialog.parentKey !== undefined
+    ) {
+      dialog = byKey.get(dialog.parentKey);
+    }
     const frame = p.node.frame;
     const sized = frame !== undefined && frame[2] > 0 && frame[3] > 0;
     const inside = 'window' === window?.node.role ? intersects(frame, window.node.frame) : sized;
-    return { ...p, visible: sized && inside };
+    return {
+      ...p,
+      visible: sized && inside,
+      dialog: 'dialog' === dialog?.node.role ? dialog.node.name : '',
+    };
   });
 }
 
@@ -326,7 +340,8 @@ export class PeerCommands {
     }
     const target = await this.#resolve(ref);
     if (allowed !== undefined) {
-      const outward = outwardActionOf(target.node.name, target.node.role);
+      // The dialog's name is part of the meaning: "OK" in "Delete the project?" is a delete.
+      const outward = outwardActionOf(`${target.node.name} ${target.dialog}`, target.node.role);
       if (outward !== undefined && !allowed.includes(outward)) {
         throw new Error(outwardRefusal(outward));
       }
