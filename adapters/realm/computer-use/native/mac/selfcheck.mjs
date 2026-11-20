@@ -177,6 +177,11 @@ try {
   const slow = await step('Slow', ActKind.PRESS);
   assert.deepEqual(slow.summaries, [CuSummary.UI_GONE, CuSummary.UI_APPEARED]);
 
+  // An effect in two steps with a pause between them. The action is finished after the second.
+  // This case holds the quiet time: with 100 ms the realm stops at "Working".
+  const twice = await step('Steps', ActKind.PRESS);
+  assert.ok(twice.observed.some((o) => 'text "Steps done"' === o.value.element));
+
   const dead = await step('Dead', ActKind.PRESS);
   assert.deepEqual(dead.summaries, [CuSummary.UI_NO_EFFECT]);
 
@@ -209,7 +214,7 @@ try {
   report.push(
     `Fake   -> verdict ${lied.verdict} (${lied.ground})`,
     `Export -> verdict ${proved.verdict} (${proved.ground})`,
-    'computer-use selfcheck: 15 of 15 cases held',
+    'computer-use selfcheck: 16 of 16 cases held',
     '',
   );
   process.stdout.write(report.join('\n'));
