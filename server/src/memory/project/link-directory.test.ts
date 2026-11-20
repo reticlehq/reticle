@@ -3,12 +3,13 @@
  * resolver picks for its project. Linking a monorepo from its root left `apps/web/.reticle` — where
  * every run of that app landed — unlinked, and the daemon skipped it on every cycle.
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { discoverProjectConfigs } from '@/command/cli/config/config-discovery.js';
 import { callerArtifactRoot, linkDirectoryFor } from './link-directory.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 let root = '';
 
@@ -23,7 +24,7 @@ beforeEach(() => {
   mkdirSync(join(root, '.git'));
 });
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  removeTempDirSync(root);
 });
 
 describe('linkDirectoryFor', () => {

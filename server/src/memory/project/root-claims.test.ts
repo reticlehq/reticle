@@ -4,11 +4,12 @@
  * nothing linked or synced, and try's wait for its run timed out. A lease now carries the root of
  * whoever opened it, and the session it registers writes there.
  */
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { claimArtifactRoot, claimedArtifactRoot, dropArtifactRootClaim } from './root-claims.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const ROOT = '/work/shop/.reticle';
 
@@ -47,7 +48,7 @@ describe('artifact root claims', () => {
         join(project, '.reticle'),
       );
     } finally {
-      rmSync(project, { recursive: true, force: true });
+      removeTempDirSync(project);
     }
   });
 
@@ -59,7 +60,7 @@ describe('artifact root claims', () => {
         join(project, '.reticle'),
       );
     } finally {
-      rmSync(project, { recursive: true, force: true });
+      removeTempDirSync(project);
     }
   });
 
@@ -72,7 +73,7 @@ describe('artifact root claims', () => {
       );
       expect(claimedArtifactRoot('lease-1', 'http://localhost:3000/')).toBeUndefined();
     } finally {
-      rmSync(base, { recursive: true, force: true });
+      removeTempDirSync(base);
     }
   });
 

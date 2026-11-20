@@ -12,7 +12,7 @@
  * what it says, or the replacement is just a differently-wrong claim.
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -21,6 +21,7 @@ import {
   hasProjectConnectedBefore,
   rememberConnected,
 } from './connection-memory.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 describe('connection memory', () => {
   let dir = '';
@@ -29,7 +30,7 @@ describe('connection memory', () => {
     dir = mkdtempSync(join(tmpdir(), 'reticle-conn-'));
   });
   afterEach(() => {
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   });
 
   it('reports nothing before anything has ever connected', () => {
@@ -99,7 +100,7 @@ describe('the first-move question is about the project, not the port', () => {
     dir = mkdtempSync(join(tmpdir(), 'reticle-firstmove-'));
   });
   afterEach(() => {
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   });
 
   it('holds that nothing connected here when this project has no identity yet', () => {

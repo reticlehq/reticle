@@ -1,8 +1,9 @@
-import { renameSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { renameSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 import { reticle } from './index.js';
+import { removeTempDirSync } from './test-support/temp-dir.test-helpers.js';
 
 /**
  * An edit on disk is what the plain module URL serves next (#881).
@@ -47,7 +48,7 @@ const servers: DevServerLike[] = [];
 
 afterEach(async () => {
   for (const server of servers.splice(0)) await server.close().catch(() => undefined);
-  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of dirs.splice(0)) removeTempDirSync(dir);
 });
 
 function i18nSource(cta: string): string {

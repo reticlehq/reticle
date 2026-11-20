@@ -1,11 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ProjectSize } from '@reticlehq/core/telemetry';
 import { profileProject, projectAgeWeeks, sizeBucket, isMonorepo } from './project-profile.js';
 import { forgeOf, gitFacts, normalizeGitOrigin } from './git-facts.js';
 import { knownCommand, UNKNOWN_COMMAND } from '@/command/cli/cli-parse.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const withTempProject = (build: (root: string) => void, assert: (root: string) => void): void => {
   const root = mkdtempSync(join(tmpdir(), 'reticle-profile-'));
@@ -13,7 +14,7 @@ const withTempProject = (build: (root: string) => void, assert: (root: string) =
     build(root);
     assert(root);
   } finally {
-    rmSync(root, { recursive: true, force: true });
+    removeTempDirSync(root);
   }
 };
 

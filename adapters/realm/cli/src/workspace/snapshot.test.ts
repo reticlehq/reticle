@@ -3,6 +3,7 @@ import { mkdtempSync, mkdirSync, writeFileSync, rmSync, symlinkSync, chmodSync }
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ChangeKind, diffSnapshots, takeSnapshot } from './snapshot.js';
+import { removeTempDirSync } from '../test-support/temp-dir.test-helpers.js';
 
 /**
  * Tested against a real filesystem, on purpose.
@@ -35,7 +36,7 @@ function canSymlink(): boolean {
   } catch {
     return false;
   } finally {
-    rmSync(probe, { recursive: true, force: true });
+    removeTempDirSync(probe);
   }
 }
 
@@ -50,7 +51,7 @@ describe('what a snapshot notices', () => {
     expect(changes).toHaveLength(1);
     expect(changes[0]?.kind).toBe(ChangeKind.WRITTEN);
     expect(changes[0]?.path).toBe(join(root, 'out.txt'));
-    rmSync(root, { recursive: true });
+    removeTempDirSync(root);
   });
 
   it('sees a file vanish', () => {
@@ -60,7 +61,7 @@ describe('what a snapshot notices', () => {
     rmSync(join(root, 'gone.txt'));
     const changes = diffSnapshots(before, takeSnapshot([root]));
     expect(changes[0]?.kind).toBe(ChangeKind.DELETED);
-    rmSync(root, { recursive: true });
+    removeTempDirSync(root);
   });
 
   /**
@@ -81,7 +82,7 @@ describe('what a snapshot notices', () => {
     const changes = diffSnapshots(before, takeSnapshot([root]));
     expect(changes).toHaveLength(1);
     expect(changes[0]?.kind).toBe(ChangeKind.MODIFIED);
-    rmSync(root, { recursive: true });
+    removeTempDirSync(root);
   });
 
   it('says nothing at all when nothing happened', () => {
@@ -89,7 +90,7 @@ describe('what a snapshot notices', () => {
     writeFileSync(join(root, 'steady.txt'), 'unchanged');
     const before = takeSnapshot([root]);
     expect(diffSnapshots(before, takeSnapshot([root]))).toEqual([]);
-    rmSync(root, { recursive: true });
+    removeTempDirSync(root);
   });
 
   /**
@@ -105,7 +106,7 @@ describe('what a snapshot notices', () => {
     symlinkSync(join(root, 'real.txt'), join(root, 'link.txt'));
     const changes = diffSnapshots(before, takeSnapshot([root]));
     expect(changes.map((c) => c.path)).toEqual([join(root, 'link.txt')]);
-    rmSync(root, { recursive: true });
+    removeTempDirSync(root);
   });
 
   /**
@@ -135,7 +136,7 @@ describe('what a snapshot notices', () => {
     expect(changes).toHaveLength(1);
     expect(changes[0]?.kind).toBe(ChangeKind.MODE_CHANGED);
     chmodSync(path, 0o644);
-    rmSync(root, { recursive: true });
+    removeTempDirSync(root);
   });
 });
 
@@ -155,7 +156,7 @@ describe('what a snapshot deliberately does not look at', () => {
     const snapshot = takeSnapshot([root]);
     expect([...snapshot.files.keys()].some((p) => p.includes('node_modules'))).toBe(false);
     expect([...snapshot.files.keys()].some((p) => p.endsWith('mine.ts'))).toBe(true);
-    rmSync(root, { recursive: true });
+    removeTempDirSync(root);
   });
 
   it('can be told to look at something excluded by default', () => {
@@ -164,7 +165,7 @@ describe('what a snapshot deliberately does not look at', () => {
     writeFileSync(join(root, 'dist', 'bundle.js'), 'built');
     const snapshot = takeSnapshot([root], { exclude: [] });
     expect([...snapshot.files.keys()].some((p) => p.endsWith('bundle.js'))).toBe(true);
-    rmSync(root, { recursive: true });
+    removeTempDirSync(root);
   });
 
   /**

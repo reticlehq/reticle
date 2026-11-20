@@ -19,10 +19,11 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, existsSync } from 'node:fs';
+import { mkdtempSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ImpactStore, readScope } from './impact-store.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const roots: string[] = [];
 function tempRoot(): string {
@@ -31,7 +32,7 @@ function tempRoot(): string {
   return dir;
 }
 afterEach(() => {
-  for (const dir of roots.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of roots.splice(0)) removeTempDirSync(dir);
 });
 
 const DAY = 86_400_000;

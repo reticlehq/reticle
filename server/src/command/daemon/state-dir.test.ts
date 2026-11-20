@@ -16,10 +16,11 @@
  * container with a read-only mount, a corporate-managed profile.
  */
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { chmodSync, mkdtempSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { chmodSync, mkdtempSync, mkdirSync, readdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { stateDirProblem } from './state-dir.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 /**
  * `chmod 555` does not make a directory unwritable on Windows — Node's chmod there only toggles the
@@ -44,7 +45,7 @@ afterEach(() => {
   } catch {
     /* already writable, or never created */
   }
-  rmSync(home, { recursive: true, force: true });
+  removeTempDirSync(home);
 });
 
 describe('stateDirProblem', () => {

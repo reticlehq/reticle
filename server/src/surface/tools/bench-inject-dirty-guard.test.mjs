@@ -13,6 +13,18 @@ import { dirname, join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '../../machine/repo-root.js';
 
+/**
+ * Remove a temp folder that a test made.
+ *
+ * On Windows, a folder can stay locked for a short time after a test closes its last handle in it.
+ * An antivirus scan, the indexer or a child process that is still exiting can hold it. `rmSync` then
+ * throws `EBUSY`, `ENOTEMPTY` or `EPERM`, and the cleanup fails a test that passed (#2158). Node
+ * retries exactly these errors when the call passes `maxRetries`.
+ */
+function removeTempDirSync(dir) {
+  rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+}
+
 // Kept under server/src so the server unit gate runs it; bench/harness is not a test target.
 const ROOT = REPO_ROOT;
 const INJECTOR_PATH = 'bench/harness/inject.mjs';
@@ -82,7 +94,7 @@ function withHarnessRepo(run) {
     git(root, env, 'commit', '-qm', 'baseline');
     run(root, env);
   } finally {
-    rmSync(sandbox, { recursive: true, force: true });
+    removeTempDirSync(sandbox);
   }
 }
 

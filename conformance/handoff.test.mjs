@@ -4,9 +4,21 @@ import { join } from 'node:path';
 import { afterEach, expect, it } from 'vitest';
 import { writeWebHandoff, readWebHandoff } from './handoff.mjs';
 
+/**
+ * Remove a temp folder that a test made.
+ *
+ * On Windows, a folder can stay locked for a short time after a test closes its last handle in it.
+ * An antivirus scan, the indexer or a child process that is still exiting can hold it. `rmSync` then
+ * throws `EBUSY`, `ENOTEMPTY` or `EPERM`, and the cleanup fails a test that passed (#2158). Node
+ * retries exactly these errors when the call passes `maxRetries`.
+ */
+function removeTempDirSync(dir) {
+  rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+}
+
 const directories = [];
 afterEach(() => {
-  for (const dir of directories.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of directories.splice(0)) removeTempDirSync(dir);
 });
 
 it('a negative control cannot overwrite the real web results compared with desktop', () => {

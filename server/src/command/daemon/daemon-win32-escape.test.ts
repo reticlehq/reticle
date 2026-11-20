@@ -13,7 +13,6 @@ import {
   openSync,
   readFileSync,
   renameSync,
-  rmSync,
   statSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -21,6 +20,7 @@ import { join } from 'node:path';
 import { DaemonSpawnMethod, ReticleEnv } from '@reticlehq/core';
 import { spawnDaemon, type SpawnDaemonDeps } from './daemon.js';
 import type { EscapeRequest, EscapeResult } from './win32-escape.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const PORT = 4321;
 
@@ -32,7 +32,7 @@ describe('spawnDaemon leaves the job on Windows', () => {
   });
 
   afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
+    removeTempDirSync(home);
   });
 
   function harness(

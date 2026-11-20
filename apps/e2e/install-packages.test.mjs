@@ -10,6 +10,18 @@ import {
   validatePackageManifest,
 } from './install-packages.mjs';
 
+/**
+ * Remove a temp folder that a test made.
+ *
+ * On Windows, a folder can stay locked for a short time after a test closes its last handle in it.
+ * An antivirus scan, the indexer or a child process that is still exiting can hold it. `rmSync` then
+ * throws `EBUSY`, `ENOTEMPTY` or `EPERM`, and the cleanup fails a test that passed (#2158). Node
+ * retries exactly these errors when the call passes `maxRetries`.
+ */
+function removeTempDirSync(dir) {
+  rmSync(dir, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 });
+}
+
 it.skipIf(process.platform === 'win32')(
   'keeps package paths relative through a symlinked checkout',
   () => {
@@ -34,7 +46,7 @@ it.skipIf(process.platform === 'win32')(
         },
       ]);
     } finally {
-      rmSync(scratch, { recursive: true, force: true });
+      removeTempDirSync(scratch);
     }
   },
 );
@@ -85,7 +97,7 @@ it('restores packed builds, removes stale emitted files, and preserves checkout 
     expect(existsSync(join(root, 'core/dist/stale.js'))).toBe(false);
     expect(readFileSync(join(root, 'core/source.js'), 'utf8')).toBe('checkout source');
   } finally {
-    rmSync(scratch, { recursive: true, force: true });
+    removeTempDirSync(scratch);
   }
 }));
 

@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -14,6 +14,7 @@ import {
   splitBrainNote,
   wrongDaemonNote,
 } from './daemon-resolve.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 /**
  * Which daemon does THIS project belong to?
@@ -37,7 +38,7 @@ describe('resolveDaemonForProject', () => {
   const dirs: string[] = [];
   afterEach(() => {
     for (const d of dirs.splice(0)) {
-      rmSync(d, { recursive: true, force: true });
+      removeTempDirSync(d);
     }
   });
 
@@ -146,7 +147,7 @@ describe('daemonInsideProject', () => {
   const dirs: string[] = [];
   afterEach(() => {
     for (const d of dirs.splice(0)) {
-      rmSync(d, { recursive: true, force: true });
+      removeTempDirSync(d);
     }
   });
   function homeWith(cwd: string): string {
@@ -181,7 +182,7 @@ describe('resolveMcpPort', () => {
   const dirs: string[] = [];
   afterEach(() => {
     for (const d of dirs.splice(0)) {
-      rmSync(d, { recursive: true, force: true });
+      removeTempDirSync(d);
     }
   });
   function home(entries: readonly Record<string, unknown>[]): string {
@@ -348,7 +349,7 @@ describe('daemonsServingProjectElsewhere', () => {
   const dirs: string[] = [];
   afterEach(() => {
     for (const d of dirs.splice(0)) {
-      rmSync(d, { recursive: true, force: true });
+      removeTempDirSync(d);
     }
   });
 
@@ -482,7 +483,7 @@ describe('splitBrainNote', () => {
         'RETICLE_PORT=4401',
       );
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      removeTempDirSync(dir);
     }
   });
 
@@ -516,7 +517,7 @@ describe('splitBrainNote', () => {
       expect(note).toContain('restart the dev server');
       expect(note).not.toContain('init');
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      removeTempDirSync(dir);
     }
   });
 
@@ -538,7 +539,7 @@ describe('splitBrainNote', () => {
         'RETICLE_PORT',
       );
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      removeTempDirSync(dir);
     }
   });
 
@@ -554,7 +555,7 @@ describe('splitBrainNote', () => {
       expect(note).toContain('RETICLE_PORT=4400');
       expect(note).not.toContain('.reticle.json');
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      removeTempDirSync(dir);
     }
   });
 });
@@ -568,7 +569,7 @@ describe('relocationReason', () => {
   const dirs: string[] = [];
   afterEach(() => {
     for (const d of dirs.splice(0)) {
-      rmSync(d, { recursive: true, force: true });
+      removeTempDirSync(d);
     }
   });
   function home(entries: readonly Record<string, unknown>[]): string {

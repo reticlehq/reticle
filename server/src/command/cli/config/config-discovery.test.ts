@@ -17,11 +17,12 @@
  * never touched.
  */
 
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { discoverProjectConfigs } from './config-discovery.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 let root = '';
 
@@ -36,7 +37,7 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'reticle-discovery-'));
 });
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  removeTempDirSync(root);
 });
 
 describe('discoverProjectConfigs', () => {

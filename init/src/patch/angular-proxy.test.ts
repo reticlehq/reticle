@@ -1,9 +1,10 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { ANGULAR_TOKEN_PATH, angularProxyFile } from './angular.js';
+import { removeTempDirSync } from '../test-support/temp-dir.test-helpers.js';
 
 interface Written {
   status?: number;
@@ -13,7 +14,7 @@ type Bypass = (req: unknown, res: unknown) => unknown;
 
 const dir = mkdtempSync(join(tmpdir(), 'reticle-angular-proxy-'));
 afterAll(() => {
-  rmSync(dir, { recursive: true, force: true });
+  removeTempDirSync(dir);
 });
 
 async function loadBypass(): Promise<Bypass> {

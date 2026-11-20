@@ -5,7 +5,7 @@
  * `daemonDeath_end: "unknown"`, because the log had no heartbeat and no line that a reader could
  * classify. These tests start a real `listen` on a port that is held, and read the log back.
  */
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -19,11 +19,12 @@ import {
   recordStartupFailure,
   type StartupTrapTarget,
 } from './startup-failure.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const dirs: string[] = [];
 
 afterEach(() => {
-  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of dirs.splice(0)) removeTempDirSync(dir);
 });
 
 describe('readDaemonStartupCause', () => {

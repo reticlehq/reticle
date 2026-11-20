@@ -1,9 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import { execFileSync } from 'node:child_process';
-import { closeSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { closeSync, mkdtempSync, openSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { REPO_ROOT } from './machine/repo-root.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 /**
  * Every path the CI router names must still exist.
@@ -239,7 +240,7 @@ describe('CI routing decisions', () => {
       }
       return flags;
     } finally {
-      rmSync(temporary, { recursive: true, force: true });
+      removeTempDirSync(temporary);
     }
   };
 

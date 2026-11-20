@@ -4,10 +4,11 @@
  */
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, existsSync, readdirSync, utimesSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, existsSync, readdirSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { reclaimStaleDaemons, shouldRemovePid } from './daemon.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 describe('shouldRemovePid — orphan-race guard', () => {
   it('removes a pidfile we own, an empty one, or a dead-owner one', () => {
@@ -27,7 +28,7 @@ beforeEach(() => {
   home = mkdtempSync(join(tmpdir(), 'reticle-reclaim-'));
 });
 afterEach(() => {
-  rmSync(home, { recursive: true, force: true });
+  removeTempDirSync(home);
 });
 
 function writePidFile(port: number, pid: number): void {

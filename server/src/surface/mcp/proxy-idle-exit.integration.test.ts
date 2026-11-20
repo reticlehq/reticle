@@ -1,13 +1,14 @@
 import { afterEach, describe, expect, it, vi, type MockInstance } from 'vitest';
 import * as http from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PassThrough } from 'node:stream';
 import { LOOPBACK_HOST, MCP_SSE_PATH, ReticleEnv, STATUS_PATH } from '@reticlehq/core';
 import { proxyLogPath, setProxyLogPort, startMcpProxy } from './mcp-proxy.js';
 import { PROXY_IDLE_EXIT_EVENT } from './proxy-idle-exit.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 interface FakeDaemon {
   port: number;
@@ -82,7 +83,7 @@ describe('the MCP proxy idle exit wired through the real transport', () => {
 
   it('keeps an unanswered call alive, then exits after the settled link stays quiet', async () => {
     const home = mkdtempSync(join(tmpdir(), 'reticle-proxy-idle-'));
-    cleanups.push(() => rmSync(home, { recursive: true, force: true }));
+    cleanups.push(() => removeTempDirSync(home));
     vi.stubEnv('HOME', home);
     vi.stubEnv('USERPROFILE', home);
     vi.stubEnv(ReticleEnv.STATE_DIR, home);

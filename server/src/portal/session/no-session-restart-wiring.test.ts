@@ -6,7 +6,7 @@
  * claim appears in more than one of them.
  */
 
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { NoSessionAction } from '@reticlehq/core';
@@ -15,6 +15,7 @@ import { rememberConnected } from '@/memory/recall/prior/connection-memory.js';
 import { nextActionFor } from './no-session-next-action.js';
 import { startNoSessionWatch } from './no-session-watch.js';
 import { SessionManager } from './session-manager.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 describe('next_action agrees with the prose about a restarted daemon', () => {
   it('does not send a proven-connected project back through init', () => {
@@ -49,7 +50,7 @@ describe('the watch reads the durable bit and hands it to the diagnosis', () => 
     dir = mkdtempSync(join(tmpdir(), 'reticle-watch-'));
   });
   afterEach(() => {
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   });
 
   it('softens "never seen one" when the state directory records a prior connection', () => {

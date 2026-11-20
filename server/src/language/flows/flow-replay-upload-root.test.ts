@@ -6,7 +6,7 @@
  * "file not found".
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, mkdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, realpathSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import {
@@ -27,6 +27,7 @@ import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { ToolDeps } from '@/surface/tools/tools.js';
 import { FlowStore } from './flows.js';
 import { replayNamedFlow } from './flow-replay-run.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const FIXTURE = 'fixture.txt';
 const FIXTURE_TEXT = 'from worktree B';
@@ -52,7 +53,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  rmSync(base, { recursive: true, force: true });
+  removeTempDirSync(base);
 });
 
 const flow: FlowFile = {

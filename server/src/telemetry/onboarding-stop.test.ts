@@ -7,7 +7,7 @@
  * row that leaves.
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -24,6 +24,7 @@ import { resetOnboardingStops } from './onboarding-funnel.js';
 import { drainInstallTrace } from './install-trace.js';
 import { reportInitOutcome } from './init-telemetry.js';
 import { getSessionMetrics, resetSessionMetrics } from './session-metrics.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 function stopRows(): () => OnboardingStep[] {
   const emit = vi.spyOn(getTelemetry(), 'emit').mockResolvedValue(true);
@@ -48,7 +49,7 @@ describe('the installer stops carry a stop name', () => {
   beforeEach(() => {
     dir = mkdtempSync(join(tmpdir(), 'reticle-stop-'));
   });
-  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+  afterEach(() => removeTempDirSync(dir));
 
   it.each([
     ['runtime_ready', 'no_node', OnboardingStop.NO_NODE],

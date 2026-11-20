@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { scanPackage } from '../../../../scripts/orphan-scan.mjs';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 /**
  * The scanner ten guards trust, and which nothing tested.
@@ -34,7 +35,7 @@ describe('a scan that found nothing is an error, not a clean result', () => {
       writeFileSync(join(dir, 'src', 'README.md'), 'not source');
       expect(() => scanPackage(dir)).toThrow(/no source files/);
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      removeTempDirSync(dir);
     }
   });
 

@@ -1,7 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import {
   mkdtempSync,
-  rmSync,
   existsSync,
   readFileSync,
   writeFileSync,
@@ -14,6 +13,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { spawnDaemon, type SpawnDaemonDeps, type SpawnedChild } from './daemon.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 describe('spawnDaemon with injectable deps', () => {
   let home: string;
@@ -23,7 +23,7 @@ describe('spawnDaemon with injectable deps', () => {
   });
 
   afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
+    removeTempDirSync(home);
   });
 
   function makeDeps(overrides?: Partial<SpawnDaemonDeps>): {

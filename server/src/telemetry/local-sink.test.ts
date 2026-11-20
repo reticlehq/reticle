@@ -18,18 +18,19 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { createTelemetry } from './telemetry.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const withDir = async (fn: (dir: string) => Promise<void>): Promise<void> => {
   const dir = mkdtempSync(join(tmpdir(), 'reticle-sink-'));
   try {
     await fn(dir);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   }
 };
 

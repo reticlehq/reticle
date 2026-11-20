@@ -1,9 +1,10 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { StackUnknownReason } from '@reticlehq/core/telemetry';
 import { detectStack } from './feedback-context.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 /**
  * The stack must be detectable when the app is not in the daemon's own directory.
@@ -24,7 +25,7 @@ describe('detectStack finds the app when it is not in the daemon cwd', () => {
     root = mkdtempSync(join(tmpdir(), 'reticle-stack-'));
   });
   afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
+    removeTempDirSync(root);
   });
 
   const write = (rel: string, body: unknown): void => {

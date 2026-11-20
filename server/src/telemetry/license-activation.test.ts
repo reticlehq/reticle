@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { generateKeyPairSync } from 'node:crypto';
 import { LicenseActivation } from '@reticlehq/core/telemetry';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { TelemetryEventKind } from '@reticlehq/core/telemetry';
@@ -12,6 +12,7 @@ import {
   LICENSE_PUBLIC_KEY_ENV,
   signLicenseKey,
 } from '@/features/license/license.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const NOW = 1_700_000_000_000;
 const { publicKey, privateKey } = generateKeyPairSync('ed25519');
@@ -112,7 +113,7 @@ describe('a licensed event belongs to an organisation group', () => {
     const raw = readFileSync(file, 'utf8').trim();
     if ('' === raw) throw new Error('nothing was written to the sink');
     const line = raw.split('\n').pop() ?? '{}';
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
     return JSON.parse(line) as Record<string, unknown>;
   };
 

@@ -4,7 +4,7 @@
  * first-run phase fired on every verdict there ever was. The funnel then counted restarts and
  * verdicts as people. They are claimed once per machine + project now, on disk.
  */
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -24,6 +24,7 @@ import {
   resetAppInstrumented,
 } from './app-instrumented.js';
 import { getTelemetry, type TelemetryExtra } from './telemetry.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 let dir = '';
 beforeEach(() => {
@@ -35,7 +36,7 @@ afterEach(() => {
   resetOnboardingFirsts();
   resetAppInstrumented();
   setFirstEverDir(undefined);
-  rmSync(dir, { recursive: true, force: true });
+  removeTempDirSync(dir);
 });
 
 /** A state home that cannot be created: its parent is a file. Fails the same way on every OS. */

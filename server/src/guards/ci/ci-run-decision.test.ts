@@ -20,10 +20,11 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { REPO_ROOT } from '@/machine/repo-root.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const REPO = REPO_ROOT;
 const SCRIPT = join(REPO, 'scripts', 'ci-run.mjs');
@@ -174,7 +175,7 @@ describe('a process the command leaves behind does not hold the step open', () =
           // already gone
         }
       }
-      rmSync(dir, { recursive: true, force: true });
+      removeTempDirSync(dir);
     }
   }, 60_000); // A bound on a hang, not a duration assertion: before the fix this waited the full 120 s.
 });
@@ -220,7 +221,7 @@ describe('a command that hangs after turbo printed its summary', () => {
     try {
       return await runOnce(process.execPath, [script], { afterSummaryMs: 200 });
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      removeTempDirSync(dir);
     }
   };
 

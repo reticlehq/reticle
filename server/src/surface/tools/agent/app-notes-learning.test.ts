@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -7,6 +7,7 @@ import { addAppNote, readAppNotes } from './app-notes.js';
 import { learnFromVerdict, resetAppNoteLearning } from './app-notes-learning.js';
 import { forTheAgent } from './for-the-agent.js';
 import { type NoticeFold, resetNotices } from './notices.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const FOLD: NoticeFold = {
   advisories: [],
@@ -22,7 +23,7 @@ beforeEach(() => {
   resetNotices();
   root = mkdtempSync(join(tmpdir(), 'app-notes-'));
 });
-afterEach(() => rmSync(root, { recursive: true, force: true }));
+afterEach(() => removeTempDirSync(root));
 
 const caseMiss = {
   verified: 'no',

@@ -1,9 +1,10 @@
 import { describe, expect, it, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { mutualPairs, reaches, nameCollisions } from '../../../../scripts/directory-reach.mjs';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 /**
  * The graph five guards are frozen against, driven over a fixture instead of over this repo.
@@ -35,7 +36,7 @@ import { mutualPairs, reaches, nameCollisions } from '../../../../scripts/direct
 let fixture: string | undefined;
 
 afterEach(() => {
-  if (fixture !== undefined) rmSync(fixture, { recursive: true, force: true });
+  if (fixture !== undefined) removeTempDirSync(fixture);
   fixture = undefined;
 });
 

@@ -8,12 +8,13 @@
  * - the detached send put the whole event body in argv, readable by anyone running `ps`.
  * - a source checkout in feedback-only mode minted the machine id and spent its `firstRun`.
  */
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { TelemetryEventKind } from '@reticlehq/core/telemetry';
 import { createTelemetry, droppedInvalidEvents, INTERNAL_MARKER_FILE } from './telemetry.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const TEST_ENV = {
   RETICLE_TELEMETRY_KEY: 'phc_test',
@@ -28,7 +29,7 @@ const freshDir = (): string => {
   return dir;
 };
 afterEach(() => {
-  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of dirs.splice(0)) removeTempDirSync(dir);
 });
 
 const capture = () => {
