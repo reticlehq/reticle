@@ -145,6 +145,12 @@ export const HelloMessageSchema = z.object({
   url: z.string().max(TRANSPORT_LIMITS.MAX_URL_LENGTH),
   title: z.string().max(TRANSPORT_LIMITS.MAX_TITLE_LENGTH),
   /**
+   * The page language: the `lang` attribute of `<html>`. Absent when the page sets none, and from an
+   * SDK before this field. A recorded flow keeps it, so replay can tell a page in another language
+   * from a page that lost an element.
+   */
+  lang: z.string().max(TRANSPORT_LIMITS.MAX_LANG_LENGTH).optional(),
+  /**
    * Stable project identity stamped by the build plugin (e.g. "acme-web-9f3c1d"). Survives port
    * changes, so session resolution can scope to the right app even when its dev server boots on a
    * different port than usual. Optional for back-compat with v1.0 SDKs that don't send it; absent

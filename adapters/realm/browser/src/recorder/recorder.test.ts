@@ -440,4 +440,9 @@ describe('compileRecording determinism', () => {
     expect(flow.startPath).toBeUndefined();
     expect(flow.version).toBe(FLOW_FILE_VERSION);
   });
+
+  it('records the start page language, so replay can name a language change (#2278)', () => {
+    expect(compileRecording('f', [], [], 1, '/dashboard', 'en').startLang).toBe('en');
+    expect(compileRecording('f', [], [], 1, '/dashboard')).not.toHaveProperty('startLang');
+  });
 });

@@ -1,11 +1,14 @@
 /**
  * Replay's arrival at a flow's start page: navigate (or reload) before step 1, wait for the session
- * the SDK reconnects as, and say what happened when it does not.
+ * the SDK reconnects as, and say what happened when it does not. Also: a start page now shown in
+ * another language than the recorded one.
  */
 
 import {
   AnchorKind,
+  DriftReason,
   EventType,
+  ReplayStatus,
   ReticleCommand,
   type CommandResult,
   type FlowAnchor,
@@ -705,4 +708,72 @@ export async function navigateAndAwait(
     }
     await clock.sleep(START_PATH_POLL_MS);
   }
+}
+
+// A flow recorded in one language finds no match on a page that shows another: the copy is
+// translated and nothing is broken. Without the hint below the drift reads like a lost element.
+
+/**
+ * The drifts that copy can cause: a role or text anchor with no match, and a text check that never
+ * held. A test id, a store value or a request reads no copy, so a language change is never their cause.
+ */
+const COPY_DRIFTS: ReadonlySet<DriftReason> = new Set<DriftReason>([
+  DriftReason.COMPONENT_NOT_FOUND,
+  DriftReason.SIGNAL_NOT_OBSERVED,
+]);
+
+/** The page the replay ran on, as far as its language goes. */
+export interface PageLanguage {
+  lang: string | undefined;
+}
+
+/** The primary language subtag, so `en` and `en-US` are the same language. */
+function primaryLanguage(tag: string): string {
+  return (tag.split('-')[0] ?? tag).toLowerCase();
+}
+
+/**
+ * When a copy drift happens on a page whose language is not the recorded one, say so.
+ *
+ * A drift gets the language change in `decision.whatChanged` and a locale-free anchor first in
+ * `decision.nextAction`. A miss on the first step makes the replay `unverifiable`, and its reason
+ * gets the same two sentences. The earlier advice stays after them, because a miss can still have
+ * another cause.
+ *
+ * Silent when the flow has no `startLang`, the page sets no language, or the languages agree.
+ */
+export function applyPageLanguageHint(
+  result: FlowReplayResult,
+  flow: FlowFile,
+  page: PageLanguage,
+): void {
+  const recorded = flow.startLang;
+  const current = page.lang;
+  if (
+    recorded === undefined ||
+    current === undefined ||
+    primaryLanguage(recorded) === primaryLanguage(current)
+  ) {
+    return;
+  }
+  const drift = result.steps.find((step) => step.drift !== undefined)?.drift;
+  if (drift === undefined || !COPY_DRIFTS.has(drift.reasonKind)) {
+    return;
+  }
+  const changed = `the page language changed: the flow was recorded on lang "${recorded}" and the page now has lang "${current}"`;
+  const advice =
+    `The step looks for copy in "${recorded}" and the page shows "${current}". ` +
+    'Replay on a page in the recorded language, or anchor this step on something that does not change with the language, such as a test id. ' +
+    'If the language is not the cause:';
+  if (result.status === ReplayStatus.UNVERIFIABLE && result.unverifiable !== undefined) {
+    result.unverifiable.reason = `${changed}. ${advice} ${result.unverifiable.reason}`;
+    return;
+  }
+  const decision = result.decision;
+  if (result.status !== ReplayStatus.DRIFT || decision === undefined) {
+    return;
+  }
+  decision.whatChanged =
+    decision.whatChanged === undefined ? changed : `${decision.whatChanged} — ${changed}`;
+  decision.nextAction = `${advice} ${decision.nextAction}`;
 }
