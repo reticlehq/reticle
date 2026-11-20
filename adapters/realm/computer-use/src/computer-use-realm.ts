@@ -478,6 +478,9 @@ export class ComputerUseRealm extends Realm {
         add(CuChannel.CLIPBOARD, CuSummary.CLIPBOARD_CHANGED, {});
       }
       const effect = effectOf(outcome.before.root, outcome.after.root);
+      if (effect.focusMovedTo !== undefined) {
+        add(CuChannel.UI, CuSummary.UI_FOCUS_MOVED, { element: effect.focusMovedTo });
+      }
       if (effect.kind === EffectKind.NONE) {
         add(CuChannel.UI, CuSummary.UI_NO_EFFECT, {});
       }

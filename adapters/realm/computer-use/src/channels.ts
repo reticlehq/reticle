@@ -24,6 +24,8 @@ export const CuSummary = {
   UI_CHANGED: 'cu.ui.changed',
   /** The action was delivered and no element appeared, went away or changed. */
   UI_NO_EFFECT: 'cu.ui.no-effect',
+  /** The keyboard moved to another element. It is not an effect by itself. */
+  UI_FOCUS_MOVED: 'cu.ui.focus-moved',
   /** The action reached an element a person could not click. */
   ACT_NOT_REACHABLE: 'cu.act.not-reachable',
   FS_WRITTEN: 'cu.fs.written',
