@@ -24,6 +24,7 @@ export {
   PEER_ACTIONS,
   PEER_COMMANDS,
   PeerCommands,
+  SETTINGS_CHANGED_SIGNAL,
 } from './peer/commands.js';
 export type { Emit, PeerCommandsDeps } from './peer/commands.js';
 export { connectPeer } from './peer/peer.js';

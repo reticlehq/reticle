@@ -106,6 +106,18 @@ const DISK_CHANNEL: ChannelDescriptor = {
   note: 'bytes the process wrote to disk, counted by the operating system',
 };
 
+/**
+ * Not independent: the application chose the value and asked the system to keep it. It is a
+ * consequence all the same, as storage is for a web page: a setting that is kept is a thing the
+ * action did, and it is in no file the realm watches and often not on the screen.
+ */
+const SETTINGS_CHANNEL: ChannelDescriptor = {
+  id: CuChannel.SETTINGS,
+  independence: Independence.ACTUATION_DERIVED,
+  grade: Grade.CONSEQUENCE,
+  note: 'the settings of the application, read from the system store',
+};
+
 const SUMMARY_OF: Readonly<Record<ChangeKind, string>> = {
   [ChangeKind.GONE]: CuSummary.UI_GONE,
   [ChangeKind.DIFFERENT]: CuSummary.UI_CHANGED,
@@ -166,6 +178,7 @@ export class ComputerUseRealm extends Realm {
   readonly #outcomes = new Map<string, ActOutcome[]>();
   #openWindowId: string | undefined;
   #countsDisk = false;
+  #readsSettings = false;
 
   constructor(deps: ComputerUseRealmDeps) {
     super();
@@ -184,6 +197,7 @@ export class ComputerUseRealm extends Realm {
       // Declared when it was seen once. A driver that cannot count never gives a number, and a
       // channel that is declared and never reported on makes every claim on it `unknown`.
       ...(this.#countsDisk ? [DISK_CHANNEL] : []),
+      ...(this.#readsSettings ? [SETTINGS_CHANNEL] : []),
     ];
   }
 
@@ -294,6 +308,7 @@ export class ComputerUseRealm extends Realm {
       return this.refuse(action, RefusalReason.UNAVAILABLE, 'the operating system did not take it');
     }
     this.#countsDisk ||= outcome.bytesWritten !== undefined;
+    this.#readsSettings ||= outcome.settingsChanged !== undefined;
     if (this.#openWindowId !== undefined) {
       this.#outcomes.set(this.#openWindowId, [...this.#outcomesIn(this.#openWindowId), outcome]);
     }
@@ -440,6 +455,9 @@ export class ComputerUseRealm extends Realm {
           0 === outcome.bytesWritten ? CuSummary.DISK_WROTE_NOTHING : CuSummary.DISK_WROTE,
           { bytes: outcome.bytesWritten },
         );
+      }
+      for (const setting of outcome.settingsChanged ?? []) {
+        add(CuChannel.SETTINGS, CuSummary.SETTINGS_CHANGED, setting);
       }
       const effect = effectOf(outcome.before.root, outcome.after.root);
       if (effect.kind === EffectKind.NONE) {
