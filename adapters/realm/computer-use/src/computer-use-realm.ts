@@ -63,6 +63,8 @@ export interface Described {
    * application: the window is closed, or it is on another Space, which this realm cannot read.
    */
   windows: number;
+  /** Windows that are on another Space or made small. This realm cannot read them. */
+  windowsNotOnScreen?: number;
 }
 
 const UI_CHANNEL: ChannelDescriptor = {
@@ -202,6 +204,9 @@ export class ComputerUseRealm extends Realm {
       subject: this.identity(),
       ...written,
       windows: placeShown(read.root).shown.filter((p) => p.node.role === UiRole.WINDOW).length,
+      ...(read.windowsNotOnScreen === undefined
+        ? {}
+        : { windowsNotOnScreen: read.windowsNotOnScreen }),
       unread: read.unread,
       unmapped: read.unmapped,
     };

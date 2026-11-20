@@ -126,6 +126,23 @@ func windowOwner(at point: CGPoint) -> (pid: pid_t, name: String, layer: Int)? {
   return nil
 }
 
+/// The windows of an application that the window server has and that are not on the screen now:
+/// on another Space, or made small in the Dock. The Accessibility API does not list them, so an
+/// application with all its windows there reads as an application with none.
+func windowsNotOnScreen(_ pid: pid_t) -> Int {
+  func count(_ options: CGWindowListOption) -> Int {
+    let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
+    return list.filter {
+      ($0[kCGWindowOwnerPID as String] as? pid_t) == pid
+        && ($0[kCGWindowLayer as String] as? Int) == 0
+        && (($0[kCGWindowBounds as String] as? [String: Any])?["Height"] as? Double ?? 0) > 60
+    }.count
+  }
+  return max(
+    0, count([.optionAll, .excludeDesktopElements])
+      - count([.optionOnScreenOnly, .excludeDesktopElements]))
+}
+
 enum Reach {
   case yes
   /// Another element is on top at that point. `by` says which.
@@ -195,7 +212,7 @@ if args[1] == "tree" {
   let started = Date()
   let shot = snapshot(app)
   emit([
-    "tree": shot.tree, "unread": shot.unread,
+    "tree": shot.tree, "unread": shot.unread, "windowsNotOnScreen": windowsNotOnScreen(pid),
     "readMs": Int(Date().timeIntervalSince(started) * 1000),
   ])
 }

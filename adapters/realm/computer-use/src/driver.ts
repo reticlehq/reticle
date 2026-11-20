@@ -42,6 +42,11 @@ export interface UiRead {
   unread: number;
   /** Roles the reader does not know. Each such element is kept, as a `group`. */
   unmapped: readonly string[];
+  /**
+   * Windows of the application that are not on the screen now: on another Space, or made small.
+   * The reader cannot read them. Absent when the reader does not know.
+   */
+  windowsNotOnScreen?: number;
 }
 
 export interface ActRequest {

@@ -18,7 +18,7 @@ function driverAnswering(act: unknown): { driver: MacDriver; calls: string[][] }
     pid: 7,
     run: (_file, args) => {
       calls.push([...args]);
-      const answer = 'tree' === args[0] ? { tree, unread: 0 } : act;
+      const answer = 'tree' === args[0] ? { tree, unread: 0, windowsNotOnScreen: 2 } : act;
       return Promise.resolve(JSON.stringify(answer));
     },
   });
@@ -37,6 +37,7 @@ describe('MacDriver', () => {
       unreadAfter: 1,
     });
     const read = await driver.read();
+    expect(read.windowsNotOnScreen).toBe(2);
     const save = place(read.root).find((p) => 'Save' === p.node.name);
     expect(save).toBeDefined();
     if (save === undefined) {

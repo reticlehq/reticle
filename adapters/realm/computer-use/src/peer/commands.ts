@@ -203,6 +203,11 @@ export class PeerCommands {
       omitted: written.omitted,
       // Zero: the window is closed, or it is on another Space, which this realm cannot read.
       windows: see(read.root).filter((s) => s.node.role === UiRole.WINDOW).length,
+      ...(read.windowsNotOnScreen === undefined || 0 === read.windowsNotOnScreen
+        ? {}
+        : {
+            next: `${String(read.windowsNotOnScreen)} window(s) of this application are on another Space or made small. They cannot be read from here. Ask the person to bring the application to this Space.`,
+          }),
       unread: read.unread,
     };
   }
