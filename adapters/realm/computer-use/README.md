@@ -46,10 +46,11 @@ To prove that a file was written, name the file:
 | `fill` | Puts a value in the element. No key event is sent. |
 | `type` | Sends one key event for each character. A text field that takes the keyboard selects its text first, so the typed text replaces it. |
 | `press` | Sends one key with its modifiers: `Return`, `Meta+s`. |
+| `scroll` | Moves the scroll bar. See below. |
 
 Other actions are refused by name.
 
-The realm also answers the `scroll` command that the tools use to find an element that is not on the screen. It moves the scroll bar of the scroll area and sends no wheel event.
+A `scroll` moves the scroll bar of the scroll area that holds the element, and sends no wheel event. `fraction` is the place of the bar, 0 to 1. `dy` moves the bar one step in its direction: the realm does not know the height of the content, so it cannot scroll by pixels.
 
 ## Limits
 

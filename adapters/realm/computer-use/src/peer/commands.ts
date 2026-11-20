@@ -78,7 +78,7 @@ const KIND_OF: Readonly<Partial<Record<string, ActKind>>> = {
   [ActionType.PRESS]: ActKind.KEY,
 };
 /** The actions this realm does. The peer declares exactly these to the bridge. */
-export const PEER_ACTIONS: readonly string[] = Object.keys(KIND_OF);
+export const PEER_ACTIONS: readonly string[] = [...Object.keys(KIND_OF), ActionType.SCROLL];
 
 type Args = Record<string, unknown>;
 
@@ -437,7 +437,7 @@ export class PeerCommands {
    * `fraction` is the place of the bar, 0 to 1. `dy` moves the bar one step in its direction; the
    * realm does not know the height of the content, so it cannot scroll by pixels, and it says so.
    */
-  async #scroll(args: Args): Promise<unknown> {
+  async #scroll(args: Args): Promise<Record<string, unknown>> {
     const ref = text(args['ref']);
     const read = await this.#deps.driver.read();
     const seen = see(read.root);
@@ -521,6 +521,22 @@ export class PeerCommands {
   async #act(args: Args, allowed?: readonly string[]): Promise<ActResult> {
     const ref = text(args['ref']) ?? '';
     const action = text(args['action']) ?? '';
+    if (action === ActionType.SCROLL) {
+      // The same scroll as the `scroll` command, with the answer in the shape of an action.
+      const target = await this.#resolve(ref);
+      const moved = await this.#scroll({ ...record(args['args']), ref });
+      return {
+        ok: true,
+        ref,
+        action,
+        dispatched: true,
+        settled: true,
+        settleReason: null,
+        effect: { dispatched: true, targetMatched: true, ...moved },
+        role: target.node.role,
+        name: target.node.name,
+      };
+    }
     const kind = KIND_OF[action];
     if (kind === undefined) {
       throw new Error(
