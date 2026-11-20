@@ -130,10 +130,6 @@ const warning = electronWarning(
 if (warning !== undefined) {
   say(warning);
 }
-if (plan.electronSwitch) {
-  quiet(helper, ['web-tree', String(pid), 'on']);
-}
-
 const sessionId = `cu-${plan.app}-${String(pid)}`.replace(/[^\w.-]/g, '-');
 const peer = connectPeer({
   url: plan.url,
@@ -152,6 +148,10 @@ try {
   say(`Could not reach the bridge at ${plan.url}: ${String(error)}. Start it with: reticle serve`);
   process.exit(1);
 }
+// Only after the bridge answered: a command that ends before this leaves the application as it was.
+if (plan.electronSwitch) {
+  quiet(helper, ['web-tree', String(pid), 'on']);
+}
 say(`${plan.app} (${String(pid)}) is joined to ${plan.url}.`);
 say(`Give this on each tool call: sessionId "${sessionId}". Stop with Ctrl-C.`);
 if (plan.projectId === undefined) {
@@ -168,5 +168,7 @@ const stop = () => {
 };
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
+// The terminal was closed.
+process.on('SIGHUP', stop);
 // The heartbeat timer does not hold the process open, so this one does.
 setInterval(() => {}, 60_000);
