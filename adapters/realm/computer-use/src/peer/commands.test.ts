@@ -354,6 +354,7 @@ describe('PeerCommands', () => {
   it('sends a signal for a file that comes after the action is finished, and sends it once', () => {
     const fact = { hash: 'h', size: 4, mode: 0o644, linkTo: undefined };
     let files = new Map<string, typeof fact>([['/out/old.txt', fact]]);
+    let written = 1;
     const events: [string, Record<string, unknown>][] = [];
     const commands = new PeerCommands({
       driver: fakeDriver(),
@@ -363,6 +364,7 @@ describe('PeerCommands', () => {
         excluded: [],
         snapshot: () => ({ files: new Map(files), unreadable: [] }),
       },
+      writeTimeOf: (path) => ('/out/old.txt' === path ? written : 1),
     });
     // A file that was there at the start is not a change.
     commands.sendFileChanges();
@@ -372,5 +374,12 @@ describe('PeerCommands', () => {
     commands.sendFileChanges();
     commands.sendFileChanges();
     expect(events.map(([, data]) => data['name'])).toEqual(['file.written']);
+
+    // The same bytes, written again: the snapshot is the same, and the write time is new.
+    written = 2;
+    commands.sendFileChanges();
+    commands.sendFileChanges();
+    expect(events.map(([, data]) => data['name'])).toEqual(['file.written', 'file.written']);
+    expect(events[1]?.[1]['data']).toMatchObject({ file: 'old.txt', kind: 'rewritten' });
   });
 });
