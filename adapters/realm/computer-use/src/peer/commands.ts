@@ -80,6 +80,8 @@ function heldBy(outcome: ActOutcome, key: string): string {
 const LOOKS_AFTER_ACT = 2;
 /** The looks in which a place must change, with no action near, before it "changes by itself". */
 const RESTLESS_LOOKS = 2;
+/** The places in one parent that must change by themselves before the whole parent does. */
+const RESTLESS_PLACES = 3;
 const SCROLL_STEP = 0.1;
 /** Each check is one question to the operating system. A search this wide is not a check. */
 const MAX_REACH_CHECKS = 8;
@@ -221,12 +223,16 @@ export class PeerCommands {
   /**
    * How many looks, with no action near, saw each place change. A place that changed in two of
    * them changes by itself: a clock, a tip that rotates. A change there during an action is not
-   * counted as the effect of the action.
-   * ponytail: a place is the PARENT of what changed. A real effect in the same parent is then
-   * counted as "changed by itself": a missing yes, never a wrong one. Use the element's own key
-   * when a reader gives a stable identifier.
+   * counted as the effect of the action. A place is one element: its parent, its role and its
+   * corner. It was the whole parent, and a clock that lies in the window made every effect in
+   * that window "changed by itself".
    */
   readonly #restless = new Map<string, number>();
+  /**
+   * The places in each parent that changed with no action near. A parent with several of them
+   * changes by itself as a whole: a list that gets new rows, each at a new place.
+   */
+  readonly #restlessIn = new Map<string, Set<string>>();
   constructor(deps: PeerCommandsDeps) {
     this.#deps = deps;
     // The first look. A file that is there now is not a change.
@@ -257,7 +263,13 @@ export class PeerCommands {
           }
           this.#looksSinceAct += 1;
           if (this.#looksSinceAct > LOOKS_AFTER_ACT) {
-            for (const place of new Set(changes.map((change) => change.within))) {
+            for (const change of changes) {
+              this.#restlessIn.set(
+                change.within,
+                (this.#restlessIn.get(change.within) ?? new Set()).add(change.at),
+              );
+            }
+            for (const place of new Set(changes.map((change) => change.at))) {
               this.#restless.set(place, (this.#restless.get(place) ?? 0) + 1);
             }
           }
@@ -551,9 +563,12 @@ export class PeerCommands {
         `${target.node.role} "${target.node.name}" did not take the action: ${outcome.refused ?? 'the operating system refused it'}.`,
       );
     }
-    const restless = new Set(
-      [...this.#restless].filter(([, looks]) => looks >= RESTLESS_LOOKS).map(([place]) => place),
-    );
+    const restless = new Set([
+      ...[...this.#restless].filter(([, looks]) => looks >= RESTLESS_LOOKS).map(([at]) => at),
+      ...[...this.#restlessIn]
+        .filter(([, places]) => places.size >= RESTLESS_PLACES)
+        .map(([parent]) => parent),
+    ]);
     const effect = effectOf(outcome.before.root, outcome.after.root, restless);
     const all = effect.changes;
     // Every change is sent: it did happen. Only the count of what the action did leaves out the

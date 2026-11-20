@@ -34,8 +34,13 @@ export interface Change {
   value?: readonly [string, string];
   /** For a changed element: the states before and after, when they changed. */
   states?: readonly [string, string];
-  /** The key of the element that holds this one: the place of the change. */
+  /** The key of the element that holds this one. */
   within: string;
+  /**
+   * Where the change is: the parent, the role and the corner of the element. An element that is
+   * given new words (a clock, a count) has a new name and so a new key, and keeps this.
+   */
+  at: string;
   /** The change is in a place that changes with no action. The action may not be its cause. */
   ambient?: true;
 }
@@ -86,12 +91,22 @@ function difference(before: UiNode, after: UiNode): Pick<Change, 'detail' | 'val
   return parts.length > 0 ? { ...out, detail: parts.join('; ') } : {};
 }
 
-function who(p: Placed): Pick<Change, 'element' | 'role' | 'name' | 'within'> {
+/** A separator that is in no key: a key is made of roles and names. */
+const AT = '\u0000';
+
+function placeOf(p: Placed): string {
+  const [x, y] = p.node.frame ?? [];
+  const corner = x === undefined || y === undefined ? '' : `${String(x)},${String(y)}`;
+  return [p.parentKey ?? '', p.node.role, corner].join(AT);
+}
+
+function who(p: Placed): Pick<Change, 'element' | 'role' | 'name' | 'within' | 'at'> {
   return {
     element: label(p.node),
     role: p.node.role,
     name: p.node.name,
     within: p.parentKey ?? '',
+    at: placeOf(p),
   };
 }
 
@@ -138,7 +153,9 @@ export function effectOf(
   const real = changes
     .filter((change) => !isFocusOnly(change))
     .map((change) =>
-      restless.has(change.within) ? { ...change, ambient: true as const } : change,
+      restless.has(change.at) || restless.has(change.within)
+        ? { ...change, ambient: true as const }
+        : change,
     );
   const caused = real.filter((change) => change.ambient === undefined);
   const taker = changes.find((change) => isFocusOnly(change) && tookFocus(change));

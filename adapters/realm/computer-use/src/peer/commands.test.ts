@@ -591,6 +591,104 @@ describe('PeerCommands', () => {
     });
   });
 
+  /**
+   * The place that changes by itself was the PARENT of what changed. A clock that lies in the
+   * window, next to every control, then made the whole window such a place, and each real effect
+   * was counted as "changed by itself".
+   */
+  describe('how wide a place that changes by itself is', () => {
+    const acting = (shown: () => UiRead, next: () => UiRead) => {
+      const commands = new PeerCommands({
+        driver: {
+          subject: () => ({ app: 'Notes', pid: 7 }),
+          read: () => Promise.resolve(shown()),
+          reach: () => Promise.resolve({ reach: 'yes' }),
+          act: () =>
+            Promise.resolve({
+              delivered: true,
+              reachable: true,
+              settled: true,
+              before: shown(),
+              after: next(),
+            }),
+        },
+        emit: () => undefined,
+      });
+      const press = async () =>
+        (
+          (await commands.answer(ReticleCommand.ACT, {
+            ref: await refOf(commands, 'Save'),
+            action: ActionType.CLICK,
+          })) as { effect: Record<string, unknown> }
+        ).effect;
+      return { commands, press };
+    };
+
+    it('is one element, when one element changes: a real effect beside a clock is counted', async () => {
+      const flat = (tick: number, status: string): UiRead => ({
+        root: node(UiRole.WINDOW, 'Notes', {
+          frame: [0, 0, 400, 300],
+          children: [
+            node(UiRole.BUTTON, 'Save', { frame: [10, 10, 80, 30] }),
+            node(UiRole.TEXT, `Tick ${String(tick)}`, { frame: [10, 50, 200, 20] }),
+            node(UiRole.TEXT, status, { frame: [10, 90, 200, 20] }),
+          ],
+        }),
+        unread: 0,
+        unmapped: [],
+      });
+      let now = flat(0, 'Ready');
+      let after = now;
+      const { commands, press } = acting(
+        () => now,
+        () => after,
+      );
+      for (let tick = 1; tick < 7; tick += 1) {
+        now = flat(tick, 'Ready');
+        await commands.sendTreeChanges();
+      }
+      after = flat(7, 'Saved');
+      const effect = await press();
+      expect(effect['domMutatedWithin']).toBe(2);
+      expect(effect['changedByItself']).toBe(2);
+    });
+
+    it('is the whole list, when new rows come by themselves at new places', async () => {
+      const chat = (rows: number): UiRead => ({
+        root: node(UiRole.WINDOW, 'Notes', {
+          frame: [0, 0, 400, 300],
+          children: [
+            node(UiRole.BUTTON, 'Save', { frame: [10, 10, 80, 30] }),
+            node(UiRole.LIST, 'Messages', {
+              frame: [10, 50, 300, 200],
+              children: Array.from({ length: rows }, (_, row) =>
+                node(UiRole.TEXT, `Message ${String(row)}`, {
+                  frame: [10, 50 + 20 * row, 300, 20],
+                }),
+              ),
+            }),
+          ],
+        }),
+        unread: 0,
+        unmapped: [],
+      });
+      let now = chat(0);
+      let after = now;
+      const { commands, press } = acting(
+        () => now,
+        () => after,
+      );
+      for (let rows = 1; rows < 8; rows += 1) {
+        now = chat(rows);
+        await commands.sendTreeChanges();
+      }
+      after = chat(8);
+      const effect = await press();
+      expect(effect['domMutatedWithin']).toBe(0);
+      expect(effect['changedByItself']).toBe(1);
+    });
+  });
+
   it('says why a press can have no effect, when the peer was told a reason', async () => {
     const still = { before: read('Ready'), after: read('Ready') };
     const press = async (commands: PeerCommands) =>
