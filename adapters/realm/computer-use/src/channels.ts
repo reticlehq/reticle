@@ -13,6 +13,8 @@ export const CuChannel = {
   DISK: 'x-disk',
   /** The settings of the application, as the system's settings store holds them. */
   SETTINGS: 'x-settings',
+  /** That something was put on the clipboard. Never what. */
+  CLIPBOARD: 'x-clipboard',
 } as const;
 
 /** Stable labels. A claim matches on them exactly. */
@@ -34,6 +36,8 @@ export const CuSummary = {
   DISK_WROTE_NOTHING: 'cu.disk.wrote-nothing',
   /** One setting of the application has a new value, or is new, or is gone. */
   SETTINGS_CHANGED: 'cu.settings.changed',
+  /** Something was put on the clipboard in the action. */
+  CLIPBOARD_CHANGED: 'cu.clipboard.changed',
 } as const;
 
 export const CU_SURFACE = 'x-computer-use';

@@ -19,6 +19,7 @@ export type { ActOutcome, ActRequest, SettingChange, UiDriver, UiRead } from './
 export { MacDriver } from './mac/mac-driver.js';
 export type { MacDriverInput, RunHelper } from './mac/mac-driver.js';
 export {
+  CLIPBOARD_CHANGED_SIGNAL,
   DISK_WROTE_SIGNAL,
   FILE_SIGNAL_PREFIX,
   PEER_ACTIONS,

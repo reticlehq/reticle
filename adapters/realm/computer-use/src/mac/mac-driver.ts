@@ -33,6 +33,7 @@ const ActedSchema = z.object({
   unreadBefore: z.number(),
   unreadAfter: z.number(),
   bytesWritten: z.number().optional(),
+  clipboardChanged: z.boolean().optional(),
   settingsChanged: z
     .array(
       z.object({
@@ -250,6 +251,7 @@ export class MacDriver implements UiDriver {
       before: toRead(acted.before, acted.unreadBefore),
       after: toRead(acted.after, acted.unreadAfter),
       ...(acted.bytesWritten === undefined ? {} : { bytesWritten: acted.bytesWritten }),
+      ...(acted.clipboardChanged === undefined ? {} : { clipboardChanged: acted.clipboardChanged }),
       ...(acted.settingsChanged === undefined
         ? {}
         : {

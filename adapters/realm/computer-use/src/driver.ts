@@ -98,6 +98,11 @@ export interface ActOutcome {
    * application (an application in a sandbox), and nothing is known about them.
    */
   settingsChanged?: readonly SettingChange[];
+  /**
+   * Something was put on the clipboard in the action. The driver reads only that it changed, never
+   * what is on it. Absent: the driver cannot tell.
+   */
+  clipboardChanged?: boolean;
 }
 
 /** Whether a person can see and click an element now. */

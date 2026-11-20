@@ -8,6 +8,7 @@
 //   Items    a table of three rows. To choose a row changes the status text.
 //   Actions  a menu. Its items are not on the screen until it is open.
 //   Remember a checkbox. It changes one setting of the application, and nothing on the screen but itself.
+//   Copy     puts the title on the clipboard, and changes nothing on the screen.
 //   Volume   a slider. Its value is a number, not text.
 //   Later    writes note.txt 800 ms after the press, and shows nothing.
 //   Export   writes the title to note.txt in the folder given as the first argument, then says so.
@@ -49,7 +50,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     window = NSWindow(
-      contentRect: NSRect(x: 80, y: 80, width: 360, height: 320), styleMask: [.titled],
+      contentRect: NSRect(x: 80, y: 80, width: 450, height: 320), styleMask: [.titled],
       backing: .buffered, defer: false)
     window.title = "Reticle Fixture"
     window.level = .floating
@@ -90,6 +91,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
     window.contentView!.addSubview(actions)
     _ = button("Steps", 140, #selector(steps), y: 138)
     _ = button("Later", 230, #selector(later), y: 138)
+    _ = button("Copy", 350, #selector(copyTitle), y: 110)
     let remember = NSButton(checkboxWithTitle: "Remember", target: self, action: #selector(remember))
     remember.frame = NSRect(x: 190, y: 52, width: 150, height: 20)
     window.contentView!.addSubview(remember)
@@ -119,6 +121,14 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
   }
   @objc func remember(_ sender: NSButton) {
     UserDefaults.standard.set(sender.state == .on, forKey: "remember")
+  }
+  /// Puts the title on the clipboard, and shows nothing. A check names its own clipboard in the
+  /// environment, so that the clipboard of the person at the machine is not written over.
+  @objc func copyTitle() {
+    let name = ProcessInfo.processInfo.environment["RETICLE_AX_PASTEBOARD"] ?? ""
+    let board = name.isEmpty ? NSPasteboard.general : NSPasteboard(name: NSPasteboard.Name(name))
+    board.clearContents()
+    board.setString(field.stringValue, forType: .string)
   }
   @objc func fake() { status.stringValue = "Exported" }
   @objc func slow() {
