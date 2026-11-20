@@ -318,6 +318,18 @@ func settingsChanged(_ before: [String: String], _ after: [String: String]) -> [
   }
 }
 
+/// The clipboard. Its change count goes up each time something is put on it. The helper reads the
+/// count and never the content: what a person copied is not the realm's to read.
+///
+/// A check can name another clipboard in the environment, so that it does not write over the one
+/// the person at the machine uses.
+let clipboard: NSPasteboard = {
+  if let name = ProcessInfo.processInfo.environment["RETICLE_AX_PASTEBOARD"], !name.isEmpty {
+    return NSPasteboard(name: NSPasteboard.Name(name))
+  }
+  return NSPasteboard.general
+}()
+
 /// Key codes of the ANSI keyboard. A letter here is the key at that place, for a shortcut.
 let keyCodes: [String: CGKeyCode] = [
   "return": 36, "enter": 36, "tab": 48, "space": 49, "escape": 53, "backspace": 51, "delete": 117,
@@ -411,6 +423,7 @@ func run(_ args: [String]) throws {
   let filesBefore = filesNow()
   let writtenBefore = bytesWritten(pid)
   let settingsBefore = settings(pid)
+  let clipboardBefore = clipboard.changeCount
   var canReach = false
   var coveredBy = ""
   switch frame(now[7], now[8]).map({ reach(target, $0) }) ?? .unknown(code: -1) {
@@ -539,7 +552,8 @@ func run(_ args: [String]) throws {
     "before": before.tree, "after": after.tree, "unreadBefore": before.unread,
     "unreadAfter": after.unread,
   ].merging(wrote.map { ["bytesWritten": $0] } ?? [:]) { $1 }
-    .merging(changedSettings.map { ["settingsChanged": $0] } ?? [:]) { $1 })
+    .merging(changedSettings.map { ["settingsChanged": $0] } ?? [:]) { $1 }
+    .merging(["clipboardChanged": clipboard.changeCount != clipboardBefore]) { $1 })
 }
 
 func write(_ object: [String: Any]) {

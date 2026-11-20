@@ -83,6 +83,9 @@ export const DISK_WROTE_SIGNAL = 'disk.wrote';
 /** The signal for one setting of the application that an action changed: its key and its values. */
 export const SETTINGS_CHANGED_SIGNAL = 'settings.changed';
 
+/** The signal for an action that put something on the clipboard. It does not carry the content. */
+export const CLIPBOARD_CHANGED_SIGNAL = 'clipboard.changed';
+
 /** The commands this realm answers. The peer declares exactly these to the bridge. */
 export const PEER_COMMANDS = [
   ReticleCommand.SNAPSHOT,
@@ -521,6 +524,9 @@ export class PeerCommands {
           ...(true === setting.cut ? { cut: true } : {}),
         },
       });
+    }
+    if (true === outcome.clipboardChanged) {
+      this.#deps.emit(EventType.SIGNAL, { name: CLIPBOARD_CHANGED_SIGNAL, data: {} });
     }
     if (outcome.bytesWritten !== undefined && outcome.bytesWritten > 0) {
       this.#deps.emit(EventType.SIGNAL, {

@@ -36,6 +36,8 @@ for (const name of ['reticle-ax', 'fixture']) {
   });
 }
 
+// A clipboard for this check alone. The fixture and the helper both read the name.
+process.env.RETICLE_AX_PASTEBOARD = `reticle-selfcheck-${String(process.pid)}`;
 const folder = mkdtempSync(join(tmpdir(), 'reticle-cu-'));
 const fixture = spawn(`${build}/fixture`, [folder], { stdio: 'ignore' });
 const helper = `${build}/reticle-ax`;
@@ -68,9 +70,8 @@ async function step(name, kind, parameters = {}) {
   const coverage = await realm.coverage(closed);
   const ms = Date.now() - started;
   // What the tree and the watched folders showed. The count of bytes on disk is asked for by name.
-  const summaries = observed
-    .filter((o) => CuChannel.DISK !== o.channel && CuChannel.SETTINGS !== o.channel)
-    .map((o) => o.summary);
+  const QUIET = [CuChannel.DISK, CuChannel.SETTINGS, CuChannel.CLIPBOARD];
+  const summaries = observed.filter((o) => !QUIET.includes(o.channel)).map((o) => o.summary);
   const disk = observed.filter((o) => CuChannel.DISK === o.channel).map((o) => o.summary);
   report.push(
     `${name.padEnd(8)} ${String(ms).padStart(5)} ms  ${summaries.join(', ') || receipt.refused?.detail}  [closed by ${closed.closedBy}]`,
@@ -170,6 +171,12 @@ try {
   assert.ok(chosen.observed.some((o) => 'text "Marked done"' === o.value.element));
   assert.deepEqual(await realm.locate({ name: 'Mark done' }), []);
 
+  // A button that puts the title on the clipboard and changes nothing on the screen. The check
+  // uses a clipboard of its own, so the clipboard of the person at the machine is not touched.
+  const copied = await step('Copy', ActKind.PRESS);
+  assert.ok(copied.observed.some((o) => CuSummary.CLIPBOARD_CHANGED === o.summary));
+  assert.ok(!typed.observed.some((o) => CuSummary.CLIPBOARD_CHANGED === o.summary));
+
   // A checkbox that changes one setting of the application. The setting is in no watched file.
   const remembered = await step('Remember', ActKind.PRESS);
   const setting = remembered.observed.find((o) => CuChannel.SETTINGS === o.channel);
@@ -227,7 +234,7 @@ try {
   report.push(
     `Fake   -> verdict ${lied.verdict} (${lied.ground})`,
     `Export -> verdict ${proved.verdict} (${proved.ground})`,
-    'computer-use selfcheck: 17 of 17 cases held',
+    'computer-use selfcheck: 18 of 18 cases held',
     '',
   );
   process.stdout.write(report.join('\n'));

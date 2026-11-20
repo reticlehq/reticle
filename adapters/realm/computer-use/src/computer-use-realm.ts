@@ -118,6 +118,18 @@ const SETTINGS_CHANNEL: ChannelDescriptor = {
   note: 'the settings of the application, read from the system store',
 };
 
+/**
+ * The clipboard is kept by the system, and the count of its changes is the system's. What is put
+ * on it is the application's choice, and the realm does not read it. So: that it changed, at
+ * presence grade.
+ */
+const CLIPBOARD_CHANNEL: ChannelDescriptor = {
+  id: CuChannel.CLIPBOARD,
+  independence: Independence.ACTUATION_DERIVED,
+  grade: Grade.PRESENCE,
+  note: 'that something was put on the clipboard; never its content',
+};
+
 const SUMMARY_OF: Readonly<Record<ChangeKind, string>> = {
   [ChangeKind.GONE]: CuSummary.UI_GONE,
   [ChangeKind.DIFFERENT]: CuSummary.UI_CHANGED,
@@ -179,6 +191,7 @@ export class ComputerUseRealm extends Realm {
   #openWindowId: string | undefined;
   #countsDisk = false;
   #readsSettings = false;
+  #readsClipboard = false;
 
   constructor(deps: ComputerUseRealmDeps) {
     super();
@@ -198,6 +211,7 @@ export class ComputerUseRealm extends Realm {
       // channel that is declared and never reported on makes every claim on it `unknown`.
       ...(this.#countsDisk ? [DISK_CHANNEL] : []),
       ...(this.#readsSettings ? [SETTINGS_CHANNEL] : []),
+      ...(this.#readsClipboard ? [CLIPBOARD_CHANNEL] : []),
     ];
   }
 
@@ -309,6 +323,7 @@ export class ComputerUseRealm extends Realm {
     }
     this.#countsDisk ||= outcome.bytesWritten !== undefined;
     this.#readsSettings ||= outcome.settingsChanged !== undefined;
+    this.#readsClipboard ||= outcome.clipboardChanged !== undefined;
     if (this.#openWindowId !== undefined) {
       this.#outcomes.set(this.#openWindowId, [...this.#outcomesIn(this.#openWindowId), outcome]);
     }
@@ -458,6 +473,9 @@ export class ComputerUseRealm extends Realm {
       }
       for (const setting of outcome.settingsChanged ?? []) {
         add(CuChannel.SETTINGS, CuSummary.SETTINGS_CHANGED, setting);
+      }
+      if (true === outcome.clipboardChanged) {
+        add(CuChannel.CLIPBOARD, CuSummary.CLIPBOARD_CHANGED, {});
       }
       const effect = effectOf(outcome.before.root, outcome.after.root);
       if (effect.kind === EffectKind.NONE) {

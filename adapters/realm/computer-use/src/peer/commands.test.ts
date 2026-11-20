@@ -450,6 +450,25 @@ describe('PeerCommands', () => {
     expect(events.map(([, data]) => data['name'])).toEqual(['Ready', 'Working', 'Working', 'Done']);
   });
 
+  it('sends a signal when the action put something on the clipboard, with no content', async () => {
+    const copied = peer({ clipboardChanged: true });
+    await copied.commands.answer(ReticleCommand.ACT, {
+      ref: await refOf(copied.commands, 'Save'),
+      action: ActionType.CLICK,
+    });
+    expect(copied.events).toContainEqual([
+      EventType.SIGNAL,
+      { name: 'clipboard.changed', data: {} },
+    ]);
+
+    const not = peer({ clipboardChanged: false });
+    await not.commands.answer(ReticleCommand.ACT, {
+      ref: await refOf(not.commands, 'Save'),
+      action: ActionType.CLICK,
+    });
+    expect(not.events.filter(([type]) => EventType.SIGNAL === type)).toEqual([]);
+  });
+
   it('sends a signal for a setting that the action changed', async () => {
     const changed = peer({
       settingsChanged: [
