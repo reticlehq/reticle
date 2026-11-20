@@ -322,6 +322,17 @@ describe('every setting explains itself in one line', () => {
     }
   });
 
+  // Reported from the field: the switches had no text and no aria-label, so screen
+  // readers said "switch" eight times and the app's own accessibility audit counted them.
+  it('gives each switch and checkbox an accessible name', () => {
+    document.body.innerHTML = settingsPanelHtml();
+    const controls = [...document.querySelectorAll('[role="switch"],[role="checkbox"]')];
+    expect(controls.length).toBeGreaterThan(8);
+    for (const control of controls) {
+      expect(control.getAttribute('aria-label') ?? '', control.outerHTML).not.toBe('');
+    }
+  });
+
   it('names the options in plain words', () => {
     document.body.innerHTML = settingsPanelHtml();
     const text = document.body.textContent ?? '';
