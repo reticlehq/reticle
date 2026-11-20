@@ -40,7 +40,7 @@ import { ActKind, ActRefusal, Delivery } from './driver.js';
 import type { ActOutcome, UiDriver, UiRead } from './driver.js';
 import { ChangeKind, EffectKind, effectOf } from './effect.js';
 import { RefTable, writeLines, writeWindows } from './lines.js';
-import { isAddressable, label, place } from './ui-node.js';
+import { UiRole, isAddressable, label, placeShown } from './ui-node.js';
 import type { Placed } from './ui-node.js';
 
 export interface ComputerUseRealmDeps {
@@ -56,8 +56,13 @@ export interface Described {
   tree: string;
   unread: number;
   unmapped: readonly string[];
-  /** Elements in closed menus that the tree leaves out. Ask with `{ menus: true }` to get them. */
+  /** Elements with no place on the screen that the tree leaves out. `{ menus: true }` gives them. */
   omitted: number;
+  /**
+   * How many windows of the application are on the screen. Zero is a fact to act on, not an empty
+   * application: the window is closed, or it is on another Space, which this realm cannot read.
+   */
+  windows: number;
 }
 
 const UI_CHANNEL: ChannelDescriptor = {
@@ -196,6 +201,7 @@ export class ComputerUseRealm extends Realm {
     return {
       subject: this.identity(),
       ...written,
+      windows: placeShown(read.root).shown.filter((p) => p.node.role === UiRole.WINDOW).length,
       unread: read.unread,
       unmapped: read.unmapped,
     };
@@ -206,8 +212,9 @@ export class ComputerUseRealm extends Realm {
     const want =
       'object' === typeof query && query !== null ? (query as Record<string, unknown>) : {};
     const read = await this.#deps.driver.read();
-    return place(read.root)
-      .filter(
+    // Only what is on the screen. An item in a closed menu has a name too, and it is not a target.
+    return placeShown(read.root)
+      .shown.filter(
         (p) =>
           isAddressable(p.node) &&
           (want['name'] === undefined || want['name'] === p.node.name) &&
@@ -260,7 +267,7 @@ export class ComputerUseRealm extends Realm {
       return undefined;
     }
     const read = await this.#deps.driver.read();
-    return place(read.root).find((p) => p.key === key);
+    return placeShown(read.root).shown.find((p) => p.key === key);
   }
 
   openWindow(budgetMs: number): Window {

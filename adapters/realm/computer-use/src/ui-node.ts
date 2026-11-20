@@ -106,3 +106,26 @@ export function place(root: UiNode): Placed[] {
   visit(root, [], label(root), undefined);
   return out;
 }
+
+/**
+ * The elements that have a place on the screen, and how many do not.
+ *
+ * An element with a frame of no size is not drawn: the items of a closed menu are the usual case,
+ * and they are most of an application's elements. A person cannot see or click them, so they are
+ * not shown and not offered as a target. When the menu is open its items have a size, and they
+ * are here. An element with no frame at all is kept: the reader did not say where it is.
+ */
+export function placeShown(root: UiNode): { shown: Placed[]; omitted: number } {
+  const hidden = new Set<string>();
+  const shown: Placed[] = [];
+  for (const p of place(root)) {
+    const frame = p.node.frame;
+    const noSize = frame !== undefined && (frame[2] <= 0 || frame[3] <= 0);
+    if (noSize || (p.parentKey !== undefined && hidden.has(p.parentKey))) {
+      hidden.add(p.key);
+    } else {
+      shown.push(p);
+    }
+  }
+  return { shown, omitted: hidden.size };
+}

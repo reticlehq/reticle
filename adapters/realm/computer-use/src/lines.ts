@@ -5,7 +5,7 @@
  * ponytail: the format has two writers now. Move one pure writer into `core` when the browser
  * adopts it.
  */
-import { UiRole, isAddressable, label, place, quoted } from './ui-node.js';
+import { isAddressable, label, place, placeShown, quoted } from './ui-node.js';
 import type { Placed, UiNode } from './ui-node.js';
 
 const INDENT = '  ';
@@ -37,34 +37,14 @@ export class RefTable {
 
 export interface Written {
   tree: string;
-  /** Elements left out because they are inside a closed menu. Zero when menus were asked for. */
+  /** Elements left out because they have no place on the screen: closed menus, for the most part. */
   omitted: number;
 }
 
-/**
- * The tree without the items of closed menus. A menu bar is most of an application's elements,
- * and an agent seldom needs it: it finds a menu item by name, or asks for the menus.
- */
+/** The tree of what is on the screen. See `placeShown`. */
 export function writeWindows(root: UiNode, refs: RefTable): Written {
-  const placed = place(root);
-  const hidden = new Set<string>();
-  for (const p of placed) {
-    const parent =
-      p.parentKey === undefined ? undefined : placed.find((q) => q.key === p.parentKey);
-    if (
-      p.parentKey !== undefined &&
-      (hidden.has(p.parentKey) || parent?.node.role === UiRole.MENUITEM)
-    ) {
-      hidden.add(p.key);
-    }
-  }
-  return {
-    tree: writePlaced(
-      placed.filter((p) => !hidden.has(p.key)),
-      refs,
-    ),
-    omitted: hidden.size,
-  };
+  const { shown, omitted } = placeShown(root);
+  return { tree: writePlaced(shown, refs), omitted };
 }
 
 export function writeLines(root: UiNode, refs: RefTable): string {

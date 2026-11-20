@@ -50,13 +50,31 @@ describe('writeLines', () => {
     expect(new Set(refs).size).toBe(3);
   });
 
-  it('leaves out the items of a closed menu, and says how many', () => {
+  it('leaves out what has no place on the screen, and says how many', () => {
+    const closed = { frame: [0, 900, 0, 0] as const };
     const app = node(UiRole.APPLICATION, 'Notes', {
       children: [
         node(UiRole.MENU, '', {
+          frame: [0, 0, 800, 30],
           children: [
             node(UiRole.MENUITEM, 'File', {
-              children: [node(UiRole.MENU, '', { children: [node(UiRole.MENUITEM, 'New Note')] })],
+              frame: [10, 0, 40, 30],
+              children: [
+                node(UiRole.MENU, '', {
+                  ...closed,
+                  children: [node(UiRole.MENUITEM, 'New Note', closed)],
+                }),
+              ],
+            }),
+            // An open menu: its item has a size, so a person can see it and click it.
+            node(UiRole.MENUITEM, 'Edit', {
+              frame: [50, 0, 40, 30],
+              children: [
+                node(UiRole.MENU, '', {
+                  frame: [50, 30, 200, 60],
+                  children: [node(UiRole.MENUITEM, 'Undo', { frame: [50, 30, 200, 20] })],
+                }),
+              ],
             }),
           ],
         }),
@@ -69,7 +87,10 @@ describe('writeLines', () => {
       '- application "Notes" (ref=e1)',
       '  - menu',
       '    - menuitem "File" (ref=e2)',
-      '  - window "Notes" (ref=e3)',
+      '    - menuitem "Edit" (ref=e3)',
+      '      - menu',
+      '        - menuitem "Undo" (ref=e4)',
+      '  - window "Notes" (ref=e5)',
     ]);
   });
 });
