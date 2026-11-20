@@ -4,6 +4,7 @@
 //   Dead     does nothing.
 //   Covered  works, but a view lies over it, so a person cannot click it.
 //   Title    a text field. The Return key in it changes the status text.
+//   Actions  a menu. Its items are not on the screen until it is open.
 //   Volume   a slider. Its value is a number, not text.
 //   Export   writes the title to note.txt in the folder given as the first argument, then says so.
 //   Fake     says "Exported" and writes nothing.
@@ -56,6 +57,12 @@ final class Fixture: NSObject, NSApplicationDelegate {
     slider.frame = NSRect(x: 190, y: 24, width: 150, height: 24)
     slider.setAccessibilityLabel("Volume")
     window.contentView!.addSubview(slider)
+    let actions = NSPopUpButton(frame: NSRect(x: 20, y: 140, width: 110, height: 26), pullsDown: true)
+    actions.addItems(withTitles: ["Actions", "Mark done", "Mark open"])
+    actions.item(at: 1)?.target = self
+    actions.item(at: 1)?.action = #selector(markDone)
+    actions.setAccessibilityLabel("Actions")
+    window.contentView!.addSubview(actions)
     _ = button("Export", 20, #selector(export), y: 20)
     _ = button("Fake", 100, #selector(fake), y: 20)
     window.orderFrontRegardless()
@@ -68,6 +75,7 @@ final class Fixture: NSObject, NSApplicationDelegate {
     status.stringValue = "Exported"
   }
   @objc func entered() { status.stringValue = "Entered: \(field.stringValue)" }
+  @objc func markDone() { status.stringValue = "Marked done" }
   @objc func fake() { status.stringValue = "Exported" }
   @objc func slow() {
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self.status.stringValue = "Slow done" }
