@@ -10,7 +10,7 @@ This package is private. It is not on npm. It runs on macOS only.
 - **Each action reports its effect.** After an action the realm reads again and says what appeared, what went away and what changed. An action that changed nothing is a result of its own: `cu.ui.no-effect`.
 - **It acts only where a person can act.** Before a press, the realm asks the operating system which element is on top at that place. If another view or another window covers the target, the realm refuses and names what is on top.
 - **It does not use the pointer or the keyboard of the person at the machine.** A press is an accessibility action. Text is typed with key events that go to the application, not to the screen.
-- **It counts the bytes the application wrote to disk.** The operating system keeps the count, so the application cannot change it. An action after which the count did not move wrote nothing, in any folder. An action that wrote bytes with no change in a watched folder wrote somewhere else, and the realm then answers "not known" and does not blame the application.
+- **It counts the bytes the application wrote to disk.** The operating system keeps the count, so the application cannot change it. The count is for the application's process and the processes it started. An action that wrote bytes with no change in a watched folder wrote somewhere else, and the realm then answers "not known" and does not blame the application. A count that did not move says that those processes wrote nothing. It does not prove that no file was written: a helper that the system runs for the application is not counted, and a process that the application started is not counted after it ends.
 - **It can watch folders.** A file that an action writes becomes a `file.written` signal. A claim can then name the file, and not only the words that the application shows.
 
 ## Use it
@@ -47,7 +47,7 @@ When no folder is watched, a claim can still ask if the application wrote to dis
 { "until": { "kind": "signal", "name": "disk.wrote" } }
 ```
 
-With `"count": 0` the same claim says that the action wrote nothing.
+With `"count": 0` the same claim says that the application's own processes wrote nothing.
 
 ## Actions
 

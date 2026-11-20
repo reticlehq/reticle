@@ -225,17 +225,38 @@ func reach(_ target: AXUIElement, _ rect: CGRect) -> Reach {
 /// application can set another time in the environment.
 let quietNeededMs = Int(ProcessInfo.processInfo.environment["RETICLE_AX_QUIET_MS"] ?? "") ?? 500
 
-/// The bytes that a process has written to disk, as the kernel counts them. It is a fact from the
-/// operating system and not from the application: an application that says "saved" and wrote
-/// nothing has a count that did not move. nil when the kernel does not answer.
+/// The processes that a process started, and the ones those started.
+func descendants(_ pid: pid_t, _ depth: Int = 0) -> [pid_t] {
+  guard depth < 6 else { return [] }
+  var buffer = [pid_t](repeating: 0, count: 512)
+  let size = Int32(buffer.count * MemoryLayout<pid_t>.size)
+  let found = Int(proc_listchildpids(pid, &buffer, size))
+  guard found > 0 else { return [] }
+  let children = buffer.prefix(min(found, buffer.count)).filter { $0 > 0 }
+  return children + children.flatMap { descendants($0, depth + 1) }
+}
+
+/// The bytes that a process and the processes it started have written to disk, as the kernel
+/// counts them. It is a fact from the operating system and not from the application: an
+/// application that says "saved" and wrote nothing has a count that did not move.
+///
+/// An application made of several processes (a browser, an Electron application) writes from a
+/// child, so the children are counted too. Two writers are not counted: a helper that the system
+/// started for the application, which is not its child, and a child that wrote and ended before
+/// the count was read. The caller must not read zero as "no write anywhere".
+/// nil when the kernel does not answer for the process itself.
 func bytesWritten(_ pid: pid_t) -> UInt64? {
-  var info = rusage_info_v4()
-  let result = withUnsafeMutablePointer(to: &info) {
-    $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) {
-      proc_pid_rusage(pid, RUSAGE_INFO_V4, $0)
+  func one(_ pid: pid_t) -> UInt64? {
+    var info = rusage_info_v4()
+    let result = withUnsafeMutablePointer(to: &info) {
+      $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) {
+        proc_pid_rusage(pid, RUSAGE_INFO_V4, $0)
+      }
     }
+    return result == 0 ? info.ri_diskio_byteswritten : nil
   }
-  return result == 0 ? info.ri_diskio_byteswritten : nil
+  guard let own = one(pid) else { return nil }
+  return descendants(pid).reduce(own) { $0 + (one($1) ?? 0) }
 }
 
 /// Key codes of the ANSI keyboard. A letter here is the key at that place, for a shortcut.

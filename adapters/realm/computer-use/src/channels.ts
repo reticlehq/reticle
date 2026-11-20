@@ -28,7 +28,7 @@ export const CuSummary = {
   FS_CONTENT: 'cu.fs.content',
   /** The process wrote bytes to disk in the action. It does not say where. */
   DISK_WROTE: 'cu.disk.wrote',
-  /** The process wrote nothing to disk in the action: no file, in any folder. */
+  /** The application and the processes it started wrote nothing to disk in the action. */
   DISK_WROTE_NOTHING: 'cu.disk.wrote-nothing',
 } as const;
 
