@@ -73,4 +73,6 @@ Read these before you rely on a result.
 node native/mac/selfcheck.mjs
 ```
 
+`native/mac/measure.mjs` prints how long a read, a press and a refusal take on the same small application. It asserts nothing: use it to compare two builds on one machine.
+
 The check needs a quiet screen. When another window is over the small window, the realm refuses the action, and the check fails for that reason.
