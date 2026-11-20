@@ -506,7 +506,7 @@ export class PeerCommands {
     kind: ActKind,
     value: string | undefined,
     how: { delivery: Delivery; budgetMs: number },
-  ): Promise<{ outcome: ActOutcome; changes: Change[]; byItself: number }> {
+  ): Promise<{ outcome: ActOutcome; changes: Change[]; byItself: number; offScreen: number }> {
     const workspace = this.#deps.workspace;
     // What changed before this action is not its effect: say it first, on its own.
     this.sendFileChanges();
@@ -544,7 +544,8 @@ export class PeerCommands {
     const restless = new Set(
       [...this.#restless].filter(([, looks]) => looks >= RESTLESS_LOOKS).map(([place]) => place),
     );
-    const all = effectOf(outcome.before.root, outcome.after.root, restless).changes;
+    const effect = effectOf(outcome.before.root, outcome.after.root, restless);
+    const all = effect.changes;
     // Every change is sent: it did happen. Only the count of what the action did leaves out the
     // places that change by themselves.
     for (const change of all) {
@@ -575,7 +576,7 @@ export class PeerCommands {
       });
     }
     this.sendFileChanges();
-    return { outcome, changes, byItself: all.length - changes.length };
+    return { outcome, changes, byItself: all.length - changes.length, offScreen: effect.offScreen };
   }
 
   /**
@@ -734,7 +735,7 @@ export class PeerCommands {
         );
       }
     }
-    const { outcome, changes, byItself } = driven;
+    const { outcome, changes, byItself, offScreen } = driven;
     return {
       ok: true,
       ref,
@@ -752,6 +753,8 @@ export class PeerCommands {
         domMutatedWithin: changes.length,
         // Changes in a place that changes with no action. The action may not be their cause.
         ...(byItself > 0 ? { changedByItself: byItself } : {}),
+        // Changes to elements that are not on the screen. They are not in the count above.
+        ...(offScreen > 0 ? { changedOffScreen: offScreen } : {}),
         occluded: !outcome.reachable,
       },
       role: target.node.role,

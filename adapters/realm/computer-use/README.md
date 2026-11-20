@@ -8,6 +8,7 @@ This package is private. It is not on npm. It runs on macOS only.
 
 - **It reads the application through the accessibility tree of the operating system.** The agent gets one line for each element that is on the screen: `- button "Save" (ref=e5)`. This is the same format that the web realm gives for a page.
 - **Each action reports its effect.** After an action the realm reads again and says what appeared, what went away and what changed. An action that changed nothing is a result of its own: `cu.ui.no-effect`.
+- **An effect is a change to what is on the screen.** An element with no size, such as an item of a closed menu, is not compared. The answer counts those changes apart, as `changedOffScreen`.
 - **A change the application makes by itself is not an effect.** A clock or a tip that rotates changes with no action. The peer learns such a place from its looks between actions. A change there during an action is counted apart, as `changedByItself`. The place is the parent of what changed, so a real effect next to a clock is counted there too.
 - **It acts only where a person can act.** Before a press, the realm asks the operating system which element is on top at that place. If another view or another window covers the target, the realm refuses and names what is on top.
 - **It does not use the pointer or the keyboard of the person at the machine.** A press is an accessibility action. Text is typed with key events that go to the application, not to the screen.
