@@ -291,9 +291,17 @@ export class PeerCommands {
       if (holds === undefined) {
         throw new Error(`the state ${state} is not read by the computer-use realm`);
       }
-      found = found.filter(holds);
-      if (state === ElementState.VISIBLE) {
-        found = await this.#uncovered(found);
+      if (state === ElementState.HIDDEN) {
+        // Hidden is the other side of visible, by the same two facts: no place in its window, or
+        // a place that something covers. A check and a click must not disagree about an element.
+        const placed = found.filter((s) => s.visible);
+        const seen = new Set(await this.#uncovered(placed));
+        found = found.filter((s) => !seen.has(s));
+      } else {
+        found = found.filter(holds);
+        if (state === ElementState.VISIBLE) {
+          found = await this.#uncovered(found);
+        }
       }
     }
     const limit = 'number' === typeof args['limit'] ? args['limit'] : found.length;
