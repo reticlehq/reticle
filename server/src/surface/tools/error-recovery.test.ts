@@ -988,3 +988,30 @@ describe('a lease root that names no directory on disk', () => {
     expect(refusalReasonFor(message)).toBe(RefusalReason.BAD_ARGS);
   });
 });
+
+/**
+ * Issue 2399: a page whose SDK predates `insertText` answers `unknown action 'insertText'`.
+ * The catch-all `unknown action '<verb>'` rule read that as a bad argument, so the agent retried
+ * the same call and never typed into the editor. The hint now names the page's version as the
+ * fault. Without the specific rule, the first case below returns RECOVERY.BAD_ARGUMENTS.
+ */
+describe('a page whose SDK predates insertText (issue 2399)', () => {
+  it('names the package to update, not the arguments', () => {
+    const hint = recoveryFor("unknown action 'insertText'");
+
+    expect(hint).toBe(RECOVERY.SDK_PREDATES_INSERT_TEXT);
+    expect(String(hint)).toContain('@reticlehq/browser');
+    expect(hint).not.toBe(RECOVERY.BAD_ARGUMENTS);
+  });
+
+  it('still reads any other unknown action as a bad argument', () => {
+    expect(recoveryFor("unknown action 'clcik'")).toBe(RECOVERY.BAD_ARGUMENTS);
+  });
+
+  it('still sends a real EditContext refusal to the surface hint', () => {
+    const message =
+      'cannot insertText into an EditContext editor (Monaco, CodeMirror 6): code that calls updateText does not fire textupdate, so the editor model would keep the old text. Use press for a key.';
+
+    expect(recoveryFor(message)).toBe(RECOVERY.UNSUPPORTED_SURFACE);
+  });
+});
