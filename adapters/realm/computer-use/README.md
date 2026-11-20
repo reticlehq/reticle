@@ -101,8 +101,10 @@ Read these before you rely on a result.
 
 `native/mac/electroncheck.mjs` starts a small Electron application and drives it through the peer. It checks that a press does nothing and says why with the switch off, that a press works with the switch on, and that a slow effect belongs to its own press. It is skipped when Electron is not installed.
 
+All three, one after the other, on a Mac with the Accessibility permission:
+
 ```
-node native/mac/selfcheck.mjs
+pnpm --filter @reticlehq/computer-use check:live
 ```
 
 `native/mac/measure.mjs` prints how long a read, a press and a refusal take on the same small application. It asserts nothing: use it to compare two builds on one machine.

@@ -18,6 +18,7 @@
     "typecheck": "tsc -b",
     "lint": "eslint src",
     "test:unit": "vitest run src --passWithNoTests",
+    "check:live": "node native/mac/selfcheck.mjs && node native/mac/ambientcheck.mjs && node native/mac/electroncheck.mjs",
     "prepack": "node ../../../scripts/prepare-dist.mjs --clean dist && tsc -b --force && node ../../../scripts/alias-dist.mjs && node ../../../scripts/prepare-dist.mjs dist"
   },
   "dependencies": {
