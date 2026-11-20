@@ -68,7 +68,9 @@ async function step(name, kind, parameters = {}) {
   const coverage = await realm.coverage(closed);
   const ms = Date.now() - started;
   // What the tree and the watched folders showed. The count of bytes on disk is asked for by name.
-  const summaries = observed.filter((o) => CuChannel.DISK !== o.channel).map((o) => o.summary);
+  const summaries = observed
+    .filter((o) => CuChannel.DISK !== o.channel && CuChannel.SETTINGS !== o.channel)
+    .map((o) => o.summary);
   const disk = observed.filter((o) => CuChannel.DISK === o.channel).map((o) => o.summary);
   report.push(
     `${name.padEnd(8)} ${String(ms).padStart(5)} ms  ${summaries.join(', ') || receipt.refused?.detail}  [closed by ${closed.closedBy}]`,
@@ -168,6 +170,12 @@ try {
   assert.ok(chosen.observed.some((o) => 'text "Marked done"' === o.value.element));
   assert.deepEqual(await realm.locate({ name: 'Mark done' }), []);
 
+  // A checkbox that changes one setting of the application. The setting is in no watched file.
+  const remembered = await step('Remember', ActKind.PRESS);
+  const setting = remembered.observed.find((o) => CuChannel.SETTINGS === o.channel);
+  assert.equal(setting?.value.key, 'remember');
+  assert.equal(setting?.value.new, '1');
+
   // A slider takes a number. The same path moves a scroll bar, which is how this realm scrolls.
   const slid = await step('Volume', ActKind.SET, { value: '0.5' });
   // Two elements change: the slider, and the mark on it that shows the value.
@@ -219,7 +227,7 @@ try {
   report.push(
     `Fake   -> verdict ${lied.verdict} (${lied.ground})`,
     `Export -> verdict ${proved.verdict} (${proved.ground})`,
-    'computer-use selfcheck: 16 of 16 cases held',
+    'computer-use selfcheck: 17 of 17 cases held',
     '',
   );
   process.stdout.write(report.join('\n'));
@@ -229,5 +237,7 @@ try {
   throw error;
 } finally {
   fixture.kill();
+  // The fixture keeps one setting. Remove it, so that the next run starts with none.
+  spawn('defaults', ['delete', 'fixture'], { stdio: 'ignore' });
   rmSync(folder, { recursive: true, force: true });
 }

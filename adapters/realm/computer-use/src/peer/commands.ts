@@ -80,6 +80,9 @@ export const FILE_SIGNAL_PREFIX = 'file.';
  */
 export const DISK_WROTE_SIGNAL = 'disk.wrote';
 
+/** The signal for one setting of the application that an action changed: its key and its values. */
+export const SETTINGS_CHANGED_SIGNAL = 'settings.changed';
+
 /** The commands this realm answers. The peer declares exactly these to the bridge. */
 export const PEER_COMMANDS = [
   ReticleCommand.SNAPSHOT,
@@ -507,6 +510,13 @@ export class PeerCommands {
     }
     // The bytes that the process wrote to disk, when the driver counts them. A signal only when
     // there were some: a claim with `count: 0` then says "the application wrote nothing".
+    // A setting that the action changed. It is often not on the screen and in no watched file.
+    for (const setting of outcome.settingsChanged ?? []) {
+      this.#deps.emit(EventType.SIGNAL, {
+        name: SETTINGS_CHANGED_SIGNAL,
+        data: { key: setting.key, old: setting.old, value: setting.new },
+      });
+    }
     if (outcome.bytesWritten !== undefined && outcome.bytesWritten > 0) {
       this.#deps.emit(EventType.SIGNAL, {
         name: DISK_WROTE_SIGNAL,

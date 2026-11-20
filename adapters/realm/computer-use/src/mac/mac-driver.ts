@@ -33,6 +33,9 @@ const ActedSchema = z.object({
   unreadBefore: z.number(),
   unreadAfter: z.number(),
   bytesWritten: z.number().optional(),
+  settingsChanged: z
+    .array(z.object({ key: z.string(), old: z.string(), new: z.string() }))
+    .optional(),
 });
 
 export type RunHelper = (file: string, args: readonly string[]) => Promise<string>;
@@ -240,6 +243,7 @@ export class MacDriver implements UiDriver {
       before: toRead(acted.before, acted.unreadBefore),
       after: toRead(acted.after, acted.unreadAfter),
       ...(acted.bytesWritten === undefined ? {} : { bytesWritten: acted.bytesWritten }),
+      ...(acted.settingsChanged === undefined ? {} : { settingsChanged: acted.settingsChanged }),
     };
   }
 }

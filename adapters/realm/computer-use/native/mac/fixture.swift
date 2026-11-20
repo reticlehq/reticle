@@ -7,6 +7,7 @@
 //   Title    a text field. The Return key in it changes the status text.
 //   Items    a table of three rows. To choose a row changes the status text.
 //   Actions  a menu. Its items are not on the screen until it is open.
+//   Remember a checkbox. It changes one setting of the application, and nothing on the screen but itself.
 //   Volume   a slider. Its value is a number, not text.
 //   Later    writes note.txt 800 ms after the press, and shows nothing.
 //   Export   writes the title to note.txt in the folder given as the first argument, then says so.
@@ -89,6 +90,9 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
     window.contentView!.addSubview(actions)
     _ = button("Steps", 140, #selector(steps), y: 138)
     _ = button("Later", 230, #selector(later), y: 138)
+    let remember = NSButton(checkboxWithTitle: "Remember", target: self, action: #selector(remember))
+    remember.frame = NSRect(x: 190, y: 52, width: 150, height: 20)
+    window.contentView!.addSubview(remember)
     _ = button("Export", 20, #selector(export), y: 20)
     _ = button("Fake", 100, #selector(fake), y: 20)
     window.orderFrontRegardless()
@@ -112,6 +116,9 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
       try? text.write(toFile: folder + "/note.txt", atomically: true, encoding: .utf8)
     }
+  }
+  @objc func remember(_ sender: NSButton) {
+    UserDefaults.standard.set(sender.state == .on, forKey: "remember")
   }
   @objc func fake() { status.stringValue = "Exported" }
   @objc func slow() {

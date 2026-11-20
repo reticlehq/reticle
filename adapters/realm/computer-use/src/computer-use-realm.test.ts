@@ -227,4 +227,22 @@ describe('ComputerUseRealm', () => {
     expect(nothing.spot?.impeaching).toBe(false);
     expect(nothing.disk).toEqual([CuSummary.DISK_WROTE_NOTHING]);
   });
+
+  it('reports a setting that an action changed, and declares the channel when it was read once', async () => {
+    const realm = new ComputerUseRealm({
+      driver: driver({
+        after: read('Ready'),
+        settingsChanged: [{ key: 'remember', old: '', new: '1' }],
+      }),
+      now: () => 0,
+    });
+    expect(realm.channels().map((c) => c.id)).not.toContain(CuChannel.SETTINGS);
+    const window = realm.openWindow(1000);
+    await realm.perform(press(await refOf(realm, 'Save')));
+    const seen = await realm.observe(realm.closeWindow(window));
+    expect(
+      seen.filter((o) => CuChannel.SETTINGS === o.channel).map((o) => [o.summary, o.value]),
+    ).toEqual([[CuSummary.SETTINGS_CHANGED, { key: 'remember', old: '', new: '1' }]]);
+    expect(realm.channels().map((c) => c.id)).toContain(CuChannel.SETTINGS);
+  });
 });

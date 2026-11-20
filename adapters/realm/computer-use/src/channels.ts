@@ -11,6 +11,8 @@ export const CuChannel = {
   FILES_CONTENT: 'x-files-content',
   /** How many bytes the application's process wrote to disk: the operating system counted them. */
   DISK: 'x-disk',
+  /** The settings of the application, as the system's settings store holds them. */
+  SETTINGS: 'x-settings',
 } as const;
 
 /** Stable labels. A claim matches on them exactly. */
@@ -30,6 +32,8 @@ export const CuSummary = {
   DISK_WROTE: 'cu.disk.wrote',
   /** The application and the processes it started wrote nothing to disk in the action. */
   DISK_WROTE_NOTHING: 'cu.disk.wrote-nothing',
+  /** One setting of the application has a new value, or is new, or is gone. */
+  SETTINGS_CHANGED: 'cu.settings.changed',
 } as const;
 
 export const CU_SURFACE = 'x-computer-use';

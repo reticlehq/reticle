@@ -259,6 +259,33 @@ func bytesWritten(_ pid: pid_t) -> UInt64? {
   return descendants(pid).reduce(own) { $0 + (one($1) ?? 0) }
 }
 
+/// The settings of an application: the values in its preferences domain, each as text.
+///
+/// nil when they cannot be read from outside the application. An application in a sandbox keeps
+/// its settings in its own container, and a read from here gives nothing: that is "not read", and
+/// it must not be taken for "no setting changed".
+func settings(_ pid: pid_t) -> [String: String]? {
+  guard let app = NSRunningApplication(processIdentifier: pid),
+    let domain = app.bundleIdentifier ?? app.executableURL?.lastPathComponent
+  else { return nil }
+  let container = NSHomeDirectory() + "/Library/Containers/" + domain
+  if FileManager.default.fileExists(atPath: container) { return nil }
+  CFPreferencesAppSynchronize(domain as CFString)
+  let all =
+    CFPreferencesCopyMultiple(
+      nil, domain as CFString, kCFPreferencesCurrentUser, kCFPreferencesAnyHost) as? [String: Any]
+    ?? [:]
+  return all.mapValues { String(String(describing: $0).prefix(200)) }
+}
+
+/// The settings that are different after an action: new, changed or gone.
+func settingsChanged(_ before: [String: String], _ after: [String: String]) -> [[String: String]] {
+  Set(before.keys).union(after.keys).sorted().compactMap { key in
+    before[key] == after[key]
+      ? nil : ["key": key, "old": before[key] ?? "", "new": after[key] ?? ""]
+  }
+}
+
 /// Key codes of the ANSI keyboard. A letter here is the key at that place, for a shortcut.
 let keyCodes: [String: CGKeyCode] = [
   "return": 36, "enter": 36, "tab": 48, "space": 49, "escape": 53, "backspace": 51, "delete": 117,
@@ -351,6 +378,7 @@ func run(_ args: [String]) throws {
   let before = snapshot(app)
   let filesBefore = filesNow()
   let writtenBefore = bytesWritten(pid)
+  let settingsBefore = settings(pid)
   var canReach = false
   var coveredBy = ""
   switch frame(now[7], now[8]).map({ reach(target, $0) }) ?? .unknown(code: -1) {
@@ -467,6 +495,8 @@ func run(_ args: [String]) throws {
     if quietMs() >= quietWanted && (after.json != before.json || files != filesBefore) { break }
   }
   let settled = quietMs() >= quietWanted
+  var changedSettings: [[String: String]]?
+  if let was = settingsBefore, let now = settings(pid) { changedSettings = settingsChanged(was, now) }
   var wrote: UInt64?
   if let was = writtenBefore, let now = bytesWritten(pid), now >= was { wrote = now - was }
 
@@ -476,7 +506,8 @@ func run(_ args: [String]) throws {
     "settled": settled, "waitedMs": elapsedMs(), "budgetMs": budgetMs,
     "before": before.tree, "after": after.tree, "unreadBefore": before.unread,
     "unreadAfter": after.unread,
-  ].merging(wrote.map { ["bytesWritten": $0] } ?? [:]) { $1 })
+  ].merging(wrote.map { ["bytesWritten": $0] } ?? [:]) { $1 }
+    .merging(changedSettings.map { ["settingsChanged": $0] } ?? [:]) { $1 })
 }
 
 func write(_ object: [String: Any]) {

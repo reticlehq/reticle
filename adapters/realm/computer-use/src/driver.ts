@@ -84,6 +84,12 @@ export interface ActOutcome {
    * counted. Absent: the driver cannot count.
    */
   bytesWritten?: number;
+  /**
+   * The settings of the application that are different after the action. An empty list says that
+   * the settings were read and none changed. Absent: the settings cannot be read from outside the
+   * application (an application in a sandbox), and nothing is known about them.
+   */
+  settingsChanged?: readonly { key: string; old: string; new: string }[];
 }
 
 /** Whether a person can see and click an element now. */

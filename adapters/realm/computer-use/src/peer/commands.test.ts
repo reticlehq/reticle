@@ -449,4 +449,16 @@ describe('PeerCommands', () => {
     await commands.sendTreeChanges();
     expect(events.map(([, data]) => data['name'])).toEqual(['Ready', 'Working', 'Working', 'Done']);
   });
+
+  it('sends a signal for a setting that the action changed', async () => {
+    const changed = peer({ settingsChanged: [{ key: 'remember', old: '', new: '1' }] });
+    await changed.commands.answer(ReticleCommand.ACT, {
+      ref: await refOf(changed.commands, 'Save'),
+      action: ActionType.CLICK,
+    });
+    expect(changed.events).toContainEqual([
+      EventType.SIGNAL,
+      { name: 'settings.changed', data: { key: 'remember', old: '', value: '1' } },
+    ]);
+  });
 });
