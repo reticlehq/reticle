@@ -879,6 +879,57 @@ describe('PeerCommands', () => {
       expect(answer.effect['domMutatedWithin']).toBeGreaterThan(0);
     });
 
+    // A list in a web view gives no names for its choices: only the chosen one is there, with
+    // no name. A person can still type the name of a choice into the list.
+    it('types the name of the choice when the pop-up does not name its choices', async () => {
+      const state = { value: 'Low' };
+      const kinds: string[] = [];
+      const web = (): UiRead => ({
+        root: node(UiRole.WINDOW, 'Tasks', {
+          frame: [0, 0, 400, 300],
+          children: [
+            node(UiRole.COMBOBOX, 'Priority', { frame: [10, 10, 120, 30], value: state.value }),
+          ],
+        }),
+        unread: 0,
+        unmapped: [],
+      });
+      const commands = new PeerCommands({
+        driver: {
+          subject: () => ({ app: 'Tasks', pid: 7 }),
+          read: () => Promise.resolve(web()),
+          reach: () => Promise.resolve({ reach: 'yes' }),
+          act: (request) => {
+            const before = web();
+            kinds.push(request.kind);
+            if (ActKind.TYPE === request.kind && 'High' === request.value) {
+              state.value = 'High';
+            }
+            return Promise.resolve({
+              delivered: true,
+              reachable: true,
+              settled: true,
+              before,
+              after: web(),
+            });
+          },
+        },
+        emit: () => undefined,
+      });
+      const ref = (
+        (await commands.answer(ReticleCommand.QUERY, { role: UiRole.COMBOBOX })) as {
+          elements: { ref: string }[];
+        }
+      ).elements[0]?.ref;
+      const select = (value: string) =>
+        commands.answer(ReticleCommand.ACT, { ref, action: ActionType.SELECT, args: { value } });
+      await select('High');
+      expect(state.value).toBe('High');
+      // The pop-up is not opened: only the keys are sent.
+      expect(kinds).toEqual([ActKind.TYPE]);
+      await expect(select('Urgent')).rejects.toThrow(/did not go to the choice "Urgent"/);
+    });
+
     it('closes the pop-up and names the choices when the one asked for is not there', async () => {
       const { select, pressed, state } = fake();
       await expect(select('Urgent')).rejects.toThrow(/no choice "Urgent".*"Low", "High"/s);

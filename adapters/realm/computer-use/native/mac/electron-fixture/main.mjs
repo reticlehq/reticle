@@ -2,11 +2,14 @@
 //   Add   puts the text of the field in the list, and counts the notes.
 //   Slow  changes the count text after 400 ms.
 //   Dead  does nothing.
+//   Priority  a list of two choices.  Pinned  a checkbox.
 import { app, BrowserWindow } from 'electron';
 
 const page = `<h1>Notes</h1>
 <input aria-label="New note">
 <button id="add">Add</button><button id="slow">Slow</button><button>Dead</button>
+<select aria-label="Priority"><option>Low</option><option>High</option></select>
+<label><input type="checkbox"> Pinned</label>
 <p id="count">0 notes</p><ul></ul>
 <script>
   const count = document.querySelector('#count');
