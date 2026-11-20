@@ -21,11 +21,11 @@ import {
 } from '@reticlehq/core';
 
 import { ActKind, ActRefusal, Delivery } from '../driver.js';
-import type { UiDriver } from '../driver.js';
+import type { ActOutcome, UiDriver } from '../driver.js';
 import { ChangeKind, effectOf } from '../effect.js';
 import type { Change } from '../effect.js';
 import { RefTable, writeWindows } from '../lines.js';
-import { isAddressable, place } from '../ui-node.js';
+import { UiRole, isAddressable, place } from '../ui-node.js';
 import type { Placed, UiNode } from '../ui-node.js';
 
 export type Emit = (type: EventType, data: Record<string, unknown>) => void;
@@ -44,6 +44,8 @@ export interface PeerCommandsDeps {
 /** An application has one screen for the server: it has no address a caller can go to. */
 const ROUTE = '/';
 const DEFAULT_SETTLE_MS = 1000;
+/** How far one `dy` scroll moves the bar: a tenth of its range. */
+const SCROLL_STEP = 0.1;
 const SettleReason = { TIMEOUT: 'timeout' } as const;
 const Field = { VALUE: 'value', STATES: 'states' } as const;
 
@@ -62,6 +64,7 @@ export const PEER_COMMANDS = [
   ReticleCommand.INSPECT,
   ReticleCommand.ACT,
   ReticleCommand.ACT_SEQUENCE,
+  ReticleCommand.SCROLL,
   ReticleCommand.CAPABILITIES,
 ] as const;
 
@@ -178,6 +181,8 @@ export class PeerCommands {
         return this.#act(args, outward);
       case ReticleCommand.ACT_SEQUENCE:
         return this.#sequence(Array.isArray(args['steps']) ? args['steps'] : [], outward);
+      case ReticleCommand.SCROLL:
+        return this.#scroll(args);
       case ReticleCommand.CAPABILITIES:
         return { testids: [], signals: [], stores: [], flows: [] };
       default:
@@ -306,6 +311,119 @@ export class PeerCommands {
   }
 
   /**
+   * Does one action, and sends what it changed before the caller gets an answer: each change in
+   * the tree as an event, and each file written in a watched folder as a signal.
+   */
+  async #drive(
+    target: Seen,
+    ref: string,
+    kind: ActKind,
+    value: string | undefined,
+    how: { delivery: Delivery; budgetMs: number },
+  ): Promise<{ outcome: ActOutcome; changes: Change[] }> {
+    const workspace = this.#deps.workspace;
+    const filesBefore = workspace?.snapshot();
+    const outcome = await this.#deps.driver.act({
+      target,
+      kind,
+      ...(value === undefined ? {} : { value }),
+      ...how,
+      watch: workspace?.roots ?? [],
+    });
+    if (outcome.refused === ActRefusal.STALE) {
+      throw new Error(`ref '${ref}' no longer resolves to an element`);
+    }
+    if (outcome.refused === ActRefusal.UNREACHABLE) {
+      throw new Error(
+        `a person cannot reach ${target.node.role} "${target.node.name}": ${outcome.detail ?? 'another view or window'} is over it.`,
+      );
+    }
+    if (outcome.refused !== undefined || !outcome.delivered) {
+      throw new Error(
+        `${target.node.role} "${target.node.name}" did not take the action: ${outcome.refused ?? 'the operating system refused it'}.`,
+      );
+    }
+    const { changes } = effectOf(outcome.before.root, outcome.after.root);
+    for (const change of changes) {
+      this.#send(change);
+    }
+    if (workspace !== undefined && filesBefore !== undefined) {
+      for (const file of diffSnapshots(filesBefore, workspace.snapshot())) {
+        this.#deps.emit(EventType.SIGNAL, {
+          name: `${FILE_SIGNAL_PREFIX}${file.kind}`,
+          data: { file: basename(file.path), path: file.path, size: file.after?.size ?? 0 },
+        });
+      }
+    }
+    return { outcome, changes };
+  }
+
+  /**
+   * Scrolls the scroll area that holds an element, by moving its scroll bar. No wheel event is
+   * sent: a wheel event does not reach an application that is not in front, and it would use the
+   * pointer of the person at the machine.
+   *
+   * `fraction` is the place of the bar, 0 to 1. `dy` moves the bar one step in its direction; the
+   * realm does not know the height of the content, so it cannot scroll by pixels, and it says so.
+   */
+  async #scroll(args: Args): Promise<unknown> {
+    const ref = text(args['ref']);
+    const read = await this.#deps.driver.read();
+    const seen = see(read.root);
+    const key = ref === undefined ? undefined : this.#refs.keyOf(ref);
+    if (ref !== undefined && !seen.some((s) => s.key === key)) {
+      throw new Error(`ref '${ref}' no longer resolves to an element`);
+    }
+    // The first vertical bar that is in the element's own line of parents, or the first of all.
+    const bars = seen.filter(
+      (s) =>
+        s.node.role === UiRole.SCROLLBAR &&
+        s.node.frame !== undefined &&
+        s.node.frame[3] > s.node.frame[2],
+    );
+    const bar =
+      key === undefined
+        ? bars[0]
+        : bars
+            .filter((b) => b.parentKey !== undefined && `${key}/`.startsWith(`${b.parentKey}/`))
+            .at(-1);
+    if (bar === undefined) {
+      throw new Error('there is no scroll bar to move for this element');
+    }
+    const now = Number(bar.node.value ?? '0');
+    const fraction = args['fraction'];
+    const dy = args['dy'];
+    let to = now;
+    if ('number' === typeof fraction) {
+      to = fraction;
+    } else if ('number' === typeof dy && dy !== 0) {
+      to = now + Math.sign(dy) * SCROLL_STEP;
+    }
+    to = Math.min(1, Math.max(0, to));
+    const { changes } = await this.#drive(
+      bar,
+      this.#refs.refFor(bar.key),
+      ActKind.SET,
+      String(to),
+      {
+        // A person scrolls with a wheel over the content, not by a click on the bar, and the bar
+        // of a modern scroll area is not drawn until then. So no reach check is made on the bar.
+        delivery: Delivery.DIRECT,
+        budgetMs: DEFAULT_SETTLE_MS,
+      },
+    );
+    return {
+      scrolled: changes.length > 0,
+      atEnd: 0 === to || 1 === to,
+      fraction: to,
+      // Declared, because the caller asked for pixels and got a step.
+      ...('number' === typeof dy && 'number' !== typeof fraction
+        ? { stepInsteadOfPixels: SCROLL_STEP }
+        : {}),
+    };
+  }
+
+  /**
    * Several actions in one command, so a model turn drives more than one step. It stops at the
    * first action that fails, and the failure names the step.
    */
@@ -354,41 +472,10 @@ export class PeerCommands {
       kind === ActKind.KEY && key !== undefined
         ? [...modifiers, key].join('+')
         : (text(more['value']) ?? key);
-    const workspace = this.#deps.workspace;
-    const filesBefore = workspace?.snapshot();
-    const outcome = await this.#deps.driver.act({
-      target,
-      kind,
-      ...(value === undefined ? {} : { value }),
+    const { outcome, changes } = await this.#drive(target, ref, kind, value, {
       delivery: Delivery.USER_PATH,
       budgetMs: 'number' === typeof more['settleMs'] ? more['settleMs'] : DEFAULT_SETTLE_MS,
-      watch: workspace?.roots ?? [],
     });
-    if (outcome.refused === ActRefusal.STALE) {
-      throw new Error(`ref '${ref}' no longer resolves to an element`);
-    }
-    if (outcome.refused === ActRefusal.UNREACHABLE) {
-      throw new Error(
-        `a person cannot reach ${target.node.role} "${target.node.name}": ${outcome.detail ?? 'another view or window'} is over it.`,
-      );
-    }
-    if (outcome.refused !== undefined || !outcome.delivered) {
-      throw new Error(
-        `${target.node.role} "${target.node.name}" did not take the action: ${outcome.refused ?? 'the operating system refused it'}.`,
-      );
-    }
-    const { changes } = effectOf(outcome.before.root, outcome.after.root);
-    for (const change of changes) {
-      this.#send(change);
-    }
-    if (workspace !== undefined && filesBefore !== undefined) {
-      for (const file of diffSnapshots(filesBefore, workspace.snapshot())) {
-        this.#deps.emit(EventType.SIGNAL, {
-          name: `${FILE_SIGNAL_PREFIX}${file.kind}`,
-          data: { file: basename(file.path), path: file.path, size: file.after?.size ?? 0 },
-        });
-      }
-    }
     return {
       ok: true,
       ref,

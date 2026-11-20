@@ -239,4 +239,60 @@ describe('PeerCommands', () => {
     await expect(commands.answer(ReticleCommand.ACT, ok, [])).rejects.toThrow(/send/i);
     expect(asked).toHaveLength(2);
   });
+
+  it('scrolls by a move of the scroll bar, and says when it took a step and not pixels', async () => {
+    const list = (bar: string): UiRead => ({
+      root: node(UiRole.WINDOW, 'Notes', {
+        frame: [0, 0, 400, 300],
+        children: [
+          node(UiRole.GROUP, 'Rows', {
+            frame: [0, 0, 300, 300],
+            children: [
+              node(UiRole.BUTTON, 'Row 1', { frame: [0, 0, 100, 20] }),
+              node(UiRole.SCROLLBAR, '', { frame: [285, 0, 15, 300], value: bar }),
+            ],
+          }),
+        ],
+      }),
+      unread: 0,
+      unmapped: [],
+    });
+    const asked: ActRequest[] = [];
+    const commands = new PeerCommands({
+      driver: {
+        subject: () => ({ app: 'Notes', pid: 7 }),
+        read: () => Promise.resolve(list('0.5')),
+        act: (request) => {
+          asked.push(request);
+          return Promise.resolve({
+            delivered: true,
+            reachable: false,
+            settled: true,
+            before: list('0.5'),
+            after: list(request.value ?? ''),
+          });
+        },
+      },
+      emit: () => undefined,
+    });
+    const row = await refOf(commands, 'Row 1');
+    expect(await commands.answer(ReticleCommand.SCROLL, { ref: row, fraction: 1 })).toEqual({
+      scrolled: true,
+      atEnd: true,
+      fraction: 1,
+    });
+    expect(await commands.answer(ReticleCommand.SCROLL, { ref: row, dy: 400 })).toEqual({
+      scrolled: true,
+      atEnd: false,
+      fraction: 0.6,
+      stepInsteadOfPixels: 0.1,
+    });
+    expect(asked.map((a) => [a.kind, a.value, a.target.node.role])).toEqual([
+      ['set', '1', 'scrollbar'],
+      ['set', '0.6', 'scrollbar'],
+    ]);
+    await expect(peer().commands.answer(ReticleCommand.SCROLL, {})).rejects.toThrow(
+      /no scroll bar/,
+    );
+  });
 });
