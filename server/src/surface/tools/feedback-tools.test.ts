@@ -292,6 +292,17 @@ describe('reticle_feedback accepts the body under the name agents actually use',
     expect(result.accepted).toBe(true);
   });
 
+  /**
+   * #2305: a report with `kind`, `need`, `impact`, `currentApproach` and `trace` was refused for a
+   * missing `text`, while the schema showed `text` and `summary` as optional and no description said
+   * one of them is needed. The refusal must not be the first place a caller learns the rule.
+   */
+  it('says in the schema that one of text and summary is needed', () => {
+    const shape = tool?.inputSchema as Record<string, z.ZodTypeAny>;
+    expect(shape['text']?.description).toMatch(/`text` or `summary`: one of them is needed/);
+    expect(shape['summary']?.description).toMatch(/One of the two is needed/);
+  });
+
   it('refuses a call that carries neither, and names both fields in the reason', async () => {
     const result = (await tool?.handler(noSession(), { kind: FeedbackKind.BUG })) as {
       accepted: boolean;
