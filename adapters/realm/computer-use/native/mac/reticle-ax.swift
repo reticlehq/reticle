@@ -225,6 +225,19 @@ func reach(_ target: AXUIElement, _ rect: CGRect) -> Reach {
 /// application can set another time in the environment.
 let quietNeededMs = Int(ProcessInfo.processInfo.environment["RETICLE_AX_QUIET_MS"] ?? "") ?? 500
 
+/// The bytes that a process has written to disk, as the kernel counts them. It is a fact from the
+/// operating system and not from the application: an application that says "saved" and wrote
+/// nothing has a count that did not move. nil when the kernel does not answer.
+func bytesWritten(_ pid: pid_t) -> UInt64? {
+  var info = rusage_info_v4()
+  let result = withUnsafeMutablePointer(to: &info) {
+    $0.withMemoryRebound(to: rusage_info_t?.self, capacity: 1) {
+      proc_pid_rusage(pid, RUSAGE_INFO_V4, $0)
+    }
+  }
+  return result == 0 ? info.ri_diskio_byteswritten : nil
+}
+
 /// Key codes of the ANSI keyboard. A letter here is the key at that place, for a shortcut.
 let keyCodes: [String: CGKeyCode] = [
   "return": 36, "enter": 36, "tab": 48, "space": 49, "escape": 53, "backspace": 51, "delete": 117,
@@ -313,6 +326,7 @@ func run(_ args: [String]) throws {
 
   let before = snapshot(app)
   let filesBefore = filesNow()
+  let writtenBefore = bytesWritten(pid)
   var canReach = false
   var coveredBy = ""
   switch frame(now[7], now[8]).map({ reach(target, $0) }) ?? .unknown(code: -1) {
@@ -429,6 +443,8 @@ func run(_ args: [String]) throws {
     if quietMs() >= quietNeededMs && (after.json != before.json || files != filesBefore) { break }
   }
   let settled = quietMs() >= quietNeededMs
+  var wrote: UInt64?
+  if let was = writtenBefore, let now = bytesWritten(pid), now >= was { wrote = now - was }
 
   try emit([
     "delivered": result == .success, "axError": Int(result.rawValue), "reachable": canReach,
@@ -436,7 +452,7 @@ func run(_ args: [String]) throws {
     "settled": settled, "waitedMs": elapsedMs(), "budgetMs": budgetMs,
     "before": before.tree, "after": after.tree, "unreadBefore": before.unread,
     "unreadAfter": after.unread,
-  ])
+  ].merging(wrote.map { ["bytesWritten": $0] } ?? [:]) { $1 })
 }
 
 func write(_ object: [String: Any]) {

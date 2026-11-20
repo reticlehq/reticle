@@ -32,6 +32,7 @@ const ActedSchema = z.object({
   after: AxNodeSchema,
   unreadBefore: z.number(),
   unreadAfter: z.number(),
+  bytesWritten: z.number().optional(),
 });
 
 export type RunHelper = (file: string, args: readonly string[]) => Promise<string>;
@@ -236,6 +237,7 @@ export class MacDriver implements UiDriver {
       settled: acted.settled,
       before: toRead(acted.before, acted.unreadBefore),
       after: toRead(acted.after, acted.unreadAfter),
+      ...(acted.bytesWritten === undefined ? {} : { bytesWritten: acted.bytesWritten }),
     };
   }
 }
