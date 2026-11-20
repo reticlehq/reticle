@@ -19,12 +19,16 @@ const page = `<h1>Notes</h1>
   document.querySelector('#slow').onclick = () => setTimeout(() => (count.textContent = 'slow done'), 400);
 </script>`;
 
+// Not in the Dock and not in front: the person at the machine keeps the application they use.
+app.setActivationPolicy('accessory');
+
 void app.whenReady().then(() => {
-  const window = new BrowserWindow({ width: 420, height: 320, title: 'Notes' });
+  const window = new BrowserWindow({ width: 420, height: 320, title: 'Notes', show: false });
   // Over the other windows, and not the one that takes the keyboard: the realm presses only what
   // a person could press, and a run must not take the keyboard of the person at the machine.
   window.setAlwaysOnTop(true, 'floating');
   window.setVisibleOnAllWorkspaces(true);
+  window.showInactive();
   void window.loadURL(`data:text/html,${encodeURIComponent(page)}`);
 });
 app.on('window-all-closed', () => app.quit());
