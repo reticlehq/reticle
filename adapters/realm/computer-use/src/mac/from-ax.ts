@@ -79,6 +79,8 @@ const ROLE_OF: Readonly<Record<string, UiRole>> = {
   AXImage: UiRole.IMAGE,
   [AxRole.STATIC_TEXT]: UiRole.TEXT,
   AXHeading: UiRole.HEADING,
+  // The bullet or the number before a list item in a web view.
+  AXListMarker: UiRole.GROUP,
   AXWebArea: UiRole.DOCUMENT,
   AXGroup: UiRole.GROUP,
   AXScrollArea: UiRole.GROUP,
