@@ -3,6 +3,7 @@
 // has for a web page work on it. macOS only for now. Nothing is installed in the application.
 //
 //   reticle-computer-use --app <name> [--project <folder>] [--port <port>] [--watch <folder>]...
+//                        [--electron-switch]
 //   reticle-computer-use --app <name> --doctor     (checks that it can work, and says what to do)
 //
 // The terminal needs Accessibility permission. The command stays open until you stop it.
@@ -14,7 +15,13 @@ import { fileURLToPath } from 'node:url';
 
 import { nodeWorkspace } from '@reticlehq/cli-realm';
 
-import { MacDriver, attachPlan, connectPeer, doctorReport } from '../dist/index.js';
+import {
+  MacDriver,
+  attachPlan,
+  connectPeer,
+  doctorReport,
+  electronWarning,
+} from '../dist/index.js';
 
 const say = (line) => process.stderr.write(`${line}\n`);
 const read = (path) => (existsSync(path) ? readFileSync(path, 'utf8') : undefined);
@@ -115,6 +122,18 @@ if (!buildHelper('inherit')) {
   process.exit(1);
 }
 
+const warning = electronWarning(
+  quiet('ps', ['-o', 'comm=', '-p', String(pid)]) ?? '',
+  plan,
+  existsSync,
+);
+if (warning !== undefined) {
+  say(warning);
+}
+if (plan.electronSwitch) {
+  quiet(helper, ['web-tree', String(pid), 'on']);
+}
+
 const sessionId = `cu-${plan.app}-${String(pid)}`.replace(/[^\w.-]/g, '-');
 const peer = connectPeer({
   url: plan.url,
@@ -140,6 +159,9 @@ if (plan.projectId === undefined) {
   );
 }
 const stop = () => {
+  if (plan.electronSwitch) {
+    quiet(helper, ['web-tree', String(pid), 'off']);
+  }
   peer.close();
   process.exit(0);
 };

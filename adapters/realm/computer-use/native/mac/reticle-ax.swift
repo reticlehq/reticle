@@ -16,6 +16,7 @@
 //
 // Output is one JSON object on stdout. The helper decides nothing. It reports what it read.
 //
+//   reticle-ax web-tree <pid> on|off   (Electron: its accessibility switch)
 //   reticle-ax serve      (one command for each line on standard input, as a JSON list of words)
 import AppKit
 import ApplicationServices
@@ -356,6 +357,19 @@ func run(_ args: [String]) throws {
   }
   let app = AXUIElementCreateApplication(pid)
 
+  if args[1] == "web-tree" {
+    // An Electron application gives its tree with no switch, and then does nothing for a press:
+    // the press is answered with "done" and the page never gets it. With this attribute on, the
+    // press works. It is the attribute that Electron documents for a tool that is not a screen
+    // reader. It costs the application some speed, so it is set only when the person asks, and
+    // set back when the realm leaves.
+    let on = args.count > 3 && args[3] == "on"
+    let result = AXUIElementSetAttributeValue(
+      app, "AXManualAccessibility" as CFString, on ? kCFBooleanTrue : kCFBooleanFalse)
+    readBefore.remove(pid)
+    try emit(["set": result == .success])
+  }
+
   if args[1] == "tree" {
     let started = Date()
     var shot = snapshot(app)
@@ -541,6 +555,11 @@ func run(_ args: [String]) throws {
     return rect.width > 0 && rect.height > 0
   }
 
+  func sameButFocus(_ json: Data) -> String {
+    String(decoding: json, as: UTF8.self).replacingOccurrences(
+      of: "\"focused\":true", with: "\"focused\":false")
+  }
+  let startButFocus = sameButFocus(before.json)
   var last = before.json
   var lastFiles = filesBefore
   var after = before
@@ -554,7 +573,12 @@ func run(_ args: [String]) throws {
     if after.json != last || files != lastFiles || menuShows() { quietSince = Date() }
     last = after.json
     lastFiles = files
-    if quietMs() >= quietWanted && (after.json != before.json || files != filesBefore) { break }
+    // The keyboard coming to the target is not an effect. A button in a web view takes the
+    // keyboard when it is pressed. That was "a change", so the wait ended before a slow effect,
+    // and the next action was given that effect.
+    if quietMs() >= quietWanted && (sameButFocus(after.json) != startButFocus || files != filesBefore) {
+      break
+    }
   }
   let settled = quietMs() >= quietWanted
   var changedSettings: [[String: Any]]?
