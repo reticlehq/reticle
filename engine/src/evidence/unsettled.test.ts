@@ -56,6 +56,32 @@ describe('describeWaitTarget names what was being waited for', () => {
     );
     expect(
       describeWaitTarget({
+        kind: PredicateKind.TEXT,
+        satisfies: { property: 'matchesPattern', pattern: '\\d+ items' },
+      }),
+    ).toBe('text matching /\\d+ items/');
+    expect(
+      describeWaitTarget({
+        kind: PredicateKind.TEXT,
+        satisfies: { property: 'matchesPattern', pattern: '\\d+ items' },
+        ignoreCase: true,
+      }),
+    ).toBe('text matching /\\d+ items/, ignoring case');
+    expect(
+      describeWaitTarget({
+        kind: PredicateKind.TEXT,
+        contains: 'items',
+        satisfies: { property: 'matchesPattern', pattern: '\\d+ items' },
+      }),
+    ).toBe("text containing 'items' matching /\\d+ items/");
+    expect(
+      describeWaitTarget({
+        kind: PredicateKind.TEXT,
+        satisfies: { property: 'nonEmpty' },
+      }),
+    ).toBe('text that is non-empty');
+    expect(
+      describeWaitTarget({
         kind: PredicateKind.ELEMENT,
         query: { testid: 'pay' },
         state: 'enabled',
