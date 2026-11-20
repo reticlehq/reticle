@@ -43,6 +43,11 @@ export interface PeerCommandsDeps {
   workspace?: WorkspacePort;
   /** When a file was last written. The default asks the file system. A test gives its own. */
   writeTimeOf?: WriteTimeOf;
+  /**
+   * The quiet time for an action. The peer goes on looking after an action (`sendTreeChanges`), so
+   * an action can be called finished sooner than a caller that looks once must wait.
+   */
+  quietMs?: number;
 }
 
 /** An application has one screen for the server: it has no address a caller can go to. */
@@ -50,6 +55,11 @@ const ROUTE = '/';
 /** Room for an effect that comes up to a second late, and then the quiet time after it. */
 const DEFAULT_SETTLE_MS = 1500;
 /** How far one `dy` scroll moves the bar: a tenth of its range. */
+/**
+ * The quiet time for an action through the peer. It is shorter than the driver's own 500 ms,
+ * because the peer goes on looking: a change that comes after the action is sent when it comes.
+ */
+const PEER_QUIET_MS = 150;
 const SCROLL_STEP = 0.1;
 /** Each check is one question to the operating system. A search this wide is not a check. */
 const MAX_REACH_CHECKS = 8;
@@ -175,10 +185,44 @@ export class PeerCommands {
   #files: Snapshot | undefined;
   /** When each watched file was last written, at the last look. */
   #fileTimes: WriteTimes | undefined;
+  /** The tree at the last look, to say what changed since. */
+  #tree: UiNode | undefined;
+  /** Actions in progress. An action says its own changes, so the look between actions waits. */
+  #acting = 0;
+  #looking = false;
   constructor(deps: PeerCommandsDeps) {
     this.#deps = deps;
     // The first look. A file that is there now is not a change.
     this.sendFileChanges();
+  }
+
+  /**
+   * Sends what changed in the tree since the last look, when no action is in progress.
+   *
+   * An action sends its own changes before it answers. An application also changes after that: a
+   * second step of an effect, a save that ends late. With no look between actions those changes
+   * were sent by nobody, and a caller that waited for them had only its own questions to go on.
+   * The peer calls this on a timer.
+   */
+  async sendTreeChanges(): Promise<void> {
+    if (this.#acting > 0 || this.#looking) {
+      return;
+    }
+    this.#looking = true;
+    try {
+      const read = await this.#deps.driver.read();
+      // An action that began while the read was out says its own changes from its own reads.
+      if (0 === this.#acting) {
+        if (this.#tree !== undefined) {
+          for (const change of effectOf(this.#tree, read.root).changes) {
+            this.#send(change);
+          }
+        }
+        this.#tree = read.root;
+      }
+    } finally {
+      this.#looking = false;
+    }
   }
 
   /**
@@ -427,13 +471,23 @@ export class PeerCommands {
     const workspace = this.#deps.workspace;
     // What changed before this action is not its effect: say it first, on its own.
     this.sendFileChanges();
-    const outcome = await this.#deps.driver.act({
-      target,
-      kind,
-      ...(value === undefined ? {} : { value }),
-      ...how,
-      watch: workspace?.roots ?? [],
-    });
+    this.#acting += 1;
+    let outcome: ActOutcome;
+    try {
+      outcome = await this.#deps.driver.act({
+        target,
+        kind,
+        ...(value === undefined ? {} : { value }),
+        ...how,
+        quietMs: this.#deps.quietMs ?? PEER_QUIET_MS,
+        watch: workspace?.roots ?? [],
+      });
+      if (outcome.refused === undefined) {
+        this.#tree = outcome.after.root;
+      }
+    } finally {
+      this.#acting -= 1;
+    }
     if (outcome.refused === ActRefusal.STALE) {
       throw new Error(`ref '${ref}' no longer resolves to an element`);
     }

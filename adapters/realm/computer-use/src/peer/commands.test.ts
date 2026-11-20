@@ -401,4 +401,52 @@ describe('PeerCommands', () => {
     });
     expect(nothing.events.filter(([type]) => EventType.SIGNAL === type)).toEqual([]);
   });
+
+  it('says what changed in the tree between actions, once, and not while an action runs', async () => {
+    let status = 'Ready';
+    const events: [string, Record<string, unknown>][] = [];
+    let release: (() => void) | undefined;
+    const commands = new PeerCommands({
+      driver: {
+        subject: () => ({ app: 'Notes', pid: 7 }),
+        read: () => Promise.resolve(read(status)),
+        reach: () => Promise.resolve({ reach: 'yes' }),
+        act: (request) =>
+          new Promise((resolve) => {
+            // The action is asked for a short quiet time, because the peer goes on looking.
+            expect(request.quietMs).toBe(150);
+            release = () => {
+              resolve({
+                delivered: true,
+                reachable: true,
+                settled: true,
+                before: read('Ready'),
+                after: read('Working'),
+              });
+            };
+          }),
+      },
+      emit: (type, data) => events.push([type, data]),
+    });
+    // The first look has nothing to compare with.
+    await commands.sendTreeChanges();
+    expect(events).toEqual([]);
+
+    const ref = await refOf(commands, 'Save');
+    const acting = commands.answer(ReticleCommand.ACT, { ref, action: ActionType.CLICK });
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    status = 'Working';
+    // An action is in progress: it says its own changes, so the look says nothing.
+    await commands.sendTreeChanges();
+    expect(events).toEqual([]);
+    release?.();
+    await acting;
+    expect(events.map(([, data]) => data['name'])).toEqual(['Ready', 'Working']);
+
+    // The second step of the effect comes after the action is finished. The look sends it, once.
+    status = 'Done';
+    await commands.sendTreeChanges();
+    await commands.sendTreeChanges();
+    expect(events.map(([, data]) => data['name'])).toEqual(['Ready', 'Working', 'Working', 'Done']);
+  });
 });
