@@ -247,3 +247,14 @@ describe('the verdict carries it, in the field an agent already reads', () => {
     expect(v.because).toMatch(/re-check/i);
   });
 });
+
+describe('describeWaitTarget names a satisfies-only text check', () => {
+  it('names the property and its argument', () => {
+    expect(
+      describeWaitTarget({
+        kind: PredicateKind.TEXT,
+        satisfies: { property: 'matchesPattern', pattern: '\\d+ items' },
+      }),
+    ).toBe('text matching /\\d+ items/');
+  });
+});
