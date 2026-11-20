@@ -64,6 +64,12 @@ const Field = { VALUE: 'value', STATES: 'states' } as const;
  */
 export const FILE_SIGNAL_PREFIX = 'file.';
 
+/**
+ * The signal for an action in which the application's process wrote bytes to disk, in any folder.
+ * The operating system counts the bytes. No folder has to be watched for it.
+ */
+export const DISK_WROTE_SIGNAL = 'disk.wrote';
+
 /** The commands this realm answers. The peer declares exactly these to the bridge. */
 export const PEER_COMMANDS = [
   ReticleCommand.SNAPSHOT,
@@ -444,6 +450,14 @@ export class PeerCommands {
     const { changes } = effectOf(outcome.before.root, outcome.after.root);
     for (const change of changes) {
       this.#send(change);
+    }
+    // The bytes that the process wrote to disk, when the driver counts them. A signal only when
+    // there were some: a claim with `count: 0` then says "the application wrote nothing".
+    if (outcome.bytesWritten !== undefined && outcome.bytesWritten > 0) {
+      this.#deps.emit(EventType.SIGNAL, {
+        name: DISK_WROTE_SIGNAL,
+        data: { bytes: outcome.bytesWritten },
+      });
     }
     this.sendFileChanges();
     return { outcome, changes };

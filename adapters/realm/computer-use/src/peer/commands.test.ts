@@ -382,4 +382,23 @@ describe('PeerCommands', () => {
     expect(events.map(([, data]) => data['name'])).toEqual(['file.written', 'file.written']);
     expect(events[1]?.[1]['data']).toMatchObject({ file: 'old.txt', kind: 'rewritten' });
   });
+
+  it('sends a signal when the process wrote bytes to disk, and none when it wrote nothing', async () => {
+    const wrote = peer({ bytesWritten: 4096 });
+    await wrote.commands.answer(ReticleCommand.ACT, {
+      ref: await refOf(wrote.commands, 'Save'),
+      action: ActionType.CLICK,
+    });
+    expect(wrote.events).toContainEqual([
+      EventType.SIGNAL,
+      { name: 'disk.wrote', data: { bytes: 4096 } },
+    ]);
+
+    const nothing = peer({ bytesWritten: 0 });
+    await nothing.commands.answer(ReticleCommand.ACT, {
+      ref: await refOf(nothing.commands, 'Save'),
+      action: ActionType.CLICK,
+    });
+    expect(nothing.events.filter(([type]) => EventType.SIGNAL === type)).toEqual([]);
+  });
 });
