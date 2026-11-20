@@ -117,9 +117,17 @@ func readElement(_ element: AXUIElement, _ depth: Int, _ unread: inout Int) -> [
   return node
 }
 
-/// True when the application has the topmost ordinary window on the screen. Its menu bar is then
-/// the one on the screen. Asked of the window server, which answers with no run loop.
+/// True when the menu bar on the screen is the one of this application: the application is the
+/// one in front. Two sources, and either one is enough.
+///
+/// The workspace names the application in front. It learns of a change from the run loop, so the
+/// loop is run once first. The window server names the owner of the topmost ordinary window, and
+/// it is never old. The window alone was not enough: an application whose top window is an alert
+/// or a panel has it on another layer, and its menu bar was then not read.
+/// An old "in front" costs only time: the menu bar is read, and a press on it is refused.
 func isInFront(_ pid: pid_t) -> Bool {
+  RunLoop.current.run(until: Date())
+  if NSWorkspace.shared.frontmostApplication?.processIdentifier == pid { return true }
   let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
   let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
   let top = list.first { ($0[kCGWindowLayer as String] as? Int) == 0 }
