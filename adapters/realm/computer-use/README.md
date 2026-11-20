@@ -49,7 +49,7 @@ When no folder is watched, a claim can still ask if the application wrote to dis
 { "until": { "kind": "signal", "name": "disk.wrote" } }
 ```
 
-With `"count": 0` the same claim says that the application's own processes wrote nothing.
+With `"count": 0` the same claim says that the application's own processes wrote nothing. That is weak evidence: a helper of the system can write for the application.
 
 ## Actions
 
