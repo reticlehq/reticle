@@ -69,6 +69,9 @@ With `"count": 0` the same claim says that the application's own processes wrote
 | `fill` | Puts a value in the element, then reads it. A text field that did not take the value (a field in a web view) gets keys: all its text is selected, and the value is typed. The action fails if the field still holds another value. |
 | `type` | Sends one key event for each character. A text field that takes the keyboard selects its text first, so the typed text replaces it. |
 | `press` | Sends one key with its modifiers: `Return`, `Meta+s`. |
+| `clear` | A `fill` with no text. |
+| `check`, `uncheck` | Presses a checkbox or a radio button, then reads its state. Sends nothing when the box is in that state already, and says so (`alreadyAtValue`). Fails when the box did not change. |
+| `submit` | Sends the Return key to the element. |
 | `scroll` | Moves the scroll bar. See below. |
 
 Other actions are refused by name.
