@@ -55,6 +55,7 @@ const ROLE_OF: Readonly<Record<string, UiRole>> = {
   AXComboBox: UiRole.COMBOBOX,
   AXPopUpButton: UiRole.COMBOBOX,
   AXSlider: UiRole.SLIDER,
+  AXScrollBar: UiRole.SCROLLBAR,
   AXLink: UiRole.LINK,
   AXMenu: UiRole.MENU,
   AXMenuBar: UiRole.MENU,

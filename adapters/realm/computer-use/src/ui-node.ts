@@ -16,6 +16,7 @@ export const UiRole = {
   TEXTBOX: 'textbox',
   COMBOBOX: 'combobox',
   SLIDER: 'slider',
+  SCROLLBAR: 'scrollbar',
   LINK: 'link',
   MENU: 'menu',
   MENUITEM: 'menuitem',
