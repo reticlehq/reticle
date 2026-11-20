@@ -9,7 +9,7 @@
 import { basename } from 'node:path';
 
 import { diffSnapshots } from '@reticlehq/cli-realm';
-import type { WorkspacePort } from '@reticlehq/cli-realm';
+import type { Snapshot, WorkspacePort } from '@reticlehq/cli-realm';
 import {
   ActionType,
   ElementState,
@@ -160,8 +160,34 @@ interface ActResult {
 export class PeerCommands {
   readonly #deps: PeerCommandsDeps;
   readonly #refs = new RefTable();
+  /** The watched folders at the last look. Absent before the first one. */
+  #files: Snapshot | undefined;
   constructor(deps: PeerCommandsDeps) {
     this.#deps = deps;
+    // The first look. A file that is there now is not a change.
+    this.sendFileChanges();
+  }
+
+  /**
+   * Sends one signal for each file in the watched folders that changed since the last look.
+   *
+   * It is called after each action, and the peer calls it on a timer too. An application can
+   * write a file a moment after the action is finished. A signal that is sent only inside the
+   * action misses that file, and a claim that waits for it then fails for a file that is there.
+   */
+  sendFileChanges(): void {
+    const workspace = this.#deps.workspace;
+    if (workspace === undefined) {
+      return;
+    }
+    const now = workspace.snapshot();
+    for (const file of diffSnapshots(this.#files ?? now, now)) {
+      this.#deps.emit(EventType.SIGNAL, {
+        name: `${FILE_SIGNAL_PREFIX}${file.kind}`,
+        data: { file: basename(file.path), path: file.path, size: file.after?.size ?? 0 },
+      });
+    }
+    this.#files = now;
   }
 
   /**
@@ -365,7 +391,8 @@ export class PeerCommands {
     how: { delivery: Delivery; budgetMs: number },
   ): Promise<{ outcome: ActOutcome; changes: Change[] }> {
     const workspace = this.#deps.workspace;
-    const filesBefore = workspace?.snapshot();
+    // What changed before this action is not its effect: say it first, on its own.
+    this.sendFileChanges();
     const outcome = await this.#deps.driver.act({
       target,
       kind,
@@ -390,14 +417,7 @@ export class PeerCommands {
     for (const change of changes) {
       this.#send(change);
     }
-    if (workspace !== undefined && filesBefore !== undefined) {
-      for (const file of diffSnapshots(filesBefore, workspace.snapshot())) {
-        this.#deps.emit(EventType.SIGNAL, {
-          name: `${FILE_SIGNAL_PREFIX}${file.kind}`,
-          data: { file: basename(file.path), path: file.path, size: file.after?.size ?? 0 },
-        });
-      }
-    }
+    this.sendFileChanges();
     return { outcome, changes };
   }
 
