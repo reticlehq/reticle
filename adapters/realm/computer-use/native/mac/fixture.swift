@@ -3,6 +3,7 @@
 //   Slow     changes the status text after 400 ms.
 //   Dead     does nothing.
 //   Covered  works, but a view lies over it, so a person cannot click it.
+//   Title    a text field. The Return key in it changes the status text.
 //   Export   writes the title to note.txt in the folder given as the first argument, then says so.
 //   Fake     says "Exported" and writes nothing.
 // The window floats and the application never takes the keyboard, so a run does not disturb the
@@ -39,6 +40,8 @@ final class Fixture: NSObject, NSApplicationDelegate {
     // Space while a check runs, and a window left on another Space is one nobody can click.
     window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
     field.setAccessibilityLabel("Title")
+    field.target = self
+    field.action = #selector(entered)
     status.frame = NSRect(x: 20, y: 60, width: 320, height: 24)
     status.setAccessibilityIdentifier("status")
     window.contentView!.addSubview(field)
@@ -59,6 +62,7 @@ final class Fixture: NSObject, NSApplicationDelegate {
     try? field.stringValue.write(toFile: folder + "/note.txt", atomically: true, encoding: .utf8)
     status.stringValue = "Exported"
   }
+  @objc func entered() { status.stringValue = "Entered: \(field.stringValue)" }
   @objc func fake() { status.stringValue = "Exported" }
   @objc func slow() {
     DispatchQueue.main.asyncAfter(deadline: .now() + 0.4) { self.status.stringValue = "Slow done" }

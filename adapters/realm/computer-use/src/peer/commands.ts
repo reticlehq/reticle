@@ -60,6 +60,8 @@ export const PEER_COMMANDS = [
 const KIND_OF: Readonly<Partial<Record<string, ActKind>>> = {
   [ActionType.CLICK]: ActKind.PRESS,
   [ActionType.FILL]: ActKind.SET,
+  [ActionType.TYPE]: ActKind.TYPE,
+  [ActionType.PRESS]: ActKind.KEY,
 };
 /** The actions this realm does. The peer declares exactly these to the bridge. */
 export const PEER_ACTIONS: readonly string[] = Object.keys(KIND_OF);
@@ -311,7 +313,13 @@ export class PeerCommands {
     }
     const target = await this.#resolve(ref);
     const more = record(args['args']);
-    const value = text(more['value']);
+    const modifiers = Array.isArray(more['modifiers']) ? more['modifiers'].map(String) : [];
+    const key = text(more['text']);
+    // `fill` gives `value`. `type` gives `text`. `press` gives the key in `text`, with modifiers.
+    const value =
+      kind === ActKind.KEY && key !== undefined
+        ? [...modifiers, key].join('+')
+        : (text(more['value']) ?? key);
     const workspace = this.#deps.workspace;
     const filesBefore = workspace?.snapshot();
     const outcome = await this.#deps.driver.act({

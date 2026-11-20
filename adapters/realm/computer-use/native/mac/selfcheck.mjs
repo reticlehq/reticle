@@ -129,6 +129,13 @@ try {
   const typed = await step('Title', ActKind.SET, { value: 'Plan' });
   assert.deepEqual(typed.summaries, [CuSummary.UI_CHANGED]);
 
+  // Key events, not a value put in the field: the Return key runs the field's own action.
+  const keyed = await step('Title', ActKind.TYPE, { value: ' B' });
+  assert.deepEqual(keyed.summaries, [CuSummary.UI_CHANGED]);
+  const entered = await step('Title', ActKind.KEY, { value: 'Return' });
+  assert.deepEqual(entered.summaries, [CuSummary.UI_GONE, CuSummary.UI_APPEARED]);
+  assert.equal(entered.observed[1].value.element, 'text "Entered: Plan B"');
+
   const saved = await step('Save', ActKind.PRESS);
   assert.deepEqual(saved.summaries, [CuSummary.UI_GONE, CuSummary.UI_APPEARED]);
 
@@ -167,7 +174,7 @@ try {
   report.push(
     `Fake   -> verdict ${lied.verdict} (${lied.ground})`,
     `Export -> verdict ${proved.verdict} (${proved.ground})`,
-    'computer-use selfcheck: 9 of 9 cases held',
+    'computer-use selfcheck: 11 of 11 cases held',
     '',
   );
   process.stdout.write(report.join('\n'));

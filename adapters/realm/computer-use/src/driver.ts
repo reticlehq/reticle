@@ -5,7 +5,15 @@
  */
 import type { Placed, UiNode } from './ui-node.js';
 
-export const ActKind = { PRESS: 'press', SET: 'set' } as const;
+export const ActKind = {
+  PRESS: 'press',
+  /** Puts a value in the element. No key event is sent. */
+  SET: 'set',
+  /** Key events, one for each character of `value`. */
+  TYPE: 'type',
+  /** One key with its modifiers: `Return`, `Meta+s`. */
+  KEY: 'key',
+} as const;
 export type ActKind = (typeof ActKind)[keyof typeof ActKind];
 
 /** How an action reaches its element. */

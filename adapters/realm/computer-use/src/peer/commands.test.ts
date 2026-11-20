@@ -200,4 +200,23 @@ describe('PeerCommands', () => {
     ).rejects.toThrow("step 2 of 2: ref 'e99' no longer resolves to an element");
     expect(asked).toHaveLength(3);
   });
+
+  it('types with key events, and presses a key with its modifiers', async () => {
+    const { commands, asked } = peer();
+    const ref = await refOf(commands, 'Save');
+    await commands.answer(ReticleCommand.ACT, {
+      ref,
+      action: ActionType.TYPE,
+      args: { text: 'Plan' },
+    });
+    await commands.answer(ReticleCommand.ACT, {
+      ref,
+      action: ActionType.PRESS,
+      args: { text: 's', modifiers: ['Meta', 'Shift'] },
+    });
+    expect(asked.map((a) => [a.kind, a.value])).toEqual([
+      ['type', 'Plan'],
+      ['key', 'Meta+Shift+s'],
+    ]);
+  });
 });
