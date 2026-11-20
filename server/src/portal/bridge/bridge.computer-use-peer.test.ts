@@ -144,6 +144,12 @@ describe('a computer-use peer on the bridge', () => {
     })) as Verdict;
     expect(app.pressed).toEqual(['Save', 'Dead']);
     expect(result.verdict.pass).toBe(false);
+    // A red verdict on a web page says: add a build plugin, fire a signal. There is no SDK in a
+    // desktop application, so that advice is not given.
+    const gaps = (result as { instrumentationGaps?: { kind: string }[] }).instrumentationGaps ?? [];
+    expect(
+      gaps.map((gap) => gap.kind).filter((kind) => /source-mapping|signal|store/.test(kind)),
+    ).toEqual([]);
   });
 
   it('tells a file that was written from words that say so', async () => {

@@ -52,7 +52,7 @@ import {
 } from '@/surface/tools/act/settle-in-flight.js';
 import { gradeOfPredicate } from './assert-grade.js';
 import { assertSource, stampedSourceIn } from './assert-source.js';
-import { noteSourceSeen } from '@/portal/session/recorded-gaps.js';
+import { noteSourceSeen, sdkFacts } from '@/portal/session/recorded-gaps.js';
 import { diagnoseTimeout } from '@/surface/tools/act/act-observation.js';
 
 /**
@@ -338,11 +338,7 @@ export async function assertVerdict(
     source: source ?? stampedSourceIn(evidence) ?? session.lastAct.source(),
     stateAsked: declaresState(predicate),
     stateUnwatched: isStateUnwatched(spots),
-    // What the app DECLARED, so an under-instrumented one is told without having to be asked.
-    hasCapabilities: session.hasCapabilities,
-    // Whether the build TURNED the source stamp off, so a red with no file:line prescribes the
-    // right fix. `false` from the page is the only value that means anything; absent is unknown.
-    ...(false === session.sourceMapping ? { sourceMappingDisabled: true } : {}),
+    ...sdkFacts(session),
     domMutated: false,
     signalsFired: 0,
   });

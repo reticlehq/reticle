@@ -111,7 +111,7 @@ import { hiddenTargetField } from './act/resolve-target.js';
 import { screenRequestFindings, withAdvisories } from './act/screen-request.js';
 import { gradeOfPredicate } from './assert/assert-grade.js';
 import { readAlreadyTrueOrUnknown } from './act/already-true.js';
-import { engineBlindSpotsField, noteSourceSeen } from '@/portal/session/recorded-gaps.js';
+import { engineBlindSpotsField, noteSourceSeen, sdkFacts } from '@/portal/session/recorded-gaps.js';
 
 /**
  * The action vocabulary, derived from ActionType — never retyped: a hand-copied list once omitted
@@ -843,11 +843,7 @@ export const ACT_TOOLS: ToolDef[] = [
           ref: asString(args['ref']),
           stateAsked: declaresState(until),
           stateUnwatched,
-          // What the app DECLARED, so an under-instrumented one is told without having to be asked.
-          hasCapabilities: session.hasCapabilities,
-          // Whether the build TURNED the source stamp off, so a red with no file:line prescribes the
-          // right fix. `false` from the page is the only value that means anything; absent is unknown.
-          ...(false === session.sourceMapping ? { sourceMappingDisabled: true } : {}),
+          ...sdkFacts(session),
           // What the run still owes. A green that leaves this above zero is not the same as done.
           // MINUS the one this verdict is about to discharge.
           //
