@@ -48,6 +48,11 @@ export interface PeerCommandsDeps {
    * an action can be called finished sooner than a caller that looks once must wait.
    */
   quietMs?: number;
+  /**
+   * A known reason why a press can do nothing in this application. The answer to a press with
+   * no effect carries it as `note`. An Electron application with its switch off is the case.
+   */
+  noEffectNote?: string;
 }
 
 /** An application has one screen for the server: it has no address a caller can go to. */
@@ -755,6 +760,9 @@ export class PeerCommands {
         ...(byItself > 0 ? { changedByItself: byItself } : {}),
         // Changes to elements that are not on the screen. They are not in the count above.
         ...(offScreen > 0 ? { changedOffScreen: offScreen } : {}),
+        ...(kind === ActKind.PRESS && 0 === changes.length && this.#deps.noEffectNote !== undefined
+          ? { note: this.#deps.noEffectNote }
+          : {}),
         occluded: !outcome.reachable,
       },
       role: target.node.role,

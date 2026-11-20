@@ -114,5 +114,5 @@ export function electronWarning(
   if (plan.electronSwitch || bundle === undefined || !exists(join(bundle, ELECTRON_MARK))) {
     return undefined;
   }
-  return `${plan.app} is an Electron application. It shows its elements, and it does NOTHING for a press until its accessibility switch is on. Run again with ${Flag.ELECTRON_SWITCH}: the switch is set now and set back when you stop. It costs ${plan.app} some speed.`;
+  return `${plan.app} is an Electron application. It shows its elements, and it does NOTHING for a press until its accessibility switch is on. Run again with ${Flag.ELECTRON_SWITCH}: the switch is then set, and it is set back when you stop. It costs ${plan.app} some speed.`;
 }

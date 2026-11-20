@@ -66,6 +66,8 @@ export interface PeerInput {
   filesEveryMs?: number;
   /** How often the tree is looked at between actions. The default is a quarter of a second. */
   treeEveryMs?: number;
+  /** A known reason why a press can do nothing in this application. See `PeerCommandsDeps`. */
+  noEffectNote?: string;
   /** How long to wait before the first new dial when the bridge goes away. The default is one second. */
   retryMs?: number;
   now: () => number;
@@ -109,6 +111,7 @@ export function connectPeer(input: PeerInput): Peer {
     driver: input.driver,
     emit,
     ...(input.workspace === undefined ? {} : { workspace: input.workspace }),
+    ...(input.noEffectNote === undefined ? {} : { noEffectNote: input.noEffectNote }),
   });
   const health = (reason: string): void => {
     emit(EventType.PAGE_HEALTH, {

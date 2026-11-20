@@ -591,6 +591,43 @@ describe('PeerCommands', () => {
     });
   });
 
+  it('says why a press can have no effect, when the peer was told a reason', async () => {
+    const still = { before: read('Ready'), after: read('Ready') };
+    const press = async (commands: PeerCommands) =>
+      (
+        (await commands.answer(ReticleCommand.ACT, {
+          ref: await refOf(commands, 'Save'),
+          action: ActionType.CLICK,
+        })) as { effect: Record<string, unknown> }
+      ).effect;
+    const driver: UiDriver = {
+      ...fakeDriver(),
+      act: () => Promise.resolve({ delivered: true, reachable: true, settled: true, ...still }),
+    };
+    const told = new PeerCommands({ driver, emit: () => undefined, noEffectNote: 'the switch' });
+    expect((await press(told))['note']).toBe('the switch');
+    // No reason was given: no note. And an action that did something has no note.
+    expect((await press(new PeerCommands({ driver, emit: () => undefined })))['note']).toBe(
+      undefined,
+    );
+    const acted = new PeerCommands({
+      driver: {
+        ...driver,
+        act: () =>
+          Promise.resolve({
+            delivered: true,
+            reachable: true,
+            settled: true,
+            before: read('Ready'),
+            after: read('Saved'),
+          }),
+      },
+      emit: () => undefined,
+      noEffectNote: 'the switch',
+    });
+    expect((await press(acted))['note']).toBe(undefined);
+  });
+
   it('sends a signal when the action put something on the clipboard, with no content', async () => {
     const copied = peer({ clipboardChanged: true });
     await copied.commands.answer(ReticleCommand.ACT, {
