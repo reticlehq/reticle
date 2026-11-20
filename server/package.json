@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/server",
-  "version": "3.10.9",
+  "version": "3.10.10",
   "mcpName": "io.github.reticlehq/reticle",
   "description": "Reticle CLI, bridge and MCP server: a coding agent drives your running web app from the inside and gets a verdict with evidence, for change verification, access control, accessibility, performance and SEO checks.",
   "type": "module",
@@ -75,7 +75,7 @@
     "cli"
   ],
   "reticle": {
-    "changelog": "3.10.9 stops a false verdict: with two tabs connected and no sessionId, a verdict tool now refuses and lists the tabs instead of grading a guessed one. Init also finds the root layout of a next-intl app, and the HUD settings switches have names for screen readers.",
+    "changelog": "3.10.10 fixes a credential leak: a password entered with type was saved in plain text in the flow file, and is now redacted like a fill. A page refused at the origin gate is also no longer diagnosed as a closed tab: the answer names the origin and RETICLE_ALLOWED_ORIGINS.",
     "breakingChanges": []
   },
   "publishConfig": {
