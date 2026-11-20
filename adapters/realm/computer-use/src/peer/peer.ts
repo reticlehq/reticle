@@ -23,6 +23,8 @@ const ADAPTER = 'computer-use';
 /** A session with no word for 12 s reads as throttled. The SDK in a page sends this at the same rate. */
 const HEARTBEAT_MS = 5000;
 const FILES_EVERY_MS = 1000;
+const RETRY_MS = 1000;
+const MAX_RETRY_MS = 10_000;
 /** The bridge drops a result whose error is longer than 4,096 characters, and the command then waits. */
 const MAX_ERROR = 4000;
 const HealthReason = { CONNECT: 'connect', HEARTBEAT: 'heartbeat' } as const;
@@ -47,6 +49,8 @@ export interface PeerInput {
   workspace?: WorkspacePort;
   /** How often the watched folders are looked at between actions. The default is one second. */
   filesEveryMs?: number;
+  /** How long to wait before the first new dial when the bridge goes away. The default is one second. */
+  retryMs?: number;
   now: () => number;
 }
 
@@ -62,9 +66,16 @@ function known(mine: readonly string[], theirs: readonly string[]): string[] {
 }
 
 export function connectPeer(input: PeerInput): Peer {
-  const socket = new WebSocket(input.url, { origin: ORIGIN });
+  let socket: WebSocket | undefined;
+  let closed = false;
+  let joinedOnce = false;
+  let retryMs = input.retryMs ?? RETRY_MS;
+  let retry: ReturnType<typeof setTimeout> | undefined;
+  let heartbeat: ReturnType<typeof setInterval> | undefined;
+  let files: ReturnType<typeof setInterval> | undefined;
+
   const send = (message: unknown): void => {
-    if (socket.readyState === WebSocket.OPEN) {
+    if (socket?.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify(message));
     }
   };
@@ -74,6 +85,8 @@ export function connectPeer(input: PeerInput): Peer {
       event: { t: input.now(), type, sessionId: input.sessionId, data },
     });
   };
+  // One for the life of the peer, not one for each connection: a ref that the agent holds must
+  // still be the same element after the bridge comes back.
   const commands = new PeerCommands({
     driver: input.driver,
     emit,
@@ -87,51 +100,49 @@ export function connectPeer(input: PeerInput): Peer {
       runtime: COMPUTER_USE_RUNTIME,
     });
   };
-  let heartbeat: ReturnType<typeof setInterval> | undefined;
-  let files: ReturnType<typeof setInterval> | undefined;
+  const stopTimers = (): void => {
+    clearInterval(heartbeat);
+    clearInterval(files);
+  };
 
-  const ready = new Promise<void>((resolve, reject) => {
-    socket.once('error', reject);
-    socket.once('open', () => {
-      const { app, pid } = input.driver.subject();
-      send({
-        kind: MessageKind.HELLO,
-        protocolVersion: RETICLE_PROTOCOL_VERSION,
-        sessionId: input.sessionId,
-        url: `app://${encodeURIComponent(app)}/`,
-        title: `${app} (${String(pid)})`,
-        adapters: [ADAPTER],
-        projectId: input.projectId,
-        ...(input.token === undefined ? {} : { token: input.token }),
-        platform: PlatformProfile.NATIVE,
-        hasCapabilities: false,
-        sourceMapping: false,
-        commands: [...PEER_COMMANDS],
-        contract: CONTRACT_FINGERPRINT,
-        contractParts: {
-          commands: known(PEER_COMMANDS, CONTRACT_PARTS.commands),
-          events: known(EVENTS, CONTRACT_PARTS.events),
-          actions: known(PEER_ACTIONS, CONTRACT_PARTS.actions),
-        },
-      });
-      health(HealthReason.CONNECT);
-      heartbeat = setInterval(() => {
-        health(HealthReason.HEARTBEAT);
-      }, HEARTBEAT_MS);
-      heartbeat.unref();
-      if (input.workspace !== undefined) {
-        // ponytail: a whole look at the folders each time. Watch them for changes when a folder
-        // is large enough for the look to cost more than the wait.
-        files = setInterval(() => {
-          commands.sendFileChanges();
-        }, input.filesEveryMs ?? FILES_EVERY_MS);
-        files.unref();
-      }
-      resolve();
+  const announce = (): void => {
+    const { app, pid } = input.driver.subject();
+    send({
+      kind: MessageKind.HELLO,
+      protocolVersion: RETICLE_PROTOCOL_VERSION,
+      sessionId: input.sessionId,
+      url: `app://${encodeURIComponent(app)}/`,
+      title: `${app} (${String(pid)})`,
+      adapters: [ADAPTER],
+      projectId: input.projectId,
+      ...(input.token === undefined ? {} : { token: input.token }),
+      platform: PlatformProfile.NATIVE,
+      hasCapabilities: false,
+      sourceMapping: false,
+      commands: [...PEER_COMMANDS],
+      contract: CONTRACT_FINGERPRINT,
+      contractParts: {
+        commands: known(PEER_COMMANDS, CONTRACT_PARTS.commands),
+        events: known(EVENTS, CONTRACT_PARTS.events),
+        actions: known(PEER_ACTIONS, CONTRACT_PARTS.actions),
+      },
     });
-  });
+    health(HealthReason.CONNECT);
+    heartbeat = setInterval(() => {
+      health(HealthReason.HEARTBEAT);
+    }, HEARTBEAT_MS);
+    heartbeat.unref();
+    if (input.workspace !== undefined) {
+      // ponytail: a whole look at the folders each time. Watch them for changes when a folder
+      // is large enough for the look to cost more than the wait.
+      files = setInterval(() => {
+        commands.sendFileChanges();
+      }, input.filesEveryMs ?? FILES_EVERY_MS);
+      files.unref();
+    }
+  };
 
-  socket.on('message', (raw) => {
+  const onMessage = (raw: unknown): void => {
     if (!Buffer.isBuffer(raw)) {
       return;
     }
@@ -174,18 +185,54 @@ export function connectPeer(input: PeerInput): Peer {
           });
         },
       );
-  });
-  socket.on('close', () => {
-    clearInterval(heartbeat);
-    clearInterval(files);
+  };
+
+  /**
+   * Dials the bridge. When the bridge goes away after the peer joined it once, the peer dials
+   * again, and waits longer each time up to ten seconds. The daemon ends when it is idle and
+   * starts again on the next tool call, and a peer that stayed gone made the application
+   * disappear for the agent with no word.
+   */
+  const dial = (onFirst?: { resolve: () => void; reject: (error: unknown) => void }): void => {
+    const next = new WebSocket(input.url, { origin: ORIGIN });
+    socket = next;
+    next.once('open', () => {
+      joinedOnce = true;
+      retryMs = input.retryMs ?? RETRY_MS;
+      announce();
+      onFirst?.resolve();
+    });
+    next.on('message', onMessage);
+    // An error before the first join is the caller's to know: the bridge is not there. After
+    // it, the close that follows starts the next dial.
+    next.on('error', (error) => {
+      if (!joinedOnce) {
+        onFirst?.reject(error);
+      }
+    });
+    next.on('close', () => {
+      stopTimers();
+      if (closed || !joinedOnce) {
+        return;
+      }
+      retry = setTimeout(() => {
+        dial();
+      }, retryMs);
+      retryMs = Math.min(retryMs * 2, MAX_RETRY_MS);
+    });
+  };
+
+  const ready = new Promise<void>((resolve, reject) => {
+    dial({ resolve, reject });
   });
 
   return {
     ready,
     close: () => {
-      clearInterval(heartbeat);
-      clearInterval(files);
-      socket.close();
+      closed = true;
+      clearTimeout(retry);
+      stopTimers();
+      socket?.close();
     },
   };
 }
