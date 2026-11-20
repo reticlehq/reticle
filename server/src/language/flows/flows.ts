@@ -8,6 +8,7 @@ import {
 import {
   REDACTED_FILL,
   SECRET_FIELD_ARG,
+  typedTextKey,
   SECRET_NAME_ARG,
   secretEnvKey,
   withDistinctSecretKeys,
@@ -241,7 +242,8 @@ function redactSecretFill(
   /** The SDK said the target holds a secret: redact whatever the field is called. */
   secret = false,
 ): Record<string, unknown> {
-  if (typeof args['value'] !== 'string') {
+  const key = typedTextKey(args);
+  if (key === undefined) {
     return args;
   }
   const field = anchorFieldName(anchor);
@@ -251,22 +253,20 @@ function redactSecretFill(
   }
   // ponytail: a secret field with no name (a component anchor) gets no variable; replay then refuses it.
   if (field === undefined) {
-    return { ...args, value: REDACTED_FILL };
+    return { ...args, [key]: REDACTED_FILL };
   }
   // The variable that supplies it, beside the placeholder: the file alone says what to set.
-  return { ...args, value: REDACTED_FILL, [SECRET_NAME_ARG]: secretEnvKey(field) };
+  return { ...args, [key]: REDACTED_FILL, [SECRET_NAME_ARG]: secretEnvKey(field) };
 }
 
 /**
- * An anchored flow with each credential fill redacted by its field name.
- *
- * An in-page recorder of an older SDK redacts by an English rule only, and its flow arrives here
- * already anchored. A value that is already a placeholder is left as it is, with its variable name.
+ * An anchored flow with each credential fill redacted by its field name. An older SDK's recorder
+ * redacts by an English rule only. A value that is already a placeholder keeps its variable name.
  */
 function redactSavedFills(flow: FlowFile): FlowFile {
   let redacted = false;
   const redact = (step: FlowStep): FlowStep => {
-    const value = step.args?.['value'];
+    const value = step.args?.[typedTextKey(step.args) ?? 'value'];
     let out = step;
     if (
       step.args !== undefined &&

@@ -3,6 +3,7 @@ import {
   SECRET_NAME_ARG,
   secretKeyForFill,
   secretValue,
+  typedTextKey,
 } from './fields/flow-secret-field.js';
 import {
   EventType,
@@ -111,7 +112,8 @@ export function replayActionArgs(
   if (key !== undefined) {
     const supplied = secretValue(key, process.env);
     if (supplied !== undefined && supplied.length > 0) {
-      args['value'] = supplied;
+      // Into the arg that holds the placeholder: `value` for a fill, `text` for a type.
+      args[typedTextKey(args) ?? 'value'] = supplied;
     }
   }
   return args;
