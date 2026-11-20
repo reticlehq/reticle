@@ -1,0 +1,58 @@
+{
+  "name": "@reticlehq/computer-use",
+  "version": "3.10.7",
+  "private": true,
+  "description": "Reticle realm adapter for computer use: reads an application through the operating system's accessibility tree, acts on it, and reports what each action changed. Needs no code inside the subject.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsc -b && node ../../../scripts/alias-dist.mjs",
+    "typecheck": "tsc -b",
+    "lint": "eslint src",
+    "test:unit": "vitest run src --passWithNoTests",
+    "prepack": "node ../../../scripts/prepare-dist.mjs --clean dist && tsc -b --force && node ../../../scripts/alias-dist.mjs && node ../../../scripts/prepare-dist.mjs dist"
+  },
+  "dependencies": {
+    "@reticlehq/cli-realm": "workspace:*",
+    "@reticlehq/core": "workspace:*",
+    "open-verification": "workspace:*",
+    "ws": "^8.22.1",
+    "zod": "^4.6.6"
+  },
+  "license": "Apache-2.0",
+  "author": "Reticle contributors",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/reticlehq/reticle.git",
+    "directory": "adapters/realm/computer-use"
+  },
+  "homepage": "https://github.com/reticlehq/reticle#readme",
+  "bugs": "https://github.com/reticlehq/reticle/issues",
+  "files": [
+    "bin",
+    "dist",
+    "native/mac/reticle-ax.swift",
+    "NOTICE"
+  ],
+  "sideEffects": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.18.2"
+  },
+  "bin": {
+    "reticle-computer-use": "./bin/attach.mjs"
+  }
+}

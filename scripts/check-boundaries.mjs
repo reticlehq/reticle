@@ -66,6 +66,9 @@ export const SIDE = Object.freeze({
   // has no browser half at all — there is no code inside the subject, which is the whole point of
   // it.
   '@reticlehq/cli-realm': 'node',
+  // The computer-use realm. Node only: it speaks to a helper process that reads the operating
+  // system's accessibility tree. It has no half inside the subject.
+  '@reticlehq/computer-use': 'node',
   // Isomorphic foundation — imported by every side, imports none of them.
   '@reticlehq/core': 'iso',
   // The conformance suite. Isomorphic and dependency-free: it describes behaviours to plant and

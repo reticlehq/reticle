@@ -1,0 +1,73 @@
+{
+  "children": [
+    {
+      "children": [
+        {
+          "children": [],
+          "description": "Title",
+          "enabled": true,
+          "focused": true,
+          "frame": [99, 707, 322, 26],
+          "role": "AXTextField",
+          "value": ""
+        },
+        {
+          "children": [],
+          "enabled": true,
+          "focused": false,
+          "frame": [101, 817, 318, 26],
+          "id": "status",
+          "role": "AXStaticText",
+          "value": "Ready"
+        },
+        {
+          "children": [],
+          "enabled": true,
+          "focused": false,
+          "frame": [99, 759, 82, 34],
+          "role": "AXButton",
+          "title": "Save"
+        },
+        {
+          "children": [],
+          "enabled": true,
+          "focused": false,
+          "frame": [179, 759, 82, 34],
+          "role": "AXButton",
+          "title": "Slow"
+        },
+        {
+          "children": [],
+          "enabled": true,
+          "focused": false,
+          "frame": [259, 759, 82, 34],
+          "role": "AXButton",
+          "title": "Dead"
+        },
+        {
+          "children": [],
+          "enabled": true,
+          "focused": false,
+          "frame": [339, 759, 82, 34],
+          "role": "AXButton",
+          "title": "Covered"
+        },
+        {
+          "children": [],
+          "enabled": true,
+          "focused": false,
+          "frame": [98, 658, 98, 16],
+          "role": "AXStaticText",
+          "value": "Reticle Fixture"
+        }
+      ],
+      "focused": false,
+      "frame": [80, 650, 360, 252],
+      "role": "AXWindow",
+      "subrole": "AXStandardWindow",
+      "title": "Reticle Fixture"
+    }
+  ],
+  "role": "AXApplication",
+  "title": "fixture"
+}

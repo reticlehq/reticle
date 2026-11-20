@@ -13,6 +13,7 @@
   "@reticlehq/eslint-plugin": ["e2e", "windows"],
   "@reticlehq/browser": ["e2e", "windows"],
   "@reticlehq/cli-realm": ["e2e", "windows"],
+  "@reticlehq/computer-use": [],
   "@reticlehq/electron": ["e2e", "windows"],
   "@reticlehq/api": ["e2e"],
   "@reticlehq/atlas": ["e2e"],

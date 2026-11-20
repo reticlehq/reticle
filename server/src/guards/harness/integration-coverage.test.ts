@@ -139,6 +139,9 @@ describe('every shipped integration is covered by an app AND a gate', () => {
       // need an app and a gate of its own -- `apps/cli-smoke` and the conformance subject -- and
       // that obligation is `apps/README.md` rule 1's, not this guard's.
       'cli',
+      // The realm for a whole application, read through the operating system. Like `cli`, it
+      // watches from outside, so there is nothing for a user to wire into an app.
+      'computer-use',
       'server',
       'spec-runner',
       // The suite that scores an implementation of the specification. It teaches Reticle nothing
