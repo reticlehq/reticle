@@ -371,3 +371,62 @@ describe('dev overlays report what actually takes the pointer (#1698)', () => {
     expect(hitTestOccluder(app, new DOMRect(0, 0, 100, 100))).toBe(overlay);
   });
 });
+
+/**
+ * #2402: an overlay that takes no pointer events does not cover a control.
+ *
+ * `act_and_wait` on an icon button came back `verified: "unknown"`, covered by a `div` that the
+ * pointer goes through. The hit test now looks past such an element to the next one. A transparent
+ * element that takes pointer events still receives the click, so it is still the occluder.
+ */
+describe('an overlay that takes no pointer events is not an occluder (#2402)', () => {
+  afterEach(clearStubs);
+
+  function setup(style: string): { button: HTMLButtonElement; overlay: HTMLDivElement } {
+    const button = document.createElement('button');
+    const overlay = document.createElement('div');
+    overlay.setAttribute('style', style);
+    document.body.append(button, overlay);
+    stubStack(() => [overlay, button, document.body]);
+    return { button, overlay };
+  }
+
+  it('looks past an overlay that takes no pointer events', () => {
+    const { button } = setup('pointer-events: none');
+    expect(hitTestOccluder(button, new DOMRect(0, 0, 100, 100))).toBeNull();
+  });
+
+  it('looks past it when only the singular hit test exists', () => {
+    const { button, overlay } = setup('pointer-events: none');
+    clearStubs();
+    document.body.append(button, overlay);
+    stubPerPoint(() => overlay);
+    expect(hitTestOccluder(button, new DOMRect(0, 0, 100, 100))).toBeNull();
+  });
+
+  it('still reports an overlay under the one that takes no pointer events', () => {
+    const button = document.createElement('button');
+    const ghost = document.createElement('div');
+    ghost.setAttribute('style', 'pointer-events: none');
+    const modal = document.createElement('div');
+    document.body.append(button, modal, ghost);
+    stubStack(() => [ghost, modal, button, document.body]);
+    expect(hitTestOccluder(button, new DOMRect(0, 0, 100, 100))).toBe(modal);
+  });
+
+  it('reports a fully transparent overlay, which still takes the click', () => {
+    const { button, overlay } = setup('opacity: 0');
+    expect(hitTestOccluder(button, new DOMRect(0, 0, 100, 100))).toBe(overlay);
+  });
+
+  it('reports an overlay inside a transparent ancestor', () => {
+    const button = document.createElement('button');
+    const layer = document.createElement('div');
+    layer.setAttribute('style', 'opacity: 0');
+    const overlay = document.createElement('div');
+    layer.append(overlay);
+    document.body.append(button, layer);
+    stubStack(() => [overlay, layer, button, document.body]);
+    expect(hitTestOccluder(button, new DOMRect(0, 0, 100, 100))).toBe(overlay);
+  });
+});

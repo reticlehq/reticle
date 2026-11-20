@@ -66,14 +66,22 @@ export function hitTestOccluder(el: Element, rect: DOMRect): Element | null {
    * APP element underneath is blamed for covering it. Kept, it lands on the `top === el` branch
    * below: "not occluded", like any target that is on top of itself.
    */
-  const isOursButNotTheTarget = (candidate: Element): boolean =>
-    isReticleUi(candidate) &&
-    candidate !== el &&
-    !el.contains(candidate) &&
-    !candidate.contains(el);
+  const isForeign = (candidate: Element): boolean =>
+    candidate !== el && !el.contains(candidate) && !candidate.contains(el);
+  /*
+   * An element that takes no pointer events covers nothing (#2402): the pointer goes through it. A
+   * transparent element still takes the click, so it stays an occluder. Only foreign elements are
+   * skipped. A shadow host is in the stack for its shadow content, which can take the pointer while
+   * the host does not (#1698), so its own `pointer-events` does not count.
+   */
+  const coversNothing = (candidate: Element): boolean =>
+    'none' === candidate.ownerDocument.defaultView?.getComputedStyle(candidate).pointerEvents &&
+    null === (candidate.shadowRoot ?? capturedRootOf(candidate));
+  const isSkipped = (candidate: Element): boolean =>
+    isForeign(candidate) && (isReticleUi(candidate) || coversNothing(candidate));
   const topAt = (x: number, y: number): { blocker: Element; resolved: Element } | null => {
     const found = withStack.elementsFromPoint?.(x, y) ?? [doc.elementFromPoint(x, y)];
-    const top = found.find((c): c is Element => null !== c && !isOursButNotTheTarget(c)) ?? null;
+    const top = found.find((c): c is Element => null !== c && !isSkipped(c)) ?? null;
     if (null === top) {
       return null;
     }
