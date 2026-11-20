@@ -4,6 +4,14 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+## [3.10.9] — 2026-11-21
+
+### Fixed
+
+- **`@reticlehq/browser` — the HUD settings switches had no accessible name.** Each switch and checkbox in the settings panel had no text and no `aria-label`. A screen reader said only "switch", and an accessibility audit of the app counted the HUD controls as unnamed. Each control now has the name of its setting as its `aria-label`.
+- **`reticle init` — in a next-intl app, init found no root layout.** The root layout of a next-intl app is `app/[locale]/layout.tsx`, and init looked only at `app/layout.*`, route groups and `pages/_app`, so it said "no root layout (app/layout.tsx) or pages/_app found" and the user mounted the component by hand. Init now also takes a top-level dynamic segment whose layout renders `<html>`, under `app` or `src/app`. A nested dynamic layout that does not render `<html>` is never taken.
+- **`@reticlehq/server` — a verdict was graded against a guessed tab.** With two tabs connected, a call that named no `sessionId` was sent to a tab the resolver picked by heartbeat or focus. A `reticle_assert` could then answer `verified: "no"` about a page the agent never meant, and nothing in the answer said a tab was guessed. Now a tool that gives a verdict (`reticle_assert`, `reticle_act_and_wait`, `reticle_verify`, `reticle_act` with `steps`, a flow replay) refuses when more than one tab is connected and no `sessionId` is given. The refusal lists each tab's `sessionId` and URL. A read or a single action still picks a tab as before.
+
 ## [3.10.8] — 2026-11-20
 
 ### Fixed

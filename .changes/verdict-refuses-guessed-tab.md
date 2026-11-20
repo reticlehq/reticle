@@ -1,3 +1,0 @@
-### Fixed
-
-- **A verdict is never graded against a guessed tab.** With two tabs connected, a call that named no `sessionId` was sent to a tab the resolver picked by heartbeat or focus. A `reticle_assert` could then answer `verified: "no"` about a page the agent never meant, and nothing in the answer said a tab was guessed. Now a tool that gives a verdict (`reticle_assert`, `reticle_act_and_wait`, `reticle_verify`, `reticle_act` with `steps`, a flow replay) refuses when more than one tab is connected and no `sessionId` is given. The refusal lists each tab's `sessionId` and URL. A read or a single action still picks a tab as before.
