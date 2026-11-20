@@ -20,6 +20,7 @@
 import AppKit
 import ApplicationServices
 import Foundation
+import Security
 
 let attributes =
   [
@@ -259,6 +260,29 @@ func bytesWritten(_ pid: pid_t) -> UInt64? {
   return descendants(pid).reduce(own) { $0 + (one($1) ?? 0) }
 }
 
+/// Whether a running application is in a sandbox, asked of its code signature. nil when the
+/// system does not answer.
+///
+/// It was asked of the file system before: is there a folder for the application in
+/// ~/Library/Containers. macOS guards that folder, and a look into it can put a question on the
+/// person's screen ("would like to access data from other apps"). The signature needs no such
+/// look.
+func sandboxed(_ pid: pid_t) -> Bool? {
+  var code: SecCode?
+  let attributes = [kSecGuestAttributePid: pid] as CFDictionary
+  guard SecCodeCopyGuestWithAttributes(nil, attributes, [], &code) == errSecSuccess, let code
+  else { return nil }
+  var fixed: SecStaticCode?
+  guard SecCodeCopyStaticCode(code, [], &fixed) == errSecSuccess, let fixed else { return nil }
+  var info: CFDictionary?
+  let flags = SecCSFlags(rawValue: kSecCSSigningInformation)
+  guard SecCodeCopySigningInformation(fixed, flags, &info) == errSecSuccess,
+    let facts = info as? [String: Any]
+  else { return nil }
+  let entitlements = facts[kSecCodeInfoEntitlementsDict as String] as? [String: Any]
+  return (entitlements?["com.apple.security.app-sandbox"] as? Bool) == true
+}
+
 /// The settings of an application: the values in its preferences domain, each as text.
 ///
 /// nil when they cannot be read from outside the application. An application in a sandbox keeps
@@ -268,8 +292,8 @@ func settings(_ pid: pid_t) -> [String: String]? {
   guard let app = NSRunningApplication(processIdentifier: pid),
     let domain = app.bundleIdentifier ?? app.executableURL?.lastPathComponent
   else { return nil }
-  let container = NSHomeDirectory() + "/Library/Containers/" + domain
-  if FileManager.default.fileExists(atPath: container) { return nil }
+  // An application in a sandbox: not read. Nil too when the question has no answer.
+  guard sandboxed(pid) == false else { return nil }
   CFPreferencesAppSynchronize(domain as CFString)
   let all =
     CFPreferencesCopyMultiple(
