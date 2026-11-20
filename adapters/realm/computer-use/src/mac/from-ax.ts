@@ -18,6 +18,7 @@ export interface AxNode {
   value?: string | undefined;
   enabled?: boolean | undefined;
   focused?: boolean | undefined;
+  selected?: boolean | undefined;
   id?: string | undefined;
   frame?: number[] | undefined;
   /** The place among all the children of the parent, when the helper left some out. */
@@ -36,6 +37,7 @@ export const AxNodeSchema: z.ZodType<AxNode> = z.lazy(() =>
     value: z.string().optional(),
     enabled: z.boolean().optional(),
     focused: z.boolean().optional(),
+    selected: z.boolean().optional(),
     id: z.string().optional(),
     frame: z.array(z.number()).optional(),
     i: z.number().optional(),
@@ -46,6 +48,7 @@ export const AxNodeSchema: z.ZodType<AxNode> = z.lazy(() =>
 
 const AxRole = { STATIC_TEXT: 'AXStaticText', CHECKBOX: 'AXCheckBox' } as const;
 const AX_ON = '1';
+const SELECTED = 'selected';
 
 const ROLE_OF: Readonly<Record<string, UiRole>> = {
   AXApplication: UiRole.APPLICATION,
@@ -115,7 +118,10 @@ export function fromAx(ax: AxNode): FromAx {
     // A static text has no title: its words are its value, and they are what a person reads.
     const isText = node.role === AxRole.STATIC_TEXT;
     const name = (isText ? node.value : undefined) ?? node.title ?? node.description ?? '';
-    const value = isText || node.role === AxRole.CHECKBOX ? undefined : node.value;
+    // ponytail: the wire has no "selected" state, so a chosen row says it in its value. Add the
+    // state to `ElementState` in core when a second realm needs it.
+    const chosen = true === node.selected ? SELECTED : undefined;
+    const value = isText || AxRole.CHECKBOX === node.role ? undefined : (chosen ?? node.value);
     const [x, y, w, h] = node.frame ?? [];
     const frame =
       x === undefined || y === undefined || w === undefined || h === undefined

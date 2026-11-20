@@ -43,7 +43,8 @@ export interface PeerCommandsDeps {
 
 /** An application has one screen for the server: it has no address a caller can go to. */
 const ROUTE = '/';
-const DEFAULT_SETTLE_MS = 1000;
+/** Room for an effect that comes up to a second late, and then the quiet time after it. */
+const DEFAULT_SETTLE_MS = 1500;
 /** How far one `dy` scroll moves the bar: a tenth of its range. */
 const SCROLL_STEP = 0.1;
 /** Each check is one question to the operating system. A search this wide is not a check. */
