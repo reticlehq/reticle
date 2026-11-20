@@ -71,6 +71,12 @@ export interface ActOutcome {
   settled: boolean;
   before: UiRead;
   after: UiRead;
+  /**
+   * The bytes that the application's process wrote to disk in the action, as the operating system
+   * counts them. Zero is a fact: nothing was written, in any folder. Absent: the driver cannot
+   * count.
+   */
+  bytesWritten?: number;
 }
 
 /** Whether a person can see and click an element now. */

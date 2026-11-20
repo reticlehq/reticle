@@ -9,6 +9,8 @@ export const CuChannel = {
   FILES: 'x-files',
   /** The bytes in a path: the application wrote them. */
   FILES_CONTENT: 'x-files-content',
+  /** How many bytes the application's process wrote to disk: the operating system counted them. */
+  DISK: 'x-disk',
 } as const;
 
 /** Stable labels. A claim matches on them exactly. */
@@ -24,6 +26,10 @@ export const CuSummary = {
   FS_WRITTEN_EMPTY: 'cu.fs.written-empty',
   FS_DELETED: 'cu.fs.deleted',
   FS_CONTENT: 'cu.fs.content',
+  /** The process wrote bytes to disk in the action. It does not say where. */
+  DISK_WROTE: 'cu.disk.wrote',
+  /** The process wrote nothing to disk in the action: no file, in any folder. */
+  DISK_WROTE_NOTHING: 'cu.disk.wrote-nothing',
 } as const;
 
 export const CU_SURFACE = 'x-computer-use';

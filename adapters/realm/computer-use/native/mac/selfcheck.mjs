@@ -67,11 +67,13 @@ async function step(name, kind, parameters = {}) {
   const observed = await realm.observe(closed);
   const coverage = await realm.coverage(closed);
   const ms = Date.now() - started;
-  const summaries = observed.map((o) => o.summary);
+  // What the tree and the watched folders showed. The count of bytes on disk is asked for by name.
+  const summaries = observed.filter((o) => CuChannel.DISK !== o.channel).map((o) => o.summary);
+  const disk = observed.filter((o) => CuChannel.DISK === o.channel).map((o) => o.summary);
   report.push(
     `${name.padEnd(8)} ${String(ms).padStart(5)} ms  ${summaries.join(', ') || receipt.refused?.detail}  [closed by ${closed.closedBy}]`,
   );
-  return { receipt, closed, observed, coverage, summaries };
+  return { receipt, closed, observed, coverage, summaries, disk };
 }
 
 const noteWritten = {
@@ -141,7 +143,7 @@ try {
   );
   const entered = await step('Title', ActKind.KEY, { value: 'Return' });
   assert.deepEqual(entered.summaries, [CuSummary.UI_GONE, CuSummary.UI_APPEARED]);
-  assert.equal(entered.observed[1].value.element, 'text "Entered: Plan B"');
+  assert.ok(entered.observed.some((o) => 'text "Entered: Plan B"' === o.value.element));
 
   // A row of a table has no press of its own. A press chooses it, as a click does.
   const rows = await realm.locate({ role: 'row' });
@@ -200,10 +202,13 @@ try {
   // The application says "Exported" both times. Only one of them wrote the file.
   const fake = await step('Fake', ActKind.PRESS);
   assert.ok(fake.summaries.includes(CuSummary.UI_APPEARED), 'the false success shows in the tree');
+  // The operating system counted the bytes the process wrote: none. That is a fact that was seen.
+  assert.deepEqual(fake.disk, [CuSummary.DISK_WROTE_NOTHING]);
   const lied = judge(fake);
   assert.notEqual(lied.verdict, 'yes');
 
   const exported = await step('Export', ActKind.PRESS);
+  assert.deepEqual(exported.disk, [CuSummary.DISK_WROTE]);
   const proved = judge(exported);
   assert.equal(
     proved.verdict,

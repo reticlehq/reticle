@@ -192,4 +192,39 @@ describe('ComputerUseRealm', () => {
       ],
     ]);
   });
+
+  it('tells a write in another folder from no write at all, by the bytes the process wrote', async () => {
+    const watching = (bytesWritten: number) =>
+      new ComputerUseRealm({
+        driver: driver({ bytesWritten }),
+        workspace: {
+          roots: ['/out'],
+          excluded: [],
+          snapshot: () => ({ files: new Map(), unreadable: [] }),
+        },
+        writeTimeOf: () => 1,
+        now: () => 0,
+      });
+    const elsewhere = async (realm: ComputerUseRealm) => {
+      const window = realm.openWindow(1000);
+      await realm.perform(press(await refOf(realm, 'Save')));
+      const closed = realm.closeWindow(window);
+      const coverage = await realm.coverage(closed);
+      const seen = await realm.observe(closed);
+      return {
+        spot: coverage.blindSpots.find((b) => BlindSpotKind.EFFECT_ELSEWHERE === b.kind),
+        disk: seen.filter((o) => CuChannel.DISK === o.channel).map((o) => o.summary),
+      };
+    };
+
+    // Bytes were written and no watched file changed: a missing file is not held against it.
+    const wrote = await elsewhere(watching(4096));
+    expect(wrote.spot?.impeaching).toBe(true);
+    expect(wrote.disk).toEqual([CuSummary.DISK_WROTE]);
+
+    // Nothing was written anywhere: nothing is hidden, and a missing file is a missing file.
+    const nothing = await elsewhere(watching(0));
+    expect(nothing.spot?.impeaching).toBe(false);
+    expect(nothing.disk).toEqual([CuSummary.DISK_WROTE_NOTHING]);
+  });
 });

@@ -95,6 +95,17 @@ const FILE_CHANNELS: readonly ChannelDescriptor[] = [
   },
 ];
 
+/**
+ * Independent, because the kernel counts the bytes and the application cannot change the count.
+ * Presence grade and no higher: bytes were written, and the count does not say which file.
+ */
+const DISK_CHANNEL: ChannelDescriptor = {
+  id: CuChannel.DISK,
+  independence: Independence.INDEPENDENT,
+  grade: Grade.PRESENCE,
+  note: 'bytes the process wrote to disk, counted by the operating system',
+};
+
 const SUMMARY_OF: Readonly<Record<ChangeKind, string>> = {
   [ChangeKind.GONE]: CuSummary.UI_GONE,
   [ChangeKind.DIFFERENT]: CuSummary.UI_CHANGED,
@@ -154,6 +165,7 @@ export class ComputerUseRealm extends Realm {
    */
   readonly #outcomes = new Map<string, ActOutcome[]>();
   #openWindowId: string | undefined;
+  #countsDisk = false;
 
   constructor(deps: ComputerUseRealmDeps) {
     super();
@@ -166,7 +178,13 @@ export class ComputerUseRealm extends Realm {
   }
 
   channels(): readonly ChannelDescriptor[] {
-    return [UI_CHANNEL, ...(this.#deps.workspace === undefined ? [] : FILE_CHANNELS)];
+    return [
+      UI_CHANNEL,
+      ...(this.#deps.workspace === undefined ? [] : FILE_CHANNELS),
+      // Declared when it was seen once. A driver that cannot count never gives a number, and a
+      // channel that is declared and never reported on makes every claim on it `unknown`.
+      ...(this.#countsDisk ? [DISK_CHANNEL] : []),
+    ];
   }
 
   determinism(): DeterminismProfile {
@@ -275,6 +293,7 @@ export class ComputerUseRealm extends Realm {
     if (!outcome.delivered) {
       return this.refuse(action, RefusalReason.UNAVAILABLE, 'the operating system did not take it');
     }
+    this.#countsDisk ||= outcome.bytesWritten !== undefined;
     if (this.#openWindowId !== undefined) {
       this.#outcomes.set(this.#openWindowId, [...this.#outcomesIn(this.#openWindowId), outcome]);
     }
@@ -333,6 +352,53 @@ export class ComputerUseRealm extends Realm {
     };
   }
 
+  /**
+   * What the realm knows about a write outside the watched folders.
+   *
+   * With a count of bytes from the operating system it is a fact, and it goes one of two ways.
+   * The process wrote bytes and no watched file changed: the write is somewhere else, so a missing
+   * file here is not held against the application. The process wrote nothing: there is no write
+   * anywhere, and nothing is hidden. Without a count it is only a thing that cannot be seen.
+   */
+  #elsewhere(window: Window): BlindSpot {
+    const counts = this.#outcomesIn(window.id).map((o) => o.bytesWritten);
+    const before = this.#before.get(window.id);
+    const after = this.#afterLook(window);
+    const sawAWrite =
+      before !== undefined &&
+      after !== undefined &&
+      (diffSnapshots(before, after).length > 0 ||
+        rewrittenSince(this.#writeTimes.get(window.id) ?? new Map(), after, new Set(), (path) =>
+          this.#writeTime(path),
+        ).length > 0);
+    const bytes = counts.reduce<number>((sum, count) => sum + (count ?? 0), 0);
+    if (counts.every((count) => count !== undefined) && counts.length > 0) {
+      if (0 === bytes) {
+        return {
+          kind: BlindSpotKind.EFFECT_ELSEWHERE,
+          detail:
+            'the process wrote nothing to disk in this window, so no write is outside the watched folders',
+          impeaching: false,
+        };
+      }
+      if (!sawAWrite) {
+        return {
+          kind: BlindSpotKind.EFFECT_ELSEWHERE,
+          channel: CuChannel.FILES,
+          detail: `the process wrote ${String(bytes)} bytes to disk in this window, and no watched file changed: the write is in a folder that is not watched`,
+          impeaching: true,
+          remedy: 'watch the folder that the application writes to',
+        };
+      }
+    }
+    return {
+      kind: BlindSpotKind.EFFECT_ELSEWHERE,
+      detail: 'a write outside the watched folders is not seen',
+      impeaching: false,
+      remedy: 'watch more folders, or make the claim about a watched one',
+    };
+  }
+
   #outcomesIn(windowId: string): readonly ActOutcome[] {
     return this.#outcomes.get(windowId) ?? [];
   }
@@ -366,6 +432,13 @@ export class ComputerUseRealm extends Realm {
     for (const outcome of this.#outcomesIn(window.id)) {
       if (!outcome.reachable) {
         add(CuChannel.UI, CuSummary.ACT_NOT_REACHABLE, {});
+      }
+      if (outcome.bytesWritten !== undefined) {
+        add(
+          CuChannel.DISK,
+          0 === outcome.bytesWritten ? CuSummary.DISK_WROTE_NOTHING : CuSummary.DISK_WROTE,
+          { bytes: outcome.bytesWritten },
+        );
       }
       const effect = effectOf(outcome.before.root, outcome.after.root);
       if (effect.kind === EffectKind.NONE) {
@@ -430,12 +503,7 @@ export class ComputerUseRealm extends Realm {
         remedy: 'name a folder to watch',
       });
     } else {
-      blindSpots.push({
-        kind: BlindSpotKind.EFFECT_ELSEWHERE,
-        detail: 'a write outside the watched folders is not seen',
-        impeaching: false,
-        remedy: 'watch more folders, or make the claim about a watched one',
-      });
+      blindSpots.push(this.#elsewhere(window));
       for (const root of this.#afterLook(window)?.unreadable ?? []) {
         blindSpots.push({
           kind: BlindSpotKind.CHANNEL_UNOBSERVED,
