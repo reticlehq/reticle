@@ -13,6 +13,7 @@
 //   Later    writes note.txt 800 ms after the press, and shows nothing.
 //   Export   writes the title to note.txt in the folder given as the first argument, then says so.
 //   Fake     says "Exported" and writes nothing.
+//   Clock    a count that goes up every 400 ms with no action. Only with a second argument `clock`.
 // The window floats and the application never takes the keyboard, so a run does not disturb the
 // person at the machine.
 import AppKit
@@ -97,6 +98,23 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
     window.contentView!.addSubview(remember)
     _ = button("Export", 20, #selector(export), y: 20)
     _ = button("Fake", 100, #selector(fake), y: 20)
+    if CommandLine.arguments.count > 2 && CommandLine.arguments[2] == "clock" {
+      // In a group of its own: the realm learns the PLACE that changes, and the place of a
+      // label that lies in the window is the whole window.
+      let box = NSView(frame: NSRect(x: 350, y: 60, width: 90, height: 24))
+      box.setAccessibilityElement(true)
+      box.setAccessibilityRole(.group)
+      box.setAccessibilityLabel("Clock")
+      let tick = NSTextField(labelWithString: "Tick 0")
+      tick.frame = box.bounds
+      box.addSubview(tick)
+      window.contentView!.addSubview(box)
+      var count = 0
+      Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { _ in
+        count += 1
+        tick.stringValue = "Tick \(count)"
+      }
+    }
     window.orderFrontRegardless()
   }
 

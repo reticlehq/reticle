@@ -93,6 +93,8 @@ Read these before you rely on a result.
 
 `native/mac/selfcheck.mjs` builds a small application and drives it through the realm. It opens a small window for a few seconds and does not take the keyboard.
 
+`native/mac/ambientcheck.mjs` starts the same application with a clock that counts by itself, and drives it through the peer. It checks that a button that does nothing is not given the clock as its effect, and that a real effect is still counted.
+
 ```
 node native/mac/selfcheck.mjs
 ```
