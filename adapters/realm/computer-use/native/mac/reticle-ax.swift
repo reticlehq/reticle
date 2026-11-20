@@ -275,14 +275,22 @@ func settings(_ pid: pid_t) -> [String: String]? {
     CFPreferencesCopyMultiple(
       nil, domain as CFString, kCFPreferencesCurrentUser, kCFPreferencesAnyHost) as? [String: Any]
     ?? [:]
-  return all.mapValues { String(String(describing: $0).prefix(200)) }
+  return all.mapValues { String(describing: $0) }
 }
 
 /// The settings that are different after an action: new, changed or gone.
-func settingsChanged(_ before: [String: String], _ after: [String: String]) -> [[String: String]] {
-  Set(before.keys).union(after.keys).sorted().compactMap { key in
-    before[key] == after[key]
-      ? nil : ["key": key, "old": before[key] ?? "", "new": after[key] ?? ""]
+///
+/// The whole values are compared. A value is given in its first 200 characters, and "cut" says so
+/// when there was more: a change past that place is still a change, and the reader is told that
+/// the two texts it sees are not the whole of it.
+func settingsChanged(_ before: [String: String], _ after: [String: String]) -> [[String: Any]] {
+  Set(before.keys).union(after.keys).sorted().compactMap { key -> [String: Any]? in
+    let old = before[key] ?? ""
+    let new = after[key] ?? ""
+    guard before[key] != after[key] else { return nil }
+    var change: [String: Any] = ["key": key, "old": String(old.prefix(200)), "new": String(new.prefix(200))]
+    if old.count > 200 || new.count > 200 { change["cut"] = true }
+    return change
   }
 }
 
@@ -495,7 +503,7 @@ func run(_ args: [String]) throws {
     if quietMs() >= quietWanted && (after.json != before.json || files != filesBefore) { break }
   }
   let settled = quietMs() >= quietWanted
-  var changedSettings: [[String: String]]?
+  var changedSettings: [[String: Any]]?
   if let was = settingsBefore, let now = settings(pid) { changedSettings = settingsChanged(was, now) }
   var wrote: UInt64?
   if let was = writtenBefore, let now = bytesWritten(pid), now >= was { wrote = now - was }

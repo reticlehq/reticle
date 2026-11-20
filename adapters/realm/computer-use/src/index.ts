@@ -15,7 +15,7 @@ export { ComputerUseRealm } from './computer-use-realm.js';
 export type { ComputerUseRealmDeps, Described } from './computer-use-realm.js';
 export { CU_SURFACE, CuChannel, CuSummary } from './channels.js';
 export { ActKind, ActRefusal, Delivery } from './driver.js';
-export type { ActOutcome, ActRequest, UiDriver, UiRead } from './driver.js';
+export type { ActOutcome, ActRequest, SettingChange, UiDriver, UiRead } from './driver.js';
 export { MacDriver } from './mac/mac-driver.js';
 export type { MacDriverInput, RunHelper } from './mac/mac-driver.js';
 export {
