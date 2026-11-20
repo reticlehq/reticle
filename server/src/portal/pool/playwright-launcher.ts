@@ -363,7 +363,10 @@ export function chromiumLaunchHint(msg: string): string | undefined {
   // Checked FIRST: Playwright's host-requirement validation error also contains
   // "browserType.launch", so the generic check below would otherwise misdiagnose it as a
   // missing binary and send the user through a fix that changes nothing.
-  if (/host system is missing dependencies/i.test(msg)) {
+  // Two wordings of the same failure: Playwright's host check, and the loader's own refusal when the
+  // browser starts without a library (`libnspr4.so: cannot open shared object file`). The second
+  // also names `browserType.launch`, so it read as a missing browser.
+  if (/host system is missing dependencies|cannot open shared object file/i.test(msg)) {
     return CHROMIUM_MISSING_DEPS_HINT;
   }
   if (/executable doesn.?t exist|playwright install|browsertype\.launch/i.test(msg)) {
