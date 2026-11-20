@@ -280,6 +280,13 @@ const LAYOUT_BASENAMES = ['layout.tsx', 'layout.jsx', 'layout.js'];
 const PAGE_FILE = /^page\.(tsx|ts|jsx|js|mdx)$/;
 /** `(marketing)`: a route group, which organises routes without adding a URL segment. */
 const ROUTE_GROUP = /^\(.+\)$/;
+/**
+ * `[locale]`: a top-level dynamic segment. next-intl keeps the root layout in one
+ * (`app/[locale]/layout.tsx`), so it counts only when its layout renders `<html>`, which a root
+ * layout must do and a nested one must not.
+ */
+const DYNAMIC_SEGMENT = /^\[[^.\]]+\]$/;
+const ROOT_HTML = /<html[\s>]/;
 
 /**
  * What `findRouteGroupRootLayout` found: the layout to mount into, with the other group root layouts
@@ -315,13 +322,20 @@ export function findRouteGroupRootLayout(io: ListingIo): RouteGroupLayouts | nul
   for (const appDir of NEXT_APP_DIRS) {
     const layouts = io
       .listDirs(appDir)
-      .filter((name) => ROUTE_GROUP.test(name))
+      .filter((name) => ROUTE_GROUP.test(name) || DYNAMIC_SEGMENT.test(name))
       .sort()
       .flatMap((group) => {
         const dir = `${appDir}/${group}`;
         const files = io.listFiles(dir);
         const layout = LAYOUT_BASENAMES.find((name) => files.includes(name));
-        return layout === undefined ? [] : [{ dir, path: `${dir}/${layout}` }];
+        if (layout === undefined) {
+          return [];
+        }
+        const path = `${dir}/${layout}`;
+        if (DYNAMIC_SEGMENT.test(group) && !ROOT_HTML.test(io.readFile(path) ?? '')) {
+          return [];
+        }
+        return [{ dir, path }];
       });
     if (0 === layouts.length) continue;
     const mounted = new Set(
