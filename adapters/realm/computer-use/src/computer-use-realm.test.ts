@@ -27,6 +27,7 @@ function driver(outcome: Partial<ActOutcome> = {}): UiDriver & { asked: ActReque
     asked,
     subject: () => ({ app: 'Notes', pid: 7 }),
     read: () => Promise.resolve(read('Ready')),
+    reach: () => Promise.resolve(reachAnswer),
     act: (request) => {
       asked.push(request);
       return Promise.resolve({
@@ -40,6 +41,8 @@ function driver(outcome: Partial<ActOutcome> = {}): UiDriver & { asked: ActReque
     },
   };
 }
+
+const reachAnswer = { reach: 'yes' as const };
 
 function press(target: string): Action {
   return { id: 'a1', actor: 'agent', capability: ActKind.PRESS, target, at: 0 };

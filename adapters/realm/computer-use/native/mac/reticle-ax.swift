@@ -1,6 +1,7 @@
 // reticle-ax: reads and drives one macOS application through the Accessibility API.
 //
 //   reticle-ax tree <pid>
+//   reticle-ax reach <pid> <path> <role> <name>
 //   reticle-ax act  <pid> <path> <role> <name> press|set|type|key [value] [budgetMs] [user-path|direct] [folder...]
 //
 // <path> is the child index at each level from the application element, joined by ".", "" for the
@@ -217,11 +218,12 @@ if args[1] == "tree" {
   ])
 }
 
-guard args[1] == "act", args.count >= 7 else {
+let onlyReach = args[1] == "reach"
+guard (args[1] == "act" && args.count >= 7) || (onlyReach && args.count >= 6) else {
   emit(["error": "usage"])
 }
 let path = args[3].split(separator: ".").compactMap { Int($0) }
-let action = args[6]
+let action = onlyReach ? "" : args[6]
 let value = args.count > 7 ? args[7] : ""
 let budgetMs = args.count > 8 ? Int(args[8]) ?? 1000 : 1000
 let direct = args.count > 9 && args[9] == "direct"
@@ -257,6 +259,14 @@ guard let now = values(target) else {
 let nameNow = [text(now[2]), text(now[3])].compactMap { $0 }.first { !$0.isEmpty } ?? ""
 guard text(now[0]) == args[4], nameNow == args[5] else {
   emit(["refused": "stale", "detail": "a different element is at the path"])
+}
+if onlyReach {
+  // Asks one thing and acts on nothing: can a person see and click this element now?
+  switch frame(now[7], now[8]).map({ reach(target, $0) }) ?? .unknown(code: -1) {
+  case .yes: emit(["reach": "yes"])
+  case .no(let by): emit(["reach": "no", "detail": by])
+  case .unknown(let code): emit(["reach": "unknown", "detail": "the hit test failed with \(code)"])
+  }
 }
 if let enabled = now[5] as? Bool, !enabled {
   emit(["refused": "disabled"])

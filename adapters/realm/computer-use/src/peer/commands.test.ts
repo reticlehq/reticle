@@ -8,7 +8,7 @@ import {
 import { describe, expect, it } from 'vitest';
 
 import { ActRefusal } from '../driver.js';
-import type { ActOutcome, ActRequest, UiDriver, UiRead } from '../driver.js';
+import type { ActOutcome, ActRequest, ReachAnswer, UiDriver, UiRead } from '../driver.js';
 import { UiRole } from '../ui-node.js';
 import type { UiNode } from '../ui-node.js';
 import { PeerCommands } from './commands.js';
@@ -34,12 +34,17 @@ function read(status: string): UiRead {
   return { root, unread: 0, unmapped: [] };
 }
 
+/** What the fake operating system says when the peer asks if a person can see an element. */
+let reachAnswer: ReachAnswer = { reach: 'yes' };
+
 function peer(outcome: Partial<ActOutcome> = {}) {
+  reachAnswer = { reach: 'yes' };
   const asked: ActRequest[] = [];
   const events: [string, Record<string, unknown>][] = [];
   const driver: UiDriver = {
     subject: () => ({ app: 'Notes', pid: 7 }),
     read: () => Promise.resolve(read('Ready')),
+    reach: () => Promise.resolve(reachAnswer),
     act: (request) => {
       asked.push(request);
       return Promise.resolve({
@@ -156,6 +161,7 @@ describe('PeerCommands', () => {
       driver: {
         subject: () => ({ app: 'Notes', pid: 7 }),
         read: () => Promise.resolve(read('Ready')),
+        reach: () => Promise.resolve(reachAnswer),
         act: () =>
           Promise.resolve({
             delivered: true,
@@ -262,6 +268,7 @@ describe('PeerCommands', () => {
       driver: {
         subject: () => ({ app: 'Notes', pid: 7 }),
         read: () => Promise.resolve(list('0.5')),
+        reach: () => Promise.resolve(reachAnswer),
         act: (request) => {
           asked.push(request);
           return Promise.resolve({
@@ -294,5 +301,22 @@ describe('PeerCommands', () => {
     await expect(peer().commands.answer(ReticleCommand.SCROLL, {})).rejects.toThrow(
       /no scroll bar/,
     );
+  });
+
+  it('does not call an element visible when a window is on top of it', async () => {
+    const { commands } = peer();
+    const visible = () =>
+      commands.answer(ReticleCommand.MATCH, {
+        query: { role: UiRole.BUTTON, name: 'Save' },
+        state: ElementState.VISIBLE,
+      }) as Promise<{ matched: boolean }>;
+    expect((await visible()).matched).toBe(true);
+
+    reachAnswer = { reach: 'no', detail: 'AXWindow "Mail" of Mail' };
+    expect((await visible()).matched).toBe(false);
+
+    // The operating system did not answer: the check fails with words, so the caller gets "not known".
+    reachAnswer = { reach: 'unknown', detail: 'the hit test failed with -25200' };
+    await expect(visible()).rejects.toThrow(/could not tell if a person can see button "Save"/);
   });
 });

@@ -73,9 +73,27 @@ export interface ActOutcome {
   after: UiRead;
 }
 
+/** Whether a person can see and click an element now. */
+export const Reach = {
+  YES: 'yes',
+  /** Another element is on top of it: a view in the same window, or another window. */
+  NO: 'no',
+  /** The operating system did not answer. Nothing is known. */
+  UNKNOWN: 'unknown',
+} as const;
+export type Reach = (typeof Reach)[keyof typeof Reach];
+
+export interface ReachAnswer {
+  reach: Reach;
+  /** For `no`: what is on top. For `unknown`: why. */
+  detail?: string;
+}
+
 export interface UiDriver {
   /** The application and the process: `Notes` and `4312`. */
   subject(): { app: string; pid: number };
   read(): Promise<UiRead>;
+  /** Asks about one element of the last read, and acts on nothing. */
+  reach(target: Placed): Promise<ReachAnswer>;
   act(request: ActRequest): Promise<ActOutcome>;
 }

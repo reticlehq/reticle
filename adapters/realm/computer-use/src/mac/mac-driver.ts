@@ -6,12 +6,13 @@ import { promisify } from 'node:util';
 
 import { z } from 'zod';
 
-import { ActRefusal } from '../driver.js';
-import type { ActOutcome, ActRequest, UiDriver, UiRead } from '../driver.js';
+import { ActRefusal, Reach } from '../driver.js';
+import type { ActOutcome, ActRequest, ReachAnswer, UiDriver, UiRead } from '../driver.js';
 import { AxNodeSchema, fromAx } from './from-ax.js';
 import type { AxNode } from './from-ax.js';
+import type { Placed } from '../ui-node.js';
 
-const Command = { TREE: 'tree', ACT: 'act' } as const;
+const Command = { TREE: 'tree', ACT: 'act', REACH: 'reach' } as const;
 const HelperError = { NOT_TRUSTED: 'not-trusted' } as const;
 
 const ErrorSchema = z.object({ error: z.string() });
@@ -20,6 +21,7 @@ const TreeSchema = z.object({
   unread: z.number(),
   windowsNotOnScreen: z.number().optional(),
 });
+const ReachSchema = z.object({ reach: z.enum(Reach), detail: z.string().optional() });
 const RefusedSchema = z.object({ refused: z.enum(ActRefusal), detail: z.string().optional() });
 const ActedSchema = z.object({
   delivered: z.boolean(),
@@ -104,11 +106,40 @@ export class MacDriver implements UiDriver {
     };
   }
 
-  async act(request: ActRequest): Promise<ActOutcome> {
+  /** The element as the helper last gave it, at the place of `path`. */
+  #rawAt(path: readonly number[]): AxNode | undefined {
     let raw: AxNode | undefined = this.#last;
-    for (const index of request.target.path) {
+    for (const index of path) {
       raw = raw?.children[index];
     }
+    return raw;
+  }
+
+  async reach(target: Placed): Promise<ReachAnswer> {
+    const raw = this.#rawAt(target.path);
+    if (raw === undefined) {
+      return { reach: Reach.UNKNOWN, detail: 'the element is not in the last read' };
+    }
+    const answer = await this.#ask([
+      Command.REACH,
+      String(this.#input.pid),
+      target.path.join('.'),
+      raw.role,
+      raw.title ?? raw.description ?? '',
+    ]);
+    const known = ReachSchema.safeParse(answer);
+    if (!known.success) {
+      // A refusal: the element moved or the application did not answer.
+      return { reach: Reach.UNKNOWN, detail: 'the element is not where it was' };
+    }
+    return {
+      reach: known.data.reach,
+      ...(known.data.detail === undefined ? {} : { detail: known.data.detail }),
+    };
+  }
+
+  async act(request: ActRequest): Promise<ActOutcome> {
+    const raw = this.#rawAt(request.target.path);
     if (raw === undefined) {
       return refused(ActRefusal.STALE, NOTHING);
     }

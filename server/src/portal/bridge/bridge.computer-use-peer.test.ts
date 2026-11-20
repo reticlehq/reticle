@@ -45,6 +45,17 @@ class FakeApp implements UiDriver {
     return Promise.resolve(this.#now());
   }
 
+  /** True while a window of another application is over this one. */
+  covered = false;
+
+  reach() {
+    return Promise.resolve(
+      this.covered
+        ? { reach: 'no' as const, detail: 'window "Mail" of Mail' }
+        : { reach: 'yes' as const },
+    );
+  }
+
   act(request: ActRequest) {
     const before = this.#now();
     this.pressed.push(request.target.node.name);
@@ -177,5 +188,22 @@ describe('a computer-use peer on the bridge', () => {
       until: fileWritten,
     })) as Verdict;
     expect(real.verdict.pass, real.verdict.failureReason).toBe(true);
+  });
+
+  it('does not prove a text that a window of another application covers', async () => {
+    const page = (await callTool(deps, 'reticle_snapshot', {})) as { tree: string };
+    const save = /button "Save" \(ref=(e\d+)\)/.exec(page.tree)?.[1] ?? '';
+    app.status = 'Ready';
+    app.covered = true;
+    const result = (await callTool(deps, 'reticle_act_and_wait', {
+      ref: save,
+      action: 'click',
+      timeout_ms: 600,
+      until: { kind: 'element', query: { text: 'Saved' }, state: ElementState.VISIBLE },
+    })) as Verdict;
+    app.covered = false;
+    // The text is in the tree. Nobody could see it.
+    expect(app.status).toBe('Saved');
+    expect(result.verdict.pass).toBe(false);
   });
 });
