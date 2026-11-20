@@ -326,6 +326,18 @@ describe('PeerCommands', () => {
     reachAnswer = { reach: 'no', detail: 'AXWindow "Mail" of Mail' };
     expect((await visible()).matched).toBe(false);
 
+    // The same element is hidden then: the two states are never both true or both false.
+    const hidden = (name: string) =>
+      commands.answer(ReticleCommand.MATCH, {
+        query: { role: UiRole.BUTTON, name },
+        state: ElementState.HIDDEN,
+      }) as Promise<{ matched: boolean }>;
+    expect((await hidden('Save')).matched).toBe(true);
+    reachAnswer = { reach: 'yes' };
+    expect((await hidden('Save')).matched).toBe(false);
+    // An element with no place in its window is hidden with no question to the operating system.
+    expect((await hidden('Below')).matched).toBe(true);
+
     // The operating system did not answer: the check fails with words, so the caller gets "not known".
     reachAnswer = { reach: 'unknown', detail: 'the hit test failed with -25200' };
     await expect(visible()).rejects.toThrow(/could not tell if a person can see button "Save"/);

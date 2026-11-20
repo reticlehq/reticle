@@ -60,6 +60,7 @@ Read these before you rely on a result.
 - **An application must give an accessibility tree.** An Electron application and a browser give very little until a switch is set in them. This realm does not set that switch. A canvas and a game have no elements to read.
 - **A large window is slow to read.** The cost is for each element. A table is read only for the rows on the screen, and its line says how many rows are not shown.
 - **An action takes about 600 ms.** The realm waits for 500 ms with no change before it calls an action finished. `RETICLE_AX_QUIET_MS` sets another time.
+- **The realm trusts the place that an application gives for an element.** Some applications give a wrong place on a second display with a high resolution. The question "is this element on top" is then asked at the wrong place, and the realm refuses the action. It does not act on a guess.
 - **Shortcuts use the key places of a US keyboard.**
 - **A drag, a hover and a right-click are not built.**
 - **The tree alone proves little.** The application draws the tree, so a text on the screen is the application's own word. Watch a folder and name the file when the action writes one.
