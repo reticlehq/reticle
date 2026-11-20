@@ -2,7 +2,7 @@
 // reticle-computer-use: joins a running application to the Reticle bridge, so the tools an agent
 // has for a web page work on it. macOS only for now. Nothing is installed in the application.
 //
-//   reticle-computer-use --app <name> [--port <port>] [--watch <folder>]...
+//   reticle-computer-use --app <name> [--project <folder>] [--port <port>] [--watch <folder>]...
 //
 // The terminal needs Accessibility permission. The command stays open until you stop it.
 import { execFileSync } from 'node:child_process';
@@ -49,7 +49,7 @@ const peer = connectPeer({
   url: plan.url,
   ...(plan.token === undefined ? {} : { token: plan.token }),
   sessionId,
-  projectId: `cu-${plan.app}`.replace(/[^\w.-]/g, '-'),
+  projectId: plan.projectId ?? `cu-${plan.app}`.replace(/[^\w.-]/g, '-'),
   driver: new MacDriver({ helper, app: plan.app, pid }),
   ...(0 === plan.watch.length ? {} : { workspace: nodeWorkspace(plan.watch, { exclude: [] }) }),
   now: () => Date.now(),
@@ -63,6 +63,11 @@ try {
 }
 say(`${plan.app} (${String(pid)}) is joined to ${plan.url}.`);
 say(`Give this on each tool call: sessionId "${sessionId}". Stop with Ctrl-C.`);
+if (plan.projectId === undefined) {
+  say(
+    'No project: the runs and flows of this session stay on this machine and do not reach the dashboard. Give --project <folder> with the folder of the application that has a .reticle.json.',
+  );
+}
 const stop = () => {
   peer.close();
   process.exit(0);
