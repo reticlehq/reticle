@@ -293,7 +293,7 @@ Plain HTML with no build step: run `npx @reticlehq/server init` in the folder th
 
 ### Running multiple apps at once
 
-It's common to have several apps open in dev: a few Next.js and React projects, or multiple tabs of the same app. Reticle handles this cleanly **as long as each connection has a unique session id**, which is exactly what `SESSION_AUTO` gives you (a fresh id per tab). The examples above all use it, so you get this for free. When more than one app is connected, an Reticle tool call targets the focused / most recently active one automatically, or you can pass an explicit `sessionId` to target a specific app.
+It's common to have several apps open in dev: a few Next.js and React projects, or multiple tabs of the same app. Reticle handles this cleanly **as long as each connection has a unique session id**, which is exactly what `SESSION_AUTO` gives you (a fresh id per tab). The examples above all use it, so you get this for free. When more than one app is connected, a read or a single action targets the focused / most recently active one automatically. A tool that gives a verdict does not guess: it refuses and lists the tabs, so pass an explicit `sessionId` to target a specific app.
 
 **Two separate projects, fully isolated.** If you want each repo to have its own independent Reticle bridge (separate sessions, separate `.reticle/` workspace), give each project its own port. Set the same port in both the MCP server config and the app's connection:
 

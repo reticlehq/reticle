@@ -8,7 +8,7 @@ import { agentNameOf, agentSessionOf, runAsAgent } from '@/hooks/coding-agents.j
 import { recordEpisodeCall } from '@/memory/journal/episode-log.js';
 import { takeHumanNotes } from './human-notes.js';
 import { takeDriveNotes } from '@/features/harness/drive-runs.js';
-import { harnessDriving, msgHarnessHasTheTab } from './harness-tab-guard.js';
+import { guessedVerdictTab, harnessDriving, msgHarnessHasTheTab } from './harness-tab-guard.js';
 import { sessionRoot, sessionTarget } from '@/memory/project/session-root.js';
 import { ArtifactRootReason } from '@/memory/project/artifact-root.js';
 import { agentNudge, takePlatformMoment } from './platform-moment.js';
@@ -550,18 +550,18 @@ async function dispatchTool<Ext>(
       session = undefined;
     }
   }
-  // CDP tools against a skewed session: refuse with the sentence reticle_sessions already knows,
-  // before Playwright invents a closed page. ready:true leases still hit this path.
-  if (session?.versionSkew !== undefined && CDP_TOOLS.has(tool.name)) {
-    const message = session.versionSkew;
-    reportRefusal(tool.name, args, message);
-    throw new Error(message);
+  // A skewed CDP session refuses with reticle_sessions' sentence; a verdict never grades a guessed tab.
+  const refusal =
+    session?.versionSkew !== undefined && CDP_TOOLS.has(tool.name)
+      ? session.versionSkew
+      : guessedVerdictTab(tool.name, args, rawSessionId, () => deps.sessions.list());
+  if (refusal !== undefined) {
+    reportRefusal(tool.name, args, refusal);
+    throw new Error(refusal);
   }
-  // A ref that was handed out by a DIFFERENT tab, on a call that named no session. Refused here, at
-  // the one point that knows both the ref and the tab resolution picked — the handler only learns
-  // that the ref missed, and answers that with "the DOM re-rendered", which is a confident diagnosis
-  // of the wrong thing. The other half is worse: the same ref can resolve to a different element in
-  // the guessed tab and return a green about a page nobody asked about.
+  // A ref handed out by a DIFFERENT tab, on a call that named no session. Refused here, the one point
+  // that knows the ref and the tab resolution picked: the handler would blame a re-render, and the
+  // same ref can resolve to a different element in the guessed tab and return a false green.
   if (session !== undefined) {
     const wrongTab = wrongTabRefusal({
       ref: spentRefFromArgs(args),

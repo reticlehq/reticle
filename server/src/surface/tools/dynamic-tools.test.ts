@@ -400,7 +400,9 @@ describe('reticle_run — a merged name', () => {
     };
     const run = buildDynamicTools([assertTool]).find((t) => t.name === ReticleTool.RUN);
     const predicate = { kind: 'text', contains: 'More tools' };
-    const out = (await run?.handler(NO_DEPS, {
+    // A verdict reads which tabs are connected before it runs; none here, so nothing to guess.
+    const deps = { sessions: { list: () => [] } } as unknown as ToolDeps;
+    const out = (await run?.handler(deps, {
       tool: ReticleTool.WAIT_FOR,
       args: { predicate, timeout_ms: 5000 },
     })) as { pass?: boolean; error?: string };

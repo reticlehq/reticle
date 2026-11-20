@@ -315,7 +315,9 @@ describe('--select against the real tool surface', () => {
       ageWarning: () => undefined,
     };
     const server = createMcpServer(
-      { sessions: { resolve: () => tab } } as unknown as ToolDeps,
+      {
+        sessions: { resolve: () => tab, list: () => [{ sessionId: 's1' }] },
+      } as unknown as ToolDeps,
       TOOL_SURFACE.DEFAULT,
     );
     const [clientSide, serverSide] = InMemoryTransport.createLinkedPair();

@@ -23,7 +23,9 @@ const tab: Partial<Session> = {
   takeSessionLease: () => undefined,
   ageWarning: () => undefined,
 };
-const deps = { sessions: { resolve: () => tab, get: () => tab } } as unknown as ToolDeps;
+const deps = {
+  sessions: { resolve: () => tab, get: () => tab, list: () => [{ sessionId: 's1' }] },
+} as unknown as ToolDeps;
 const act = TOOLS.find((t) => ReticleTool.ACT_AND_WAIT === t.name);
 
 /** A tool under `name` whose handler only answers, so the guard is the one thing deciding. */
