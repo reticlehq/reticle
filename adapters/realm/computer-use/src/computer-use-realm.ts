@@ -9,8 +9,6 @@
  * application's own word. A claim gets a `yes` only from a channel the application does not
  * decide: here, the file system, when the caller names a folder to watch.
  */
-import { statSync } from 'node:fs';
-
 import { ChangeKind as FileChangeKind, diffSnapshots } from '@reticlehq/cli-realm';
 import type { Snapshot, WorkspacePort } from '@reticlehq/cli-realm';
 import {
@@ -41,6 +39,8 @@ import { CU_SURFACE, CuChannel, CuSummary } from './channels.js';
 import { ActKind, ActRefusal, Delivery } from './driver.js';
 import type { ActOutcome, UiDriver, UiRead } from './driver.js';
 import { ChangeKind, EffectKind, effectOf } from './effect.js';
+import { REWRITTEN, rewrittenSince, writeTimeOnDisk, writeTimesOf } from './files.js';
+import type { WriteTimes } from './files.js';
 import { RefTable, writeLines, writeWindows } from './lines.js';
 import { UiRole, isAddressable, label, placeShown } from './ui-node.js';
 import type { Placed } from './ui-node.js';
@@ -145,7 +145,7 @@ export class ComputerUseRealm extends Realm {
    * the same bytes again did write, and the snapshot shows no change. Without the time, the realm
    * said that nothing was written.
    */
-  readonly #writeTimes = new Map<string, Map<string, number | undefined>>();
+  readonly #writeTimes = new Map<string, WriteTimes>();
   /**
    * What each action did, under the window that was open when it ran.
    *
@@ -299,7 +299,7 @@ export class ComputerUseRealm extends Realm {
       this.#before.set(id, before);
       this.#writeTimes.set(
         id,
-        new Map([...before.files.keys()].map((path) => [path, this.#writeTime(path)])),
+        writeTimesOf(before, (path) => this.#writeTime(path)),
       );
     }
     this.#openBudgetMs = budgetMs;
@@ -405,14 +405,13 @@ export class ComputerUseRealm extends Realm {
         ? diffSnapshots(before, after).map((change) => change.path)
         : [],
     );
-    for (const [path, was] of this.#writeTimes.get(window.id) ?? []) {
-      const fact = after?.files.get(path);
-      const now = fact === undefined ? undefined : this.#writeTime(path);
-      if (fact !== undefined && !changed.has(path) && now !== undefined && now !== was) {
-        add(CuChannel.FILES, 0 === fact.size ? CuSummary.FS_WRITTEN_EMPTY : CuSummary.FS_WRITTEN, {
-          path,
+    const times = this.#writeTimes.get(window.id);
+    if (times !== undefined && after !== undefined) {
+      for (const file of rewrittenSince(times, after, changed, (path) => this.#writeTime(path))) {
+        add(CuChannel.FILES, 0 === file.size ? CuSummary.FS_WRITTEN_EMPTY : CuSummary.FS_WRITTEN, {
+          path: file.path,
           kind: REWRITTEN,
-          size: fact.size,
+          size: file.size,
         });
       }
     }
@@ -471,17 +470,6 @@ export class ComputerUseRealm extends Realm {
       observed: this.channels().map((c) => c.id),
       blindSpots,
     });
-  }
-}
-
-/** The kind of a write that left the same bytes. The snapshot has no word for it. */
-const REWRITTEN = 'rewritten';
-
-function writeTimeOnDisk(path: string): number | undefined {
-  try {
-    return statSync(path).mtimeMs;
-  } catch {
-    return undefined;
   }
 }
 

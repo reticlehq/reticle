@@ -8,7 +8,7 @@
  */
 import { basename } from 'node:path';
 
-import { diffSnapshots } from '@reticlehq/cli-realm';
+import { ChangeKind as FileKind, diffSnapshots } from '@reticlehq/cli-realm';
 import type { Snapshot, WorkspacePort } from '@reticlehq/cli-realm';
 import {
   ActionType,
@@ -24,6 +24,8 @@ import { ActKind, ActRefusal, Delivery, Reach } from '../driver.js';
 import type { ActOutcome, UiDriver } from '../driver.js';
 import { ChangeKind, effectOf } from '../effect.js';
 import type { Change } from '../effect.js';
+import { REWRITTEN, rewrittenSince, writeTimeOnDisk, writeTimesOf } from '../files.js';
+import type { WriteTimeOf, WriteTimes } from '../files.js';
 import { RefTable, writeWindows } from '../lines.js';
 import { UiRole, isAddressable, placeShown } from '../ui-node.js';
 import type { Placed, UiNode } from '../ui-node.js';
@@ -39,6 +41,8 @@ export interface PeerCommandsDeps {
    * can require the file and not only the words the application shows.
    */
   workspace?: WorkspacePort;
+  /** When a file was last written. The default asks the file system. A test gives its own. */
+  writeTimeOf?: WriteTimeOf;
 }
 
 /** An application has one screen for the server: it has no address a caller can go to. */
@@ -54,7 +58,8 @@ const Field = { VALUE: 'value', STATES: 'states' } as const;
 
 /**
  * One signal for each file an action changed. The name is `file.` and the kind of change:
- * `file.written`, `file.modified`, `file.deleted`, `file.mode-changed`. The data is the file name,
+ * `file.written`, `file.modified`, `file.deleted`, `file.mode-changed`. A file that was written
+ * again with the same bytes is `file.written` too, with `kind: "rewritten"`. The data is the file name,
  * its path and its size.
  */
 export const FILE_SIGNAL_PREFIX = 'file.';
@@ -162,6 +167,8 @@ export class PeerCommands {
   readonly #refs = new RefTable();
   /** The watched folders at the last look. Absent before the first one. */
   #files: Snapshot | undefined;
+  /** When each watched file was last written, at the last look. */
+  #fileTimes: WriteTimes | undefined;
   constructor(deps: PeerCommandsDeps) {
     this.#deps = deps;
     // The first look. A file that is there now is not a change.
@@ -180,14 +187,27 @@ export class PeerCommands {
     if (workspace === undefined) {
       return;
     }
+    const timeOf = this.#deps.writeTimeOf ?? writeTimeOnDisk;
     const now = workspace.snapshot();
-    for (const file of diffSnapshots(this.#files ?? now, now)) {
+    const changes = diffSnapshots(this.#files ?? now, now);
+    for (const file of changes) {
       this.#deps.emit(EventType.SIGNAL, {
         name: `${FILE_SIGNAL_PREFIX}${file.kind}`,
         data: { file: basename(file.path), path: file.path, size: file.after?.size ?? 0 },
       });
     }
+    // The same bytes, written again: the snapshot shows no change, and the write time does.
+    const changed = new Set(changes.map((file) => file.path));
+    for (const file of rewrittenSince(this.#fileTimes ?? new Map(), now, changed, timeOf)) {
+      this.#deps.emit(EventType.SIGNAL, {
+        // The same name as a first write: a claim that the file was written holds for it. The
+        // data says that the bytes are the ones that were there.
+        name: `${FILE_SIGNAL_PREFIX}${FileKind.WRITTEN}`,
+        data: { file: basename(file.path), path: file.path, size: file.size, kind: REWRITTEN },
+      });
+    }
     this.#files = now;
+    this.#fileTimes = writeTimesOf(now, timeOf);
   }
 
   /**
