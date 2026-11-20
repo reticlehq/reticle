@@ -44,10 +44,11 @@ if (!existsSync(helper)) {
   execFileSync('swiftc', ['-O', `${native}reticle-ax.swift`, '-o', helper], { stdio: 'inherit' });
 }
 
+const sessionId = `cu-${plan.app}-${String(pid)}`.replace(/[^\w.-]/g, '-');
 const peer = connectPeer({
   url: plan.url,
   ...(plan.token === undefined ? {} : { token: plan.token }),
-  sessionId: `cu-${plan.app}-${String(pid)}`.replace(/[^\w.-]/g, '-'),
+  sessionId,
   projectId: `cu-${plan.app}`.replace(/[^\w.-]/g, '-'),
   driver: new MacDriver({ helper, app: plan.app, pid }),
   ...(0 === plan.watch.length ? {} : { workspace: nodeWorkspace(plan.watch, { exclude: [] }) }),
@@ -60,7 +61,8 @@ try {
   say(`Could not reach the bridge at ${plan.url}: ${String(error)}. Start it with: reticle serve`);
   process.exit(1);
 }
-say(`${plan.app} (${String(pid)}) is joined to ${plan.url}. Stop with Ctrl-C.`);
+say(`${plan.app} (${String(pid)}) is joined to ${plan.url}.`);
+say(`Give this on each tool call: sessionId "${sessionId}". Stop with Ctrl-C.`);
 const stop = () => {
   peer.close();
   process.exit(0);

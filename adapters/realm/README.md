@@ -26,6 +26,7 @@ Everything else is built on top of that. A **framework adapter** (React, Vue, Sv
 | --- | --- |
 | [`browser/`](browser) | A web page. Published as `@reticlehq/browser`. |
 | [`electron/`](electron) | An Electron app's main process, where the window lives and messages cross between halves. |
+| [`computer-use/`](computer-use) | A desktop application, read through the operating system's accessibility tree. Nothing is installed in it. |
 
 ## The feedback loop belongs to the realm
 
