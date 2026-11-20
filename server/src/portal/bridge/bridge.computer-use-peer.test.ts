@@ -5,6 +5,8 @@ import type { ActRequest, Peer, UiDriver, UiNode, UiRead } from '@reticlehq/comp
 import { Bridge } from './bridge.js';
 import type { ToolDeps } from '@/surface/tools/tools.js';
 import { callTool, makeDeps, waitUntil } from './bridge.test-harness.js';
+import { FINISH_TOOL, type ModelDriver, type ModelTurn } from '@/features/harness/harness.js';
+import { exploreApp } from '@/surface/tools/harness-explore.js';
 
 /**
  * A desktop application reaches the same tools as a web page, with no change in the server: the
@@ -206,4 +208,50 @@ describe('a computer-use peer on the bridge', () => {
     expect(app.status).toBe('Saved');
     expect(result.verdict.pass).toBe(false);
   });
+
+  /**
+   * The Harness on a desktop application, from its own entry point, with a model that is a script.
+   * Its survey and its goal search were written for a web page and they go to an address. This
+   * holds that a run still starts, drives and ends when there is no address to go to.
+   */
+  it('is driven by the Harness, with the prompt for a desktop application', async () => {
+    app.status = 'Ready';
+    const systems: string[] = [];
+    const turns: ((tree: string) => ModelTurn['calls'])[] = [
+      () => [{ id: '1', name: 'reticle_snapshot', args: {} }],
+      (tree) => [
+        {
+          id: '2',
+          name: 'reticle_act_and_wait',
+          args: {
+            ref: /button "Save" \(ref=(e\d+)\)/.exec(tree)?.[1] ?? '',
+            action: 'click',
+            timeout_ms: 2000,
+            until: { kind: 'element', query: { text: 'Saved' }, state: ElementState.VISIBLE },
+          },
+        },
+      ],
+      () => [{ id: '3', name: FINISH_TOOL.name, args: { summary: 'saved a note', goalMet: true } }],
+    ];
+    let tree = '';
+    const scripted: ModelDriver = {
+      turn: (input): Promise<ModelTurn> => {
+        systems.push(input.system);
+        const last = JSON.stringify(input.history.at(-1) ?? {});
+        tree = /- application|- window/.test(last) ? last.replaceAll('\\"', '"') : tree;
+        const next = turns.shift() ?? (() => []);
+        return Promise.resolve({ text: '', calls: next(tree) });
+      },
+    };
+    const result = await exploreApp(
+      deps,
+      {},
+      { driver: scripted, skipPlatformConfig: true, sessionId: 'cu-notes', focus: 'save a note' },
+    );
+    expect(systems[0]).toContain('a real desktop application');
+    const acted = result.drive.toolCalls.find((call) => 'reticle_act_and_wait' === call.name);
+    expect(acted?.isError, JSON.stringify(acted?.result).slice(0, 400)).toBe(false);
+    expect(JSON.stringify(acted?.result)).toContain('"verified":"yes"');
+    expect(app.status).toBe('Saved');
+  }, 60_000);
 });
