@@ -98,6 +98,8 @@ Read these before you rely on a result.
 
 `native/mac/ambientcheck.mjs` starts the same application with a clock that counts by itself, and drives it through the peer. It checks that a button that does nothing is not given the clock as its effect, and that a real effect is still counted.
 
+`native/mac/electroncheck.mjs` starts a small Electron application and drives it through the peer. It checks that a press does nothing and says why with the switch off, that a press works with the switch on, and that a slow effect belongs to its own press. It is skipped when Electron is not installed.
+
 ```
 node native/mac/selfcheck.mjs
 ```
