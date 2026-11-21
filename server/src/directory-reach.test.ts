@@ -599,6 +599,9 @@ const REACHES_FOR: Record<string, readonly string[]> = {
   // where that code lives; the count is unchanged either way.
   proxy: ['binding', 'daemon', 'identity', 'telemetry'],
   // `agent`: the resume block reads the app notes the agent layer learns (a leaf; no pair).
+  // `input` and `timing` for `verify` between flows (#2060): the live port reads the driven page
+  // (`DrivenPage`), and waits for the run's tab with the wait that replay uses
+  // (`resolveSessionWithin`). Neither directory reaches `runs`, so no pair is added.
   runs: [
     'agent',
     'artifact',
@@ -606,9 +609,11 @@ const REACHES_FOR: Record<string, readonly string[]> = {
     'dir',
     'flows',
     'hooks',
+    'input',
     'intent',
     'project',
     'telemetry',
+    'timing',
     'tools',
   ],
   session: [

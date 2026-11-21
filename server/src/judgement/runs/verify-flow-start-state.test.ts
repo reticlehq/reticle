@@ -30,7 +30,10 @@ function depsWith(applyOk: boolean) {
       return Promise.resolve(applyOk);
     },
   };
-  const deps = { realInput, sessions: { resolve: () => ({ url: PAGE }) } } as unknown as ToolDeps;
+  const deps = {
+    realInput,
+    sessions: { resolve: () => ({ url: PAGE }), inScope: () => [] },
+  } as unknown as ToolDeps;
   vi.mocked(replayAndLearn).mockImplementation((_d, args) => {
     calls.push(`replay:${String(args['flowName'])}`);
     return Promise.resolve({ name: String(args['flowName']), status: ReplayStatus.OK, steps: [] });
@@ -77,7 +80,7 @@ describe('each flow of a verify run starts from the state the run started with',
       });
     });
     const port = createRunnerPort({
-      sessions: { resolve: () => ({ url: PAGE }) },
+      sessions: { resolve: () => ({ url: PAGE }), inScope: () => [] },
     } as unknown as ToolDeps);
     await port.replayFlow('a');
     await port.replayFlow('b');

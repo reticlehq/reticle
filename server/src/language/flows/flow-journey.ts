@@ -264,7 +264,7 @@ export function samePath(observed: string, expected: string): boolean {
 }
 
 /** The least time replay waits for the SDK to reconnect on the start page. */
-const START_PATH_ARRIVAL_TIMEOUT_MS = 5_000;
+export const START_PATH_ARRIVAL_TIMEOUT_MS = 5_000;
 
 /**
  * How long replay waits for the start page: the first step's budget when that is longer.
