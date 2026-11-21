@@ -67,7 +67,20 @@ describe('fromAx', () => {
 
     const web = fromAx({
       role: 'AXWebArea',
-      children: [':r1:', 'radix-:r3:', '«r2»', 'add', 'row:3'].map((id) => ({
+      children: [
+        ':r1:',
+        ':R5d:',
+        'radix-:r3:',
+        '«r2»',
+        'mat-input-0',
+        'cdk-overlay-12',
+        'ember123',
+        'headlessui-menu-button-4',
+        'add',
+        'row:3',
+        'material-list',
+        'embers',
+      ].map((id) => ({
         role: 'AXButton',
         title: 'Open',
         id,
@@ -75,11 +88,11 @@ describe('fromAx', () => {
       })),
     });
     expect(web.root.children.map((child) => child.id)).toEqual([
-      undefined,
-      undefined,
-      undefined,
+      ...Array.from({ length: 8 }, () => undefined),
       'add',
       'row:3',
+      'material-list',
+      'embers',
     ]);
   });
 });
