@@ -24,7 +24,12 @@ import { isAlive, reticleStateHome, spawnDaemon } from '@/command/daemon/daemon.
 import { readDaemonRegistry } from '@/command/daemon/daemon-resolve.js';
 import { LOOPBACK_HOST, STATUS_HOLD_MS } from '@reticlehq/core';
 import { probePresence, presenceIsUsable } from '@/command/daemon/binding/port-presence.js';
-import { daemonProcessAlive, probeDaemon, waitForDaemonBind } from '@/surface/mcp/mcp-proxy.js';
+import {
+  daemonProcessAlive,
+  probeDaemon,
+  spawnedDaemonAlive,
+  waitForDaemonBind,
+} from '@/surface/mcp/mcp-proxy.js';
 import { daemonSpawnArgs, headlessByDefault } from '@/command/cli/daemon-start-options.js';
 import { fetchStatus, summarizeStatus } from '@/command/daemon/binding/daemon-status-probe.js';
 import { runKill } from '@/command/cli/cli-kill.js';
@@ -73,17 +78,23 @@ interface EnsureDaemonResult {
 
 /** A string field off the /status body, or undefined on a daemon too old to report it. */
 function statusString(payload: unknown, key: string): string | undefined {
-  if ('object' !== typeof payload || null === payload) return undefined;
+  if ('object' !== typeof payload || null === payload) {
+    return undefined;
+  }
   const value: unknown = Reflect.get(payload, key);
   return 'string' === typeof value && 0 < value.length ? value : undefined;
 }
 
 async function spawnAndWait(port: number, deps: EnsureDaemonDeps): Promise<boolean> {
-  if (undefined === deps.scriptPath) return false;
+  if (undefined === deps.scriptPath) {
+    return false;
+  }
   // A lost spawn race is not a failed start: `init` printed "could not start the Reticle daemon"
   // over a daemon that bound seconds later. Only a spawn that failed with nobody else starting one
   // is a reason to stop without waiting.
-  if (!deps.spawn(port) && !deps.starting(port)) return false;
+  if (!deps.spawn(port) && !deps.starting(port)) {
+    return false;
+  }
   try {
     // Readiness means the port ACCEPTS, not that a child was spawned: a readiness signal that
     // precedes readiness is worse than none, because what waits on it stops waiting too early.
@@ -100,7 +111,9 @@ export async function ensureDaemon(
 ): Promise<EnsureDaemonResult> {
   if (await deps.usable(port)) {
     const status = await deps.status(port);
-    if (!deps.skewed(status)) return { state: EnsureDaemon.ADOPTED };
+    if (!deps.skewed(status)) {
+      return { state: EnsureDaemon.ADOPTED };
+    }
     const theirs = statusString(status, 'version') ?? 'an older build';
     const { sessionCount } = summarizeStatus(status);
     if (0 < sessionCount) {
@@ -113,7 +126,9 @@ export async function ensureDaemon(
           `they are done, run \`npx @reticlehq/server stop --force --port ${String(port)}\` and re-run init.`,
       };
     }
-    if (!(await deps.replace(port))) return { state: EnsureDaemon.UNAVAILABLE };
+    if (!(await deps.replace(port))) {
+      return { state: EnsureDaemon.UNAVAILABLE };
+    }
     return (await spawnAndWait(port, deps))
       ? {
           state: EnsureDaemon.REPLACED,
@@ -151,14 +166,22 @@ export async function retireMovedDaemons(
   port: number,
   deps: RetireDeps,
 ): Promise<number[]> {
-  if (undefined === projectId || 0 === projectId.length) return [];
+  if (undefined === projectId || 0 === projectId.length) {
+    return [];
+  }
   const stopped: number[] = [];
   for (const entry of deps.registered()) {
-    if (entry.projectId !== projectId || entry.port === port) continue;
+    if (entry.projectId !== projectId || entry.port === port) {
+      continue;
+    }
     const { sessions } = summarizeStatus(await deps.status(entry.port));
     const shared = sessions.some((s) => undefined !== s.projectId && projectId !== s.projectId);
-    if (shared) continue;
-    if (await deps.stop(entry.port)) stopped.push(entry.port);
+    if (shared) {
+      continue;
+    }
+    if (await deps.stop(entry.port)) {
+      stopped.push(entry.port);
+    }
   }
   return stopped;
 }
@@ -199,7 +222,9 @@ export function nodeEnsureDaemonDeps(skewed: (status: unknown) => boolean): Ensu
     replace: (port: number): Promise<boolean> => runKill(port, false),
     spawn: (port: number): boolean => {
       const scriptPath = process.argv[1];
-      if (undefined === scriptPath) return false;
+      if (undefined === scriptPath) {
+        return false;
+      }
       const started = spawnDaemon(
         process.execPath,
         scriptPath,
@@ -214,14 +239,22 @@ export function nodeEnsureDaemonDeps(skewed: (status: unknown) => boolean): Ensu
       );
       // For a log or a pipe. On a terminal it was a JSON line in the middle of `init`'s output, read
       // by a person, about a step the next lines already report in words.
-      if (true !== process.stderr.isTTY) log('reticle_setup_daemon_started', { port, started });
+      if (true !== process.stderr.isTTY) {
+        log('reticle_setup_daemon_started', { port, started });
+      }
       return started;
     },
     starting: daemonProcessAlive,
     // The same wait `reticle restart` does: poll until `/status` answers as a daemon, bounded. A
     // cold daemon on a fresh HOME outlived the proxy's shorter reconnect budget this used to borrow.
+    // The wait tracks the spawned child (#1541): alive keeps it waiting, dead ends it at once.
     waitReady: async (port: number): Promise<unknown> => {
-      if (!(await waitForDaemonBind(port))) throw new Error(`no daemon bound :${String(port)}`);
+      const bound = await waitForDaemonBind(port, {
+        childAlive: () => spawnedDaemonAlive(port),
+      });
+      if (!bound) {
+        throw new Error(`no daemon bound :${String(port)}`);
+      }
       return undefined;
     },
     scriptPath: process.argv[1],
