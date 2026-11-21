@@ -159,8 +159,8 @@ describe('PeerCommands', () => {
       commands.answer(ReticleCommand.ACT, { ref, action: ActionType.CLICK }),
     ).rejects.toThrow(/a person cannot reach/);
     await expect(
-      commands.answer(ReticleCommand.ACT, { ref, action: ActionType.DRAG }),
-    ).rejects.toThrow(/does not have the action drag/);
+      commands.answer(ReticleCommand.ACT, { ref, action: ActionType.UPLOAD }),
+    ).rejects.toThrow(/does not have the action upload/);
   });
 
   it('sends a signal for a file the action wrote', async () => {
@@ -1025,6 +1025,91 @@ describe('PeerCommands', () => {
       };
     expect((await inspect('Save')).help).toBe('Saves the title');
     expect((await inspect('Dead')).help).toBeUndefined();
+  });
+
+  /**
+   * A double-click, a hover, a drag and a right-click need the real pointer. The realm refused
+   * each of them by name. It now does them when the caller asks for the foreground, which takes
+   * the pointer of the person at the machine, and it says how to ask.
+   */
+  describe('the real pointer', () => {
+    const acting = (foreground?: boolean) => {
+      const made = peer();
+      const commands =
+        foreground === undefined
+          ? made.commands
+          : new PeerCommands({
+              driver: {
+                ...fakeDriver(),
+                act: (request) => {
+                  made.asked.push(request);
+                  return Promise.resolve({
+                    delivered: true,
+                    reachable: true,
+                    settled: true,
+                    before: read('Ready'),
+                    after: read('Saved'),
+                  });
+                },
+              },
+              emit: () => undefined,
+              foreground,
+            });
+      const act = async (action: string, args?: Record<string, unknown>) =>
+        commands.answer(ReticleCommand.ACT, {
+          ref: await refOf(commands, 'Save'),
+          action,
+          ...(args === undefined ? {} : { args }),
+        });
+      return { act, asked: made.asked, commands };
+    };
+
+    it('is not used unless the caller asks, and the refusal says how to ask', async () => {
+      const { act, asked } = acting();
+      for (const action of [ActionType.DBLCLICK, ActionType.HOVER, ActionType.FOCUS]) {
+        await expect(act(action)).rejects.toThrow(/args: \{ foreground: true \}/);
+      }
+      expect(asked).toEqual([]);
+    });
+
+    it('is used when the caller asks: a double-click, a hover, a click', async () => {
+      const { act, asked } = acting();
+      await act(ActionType.DBLCLICK, { foreground: true });
+      await act(ActionType.HOVER, { foreground: true });
+      await act(ActionType.CLICK, { foreground: true });
+      expect(asked.map((request) => [request.kind, request.delivery])).toEqual([
+        [ActKind.DBLCLICK, 'foreground'],
+        [ActKind.HOVER, 'foreground'],
+        [ActKind.CLICK, 'foreground'],
+      ]);
+    });
+
+    it('gives the menu of a right-click by name, and uses the real button in the foreground', async () => {
+      const { act, asked } = acting();
+      await act(ActionType.CLICK, { button: 'right' });
+      await act(ActionType.CLICK, { button: 'right', foreground: true });
+      expect(asked.map((request) => [request.kind, request.delivery])).toEqual([
+        [ActKind.MENU, 'user-path'],
+        [ActKind.RIGHTCLICK, 'foreground'],
+      ]);
+    });
+
+    it('drags to the middle of another element, or to a point', async () => {
+      const { act, asked, commands } = acting();
+      await act(ActionType.DRAG, {
+        foreground: true,
+        to: { ref: await refOf(commands, 'Delete note') },
+      });
+      await act(ActionType.DRAG, { foreground: true, to: { x: 5, y: 6 } });
+      expect(asked.map((request) => request.value)).toEqual(['140,25', '5,6']);
+      await expect(act(ActionType.DRAG, { foreground: true })).rejects.toThrow(/where to drag to/);
+    });
+
+    it('is never used in a session that was joined for the background only', async () => {
+      const { act, asked } = acting(false);
+      await expect(act(ActionType.CLICK, { foreground: true })).rejects.toThrow(/background-only/);
+      expect(asked).toEqual([]);
+    });
   });
 
   it('says why a press can have no effect, when the peer was told a reason', async () => {

@@ -512,6 +512,11 @@ func run(_ args: [String]) throws {
   // The way to deliver, and after ":" the quiet time for this action when the caller gives one.
   let how = args.count > 9 ? args[9].split(separator: ":").map(String.init) : []
   let direct = how.first == "direct"
+  // In the foreground: the application is brought to the front and the real pointer is used, as
+  // a person uses it. It takes the pointer and the keyboard of the person at the machine for a
+  // moment, so a caller asks for it by name. The pointer and the application that was in front
+  // are put back after the action.
+  let foreground = how.first == "foreground"
   let quietWanted = how.count > 1 ? Int(how[1]) ?? quietNeededMs : quietNeededMs
   let folders = Array(args.dropFirst(10))
 
@@ -558,6 +563,25 @@ func run(_ args: [String]) throws {
     try emit(["refused": "disabled"])
   }
 
+  var appBefore: NSRunningApplication?
+  var pointerBefore: CGPoint?
+  if foreground {
+    RunLoop.current.run(until: Date())
+    appBefore = NSWorkspace.shared.frontmostApplication
+    pointerBefore = CGEvent(source: nil)?.location
+    NSRunningApplication(processIdentifier: pid)?.activate(options: [])
+    // Not long: an application that never takes the front (a panel, an accessory) is acted on
+    // where it is, and the reach test below says if a person could click it.
+    for _ in 0..<12 where !isInFront(pid) { Thread.sleep(forTimeInterval: 0.05) }
+  }
+  /// Puts the pointer and the application in front back as they were. Not after a hover or a
+  /// raise: what those are for is gone when the pointer or the application goes away.
+  func putBack() {
+    guard foreground, action != "hover", action != "raise" else { return }
+    if let was = pointerBefore { CGWarpMouseCursorPosition(was) }
+    if let was = appBefore, was.processIdentifier != pid { was.activate(options: []) }
+  }
+
   let before = snapshot(app)
   let filesBefore = filesNow()
   let writtenBefore = bytesWritten(pid)
@@ -569,9 +593,15 @@ func run(_ args: [String]) throws {
   case .yes: canReach = true
   case .no(let by):
     coveredBy = by
-    if !direct { try emit(["refused": "unreachable", "detail": by]) }
+    if !direct {
+      putBack()
+      try emit(["refused": "unreachable", "detail": by])
+    }
   case .unknown(let code):
-    if !direct { try emit(["refused": "reach-unknown", "detail": "the hit test failed with \(code)"]) }
+    if !direct {
+      putBack()
+      try emit(["refused": "reach-unknown", "detail": "the hit test failed with \(code)"])
+    }
   }
 
   let started = Date()
@@ -627,6 +657,65 @@ func run(_ args: [String]) throws {
       }
       event.flags = flags
       event.postToPid(pid)
+    }
+    result = .success
+  case "menu":
+    // The menu a right-click gives, asked for by name. No pointer is used.
+    result = AXUIElementPerformAction(target, kAXShowMenuAction as CFString)
+  case "raise":
+    // The application is in front already: that was done above. Give the element the keyboard.
+    guard foreground else { try emit(["refused": "needs-foreground"]) }
+    _ = AXUIElementSetAttributeValue(target, kAXFocusedAttribute as CFString, kCFBooleanTrue)
+    result = isInFront(pid) ? .success : .cannotComplete
+  case "click", "dblclick", "rightclick", "hover", "drag":
+    // The real pointer. Only in the foreground: a pointer event that is sent to one application
+    // in the background is not taken by it.
+    guard foreground, let rect = frame(now[7], now[8]) else {
+      try emit(["refused": "needs-foreground"])
+    }
+    let at = CGPoint(x: rect.midX, y: rect.midY)
+    let source = CGEventSource(stateID: .hidSystemState)
+    func send(_ type: CGEventType, _ point: CGPoint, _ button: CGMouseButton, clicks: Int64 = 1) {
+      guard
+        let event = CGEvent(
+          mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: button)
+      else { return }
+      event.setIntegerValueField(.mouseEventClickState, value: clicks)
+      event.post(tap: .cghidEventTap)
+      Thread.sleep(forTimeInterval: 0.03)
+    }
+    send(.mouseMoved, at, .left)
+    // A second small move: a view learns that the pointer came in from a move inside it, and one
+    // jump to its middle did not always tell it.
+    send(.mouseMoved, CGPoint(x: at.x + 1, y: at.y + 1), .left)
+    send(.mouseMoved, at, .left)
+    switch action {
+    case "click":
+      send(.leftMouseDown, at, .left)
+      send(.leftMouseUp, at, .left)
+    case "dblclick":
+      for count in [Int64(1), 2] {
+        send(.leftMouseDown, at, .left, clicks: count)
+        send(.leftMouseUp, at, .left, clicks: count)
+      }
+    case "rightclick":
+      send(.rightMouseDown, at, .right)
+      send(.rightMouseUp, at, .right)
+    case "drag":
+      // To the point "x,y" on the screen, in steps: an application that follows a drag reads
+      // where the pointer is on the way.
+      let parts = value.split(separator: ",").compactMap { Double($0) }
+      guard parts.count == 2 else { try emit(["error": "drag-needs-a-point"]) }
+      let to = CGPoint(x: parts[0], y: parts[1])
+      send(.leftMouseDown, at, .left)
+      for step in 1...8 {
+        let part = CGFloat(step) / 8
+        send(
+          .leftMouseDragged,
+          CGPoint(x: at.x + (to.x - at.x) * part, y: at.y + (to.y - at.y) * part), .left)
+      }
+      send(.leftMouseUp, to, .left)
+    default: break
     }
     result = .success
   default: try emit(["error": "unknown-action"])
@@ -689,6 +778,7 @@ func run(_ args: [String]) throws {
     }
   }
   let settled = quietMs() >= quietWanted
+  putBack()
   var changedSettings: [[String: Any]]?
   if let was = settingsBefore, let now = settings(pid) { changedSettings = settingsChanged(was, now) }
   var wrote: UInt64?

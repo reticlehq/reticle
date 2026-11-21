@@ -14,6 +14,7 @@
 //   Export   writes the title to note.txt in the folder given as the first argument, then says so.
 //   Fake     says "Exported" and writes nothing.
 //   Quit     ends the application 100 ms after the press, as a crash does.
+//   Pad      says which gesture of the real pointer it got: click, double, right, hover, dragged.
 //   Clock    a count that goes up every 400 ms with no action. Only with a second argument `clock`.
 // The window floats and the application never takes the keyboard, so a run does not disturb the
 // person at the machine.
@@ -25,6 +26,33 @@ final class Cover: NSView {
     dirtyRect.fill()
   }
   override func mouseDown(with event: NSEvent) {}
+}
+
+/// A view that says which gesture of the pointer it got. Only the real pointer reaches it.
+final class Pad: NSView {
+  var say: (String) -> Void = { _ in }
+  var downAt: NSPoint?
+  override func draw(_ dirtyRect: NSRect) {
+    NSColor.controlAccentColor.withAlphaComponent(0.25).setFill()
+    dirtyRect.fill()
+  }
+  override func updateTrackingAreas() {
+    trackingAreas.forEach(removeTrackingArea)
+    addTrackingArea(
+      NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways], owner: self))
+  }
+  override func mouseEntered(with event: NSEvent) { say("Pad: hover") }
+  override func mouseDown(with event: NSEvent) {
+    downAt = event.locationInWindow
+    say(event.clickCount >= 2 ? "Pad: double" : "Pad: click")
+  }
+  override func mouseUp(with event: NSEvent) {
+    guard let from = downAt else { return }
+    let dx = Int((event.locationInWindow.x - from.x).rounded())
+    if abs(dx) > 5 { say("Pad: dragged \(dx)") }
+  }
+  override func rightMouseDown(with event: NSEvent) { say("Pad: right") }
+  override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
 final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTableViewDelegate {
@@ -100,6 +128,12 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
     _ = button("Export", 20, #selector(export), y: 20)
     _ = button("Fake", 100, #selector(fake), y: 20)
     _ = button("Quit", 350, #selector(quit), y: 20)
+    let pad = Pad(frame: NSRect(x: 350, y: 150, width: 90, height: 50))
+    pad.setAccessibilityElement(true)
+    pad.setAccessibilityRole(.button)
+    pad.setAccessibilityLabel("Pad")
+    pad.say = { [weak self] words in self?.status.stringValue = words }
+    window.contentView!.addSubview(pad)
     if CommandLine.arguments.count > 2 && CommandLine.arguments[2] == "clock" {
       // In a group of its own: the realm learns the PLACE that changes, and the place of a
       // label that lies in the window is the whole window.

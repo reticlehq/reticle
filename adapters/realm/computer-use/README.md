@@ -77,8 +77,22 @@ With `"count": 0` the same claim says that the application's own processes wrote
 | `submit` | Sends the Return key to the element. |
 | `select` | For a pop-up: presses it, reads its choices, and presses the one named in `value`. When that choice is not there, it closes the pop-up and names the choices that are. A list in a web view does not name its choices: the realm types the name into the list, reads the value, and puts the old choice back when the keys went to another one. |
 | `scroll` | Moves the scroll bar. See below. |
+| `click` with `args.button: "right"` | Asks the element for the menu that a right-click gives. No pointer is used. |
+| `dblclick`, `hover`, `drag`, `focus` | Use the real pointer, or bring the application to the front. Only with `args.foreground: true`. See "The foreground" below. |
 
 Other actions are refused by name.
+
+### The foreground
+
+The realm works in the background: it does not take the pointer or the keyboard of the person at the machine, and the application stays where it is. Some things cannot be done that way: a double-click, a hover, a drag, a click on a control that takes only a real click, and the menu bar of an application that is not in front.
+
+For those, give `args.foreground: true` on the action. The realm then brings the application to the front, moves the real pointer to the element and does the gesture as a person does. After it, the pointer and the application that was in front are put back. A `hover` and a `focus` leave things as they are, because what they are for is gone when the pointer or the application goes away.
+
+- `click` with `foreground: true` is a real click. With `button: "right"` too, it is a real right-click.
+- `drag` needs `args.to`: `{ ref }` for the middle of another element, or `{ x, y }` on the screen.
+- `focus` brings the application to the front and gives the element the keyboard. After it, the menu bar is on the screen and can be read and pressed.
+
+An action that needs the foreground and did not get it is refused, and the refusal says how to ask. Join with `--background-only` and the realm never does it, whatever a caller asks.
 
 A `scroll` moves the scroll bar of the scroll area that holds the element, and sends no wheel event. `fraction` is the place of the bar, 0 to 1. `dy` moves the bar one step in its direction: the realm does not know the height of the content, so it cannot scroll by pixels.
 
@@ -99,7 +113,7 @@ Read these before you rely on a result.
 - **An action with its proof takes about 350 ms through the tools.** The peer calls an action finished after 150 ms with no change, and it goes on looking: a change that comes later is sent when it comes. A caller of the realm class looks once, so it waits for 500 ms with no change; `RETICLE_AX_QUIET_MS` sets that time.
 - **The realm trusts the place that an application gives for an element.** Some applications give a wrong place on a second display with a high resolution. The question "is this element on top" is then asked at the wrong place, and the realm refuses the action. It does not act on a guess.
 - **Shortcuts use the key places of a US keyboard.**
-- **A drag, a hover and a right-click are not built.** The tooltip of an element, which is what a person most often hovers for, is in the answer to `reticle_look { action: "element" }` as `help`: the realm reads it from the tree.
+- **A drag, a hover, a double-click and a real click take the pointer.** They work only with `args.foreground: true`. The tooltip of an element, which is what a person most often hovers for, is in the answer to `reticle_look { action: "element" }` as `help`: the realm reads it from the tree.
 - **The tree alone proves little.** The application draws the tree, so a text on the screen is the application's own word. Watch a folder and name the file when the action writes one.
 
 ## Check it
@@ -111,6 +125,8 @@ Read these before you rely on a result.
 `native/mac/electroncheck.mjs` starts a small Electron application and drives it through the peer. It checks that a press does nothing and says why with the switch off, that a press works with the switch on, and that a slow effect belongs to its own press. It is skipped when Electron is not installed.
 
 `conformance/computer-use-journey.mjs` (run it with `node` from the root of the repository) does two whole journeys through a real bridge and the tools an agent has, and each step must be proved. On the Electron application it fills a field, adds a note, chooses from a list and checks a box. On the native application it fills a field and exports it, and the proof is the file on disk. It saves each journey as a flow, opens a new application, and replays the flow with no model; the replay of the export must write the file in a new folder. Last, the Harness drives the native application with a model that is a script: the check is on the Harness, its prompt for a desktop application and the tools as it calls them, and it costs nothing.
+
+`native/mac/pointercheck.mjs` (`pnpm --filter @reticlehq/computer-use check:pointer`) checks the real pointer: a click, a double-click, a right-click, a drag and a hover. It takes the pointer for a few seconds.
 
 The first three, one after the other, on a Mac with the Accessibility permission:
 

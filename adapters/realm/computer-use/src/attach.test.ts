@@ -23,6 +23,7 @@ describe('attachPlan', () => {
       token: 'tok-file',
       watch: ['/out'],
       electronSwitch: false,
+      foreground: true,
     });
   });
 
@@ -65,6 +66,14 @@ describe('attachPlan', () => {
     expect(electronWarning(program, { ...off, electronSwitch: true }, electron)).toBeUndefined();
     expect(electronWarning(program, off, () => false)).toBeUndefined();
     expect(electronWarning('/usr/bin/tool', off, electron)).toBeUndefined();
+  });
+
+  it('lets a person keep the pointer: no foreground with --background-only', () => {
+    const read = () => undefined;
+    expect(attachPlan(['--app', 'Notes'], {}, '/home', read)).toMatchObject({ foreground: true });
+    expect(attachPlan(['--app', 'Notes', '--background-only'], {}, '/home', read)).toMatchObject({
+      foreground: false,
+    });
   });
 
   it('reads the switch for Electron from the arguments', () => {
