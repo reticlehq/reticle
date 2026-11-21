@@ -264,7 +264,13 @@ export const RECOVERY = {
     '(Tiptap, ProseMirror) takes `insertText` with `{ text }`: it goes through the browser editing ' +
     'pipeline, so the editor model updates. An EditContext editor (Monaco, CodeMirror 6) cannot be ' +
     'typed into yet, because a scripted update fires no textupdate for its model: use `press` for ' +
-    'a key. If the ref points at a wrapper, act on the editor inside it instead.',
+    'a key. If the ref points at a wrapper, act on the editor inside it instead. If the page answers ' +
+    "`unknown action 'insertText'`, its SDK predates the action: update its `@reticlehq/browser` package.",
+  SDK_PREDATES_INSERT_TEXT:
+    "The page answered `unknown action 'insertText'`, so its SDK is older than 2026-11-10, the day " +
+    "`insertText` arrived. The action is valid, so the page's version is at fault, not the call: " +
+    'update the `@reticlehq/browser` package it loads, then type again. Until then, use `press` for ' +
+    'a key.',
   HOVER_NEEDS_POINTER:
     'Hover needs a real pointer: a synthetic mouseover does not apply CSS :hover, and Reticle ' +
     'refuses rather than reporting the styles as applied. Acquire a tab with ' +
@@ -380,6 +386,7 @@ const REASON_OF: Record<keyof typeof RECOVERY, RefusalReason> = {
   AMBIGUOUS_TARGET: RefusalReason.NO_MATCH,
   FLOW_STEP_MISSING: RefusalReason.NO_MATCH,
   UNSUPPORTED_SURFACE: RefusalReason.UNSUPPORTED,
+  SDK_PREDATES_INSERT_TEXT: RefusalReason.UNSUPPORTED,
   HOVER_NEEDS_POINTER: RefusalReason.UNSUPPORTED,
   NOT_EDITABLE: RefusalReason.UNSUPPORTED,
   CONFIRM_DANGEROUS: RefusalReason.UNSUPPORTED,
@@ -420,6 +427,7 @@ const DETAIL_OF: Record<keyof typeof RECOVERY, RefusalDetail> = {
   AMBIGUOUS_TARGET: RefusalDetail.AMBIGUOUS_TARGET,
   FLOW_STEP_MISSING: RefusalDetail.FLOW_STEP_MISSING,
   UNSUPPORTED_SURFACE: RefusalDetail.UNSUPPORTED_SURFACE,
+  SDK_PREDATES_INSERT_TEXT: RefusalDetail.UNSUPPORTED_SURFACE,
   HOVER_NEEDS_POINTER: RefusalDetail.HOVER_NEEDS_POINTER,
   NOT_EDITABLE: RefusalDetail.NOT_EDITABLE,
   CONFIRM_DANGEROUS: RefusalDetail.CONFIRM_DANGEROUS,
@@ -524,6 +532,10 @@ const RULES: readonly RecoveryRule[] = [
   // broken. Order matters: contenteditable and disabled/readonly are `cannot <verb> …` messages too,
   // so they must be tested before the general wrong-target rule.
   { match: /contenteditable/i, hint: RECOVERY.UNSUPPORTED_SURFACE },
+  // A page whose SDK predates `insertText` answers this to a VALID action. The generic
+  // `unknown action '<verb>'` rule read it as a bad argument, so the agent retried the same call
+  // and never typed into the editor. Specific first: this one names the page's version as the fault.
+  { match: /^unknown action 'insertText'/i, hint: RECOVERY.SDK_PREDATES_INSERT_TEXT },
   // The EditContext refusal from insertText. Its message names no `contenteditable`, so it used to
   // fall through to the feedback ask — a deliberate refusal of a surface we cannot type into yet
   // read as "Reticle may be broken".
