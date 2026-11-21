@@ -56,6 +56,12 @@ try {
 
   const save = await press('Save');
   assert.ok(save.domMutatedWithin > 0, 'the real effect of Save was lost next to the clock');
+  // The words, and not only a count: a count can come from a change that Save did not make.
+  const shown = await commands.answer(ReticleCommand.QUERY, { role: 'text' });
+  assert.ok(
+    shown.elements.some((element) => element.name.startsWith('Saved:')),
+    'Save did not change the status',
+  );
 
   process.stdout.write(
     `computer-use ambientcheck: held (before ${String(before.domMutatedWithin)}, dead 0 + ${String(dead.changedByItself)} by itself, save ${String(save.domMutatedWithin)})\n`,

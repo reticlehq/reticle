@@ -187,12 +187,16 @@ try {
   const slid = await step('Volume', ActKind.SET, { value: '0.5' });
   // Two elements change: the slider, and the mark on it that shows the value.
   assert.deepEqual(slid.summaries, [CuSummary.UI_CHANGED, CuSummary.UI_CHANGED]);
+  // The value itself, and not only "two elements changed".
+  assert.ok(slid.observed.some((o) => String(o.value.detail).includes('0.5')));
 
   const saved = await step('Save', ActKind.PRESS);
   assert.deepEqual(saved.summaries, [CuSummary.UI_GONE, CuSummary.UI_APPEARED]);
+  assert.ok(saved.observed.some((o) => String(o.value.element).startsWith('text "Saved:')));
 
   const slow = await step('Slow', ActKind.PRESS);
   assert.deepEqual(slow.summaries, [CuSummary.UI_GONE, CuSummary.UI_APPEARED]);
+  assert.ok(slow.observed.some((o) => 'text "Slow done"' === o.value.element));
 
   // An effect in two steps with a pause between them. The action is finished after the second.
   // This case holds the quiet time: with 100 ms the realm stops at "Working".
