@@ -756,10 +756,30 @@ func run(_ args: [String]) throws {
   case "press":
     let pressed = AXUIElementPerformAction(target, kAXPressAction as CFString)
     // A row of a table has no press. A click on it chooses it, so choose it.
-    result =
-      pressed == .actionUnsupported
-      ? AXUIElementSetAttributeValue(target, kAXSelectedAttribute as CFString, kCFBooleanTrue)
-      : pressed
+    // Not only "no such action": a field in a row of an outline answers a press with another
+    // error, and it has no press all the same.
+    if pressed != .success {
+      var chosen = AXUIElementSetAttributeValue(
+        target, kAXSelectedAttribute as CFString, kCFBooleanTrue)
+      // The words of a row are a text or a field inside it, and they have no press and cannot
+      // be chosen. A click of a person on those words chooses the row. So choose the row that
+      // holds the target, when one is near above it.
+      var up = target
+      for _ in 0..<4 where chosen != .success {
+        var parent: AnyObject?
+        guard AXUIElementCopyAttributeValue(up, kAXParentAttribute as CFString, &parent) == .success,
+          let above = parent, CFGetTypeID(above) == AXUIElementGetTypeID()
+        else { break }
+        up = above as! AXUIElement
+        if let v = values(up), text(v[0]) == "AXRow" {
+          chosen = AXUIElementSetAttributeValue(up, kAXSelectedAttribute as CFString, kCFBooleanTrue)
+          break
+        }
+      }
+      result = chosen
+    } else {
+      result = pressed
+    }
   case "set":
     // An element whose value is a number (a slider, a scroll bar) takes a number, not its text.
     let number = now[4] is NSNumber ? Double(value).map { NSNumber(value: $0) } : nil
