@@ -3,7 +3,8 @@
 // what the page then shows. The task is saved as a flow, Chrome is closed and opened again, and
 // the flow replays with no model. It holds when the note is on the page after the replay too.
 //
-//   node conformance/computer-use-browser.mjs
+//   node conformance/computer-use-browser.mjs            (Chrome)
+//   node conformance/computer-use-browser.mjs --safari   (Safari)
 //
 // macOS, with the Accessibility permission and Google Chrome. Build the repository first. Not a
 // gate: it opens Chrome on the screen. It does not run when Chrome is open already: those
@@ -20,7 +21,10 @@ import { MacDriver, connectPeer } from '../adapters/realm/computer-use/dist/inde
 import { Bridge } from '../server/dist/portal/bridge/bridge.js';
 import { callTool, makeDeps, waitUntil } from '../server/dist/portal/bridge/bridge.test-harness.js';
 
-const APP = 'Google Chrome';
+// Chrome, or Safari with --safari. Safari has no profile of the run: it opens the page in the
+// profile of the person, and the check reads and writes that one page only.
+const SAFARI = process.argv.includes('--safari');
+const APP = SAFARI ? 'Safari' : 'Google Chrome';
 const pidOf = () => {
   try {
     return Number(execFileSync('pgrep', ['-x', APP], { encoding: 'utf8' }).trim().split('\n')[0]);
@@ -30,7 +34,7 @@ const pidOf = () => {
 };
 if ('darwin' !== process.platform || !existsSync(`/Applications/${APP}.app`) || 0 !== pidOf()) {
   console.error(
-    'computer-use-browser: not macOS, no Chrome, or Chrome is open already. Nothing was run.',
+    `computer-use-browser: not macOS, no ${APP}, or ${APP} is open already. Nothing was run.`,
   );
   process.exit(0);
 }
@@ -46,23 +50,30 @@ const snapshot = async () => (await callTool(deps, 'reticle_snapshot', {})).tree
 
 /** Starts Chrome on the page and joins it. The answer closes both. */
 async function open() {
-  execFileSync('open', [
-    '-na',
-    APP,
-    '--args',
-    `--user-data-dir=${profile}`,
-    '--no-first-run',
-    '--no-default-browser-check',
-    `file://${native}form.html`,
-  ]);
+  execFileSync(
+    'open',
+    SAFARI
+      ? ['-a', APP, `${native}form.html`]
+      : [
+          '-na',
+          APP,
+          '--args',
+          `--user-data-dir=${profile}`,
+          '--no-first-run',
+          '--no-default-browser-check',
+          `file://${native}form.html`,
+        ],
+  );
   let pid = 0;
   for (let tries = 0; tries < 40 && 0 === pid; tries += 1) {
     await sleep(250);
     pid = pidOf();
   }
-  assert.ok(0 !== pid, 'Chrome did not start');
+  assert.ok(0 !== pid, `${APP} did not start`);
   // A Chromium browser gives its page only after the accessibility switch is set.
-  execFileSync(helper, ['web-tree', String(pid), 'on']);
+  if (!SAFARI) {
+    execFileSync(helper, ['web-tree', String(pid), 'on']);
+  }
   const peer = connectPeer({
     url: `ws://localhost:${String(port)}/reticle`,
     token: TOKEN,
@@ -131,7 +142,7 @@ try {
   assert.equal(replayed.status, 'ok', JSON.stringify(replayed.steps));
   assert.ok((await snapshot()).includes('text "Buy milk"'), 'the replay did not add the note');
   console.error(
-    `computer-use browser: ${String(STEPS.length)} steps proved in Chrome, and the saved flow replayed in ${String(took)} ms with no model`,
+    `computer-use browser: ${String(STEPS.length)} steps proved in ${APP}, and the saved flow replayed in ${String(took)} ms with no model`,
   );
 } finally {
   await close();

@@ -482,6 +482,18 @@ func run(_ args: [String]) throws {
     // reader. It costs the application some speed, so it is set only when the person asks, and
     // set back when the realm leaves.
     let on = args.count > 3 && args[3] == "on"
+    if on {
+      // An application that just started has no window yet. A switch that is set then is in
+      // effect at a time nobody knows, and the wait below ends too soon. Wait for a window first,
+      // five seconds at most: an application with no window at all gets the switch as before.
+      let until = Date().addingTimeInterval(5)
+      while Date() < until {
+        var windows: AnyObject?
+        AXUIElementCopyAttributeValue(app, kAXWindowsAttribute as CFString, &windows)
+        if let list = windows as? [AXUIElement], !list.isEmpty { break }
+        Thread.sleep(forTimeInterval: 0.15)
+      }
+    }
     // The tree as it is before the switch, read until two reads agree: a web view makes its tree
     // when it is first asked, and that first growth must not be taken for the switch.
     var before = snapshot(app).json
