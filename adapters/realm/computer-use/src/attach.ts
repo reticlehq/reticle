@@ -127,6 +127,14 @@ export function attachPlan(
 
 /** The file that every Electron application has in its bundle. */
 const ELECTRON_MARK = 'Contents/Frameworks/Electron Framework.framework';
+/**
+ * Frameworks that carry Chromium with no Electron: the embedded framework (Spotify), and the one
+ * of Arc and Dia. Read from the bundles; only Chrome and Electron were driven.
+ */
+const CHROMIUM_MARKS = [
+  'Contents/Frameworks/Chromium Embedded Framework.framework',
+  'Contents/Frameworks/ArcCore.framework',
+];
 const BUNDLE = /^(.*?\.app)\//;
 
 /**
@@ -143,9 +151,8 @@ export function isElectron(program: string, exists: (path: string) => boolean): 
     return false;
   }
   const name = basename(program);
-  return (
-    exists(join(bundle, ELECTRON_MARK)) ||
-    exists(join(bundle, 'Contents/Frameworks', `${name} Framework.framework`))
+  return [ELECTRON_MARK, ...CHROMIUM_MARKS, `Contents/Frameworks/${name} Framework.framework`].some(
+    (mark) => exists(join(bundle, mark)),
   );
 }
 

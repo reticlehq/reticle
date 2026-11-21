@@ -95,6 +95,16 @@ describe('attachPlan', () => {
     expect(isElectron('/Applications/Notes.app/Contents/MacOS/Notes', frameworks)).toBe(false);
   });
 
+  // Dia and Arc carry Chromium in a framework of their own, and Spotify in the embedded one.
+  it('knows the other ways an application carries Chromium', () => {
+    const has = (mark: string) => (path: string) => path.endsWith(`/Contents/Frameworks/${mark}`);
+    const dia = '/Applications/Dia.app/Contents/MacOS/Dia';
+    expect(isElectron(dia, has('ArcCore.framework'))).toBe(true);
+    const spotify = '/Applications/Spotify.app/Contents/MacOS/Spotify';
+    expect(isElectron(spotify, has('Chromium Embedded Framework.framework'))).toBe(true);
+    expect(isElectron(dia, has('Sparkle.framework'))).toBe(false);
+  });
+
   it('shows the pointer and the window of the realm unless the person says not to', () => {
     const read = () => undefined;
     expect(attachPlan(['--app', 'Notes'], {}, '/home', read)).toMatchObject({ hud: true });
