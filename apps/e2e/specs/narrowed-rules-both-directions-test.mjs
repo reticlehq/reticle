@@ -508,9 +508,22 @@ for (const c of REACH) {
     if (true === c.covered) {
       await cover(true);
     }
+    const togglesBefore = await toggles(0);
     const r = await run(c.target);
     if (true === c.covered) {
       await cover(false);
+    }
+    if (true === c.covered) {
+      // A visible target under a cover is refused before the click is sent: a person could not
+      // click it, and a click that reaches it anyway can submit or sign (the covered-click refusal).
+      chk('the click is not verified yes', VERIFIED_YES !== r?.verified, verdictOf(r));
+      chk(
+        'the refusal names the cover and says why a person could not click it',
+        /covers the target/.test(String(r?.error ?? '')),
+        String(r?.error ?? '').slice(0, 160),
+      );
+      chk('the refused click sent no request', togglesBefore === (await toggles(0)));
+      continue;
     }
     chk('the click is not verified yes', VERIFIED_YES !== r?.verified, verdictOf(r));
     chk('the reason says why a person could not click it', String(r?.because ?? '').includes(c.because));

@@ -805,7 +805,7 @@ export async function executeAction(
   const geometry = CLICK_LIKE.has(action) ? clickGeometry(el) : NO_GEOMETRY;
   // Refused before anything is installed: a person could not click a covered target, and a click
   // that reaches it anyway can open, submit or sign before the verdict can say it was covered.
-  assertNotOccluded(geometry, args);
+  assertNotOccluded(geometry, args, visible);
   // Before dispatch, so a click that toggles `checked` during the event cannot erase the pre-action
   // reading, and so a script write during the action is seen. Published after settle, once React
   // has restored or committed the controlled property.

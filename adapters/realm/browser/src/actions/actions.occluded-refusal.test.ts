@@ -114,4 +114,18 @@ describe('a click on a covered target', () => {
     await expect(executeAction(ref, 'click')).rejects.toThrow(/covers the target/);
     expect(clicks()).toBe(0);
   });
+
+  // CI e2e: a switch inside a closed <details> is not visible, and the hit test at its old place
+  // lands on the visible switch beside it. That neighbour is not a cover; the story is "not
+  // visible", which the verdict already tells. The refusal is for a visible target under a cover.
+  it('is not refused for a target that is not visible at all', async () => {
+    document.body.innerHTML =
+      '<details><summary>Players</summary><button role="switch">Stream eligible</button></details>' +
+      '<button role="switch">Stream public</button>';
+    const hidden = document.querySelector('details button') as HTMLButtonElement;
+    const neighbour = document.querySelectorAll('button')[1] as HTMLButtonElement;
+    hidden.getBoundingClientRect = rect({ left: 0, top: 20, width: 100, height: 20 });
+    document.elementFromPoint = () => neighbour;
+    await expect(executeAction(refs.refFor(hidden), 'click')).resolves.toBeDefined();
+  });
 });

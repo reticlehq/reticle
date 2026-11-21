@@ -659,8 +659,17 @@ export function assertNotLeaving(el: Element): void {
  * modal over "Review & sign" opened a second signing dialog while the verdict only said `unknown`.
  * The refusal names the cover, which is usually the thing to close first.
  */
-export function assertNotOccluded(geometry: ClickGeometry, args: Record<string, unknown>): void {
-  if (!geometry.occluded || true === args[ALLOW_OCCLUDED_ARG]) {
+export function assertNotOccluded(
+  geometry: ClickGeometry,
+  args: Record<string, unknown>,
+  /**
+   * A target that is not visible is not "covered": the hit test at its place lands on whatever is
+   * drawn there instead, such as the control beside a closed `<details>`. Its verdict already says
+   * it is not visible, so the cover story would be the wrong one.
+   */
+  visible: boolean,
+): void {
+  if (!visible || !geometry.occluded || true === args[ALLOW_OCCLUDED_ARG]) {
     return;
   }
   const cover = geometry.occluderName ?? 'another element';
