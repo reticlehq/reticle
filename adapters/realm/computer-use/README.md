@@ -149,7 +149,7 @@ Read these before you rely on a result.
 - **The realm trusts the place that an application gives for an element.** Some applications give a wrong place on a second display with a high resolution. The question "is this element on top" is then asked at the wrong place, and the realm refuses the action. It does not act on a guess.
 - **Shortcuts use the key places of a US keyboard.**
 - **A drag, a hover, a double-click and a real click take the pointer.** They work only with `args.foreground: true`. The tooltip of an element, which is what a person most often hovers for, is in the answer to `reticle_look { action: "element" }` as `help`: the realm reads it from the tree.
-- **The save panel keeps its folder.** The realm fills the name and presses Save in the background. It cannot go to another folder that way: a whole path in the name field does not move the panel, and the system then writes a file whose name is that path, with a colon for each slash. To choose a folder a person types a key, and a key reaches the panel only as a real key, with the application in front.
+- **The save panel keeps its folder.** The realm fills the name and presses Save in the background. It cannot go to another folder that way: a whole path in the name field does not move the panel, and the system then writes a file whose name is that path, with a colon for each slash. To choose a folder a person types a key, and a key reaches the panel only as a real key, with the application in front. The key that opens "Go to the folder" works that way; typing the folder into that sheet is not proved yet.
 - **The realm does not see paint.** "Can a person reach this element" is a question to the operating system about what element is at a point. It is not a look at the screen. A control that another view paints over, with nothing in the accessibility tree to say so, is still "reachable" for the realm, and a person does not see it. The fixture of this package had that defect, and every check passed. Take `reticle_screenshot` and look at the window when what a person sees is part of the claim.
 - **The tree alone proves little.** The application draws the tree, so a text on the screen is the application's own word. Watch a folder and name the file when the action writes one.
 
@@ -167,7 +167,7 @@ Read these before you rely on a result.
 
 `native/mac/hudcheck.mjs` checks the window of the realm: it shows the action and its effect, and Pause stops the realm. The check presses Pause as a person does: a second realm reads the window and presses its button.
 
-`native/mac/pointercheck.mjs` (`pnpm --filter @reticlehq/computer-use check:pointer`) checks the real pointer: a click, a double-click, a right-click, a drag and a hover. It takes the pointer for a few seconds.
+`native/mac/pointercheck.mjs` (`pnpm --filter @reticlehq/computer-use check:pointer`) checks the real pointer: a click, a double-click, a right-click, a drag and a hover. It takes the pointer for a few seconds. The same command then runs `native/mac/keyscheck.mjs`: an application that was opened in the background comes to the front, and real keys go to it. It takes the keyboard for a few seconds.
 
 The first three, the check of the window and the check of the save panel, one after the other, on a Mac with the Accessibility permission:
 

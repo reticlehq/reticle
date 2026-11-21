@@ -19,7 +19,7 @@
     "lint": "eslint src",
     "test:unit": "vitest run src --passWithNoTests",
     "check:live": "node native/mac/selfcheck.mjs && node native/mac/ambientcheck.mjs && node native/mac/electroncheck.mjs && node native/mac/hudcheck.mjs && node native/mac/savepanelcheck.mjs",
-    "check:pointer": "node native/mac/pointercheck.mjs",
+    "check:pointer": "node native/mac/pointercheck.mjs && node native/mac/keyscheck.mjs",
     "prepack": "node ../../../scripts/prepare-dist.mjs --clean dist && tsc -b --force && node ../../../scripts/alias-dist.mjs && node ../../../scripts/prepare-dist.mjs dist"
   },
   "dependencies": {

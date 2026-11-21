@@ -214,5 +214,8 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
 let app = NSApplication.shared
 let delegate = Fixture()
 app.delegate = delegate
-app.setActivationPolicy(.accessory)
+// With RETICLE_FIXTURE_REGULAR it is an ordinary application that can come to the front and take
+// the keyboard, for the check of real keys. That check takes the keyboard for a moment.
+app.setActivationPolicy(
+  ProcessInfo.processInfo.environment["RETICLE_FIXTURE_REGULAR"] == "1" ? .regular : .accessory)
 app.run()

@@ -658,6 +658,11 @@ func run(_ args: [String]) throws {
     RunLoop.current.run(until: Date())
     appBefore = NSWorkspace.shared.frontmostApplication
     pointerBefore = CGEvent(source: nil)?.location
+    // Two ways to bring it to the front, and the first is the one that works on a new macOS: a
+    // tool for accessibility may say that an application is the one in front. The plain request
+    // to activate is one the system is free to pass over, and it did for an application that was
+    // opened in the background.
+    AXUIElementSetAttributeValue(app, kAXFrontmostAttribute as CFString, kCFBooleanTrue)
     NSRunningApplication(processIdentifier: pid)?.activate(options: [])
     // Not long: an application that never takes the front (a panel, an accessory) is acted on
     // where it is, and the reach test below says if a person could click it.
