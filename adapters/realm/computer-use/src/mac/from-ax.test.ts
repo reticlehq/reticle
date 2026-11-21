@@ -102,6 +102,36 @@ describe('fromAx', () => {
     ]);
   });
 
+  // Granola gives the menu of a meeting with no name, no text and no tip. A person tells such a
+  // control apart by what is beside it. An agent saw thirty-six menus with no name.
+  it('names a control that has no name by the nearest named thing beside it', () => {
+    const list = AxNodeSchema.parse({
+      role: 'AXList',
+      title: 'Meetings',
+      children: [
+        {
+          role: 'AXGroup',
+          children: [
+            { role: 'AXCheckBox', title: 'Select Weekly sync', children: [] },
+            { role: 'AXButton', title: 'Weekly sync', children: [] },
+            {
+              role: 'AXGroup',
+              children: [
+                { role: 'AXGroup', children: [] },
+                { role: 'AXPopUpButton', children: [] },
+              ],
+            },
+          ],
+        },
+        { role: 'AXPopUpButton', children: [] },
+      ],
+    });
+    const row = fromAx(list).root.children[0];
+    expect(row?.children[2]?.children[1]?.name).toBe('Menu by Weekly sync');
+    // Beside the row: the named thing nearest to it in the order of the tree is the meeting.
+    expect(fromAx(list).root.children[1]?.name).toBe('Menu by Weekly sync');
+  });
+
   it('names each role it does not know, and keeps the element', () => {
     const { root, unmapped } = fromAx({
       role: 'AXWindow',

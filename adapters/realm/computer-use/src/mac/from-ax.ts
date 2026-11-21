@@ -186,6 +186,81 @@ function wordsIn(node: AxNode): string {
   return '';
 }
 
+/** The controls that are named by what is beside them, when the application gives no name. */
+const WORD_OF_ROLE: Readonly<Partial<Record<UiRole, string>>> = {
+  [UiRole.COMBOBOX]: 'Menu',
+  [UiRole.BUTTON]: 'Button',
+  [UiRole.CHECKBOX]: 'Box',
+  [UiRole.RADIO]: 'Choice',
+  [UiRole.LINK]: 'Link',
+};
+/** The roles whose name can name a neighbour: what a person reads beside a control. */
+const NAMING_ROLES: ReadonlySet<UiRole> = new Set([
+  UiRole.BUTTON,
+  UiRole.TEXT,
+  UiRole.CHECKBOX,
+  UiRole.LINK,
+  UiRole.HEADING,
+  UiRole.COMBOBOX,
+  UiRole.RADIO,
+]);
+/** How many parents up a name is looked for. Farther up, it is the name of the whole list. */
+const NEIGHBOUR_LEVELS = 4;
+
+/** The first name in an element, in the order of the tree, or from its end. */
+function nameIn(node: UiNode, fromEnd: boolean): string {
+  if (node.name.length > 0 && NAMING_ROLES.has(node.role)) {
+    return node.name;
+  }
+  const order = fromEnd ? [...node.children].reverse() : node.children;
+  for (const child of order) {
+    const found = nameIn(child, fromEnd);
+    if (found.length > 0) {
+      return found;
+    }
+  }
+  return '';
+}
+
+/**
+ * A name for each control that has none, from the nearest named thing beside it: first what comes
+ * before it, nearest first, then what comes after it, then the same one parent up. Granola gives
+ * the menu of each meeting with no name, no text and no tip, and a person tells them apart by the
+ * meeting beside each one. Not farther than a few parents: the name of the whole list would give
+ * every menu in it the same name. A control with nothing named near it keeps no name.
+ */
+function nameByNeighbours(
+  node: UiNode,
+  chain: readonly UiNode[] = [],
+  at: readonly number[] = [],
+): UiNode {
+  const word = WORD_OF_ROLE[node.role];
+  let name = node.name;
+  if (0 === name.length && word !== undefined) {
+    for (let up = chain.length - 1; up >= 0 && chain.length - up <= NEIGHBOUR_LEVELS; up -= 1) {
+      const kids = chain[up]?.children ?? [];
+      const i = at[up] ?? 0;
+      const before = kids
+        .slice(0, i)
+        .reverse()
+        .map((s) => nameIn(s, true));
+      const after = kids.slice(i + 1).map((s) => nameIn(s, false));
+      const found = [...before, ...after].find((one) => one.length > 0);
+      if (found !== undefined) {
+        name = `${word} by ${found}`;
+        break;
+      }
+    }
+  }
+  return {
+    ...node,
+    name,
+    children: node.children.map((child, index) =>
+      nameByNeighbours(child, [...chain, node], [...at, index]),
+    ),
+  };
+}
+
 export function fromAx(ax: AxNode): FromAx {
   const unmapped = new Set<string>();
   const convert = (node: AxNode): UiNode => {
@@ -224,6 +299,6 @@ export function fromAx(ax: AxNode): FromAx {
       children: node.children.map(convert),
     };
   };
-  const root = convert(ax);
+  const root = nameByNeighbours(convert(ax));
   return { root, unmapped: [...unmapped].sort() };
 }
