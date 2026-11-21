@@ -144,6 +144,17 @@ function givenId(id: string | undefined): string | undefined {
   return id.startsWith(MADE_BY_APPKIT) || MADE_BY_A_FRAMEWORK.test(id) ? undefined : id;
 }
 
+/**
+ * A name for an element that has none, from its subrole. The buttons at the top of a window are
+ * the case: the system says what each one is, and gives it no title.
+ */
+const NAME_OF_SUBROLE: Readonly<Partial<Record<string, string>>> = {
+  AXCloseButton: 'Close window',
+  AXMinimizeButton: 'Minimize window',
+  AXZoomButton: 'Zoom window',
+  AXFullScreenButton: 'Full screen',
+};
+
 export function fromAx(ax: AxNode): FromAx {
   const unmapped = new Set<string>();
   const convert = (node: AxNode): UiNode => {
@@ -153,7 +164,8 @@ export function fromAx(ax: AxNode): FromAx {
     }
     // A static text has no title: its words are its value, and they are what a person reads.
     const isText = node.role === AxRole.STATIC_TEXT;
-    const name = (isText ? node.value : undefined) ?? node.title ?? node.description ?? '';
+    const said = (isText ? node.value : undefined) ?? node.title ?? node.description ?? '';
+    const name = 0 === said.length ? (NAME_OF_SUBROLE[node.subrole ?? ''] ?? '') : said;
     // ponytail: the wire has no "selected" state, so a chosen row says it in its value. Add the
     // state to `ElementState` in core when a second realm needs it.
     const chosen = true === node.selected ? SELECTED : undefined;

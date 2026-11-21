@@ -28,6 +28,27 @@ describe('fromAx', () => {
     ]);
   });
 
+  // The three buttons at the top of a window have no title. An agent saw three buttons with no
+  // name, and a press on one to find out what it does closes the window.
+  it('names the buttons of a window from what the system says they are', () => {
+    const window = AxNodeSchema.parse({
+      role: 'AXWindow',
+      title: 'Clock',
+      children: [
+        { role: 'AXButton', subrole: 'AXCloseButton', children: [] },
+        { role: 'AXButton', subrole: 'AXMinimizeButton', children: [] },
+        { role: 'AXButton', subrole: 'AXZoomButton', children: [] },
+        { role: 'AXButton', subrole: 'AXCloseButton', title: 'Done', children: [] },
+      ],
+    });
+    expect(fromAx(window).root.children.map((c) => c.name)).toEqual([
+      'Close window',
+      'Minimize window',
+      'Zoom window',
+      'Done',
+    ]);
+  });
+
   it('names each role it does not know, and keeps the element', () => {
     const { root, unmapped } = fromAx({
       role: 'AXWindow',
