@@ -148,4 +148,5 @@ try {
   await close();
   await bridge.close();
   rmSync(profile, { recursive: true, force: true });
+  rmSync('/tmp/reticle-test/.reticle/flows/cu-browser', { recursive: true, force: true });
 }

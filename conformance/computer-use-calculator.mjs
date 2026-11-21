@@ -10,11 +10,14 @@
 // belongs to the person. Calculator writes no file and has no account.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
+import { rmSync } from 'node:fs';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
 import { MacDriver, connectPeer } from '../adapters/realm/computer-use/dist/index.js';
+import { FINISH_TOOL } from '../server/dist/features/harness/harness.js';
 import { Bridge } from '../server/dist/portal/bridge/bridge.js';
+import { exploreApp } from '../server/dist/surface/tools/harness-explore.js';
 import { callTool, makeDeps, waitUntil } from '../server/dist/portal/bridge/bridge.test-harness.js';
 
 const APP = 'Calculator';
@@ -131,5 +134,75 @@ try {
   );
 } finally {
   await close();
+}
+
+/**
+ * The Harness drives Calculator. The model is a script here, so the run costs nothing and is the
+ * same each time. What is checked is the Harness on an application that Reticle did not write:
+ * the prompt it gives, the tools as it calls them, and the verdict of each press.
+ */
+try {
+  close = await open();
+  const turns = [
+    () => [{ id: 'look', name: 'reticle_snapshot', args: {} }],
+    () => [{ id: 'record', name: 'reticle_record', args: { action: 'start' } }],
+    ...STEPS.map(([name, shows], at) => (tree) => [
+      {
+        id: `press-${String(at)}`,
+        name: 'reticle_act_and_wait',
+        args: {
+          ref: new RegExp(`- button "${name}" \\(ref=(e\\d+)\\)`).exec(tree)?.[1],
+          action: 'click',
+          timeout_ms: 3000,
+          until: { kind: 'element', query: { role: 'text', text: shows }, state: 'visible' },
+        },
+      },
+    ]),
+    () => [{ id: 'save', name: 'reticle_flow_save', args: { flowName: 'default' } }],
+    () => [{ id: 'end', name: FINISH_TOOL.name, args: { summary: '42', goalMet: true } }],
+  ];
+  const systems = [];
+  let tree = '';
+  const scripted = {
+    turn: (input) => {
+      systems.push(input.system);
+      const last = JSON.stringify(input.history.at(-1) ?? {});
+      tree = /- application|- window/.test(last)
+        ? last.replaceAll('\\"', '"').replaceAll('\\n', '\n')
+        : tree;
+      const next = turns.shift() ?? (() => []);
+      return Promise.resolve({ text: '', calls: next(tree) });
+    },
+  };
+  const result = await exploreApp(
+    deps,
+    {},
+    {
+      driver: scripted,
+      skipPlatformConfig: true,
+      sessionId: 'cu-calculator',
+      focus: 'work out 7 times 6',
+    },
+  );
+  assert.ok(systems[0]?.includes('a real desktop application'), 'not the prompt for a desktop');
+  const acts = result.drive.toolCalls.filter((call) => 'reticle_act_and_wait' === call.name);
+  assert.equal(acts.length, STEPS.length);
+  for (const act of acts) {
+    assert.ok(
+      JSON.stringify(act.result).includes('"verified":"yes"'),
+      JSON.stringify(act.result).slice(0, 300),
+    );
+  }
+  assert.ok(display((await callTool(deps, 'reticle_snapshot', {})).tree).includes('42'));
+  console.error(
+    `computer-use calculator (Harness, scripted model): ${String(result.drive.toolCalls.length)} tool calls, ${String(acts.length)} presses proved`,
+  );
+} finally {
+  await close();
   await bridge.close();
+  rmSync('/tmp/reticle-test/.reticle/flows/cu-calculator', { recursive: true, force: true });
+  // The goal that the Harness was given is kept as an intent, in a folder that the unit tests of
+  // the server read too. Left there, its words came into the answer of another test.
+  rmSync('/tmp/reticle-test/.reticle/intent', { recursive: true, force: true });
+  setTimeout(() => process.exit(process.exitCode ?? 0), 200);
 }
