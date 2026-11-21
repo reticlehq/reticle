@@ -70,7 +70,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // +1: insert-text.ts, the `insertText` action's whole path behind a dynamic import. The rich-text
   // edit is most of that action's code, and a page that never inserts text should not download it.
   'adapters/realm/browser/src/actions': 12,
-  'adapters/realm/browser/src/dom': 20,
+  // +1: geometry.ts, the geometry predicates' own module (#1539).
+  'adapters/realm/browser/src/dom': 21,
   // +1: error-repeats.ts, the limiter every uncaught-error path in console.ts goes through (#986).
   'adapters/realm/browser/src/observers': 27,
   // 17 since the HUD's position primitives left `presenter-drag.ts` for their own leaf: the drag
@@ -223,7 +224,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // page's SDK version (#2031), split from `predicate-eval.ts` at its line cap for the same reason.
   // 25 with `predicate-animation.ts`, split from `predicate.ts` so the live-animation snapshot
   // fallback can stay beside the other predicate evaluators without growing the dispatcher.
-  'engine/src/question/predicate': 25,
+  // +1: predicate-geometry.ts, the geometry grading split out of predicate-element.ts at the
+  // 1000-line cap (#1539).
+  'engine/src/question/predicate': 26,
   /*
    * Crossed ten when the fast-drive budget and a portable byte counter landed. The guard asks for
    * grouping rather than recording at this moment, and grouping is the wrong move HERE specifically:

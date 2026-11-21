@@ -232,14 +232,20 @@ function couplingToCore(): Coupling {
   for (const rel of shippedSources()) {
     const text = readFileSync(join(PACKAGE_ROOT, rel), 'utf8');
     const statements = text.match(/import[^;]*from '@reticlehq\/core'/g) ?? [];
-    if (0 === statements.length) continue;
+    if (0 === statements.length) {
+      continue;
+    }
     files += 1;
     for (const statement of statements) {
       const braced = /\{([^}]*)\}/.exec(statement);
-      if (null === braced) continue;
+      if (null === braced) {
+        continue;
+      }
       for (const raw of (braced[1] ?? '').split(',')) {
         const name = raw.replace(/\btype\b/, '').trim();
-        if ('' !== name) symbols.add(name);
+        if ('' !== name) {
+          symbols.add(name);
+        }
       }
     }
   }
