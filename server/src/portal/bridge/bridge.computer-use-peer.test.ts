@@ -51,6 +51,9 @@ class FakeApp implements UiDriver {
   /** True while a window of another application is over this one. */
   covered = false;
 
+  /** True for an application whose Save stopped working: a press on it changes nothing. */
+  saveIsBroken = false;
+
   reach() {
     return Promise.resolve(
       this.covered
@@ -62,7 +65,7 @@ class FakeApp implements UiDriver {
   act(request: ActRequest) {
     const before = this.#now();
     this.pressed.push(request.target.node.name);
-    if ('Save' === request.target.node.name) {
+    if ('Save' === request.target.node.name && !this.saveIsBroken) {
       this.status = 'Saved';
     }
     // Both say "Exported". Only Export writes the file.
@@ -281,4 +284,43 @@ describe('a computer-use peer on the bridge', () => {
     })) as Verdict;
     expect(result.verdict.pass, result.verdict.failureReason).toBe(true);
   });
+
+  /**
+   * A drive by a model is not the same on each run. A flow that was recorded once replays with
+   * no model, and a flow that goes red names a change in the application. The step is saved by
+   * role and name, so it finds the button again without the ref of the first run.
+   */
+  it('replays a recorded flow with no model, and goes red when the application breaks', async () => {
+    app.status = 'Ready';
+    const page = (await callTool(deps, 'reticle_snapshot', {})) as { tree: string };
+    const save = /button "Save" \(ref=(e\d+)\)/.exec(page.tree)?.[1] ?? '';
+    await callTool(deps, 'reticle_record', { action: 'start' });
+    await callTool(deps, 'reticle_act_and_wait', {
+      ref: save,
+      action: 'click',
+      timeout_ms: 2000,
+      until: { kind: 'element', query: { text: 'Saved' }, state: ElementState.VISIBLE },
+    });
+    const recorded = (await callTool(deps, 'reticle_record', { action: 'stop' })) as {
+      recordingName: string;
+    };
+    await callTool(deps, 'reticle_flow_save', { flowName: recorded.recordingName });
+
+    app.status = 'Ready';
+    const presses = app.pressed.length;
+    const replayed = (await callTool(deps, 'reticle_flow_replay', {
+      flowName: recorded.recordingName,
+    })) as { status: string };
+    expect(replayed.status).toBe('ok');
+    expect(app.pressed.slice(presses)).toEqual(['Save']);
+    expect(app.status).toBe('Saved');
+
+    app.status = 'Ready';
+    app.saveIsBroken = true;
+    const broken = (await callTool(deps, 'reticle_flow_replay', {
+      flowName: recorded.recordingName,
+    })) as { status: string };
+    app.saveIsBroken = false;
+    expect(broken.status).not.toBe('ok');
+  }, 30_000);
 });

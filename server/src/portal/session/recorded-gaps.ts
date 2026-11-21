@@ -379,6 +379,15 @@ export function noteDial(sessionId: string, origin: string | undefined): void {
   }
 }
 
+/**
+ * A new page of a session: its old gaps are forgotten, and how its socket was dialled is noted.
+ * One call, so that the bridge, which is at its limit of lines, needs one line for both.
+ */
+export function noteNewPage(sessionId: string, origin: string | undefined): void {
+  forgetRecordedGaps(sessionId);
+  noteDial(sessionId, origin);
+}
+
 interface SdkSession {
   readonly id: string;
   readonly hasCapabilities: boolean;
