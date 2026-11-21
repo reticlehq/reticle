@@ -12,7 +12,12 @@
 
 import { z } from 'zod';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
-import { compileSequenceStep, pageOf, wroteSince } from '@/language/flows/replay.js';
+import {
+  compileSequenceStep,
+  markBlockedWrite,
+  pageOf,
+  wroteSince,
+} from '@/language/flows/replay.js';
 import { DEFAULT_SEQUENCE_STEP_TIMEOUT_MS } from '@/language/flows/flow-step-runners.js';
 import { sequenceStepArgs } from './act/act-preflight.js';
 import {
@@ -550,9 +555,11 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
             { count: completed, steps: stepResults.slice(0, completed) },
           );
           // The journey sent a write request: saved `writes`, so a replay does not repeat it unasked.
-          if (wroteSince(session, since)) {
+          const wrote = wroteSince(session, since);
+          if (wrote !== undefined) {
             step.writes = true;
           }
+          markBlockedWrite(step, wrote);
           return step;
         };
         const recorded = compiled(proved);
