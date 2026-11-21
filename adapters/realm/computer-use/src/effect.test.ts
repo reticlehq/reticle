@@ -135,6 +135,19 @@ describe('effectOf', () => {
       expect(effect.kind).toBe(EffectKind.AMBIENT_ONLY);
     });
 
+    // The corner of a place was its corner on the SCREEN. A person moved the window, each corner
+    // was another one, and the clock was then taken for the effect of the next action.
+    it('is the same place after the window was moved', () => {
+      const at = (dx: number, tip: string): UiNode =>
+        node(UiRole.WINDOW, 'Todos', {
+          frame: [dx, 40, 400, 300],
+          children: [node(UiRole.TEXT, tip, { frame: [dx + 10, 60, 200, 20] })],
+        });
+      const learned = new Set(effectOf(at(0, 'Tick 1'), at(0, 'Tick 2')).changes.map((c) => c.at));
+      const moved = effectOf(at(300, 'Tick 3'), at(300, 'Tick 4'), learned);
+      expect(moved.kind).toBe(EffectKind.AMBIENT_ONLY);
+    });
+
     it('changes nothing for a caller that learned no place', () => {
       const effect = effectOf(app('Tip two', '2 todos'), app('Tip three', '2 todos'));
       expect(effect.kind).toBe(EffectKind.CHANGED);

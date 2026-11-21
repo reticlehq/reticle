@@ -94,19 +94,30 @@ function difference(before: UiNode, after: UiNode): Pick<Change, 'detail' | 'val
 /** A separator that is in no key: a key is made of roles and names. */
 const AT = '\u0000';
 
-function placeOf(p: Placed): string {
+/**
+ * Where an element is: its parent, its role, and its corner as seen from the corner of its
+ * parent. Not its corner on the screen: that is another one each time a person moves the window.
+ */
+function placeOf(p: Placed, side: ReadonlyMap<string, Placed>): string {
   const [x, y] = p.node.frame ?? [];
-  const corner = x === undefined || y === undefined ? '' : `${String(x)},${String(y)}`;
+  const [px, py] = (p.parentKey === undefined ? undefined : side.get(p.parentKey)?.node.frame) ?? [
+    0, 0,
+  ];
+  const corner =
+    x === undefined || y === undefined ? '' : `${String(x - (px ?? 0))},${String(y - (py ?? 0))}`;
   return [p.parentKey ?? '', p.node.role, corner].join(AT);
 }
 
-function who(p: Placed): Pick<Change, 'element' | 'role' | 'name' | 'within' | 'at'> {
+function who(
+  p: Placed,
+  side: ReadonlyMap<string, Placed>,
+): Pick<Change, 'element' | 'role' | 'name' | 'within' | 'at'> {
   return {
     element: label(p.node),
     role: p.node.role,
     name: p.node.name,
     within: p.parentKey ?? '',
-    at: placeOf(p),
+    at: placeOf(p, side),
   };
 }
 
@@ -136,18 +147,18 @@ export function effectOf(
     const now = isByKey.get(p.key);
     if (now === undefined) {
       if (isTopOf(p, isByKey)) {
-        changes.push({ kind: ChangeKind.GONE, ...who(p) });
+        changes.push({ kind: ChangeKind.GONE, ...who(p, wasByKey) });
       }
     } else {
       const diff = difference(p.node, now.node);
       if (diff.detail !== undefined) {
-        changes.push({ kind: ChangeKind.DIFFERENT, ...who(p), ...diff });
+        changes.push({ kind: ChangeKind.DIFFERENT, ...who(p, wasByKey), ...diff });
       }
     }
   }
   for (const p of is) {
     if (!wasByKey.has(p.key) && isTopOf(p, wasByKey)) {
-      changes.push({ kind: ChangeKind.NEW, ...who(p) });
+      changes.push({ kind: ChangeKind.NEW, ...who(p, isByKey) });
     }
   }
   const real = changes
