@@ -27,6 +27,8 @@ export const StepTitle = {
   PAIRING_TOKEN_PER_MACHINE: 'Pairing token is per-machine',
   STATIC_PAIRING_TOKEN: 'Pairing token (static page)',
   CONNECT_SNIPPET_CRA: 'Connect snippet (CRA)',
+  CONNECT_SNIPPET_EXPO: 'Connect snippet (Expo)',
+  EXPO_NATIVE_MODULE: 'Native no-op module (Expo)',
   CONNECT_SNIPPET_NUXT: 'Connect snippet (Nuxt)',
   NUXT_CONFIG: 'Nuxt config (token + watcher)',
   NUXT_RESTART: 'Restart the Nuxt dev server',
@@ -67,6 +69,7 @@ export const STEP_TITLES: readonly StepTitle[] = Object.values(StepTitle);
 export const CONNECT_STEP_TITLES: ReadonlySet<StepTitle> = new Set<StepTitle>([
   StepTitle.CONNECT_SNIPPET,
   StepTitle.CONNECT_SNIPPET_CRA,
+  StepTitle.CONNECT_SNIPPET_EXPO,
   StepTitle.CONNECT_SNIPPET_ASTRO,
   StepTitle.ASTRO_RETICLE_DEV,
   StepTitle.CONNECT_SNIPPET_NUXT,

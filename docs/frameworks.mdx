@@ -5,7 +5,7 @@ description: Which frameworks Reticle supports, which are wired but unverified, 
 icon: layer-group
 ---
 
-**Reticle works on React, Next.js, Remix, Astro, Vue, SvelteKit and Angular. React + Vite, Next.js, Remix and Astro each have an example app in CI: React + Vite and Next.js are driven to a verdict by the e2e battery, and the Remix and Astro examples are booted and must register a session. Vue, SvelteKit and Angular are supported with the framework-neutral sensor; their install is gated (scaffolded from scratch whenever the install path changes, and a real session is required), and no CI gate drives them to a verdict yet. The `file:line` source pointer works on React and Svelte, not on Vue or Angular. Nuxt, React Router framework mode and Create React App have their install gated the same way. TanStack Start, Preact and plain HTML are wired by `init` and documented but not gated at all, so treat them as plausible rather than proven.** The exact wiring for each is below.
+**Reticle works on React, Next.js, Remix, Astro, Vue, SvelteKit and Angular. React + Vite, Next.js, Remix and Astro each have an example app in CI: React + Vite and Next.js are driven to a verdict by the e2e battery, and the Remix and Astro examples are booted and must register a session. Vue, SvelteKit and Angular are supported with the framework-neutral sensor; their install is gated (scaffolded from scratch whenever the install path changes, and a real session is required), and no CI gate drives them to a verdict yet. The `file:line` source pointer works on React and Svelte, not on Vue or Angular. Nuxt, React Router framework mode and Create React App have their install gated the same way. TanStack Start, Expo (web), Preact and plain HTML are wired by `init` and documented but not gated at all, so treat them as plausible rather than proven.** The exact wiring for each is below.
 
 Reticle is a verification layer that embeds a dev-only SDK in your running web app so an AI coding agent can prove a change works. Its core is framework-neutral: DOM, network, console, routing, animations and source mapping work anywhere JavaScript runs.
 
@@ -32,6 +32,7 @@ Two columns say different things and it is worth keeping them apart. **CI gate**
 | **Nuxt** | yes | no | install only | no | Install gated, drive unverified |
 | **React Router (framework mode)** | yes | no | install only | yes | Install gated, drive unverified |
 | **Create React App** | yes | no | install only | unproven | Install gated, drive unverified |
+| **Expo (web)** | yes | no | no | no | Wired, unverified (web build only) |
 | **Angular 17+** | yes | no | install only | no | Supported (no `file:line`) |
 | **Plain HTML** | yes | no | no | no | Wired, unverified |
 | **Vue (non-Nuxt)** | as Vite | no | install only | no | Supported (no `file:line`) |
@@ -247,6 +248,15 @@ if (process.env.NODE_ENV !== 'production') {
 ```
 
 `reticle init` writes this machine's pairing token to `reticle.local.js` at the project root and adds that file to `.gitignore`. Point the import at that file from your entry module. Do not commit it: each teammate runs `reticle init` for their own. The same shape works for webpack, Parcel, and the Vue and Svelte CLIs. On Create React App, `init` writes the connect for you: a dev-only connect module that reads the token from `REACT_APP_RETICLE_TOKEN`, which it puts in the git-ignored `.env.development.local`.
+
+## Expo (web)
+
+`reticle init` on an Expo app wires its web build, the one Metro serves with `expo start --web` on port 8081. Metro takes no plugin and serves no `index.html` to inject into, so `init` writes two modules at the project root and imports `./reticle-dev` from the app's entry:
+
+- `reticle-dev.web.ts` is the dev-only connect. Metro resolves `./reticle-dev` to it for web builds only.
+- `reticle-dev.ts` is empty. iOS and Android resolve to it instead, so the native bundles never load the SDK.
+
+The import goes into the root layout with expo-router (`app/_layout.tsx` or `src/app/_layout.tsx`), otherwise into `App.tsx`. The pairing token goes into the git-ignored `.env.local` as `EXPO_PUBLIC_RETICLE_TOKEN`, because Expo inlines only `EXPO_PUBLIC_*` variables into app code. Restart `expo start` after `init` so Metro reads it. The native iOS and Android apps are not observed.
 
 ## Plain HTML
 

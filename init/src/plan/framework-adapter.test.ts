@@ -167,6 +167,9 @@ describe('the tables the registry deliberately does not own', () => {
     [Framework.REACT_ROUTER]:
       'reached by the vite.config check, which `looksLikeApp` runs before the deps',
     [Framework.CRA]: 'reached by the dev-script check; react-scripts apps always declare `start`',
+    [Framework.EXPO]:
+      'reached by the dev-script check; the Expo templates declare `start: expo start`, and the ' +
+      'page check then reads `expo` as this framework',
     [Framework.HTML]: 'not an npm-shaped app at all — there is no dependency that names it',
     [Framework.ELECTRON_FORGE]:
       'reached by the `vite` dependency the Forge Vite template declares directly',
@@ -218,6 +221,9 @@ describe('the tables the registry deliberately does not own', () => {
     [Framework.ELECTRON_FORGE]: ['index.html'],
     [Framework.REMIX]: 'same as React Router — the app owns the request handler',
     [Framework.ANGULAR]: ['src/index.html'],
+    [Framework.EXPO]:
+      'Metro writes the web document itself, and an expo-router app that owns one does it in ' +
+      '`app/+html.tsx` as JSX, so there is no file of markup to regex',
   };
 
   it('names every framework as present in or absent from CSP_FILES', () => {
