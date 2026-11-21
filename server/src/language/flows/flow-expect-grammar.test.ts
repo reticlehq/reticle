@@ -123,7 +123,9 @@ describe('parseFlowFileText', () => {
   it("loads the reporter's three-channel expect instead of calling it malformed", () => {
     const parsed = parseFlowFileText(JSON.stringify(flowDoc(REPORTER_EXPECT)));
     expect(parsed.ok).toBe(true);
-    if (!parsed.ok) throw new Error('expected ok');
+    if (!parsed.ok) {
+      throw new Error('expected ok');
+    }
     // Lifted from v1 on read: the file said `{ net, signal, state }` and the value is the predicate
     // tree that means the same thing.
     expect(parsed.value.steps[0]?.expect).toEqual(LIFTED_REPORTER);
@@ -132,7 +134,9 @@ describe('parseFlowFileText', () => {
   it('loads an allOf expect exactly as it was written', () => {
     const parsed = parseFlowFileText(JSON.stringify(flowDoc(ALLOF_EXPECT)));
     expect(parsed.ok).toBe(true);
-    if (!parsed.ok) throw new Error('expected ok');
+    if (!parsed.ok) {
+      throw new Error('expected ok');
+    }
     expect(parsed.value.steps[0]?.expect).toEqual(ALLOF_EXPECT);
   });
 
@@ -141,7 +145,9 @@ describe('parseFlowFileText', () => {
       JSON.stringify(flowDoc({ kind: 'text', contains: 'Error', absent: true, scope: 'e12' })),
     );
     expect(parsed.ok).toBe(false);
-    if (parsed.ok) throw new Error('expected a refusal');
+    if (parsed.ok) {
+      throw new Error('expected a refusal');
+    }
     expect(parsed.detail).toContain('step 0');
     expect(parsed.detail).toContain('text.scope "e12"');
   });
@@ -160,7 +166,9 @@ describe('parseFlowFileText', () => {
       JSON.stringify(flowDoc({ signal: { count: 1 }, net: { method: 'POST' } })),
     );
     expect(parsed.ok).toBe(false);
-    if (parsed.ok) throw new Error('expected parse failure');
+    if (parsed.ok) {
+      throw new Error('expected parse failure');
+    }
     expect(parsed.code).toBe(FlowErrorCode.PARSE_FAILED);
     expect(parsed.detail).toContain(FlowParseNote.UNSUPPORTED_SHAPE);
     expect(parsed.detail).toContain('step 0');
@@ -176,7 +184,9 @@ describe('describeFlowZodFailure', () => {
       flowDoc({ signal: { count: 1 }, net: { method: 'POST' } }),
     );
     expect(result.success).toBe(false);
-    if (result.success) throw new Error('expected schema failure');
+    if (result.success) {
+      throw new Error('expected schema failure');
+    }
     const detail = describeFlowZodFailure(result.error);
     expect(detail).toContain(FlowParseNote.UNSUPPORTED_SHAPE);
     expect(detail).toContain('step 0');
@@ -191,11 +201,49 @@ describe('coerceFlowFileExpects', () => {
       success: { kind: 'signal', name: 'scan:complete' },
     });
     expect(coerced.ok).toBe(true);
-    if (!coerced.ok) throw new Error('expected ok');
+    if (!coerced.ok) {
+      throw new Error('expected ok');
+    }
     const file = coerced.value as { steps: { expect: unknown }[]; success: unknown };
     // Both pass through as written. The coercion's remaining job is the v1 flattening, not a
     // conversion: a predicate is already the shape the file stores.
     expect(file.steps[0]?.expect).toEqual(ALLOF_EXPECT);
     expect(file.success).toEqual({ kind: 'signal', name: 'scan:complete' });
+  });
+});
+
+/*
+ * #2431 (point 3). An agent's component anchor failed with `flow_parse_failed` and no hint. The
+ * error named no step and no field, so the agent removed fields until the file parsed. A failure in
+ * a step's anchor now names the step, the field and the reason.
+ */
+describe('a flow whose step anchor the schema refuses', () => {
+  function withAnchor(anchor: unknown): string {
+    const doc = flowDoc({ kind: 'settled' });
+    const steps = doc['steps'] as Record<string, unknown>[];
+    steps[0] = { ...steps[0], anchor };
+    return JSON.stringify(doc);
+  }
+
+  it('names the step and the anchor field', () => {
+    const parsed = parseFlowFileText(
+      withAnchor({ kind: 'component', component: 'InvoiceRow', nth: 0, of: 1 }),
+    );
+    expect(parsed.ok).toBe(false);
+    if (parsed.ok) {
+      throw new Error('expected parse failure');
+    }
+    expect(parsed.code).toBe(FlowErrorCode.PARSE_FAILED);
+    expect(parsed.detail).toContain(FlowParseNote.UNSUPPORTED_ANCHOR);
+    expect(parsed.detail).toContain('step 0');
+    expect(parsed.detail).toContain('anchor');
+    expect(parsed.detail).toContain('"of"');
+  });
+
+  it('still accepts a component anchor with nth and of', () => {
+    const parsed = parseFlowFileText(
+      withAnchor({ kind: 'component', component: 'InvoiceRow', nth: 1, of: 3 }),
+    );
+    expect(parsed.ok).toBe(true);
   });
 });
