@@ -68,7 +68,9 @@ export function sessionRoot(deps: ToolDeps, sessionId: string | undefined): stri
  * cannot disagree about what a resolved root is.
  */
 export function rootForTarget(deps: ToolDeps, target: ProjectTarget): string {
-  if (target.claimedRoot !== undefined) return target.claimedRoot;
+  if (target.claimedRoot !== undefined) {
+    return target.claimedRoot;
+  }
   return deps.artifactRootFor?.(target.projectId, target.origin).root ?? deps.reticleRoot;
 }
 
@@ -114,6 +116,38 @@ export function sessionProjectId(
 }
 
 /**
+ * What an id-less read must say when it fell back to the daemon's folder while every connected tab
+ * belongs to another project (#2427), or undefined when that is not the case.
+ *
+ * The fallback itself is kept: the scope guard refuses the other project's tab on purpose, and a
+ * tool that reads files may run with no tab. But a listing of the daemon's folder, beside a tab of
+ * another app, read as that app's flows. Naming the folder and the tab tells the agent which call to
+ * make instead.
+ */
+export function otherProjectNote(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+  root: string,
+): string | undefined {
+  // A session double without the two lists (most unit tests) has nothing to say here.
+  const { sessions } = deps;
+  if (sessionId !== undefined || 'function' !== typeof sessions.inScope) {
+    return undefined;
+  }
+  const connected = 'function' === typeof sessions.all ? sessions.all() : [];
+  if (0 === connected.length || 0 < sessions.inScope().length) {
+    return undefined;
+  }
+  const tabs = connected
+    .map((s) => `'${s.projectId ?? 'no projectId'}' (${s.url}, sessionId '${s.id}')`)
+    .join(', ');
+  return (
+    `This list is for the daemon's project (${dirname(root)}). No connected tab belongs to it. ` +
+    `The connected tabs are of another project: ${tabs}. Pass that sessionId to read its flows.`
+  );
+}
+
+/**
  * `sessionTarget` for the paths that degrade instead of refusing: replay and learning resolve a
  * missing session to the global store, and keep doing so -- with the origin when there is one.
  */
@@ -136,7 +170,9 @@ export function sessionTarget(deps: ToolDeps, sessionId: string | undefined): Pr
       ...(claimedRoot === undefined ? {} : { claimedRoot }),
     };
   } catch (cause) {
-    if (sessionId === undefined) return projectOnly(undefined);
+    if (sessionId === undefined) {
+      return projectOnly(undefined);
+    }
     throw unresolvedTargetRefusal(sessionId, cause);
   }
 }
