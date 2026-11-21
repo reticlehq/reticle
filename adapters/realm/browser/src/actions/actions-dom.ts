@@ -4,7 +4,7 @@ import { getAccessibleName, getRole } from '@/dom/a11y.js';
 import { hitTestOccluder } from '@/dom/occlusion.js';
 import { nativeFrame } from '@/timers/native/native-timers.js';
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
-import type { ActionTarget } from '@/dom/realm.js';
+import { isActionTarget, type ActionTarget } from '@/dom/realm.js';
 import { type BoxFraction } from '@reticlehq/core';
 import {
   ALLOW_OCCLUDED_ARG,
@@ -349,11 +349,16 @@ export function leavePreviousHover(next: Element): EventTarget {
   if (prev === next) {
     return prev;
   }
-  firePointer(prev, 'pointerout', next);
-  prev.dispatchEvent(mouseEventFor(prev, 'mouseout', { bubbles: true, relatedTarget: next }));
+  // The pointer leaves from where it was: the centre of the element it entered. With no
+  // coordinates the out and leave events read (0, 0) to a handler that hit-tests (#1851).
+  const prevCoords: MouseEventInit = isActionTarget(prev) ? coordsAt(centreOf(prev)) : {};
+  firePointer(prev, 'pointerout', next, prevCoords);
+  prev.dispatchEvent(
+    mouseEventFor(prev, 'mouseout', { bubbles: true, relatedTarget: next, ...prevCoords }),
+  );
   for (let el: Element | null = prev; el !== null && !el.contains(next); el = el.parentElement) {
-    firePointerNonBubbling(el, 'pointerleave', next);
-    el.dispatchEvent(mouseEventFor(el, 'mouseleave', { relatedTarget: next }));
+    firePointerNonBubbling(el, 'pointerleave', next, prevCoords);
+    el.dispatchEvent(mouseEventFor(el, 'mouseleave', { relatedTarget: next, ...prevCoords }));
   }
   return prev;
 }
@@ -413,7 +418,7 @@ function centreOf(el: ActionTarget): Point {
  * The point `at` names inside an element, in client coordinates, or its centre when `at` is absent.
  * A canvas has no child elements, so a point inside its box is the only way to hit a shape on it.
  */
-function pointOf(el: ActionTarget, at: BoxFraction | undefined): Point {
+export function pointOf(el: ActionTarget, at: BoxFraction | undefined): Point {
   if (at === undefined) {
     return centreOf(el);
   }
@@ -551,7 +556,10 @@ export async function fireTapSequence(
   point?: BoxFraction,
 ): Promise<{ prevented: boolean; heldMs: number }> {
   const touches = touchListFor(el, point);
-  const coords = coordsIn(el, point);
+  // One place decides where the tap lands: the named point, or the element centre when no
+  // point is named — the same rule the touch list above follows. With no coordinates the
+  // pointer events read (0, 0) to a handler that hit-tests from clientX/Y (#1851).
+  const coords = coordsAt(pointOf(el, point));
   firePointerTouch(el, 'pointerdown', coords);
   asSyntheticInput(() => el.dispatchEvent(makeTouchEvent('touchstart', touches)));
   if (el.tabIndex >= 0 && 'function' === typeof el.focus) {

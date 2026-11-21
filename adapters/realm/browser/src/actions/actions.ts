@@ -265,7 +265,9 @@ import {
   assertNotLeaving,
   scrollIntoViewNow,
   clickInputOf,
+  coordsAt,
   coordsIn,
+  pointOf,
 } from './actions-dom.js';
 import { scrollFrom } from './scroll.js';
 import { clickHitsNoControl } from './click-target.js';
@@ -399,8 +401,10 @@ async function dispatchOther(
       );
     }
     case ActionType.HOVER: {
-      // With `at`, every event carries the point; without it, none carries coordinates, as before.
-      const coords = coordsIn(el, boxFractionFromArgs(args, ACT_POINT_ARG));
+      // Every event carries where the pointer is: the point `at` names, or the element
+      // centre when it names none. With no coordinates a hit-testing handler read (0, 0),
+      // a position the pointer never held (#1851).
+      const coords = coordsAt(pointOf(el, boxFractionFromArgs(args, ACT_POINT_ARG)));
       // Leave what the last hover entered, and come FROM it, so enter/leave pairs match a real pointer.
       const from: EventTarget = leavePreviousHover(el);
       // Bubbling over/move with relatedTarget so React's delegated root can synthesize enter/leave.
