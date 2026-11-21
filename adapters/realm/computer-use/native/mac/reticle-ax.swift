@@ -28,6 +28,8 @@ let attributes =
     kAXRoleAttribute, kAXSubroleAttribute, kAXTitleAttribute, kAXDescriptionAttribute,
     kAXValueAttribute, kAXEnabledAttribute, kAXFocusedAttribute, kAXPositionAttribute,
     kAXSizeAttribute, kAXChildrenAttribute, kAXIdentifierAttribute, kAXSelectedAttribute,
+    // The `id` of an element in a web view. A web view does not give it as the identifier.
+    "AXDOMIdentifier",
   ] as CFArray
 
 func values(_ element: AXUIElement) -> [AnyObject]? {
@@ -73,7 +75,11 @@ func readElement(_ element: AXUIElement, _ depth: Int, _ unread: inout Int) -> [
   if let r = frame(v[7], v[8]) {
     node["frame"] = [r.origin.x, r.origin.y, r.size.width, r.size.height]
   }
-  if let s = text(v[10]), !s.isEmpty { node["id"] = s }
+  if let s = text(v[10]), !s.isEmpty {
+    node["id"] = s
+  } else if v.count > 12, let s = text(v[12]), !s.isEmpty {
+    node["id"] = s
+  }
   if let b = v[11] as? Bool, b { node["selected"] = true }
   var children = depth < 80 ? (v[9] as? [AXUIElement]) ?? [] : []
   // A table gives every row it has, and makes each one when it is asked. A table of 5,000 rows

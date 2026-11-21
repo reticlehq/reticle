@@ -174,6 +174,9 @@ interface ActResult {
   effect: Record<string, unknown>;
   role: string;
   name: string;
+  testid?: string;
+  testidOf?: number;
+  testidNth?: number;
 }
 
 export class PeerCommands {
@@ -348,6 +351,7 @@ export class PeerCommands {
       role: seen.node.role,
       name: seen.node.name,
       ...(seen.node.value === undefined ? {} : { value: seen.node.value }),
+      ...(seen.node.id === undefined ? {} : { testid: seen.node.id }),
       states,
       visible: seen.visible,
     };
@@ -359,9 +363,10 @@ export class PeerCommands {
     const role = by === QueryBy.ROLE ? value : text(query['role']);
     const name = by === QueryBy.LABEL ? value : (text(query['name']) ?? text(query['label']));
     const wanted = by === QueryBy.TEXT ? value : text(query['text']);
-    if (role === undefined && name === undefined && wanted === undefined) {
+    const id = by === QueryBy.TESTID ? value : text(query['testid']);
+    if (role === undefined && name === undefined && wanted === undefined && id === undefined) {
       throw new Error(
-        'the computer-use realm finds an element by role, name or text. This query has none of them.',
+        'the computer-use realm finds an element by role, name, text or test id. This query has none of them.',
       );
     }
     const exact = true === query['matchCase'];
@@ -372,6 +377,7 @@ export class PeerCommands {
         isAddressable(s.node) &&
         (role === undefined || role === s.node.role) &&
         (name === undefined || name === s.node.name) &&
+        (id === undefined || id === s.node.id) &&
         (wanted === undefined ||
           fold(`${s.node.name} ${s.node.value ?? ''}`).includes(fold(wanted))),
     );
@@ -883,6 +889,27 @@ export class PeerCommands {
       },
       role: target.node.role,
       name: target.node.name,
+      ...testidOf(target, outcome.before.root),
     };
   }
+}
+
+/**
+ * The identifier of the target, as the server reads it to anchor a saved step. When several
+ * elements on the screen share it, how many, and which of them the target is.
+ */
+function testidOf(target: Seen, before: UiNode): Record<string, unknown> {
+  const id = target.node.id;
+  if (id === undefined) {
+    return {};
+  }
+  const sharing = see(before).filter((s) => s.node.id === id);
+  if (sharing.length < 2) {
+    return { testid: id };
+  }
+  return {
+    testid: id,
+    testidOf: sharing.length,
+    testidNth: sharing.findIndex((s) => s.key === target.key),
+  };
 }

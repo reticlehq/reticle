@@ -938,6 +938,69 @@ describe('PeerCommands', () => {
     });
   });
 
+  /**
+   * Two buttons with one role and one name: a replay cannot tell which one the recording meant,
+   * and it refuses. The server anchors a step on a test id when the answer to the action has
+   * one. The identifier of the element is that id.
+   */
+  describe('the identifier of an element', () => {
+    const rows = (): UiRead => ({
+      root: node(UiRole.WINDOW, 'Notes', {
+        frame: [0, 0, 400, 300],
+        children: ['alpha', 'beta', 'beta'].map((id, row) =>
+          node(UiRole.BUTTON, 'Delete', { frame: [10, 10 + 40 * row, 80, 30], id: `delete-${id}` }),
+        ),
+      }),
+      unread: 0,
+      unmapped: [],
+    });
+    const commands = () =>
+      new PeerCommands({
+        driver: {
+          subject: () => ({ app: 'Notes', pid: 7 }),
+          read: () => Promise.resolve(rows()),
+          reach: () => Promise.resolve({ reach: 'yes' }),
+          act: () =>
+            Promise.resolve({
+              delivered: true,
+              reachable: true,
+              settled: true,
+              before: rows(),
+              after: rows(),
+            }),
+        },
+        emit: () => undefined,
+      });
+    const find = (peer: PeerCommands, query: Record<string, unknown>) =>
+      peer.answer(ReticleCommand.QUERY, query) as Promise<{
+        elements: { ref: string; testid?: string }[];
+      }>;
+
+    it('finds one element of several with the same name', async () => {
+      const found = await find(commands(), { by: 'testid', value: 'delete-alpha' });
+      expect(found.elements).toHaveLength(1);
+      expect(found.elements[0]?.testid).toBe('delete-alpha');
+    });
+
+    it('is in the answer to an action, with how many elements share it', async () => {
+      const peer = commands();
+      const act = async (index: number) => {
+        const all = await find(peer, { role: UiRole.BUTTON });
+        return peer.answer(ReticleCommand.ACT, {
+          ref: all.elements[index]?.ref ?? '',
+          action: ActionType.CLICK,
+        }) as Promise<Record<string, unknown>>;
+      };
+      const one = await act(0);
+      expect(one['testid']).toBe('delete-alpha');
+      expect(one['testidOf']).toBeUndefined();
+      const shared = await act(2);
+      expect(shared['testid']).toBe('delete-beta');
+      expect(shared['testidOf']).toBe(2);
+      expect(shared['testidNth']).toBe(1);
+    });
+  });
+
   it('says why a press can have no effect, when the peer was told a reason', async () => {
     const still = { before: read('Ready'), after: read('Ready') };
     const press = async (commands: PeerCommands) =>

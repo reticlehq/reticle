@@ -51,4 +51,18 @@ describe('fromAx', () => {
       [ElementState.CHECKED, ElementState.FOCUSED],
     ]);
   });
+
+  // A saved flow finds an element by the identifier its maker gave it. An identifier that AppKit
+  // made by itself ("_NS:8") is another one the next time the window is built.
+  it('keeps the identifier a person gave, and not one the toolkit made', () => {
+    const { root } = fromAx({
+      role: 'AXWindow',
+      children: [
+        { role: 'AXButton', title: 'Delete', id: 'delete-beta', children: [] },
+        { role: 'AXButton', title: 'Delete', id: '_NS:8', children: [] },
+        { role: 'AXButton', title: 'Delete', children: [] },
+      ],
+    });
+    expect(root.children.map((child) => child.id)).toEqual(['delete-beta', undefined, undefined]);
+  });
 });

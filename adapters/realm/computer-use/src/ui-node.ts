@@ -48,6 +48,11 @@ export interface UiNode {
   index?: number;
   /** Children the reader left out: the rows of a table that are not on the screen. */
   notShown?: number;
+  /**
+   * The identifier the maker of the application gave the element. It does not change when the
+   * words on the element change, so a saved flow finds the element by it. Absent: none was given.
+   */
+  id?: string;
   children: readonly UiNode[];
 }
 

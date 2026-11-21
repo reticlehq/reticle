@@ -112,6 +112,14 @@ function statesOf(ax: AxNode): ElementState[] {
   return states;
 }
 
+/** The start of an identifier that AppKit makes by itself. It changes when the window is built again. */
+const MADE_BY_APPKIT = '_NS:';
+
+/** The identifier, when a person gave it. One that the toolkit made is not a name for anything. */
+function givenId(id: string | undefined): string | undefined {
+  return id === undefined || 0 === id.length || id.startsWith(MADE_BY_APPKIT) ? undefined : id;
+}
+
 export function fromAx(ax: AxNode): FromAx {
   const unmapped = new Set<string>();
   const convert = (node: AxNode): UiNode => {
@@ -126,6 +134,7 @@ export function fromAx(ax: AxNode): FromAx {
     // state to `ElementState` in core when a second realm needs it.
     const chosen = true === node.selected ? SELECTED : undefined;
     const value = isText || AxRole.CHECKBOX === node.role ? undefined : (chosen ?? node.value);
+    const id = givenId(node.id);
     const [x, y, w, h] = node.frame ?? [];
     const frame =
       x === undefined || y === undefined || w === undefined || h === undefined
@@ -138,6 +147,7 @@ export function fromAx(ax: AxNode): FromAx {
       states: statesOf(node),
       ...(frame === undefined ? {} : { frame }),
       ...(node.i === undefined ? {} : { index: node.i }),
+      ...(id === undefined ? {} : { id }),
       ...(node.notShown === undefined || 0 === node.notShown ? {} : { notShown: node.notShown }),
       children: node.children.map(convert),
     };
