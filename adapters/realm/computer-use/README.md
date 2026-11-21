@@ -107,7 +107,7 @@ Read these before you rely on a result.
 
 `native/mac/electroncheck.mjs` starts a small Electron application and drives it through the peer. It checks that a press does nothing and says why with the switch off, that a press works with the switch on, and that a slow effect belongs to its own press. It is skipped when Electron is not installed.
 
-`conformance/computer-use-journey.mjs` (run it with `node` from the root of the repository) does two whole journeys through a real bridge and the tools an agent has, and each step must be proved. On the Electron application it fills a field, adds a note, chooses from a list and checks a box. On the native application it fills a field and exports it, and the proof is the file on disk. It saves each journey as a flow, opens a new application, and replays the flow with no model; the replay of the export must write the file in a new folder.
+`conformance/computer-use-journey.mjs` (run it with `node` from the root of the repository) does two whole journeys through a real bridge and the tools an agent has, and each step must be proved. On the Electron application it fills a field, adds a note, chooses from a list and checks a box. On the native application it fills a field and exports it, and the proof is the file on disk. It saves each journey as a flow, opens a new application, and replays the flow with no model; the replay of the export must write the file in a new folder. Last, the Harness drives the native application with a model that is a script: the check is on the Harness, its prompt for a desktop application and the tools as it calls them, and it costs nothing.
 
 The first three, one after the other, on a Mac with the Accessibility permission:
 

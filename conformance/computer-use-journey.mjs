@@ -5,6 +5,7 @@
 //   - An Electron application: fill a field, add a note, choose from a list, check a box.
 //   - A native application: fill a field and export it. The proof is the file on disk, not the
 //     words the application shows, and the replay must write the file in a new folder.
+//   - The Harness drives the native application, with a model that is a script.
 //
 //   node conformance/computer-use-journey.mjs
 //
@@ -21,7 +22,9 @@ import { fileURLToPath } from 'node:url';
 
 import { nodeWorkspace } from '../adapters/realm/cli/dist/index.js';
 import { MacDriver, connectPeer } from '../adapters/realm/computer-use/dist/index.js';
+import { FINISH_TOOL } from '../server/dist/features/harness/harness.js';
 import { Bridge } from '../server/dist/portal/bridge/bridge.js';
+import { exploreApp } from '../server/dist/surface/tools/harness-explore.js';
 import { callTool, makeDeps, waitUntil } from '../server/dist/portal/bridge/bridge.test-harness.js';
 
 if ('darwin' !== process.platform) {
@@ -165,10 +168,98 @@ async function run(journey) {
   }
 }
 
+/**
+ * The Harness drives the native application. The model is a script here, so the run costs
+ * nothing and is the same each time: what is checked is the Harness around the model, the prompt
+ * it gives for a desktop application, and the tools as the Harness calls them.
+ */
+async function runHarness() {
+  const opened = await openNative();
+  try {
+    const refOf = (tree, element) =>
+      /ref=(e\d+)/.exec(tree.split('\n').find((one) => one.includes(`- ${element}`)) ?? '')?.[1];
+    const turns = [
+      () => [{ id: '1', name: 'reticle_snapshot', args: {} }],
+      () => [{ id: '2', name: 'reticle_record', args: { action: 'start' } }],
+      (tree) => [
+        {
+          id: '3',
+          name: 'reticle_act_and_wait',
+          args: {
+            ref: refOf(tree, 'textbox "Title"'),
+            action: 'fill',
+            args: { value: 'Plan' },
+            timeout_ms: 3000,
+            until: visible({ text: 'Plan' }),
+          },
+        },
+      ],
+      (tree) => [
+        {
+          id: '4',
+          name: 'reticle_act_and_wait',
+          args: {
+            ref: refOf(tree, 'button "Export"'),
+            action: 'click',
+            timeout_ms: 3000,
+            until: { kind: 'signal', name: 'file.written', dataMatches: { file: 'note.txt' } },
+          },
+        },
+      ],
+      () => [{ id: '5', name: 'reticle_flow_save', args: { flowName: 'default' } }],
+      () => [{ id: '6', name: FINISH_TOOL.name, args: { summary: 'exported', goalMet: true } }],
+    ];
+    const systems = [];
+    let tree = '';
+    const scripted = {
+      turn: (input) => {
+        systems.push(input.system);
+        const last = JSON.stringify(input.history.at(-1) ?? {});
+        tree = /- application|- window/.test(last)
+          ? last.replaceAll('\\"', '"').replaceAll('\\n', '\n')
+          : tree;
+        const next = turns.shift() ?? (() => []);
+        return Promise.resolve({ text: '', calls: next(tree) });
+      },
+    };
+    const result = await exploreApp(
+      deps,
+      {},
+      {
+        driver: scripted,
+        skipPlatformConfig: true,
+        sessionId: 'cu-journey',
+        focus: 'export a note',
+      },
+    );
+    assert.ok(systems[0]?.includes('a real desktop application'), 'not the prompt for a desktop');
+    const acts = result.drive.toolCalls.filter((call) => 'reticle_act_and_wait' === call.name);
+    assert.equal(acts.length, 2);
+    for (const act of acts) {
+      assert.ok(
+        JSON.stringify(act.result).includes('"verified":"yes"'),
+        JSON.stringify(act.result).slice(0, 300),
+      );
+    }
+    const saved = result.drive.toolCalls.find((call) => 'reticle_flow_save' === call.name);
+    assert.ok(
+      false === saved?.isError && JSON.stringify(saved.result).includes('"stepCount":2'),
+      `the Harness did not save the flow: ${JSON.stringify(saved?.result).slice(0, 300)}`,
+    );
+    assert.equal(readFileSync(join(opened.folder, 'note.txt'), 'utf8'), 'Plan');
+    console.error(
+      `computer-use journey (Harness, scripted model): ${String(result.drive.toolCalls.length)} tool calls, 2 steps proved, the file is on disk`,
+    );
+  } finally {
+    await opened.close();
+  }
+}
+
 try {
   for (const journey of JOURNEYS) {
     await run(journey);
   }
+  await runHarness();
 } finally {
   await bridge.close();
   rmSync(join('/tmp/reticle-test/.reticle/flows', PROJECT), { recursive: true, force: true });
