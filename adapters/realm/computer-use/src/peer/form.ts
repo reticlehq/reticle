@@ -1,0 +1,75 @@
+/**
+ * What the peer knows about the actions of a form: which action of a tool is which kind of
+ * action of the realm, what a field holds after an action, and the identifier of an element.
+ */
+import { ActionType, ElementState } from '@reticlehq/core';
+
+import { ActKind } from '../driver.js';
+import type { ActOutcome } from '../driver.js';
+import { UiRole, place } from '../ui-node.js';
+import type { UiNode } from '../ui-node.js';
+import { see } from './seen.js';
+import type { Seen } from './seen.js';
+
+/** The keys that select all the text of a field, and that remove what is selected. */
+export const SELECT_ALL = 'Meta+a';
+export const DELETE = 'Backspace';
+export const ESCAPE = 'Escape';
+/** The choices a refusal names. A long menu is not put in an error. */
+export const CHOICES_NAMED = 20;
+/** The roles whose value is the text a fill asks for. A slider's value is a number in another form. */
+export const TEXT_ROLES: ReadonlySet<string> = new Set([UiRole.TEXTBOX, UiRole.COMBOBOX]);
+
+/** The value an element holds after an action. */
+export function heldBy(outcome: ActOutcome, key: string): string {
+  return place(outcome.after.root).find((p) => p.key === key)?.node.value ?? '';
+}
+
+export const KIND_OF: Readonly<Partial<Record<string, ActKind>>> = {
+  [ActionType.CLICK]: ActKind.PRESS,
+  [ActionType.FILL]: ActKind.SET,
+  [ActionType.TYPE]: ActKind.TYPE,
+  [ActionType.PRESS]: ActKind.KEY,
+  [ActionType.CLEAR]: ActKind.SET,
+  [ActionType.CHECK]: ActKind.PRESS,
+  [ActionType.UNCHECK]: ActKind.PRESS,
+  [ActionType.SUBMIT]: ActKind.KEY,
+};
+/** The actions that carry their own value: a caller gives none. */
+export const VALUE_OF: Readonly<Partial<Record<string, string>>> = {
+  [ActionType.CLEAR]: '',
+  [ActionType.SUBMIT]: 'Return',
+};
+/** The state each of these actions asks for. */
+export const WANTS_CHECKED: Readonly<Partial<Record<string, boolean>>> = {
+  [ActionType.CHECK]: true,
+  [ActionType.UNCHECK]: false,
+};
+export const BOX_ROLES: ReadonlySet<string> = new Set([UiRole.CHECKBOX, UiRole.RADIO]);
+export const isChecked = (node: UiNode): boolean => node.states.includes(ElementState.CHECKED);
+/** The actions this realm does. The peer declares exactly these to the bridge. */
+export const PEER_ACTIONS: readonly string[] = [
+  ...Object.keys(KIND_OF),
+  ActionType.SCROLL,
+  ActionType.SELECT,
+];
+
+/**
+ * The identifier of the target, as the server reads it to anchor a saved step. When several
+ * elements on the screen share it, how many, and which of them the target is.
+ */
+export function testidOf(target: Seen, before: UiNode): Record<string, unknown> {
+  const id = target.node.id;
+  if (id === undefined) {
+    return {};
+  }
+  const sharing = see(before).filter((s) => s.node.id === id);
+  if (sharing.length < 2) {
+    return { testid: id };
+  }
+  return {
+    testid: id,
+    testidOf: sharing.length,
+    testidNth: sharing.findIndex((s) => s.key === target.key),
+  };
+}
