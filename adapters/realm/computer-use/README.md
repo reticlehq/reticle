@@ -18,6 +18,16 @@ This package is private. It is not on npm. It runs on macOS only.
 - **It sees that an action put something on the clipboard.** It reads only that the clipboard changed, never what is on it. Over the tools it is a `clipboard.changed` signal.
 - **It can watch folders.** A file that an action writes becomes a `file.written` signal. A claim can then name the file, and not only the words that the application shows.
 
+## For an agent
+
+Three steps. Run the commands in the folder of your project.
+
+1. See what is open: `reticle-computer-use --list` prints `{"apps":[{"name","process"}]}`.
+2. Join one, and leave the command running: `reticle-computer-use --app "<name>"`. It waits for the Reticle daemon when there is none yet, and then prints one line of JSON: `{"joined":true,"sessionId":"…","needsSessionId":false,"next":[…]}`. `next` says what to call.
+3. Use the tools you have for a web page. `reticle_look { action: "page" }` gives the window. `reticle_act_and_wait { ref, action, until }` acts and proves the consequence.
+
+You give no `sessionId` when the folder is a Reticle project (`needsSessionId` is false). You set no switch for an Electron application: the command sets it. When an action is refused, the refusal says what to do: for a double-click, a hover, a drag or the menu bar, it says to send the action again with `args: { foreground: true }`.
+
 ## Use it
 
 Give the terminal Accessibility permission: System Settings, Privacy & Security, Accessibility.
@@ -27,6 +37,8 @@ Start the Reticle daemon, then join a running application to it:
 ```
 reticle-computer-use --app Notes --watch ~/Documents/out
 ```
+
+The command waits for the daemon for 30 seconds when it is not there yet.
 
 The command needs the Xcode command-line tools the first time, because it compiles its helper. It stays open until you stop it.
 
@@ -46,9 +58,7 @@ The application is now a Reticle session. The tools an agent already has for a w
 - `reticle_act_and_wait { ref, action, until }` acts and proves the consequence in one call.
 - `reticle_act { steps }` does several actions in one call.
 
-The session is not in the default list of sessions. Give its `sessionId` on each call. The command prints it.
-
-A desktop application has no project of its own. Give `--project <folder>` with the folder that has the `.reticle.json` of the application, and its runs and flows go to that project. Without it they stay on this machine and do not reach the dashboard; the command says so.
+The command takes the project of the folder it runs in, when that folder has a `.reticle.json`. The tools then find the session with no `sessionId`, and its runs and flows go to that project. Give `--project <folder>` for another folder. In a folder that is no project, the session is in no project: give its `sessionId` on each call (the command prints it), and its runs and flows stay on this machine.
 
 To prove that a file was written, name the file:
 
@@ -108,7 +118,7 @@ Read these before you rely on a result.
 - **The realm reads one application.** It reads the elements, the settings and the disk count of the application it joined, and the folders you name. Of another application it reports only the name and the role of an element, when that application covers the target. It reports that the clipboard changed, and never what is on it.
 - **The menu bar needs the application in front.** The menu bar of an application that is not in front is not on the screen. It is not read and cannot be pressed. A menu in the window (a pull-down button) works in any case.
 - **An application must give an accessibility tree.** A canvas and a game have no elements to read. A browser can give very little until a switch is set in it, and this realm does not set that switch.
-- **An Electron application needs its switch for a press.** It shows its elements with no switch, answers "done" to a press, and does nothing. `reticle-computer-use` says so when it joins one. Give `--electron-switch`: the realm sets the accessibility switch that Electron documents for such tools, and sets it back when you stop. The switch is not in effect at once: for two or three seconds the application still loses a press. The command waits until the tree of the application has changed, and joins after that. The switch costs the application some speed. A command that is killed with no warning (`kill -9`) cannot set it back: the switch then stays on until the application is closed. This was measured on Electron 45.
+- **An Electron application needs its switch for a press.** It shows its elements with no switch, answers "done" to a press, and does nothing. The command sets the accessibility switch that Electron documents for such tools, and sets it back when you stop. Give `--no-electron-switch` to leave the application as it is; the command then says that a press will do nothing. The switch is not in effect at once: for two or three seconds the application still loses a press. The command waits until the tree of the application has changed, and joins after that. The switch costs the application some speed. A command that is killed with no warning (`kill -9`) cannot set it back: the switch then stays on until the application is closed. This was measured on Electron 45.
 - **A large window is slow to read.** The cost is for each element. A table is read only for the rows on the screen, and its line says how many rows are not shown.
 - **An action with its proof takes about 350 ms through the tools.** The peer calls an action finished after 150 ms with no change, and it goes on looking: a change that comes later is sent when it comes. A caller of the realm class looks once, so it waits for 500 ms with no change; `RETICLE_AX_QUIET_MS` sets that time.
 - **The realm trusts the place that an application gives for an element.** Some applications give a wrong place on a second display with a high resolution. The question "is this element on top" is then asked at the wrong place, and the realm refuses the action. It does not act on a guess.

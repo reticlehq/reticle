@@ -412,12 +412,16 @@ func run(_ args: [String]) throws {
     // The applications a person could mean by a name: the name they see, and the name of the
     // process. Only names and numbers, and only of applications that have a face.
     let list = NSWorkspace.shared.runningApplications
-      .filter { $0.activationPolicy != .prohibited }
+      .filter { $0.activationPolicy != .prohibited && !$0.isTerminated && kill($0.processIdentifier, 0) == 0 }
       .map { app -> [String: Any] in
         [
           "name": app.localizedName ?? "",
           "process": app.executableURL?.lastPathComponent ?? "",
           "pid": Int(app.processIdentifier),
+          // In the Dock, with windows of its own: what a person calls an application.
+          "regular": app.activationPolicy == .regular,
+          // When it was started. Of two with one name, the caller takes the newer one.
+          "launched": app.launchDate?.timeIntervalSince1970 ?? 0,
         ]
       }
     try emit(["apps": list])

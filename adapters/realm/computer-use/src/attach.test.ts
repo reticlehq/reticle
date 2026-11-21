@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { attachPlan, electronWarning, pickApp } from './attach.js';
+import { attachPlan, electronWarning, joinedAnswer, pickApp } from './attach.js';
 
 const files: Record<string, string> = {
   '/home/.reticle/pairing-token': 'tok-file\n',
@@ -22,7 +22,7 @@ describe('attachPlan', () => {
       url: 'ws://localhost:14400/reticle',
       token: 'tok-file',
       watch: ['/out'],
-      electronSwitch: false,
+      electronSwitch: true,
       foreground: true,
     });
   });
@@ -35,7 +35,7 @@ describe('attachPlan', () => {
 
   it('says what is missing when no application is named', () => {
     expect(attachPlan([], {}, '/home', read)).toEqual({
-      error: 'Name the application: --app <name>.',
+      error: 'Name the application: --app <name>. To see the names that are open: --list.',
     });
   });
 
@@ -62,7 +62,7 @@ describe('attachPlan', () => {
     const electron = (path: string) =>
       '/Applications/Notes.app/Contents/Frameworks/Electron Framework.framework' === path;
     const off = { app: 'Notes', electronSwitch: false };
-    expect(electronWarning(program, off, electron)).toMatch(/--electron-switch/);
+    expect(electronWarning(program, off, electron)).toMatch(/--no-electron-switch/);
     expect(electronWarning(program, { ...off, electronSwitch: true }, electron)).toBeUndefined();
     expect(electronWarning(program, off, () => false)).toBeUndefined();
     expect(electronWarning('/usr/bin/tool', off, electron)).toBeUndefined();
@@ -76,12 +76,46 @@ describe('attachPlan', () => {
     });
   });
 
-  it('reads the switch for Electron from the arguments', () => {
+  // An agent that joins an Electron application must not have to know about the switch.
+  it('sets the switch for Electron unless the person says not to', () => {
     const read = () => undefined;
-    const on = attachPlan(['--app', 'Notes', '--electron-switch'], {}, '/home', read);
-    const off = attachPlan(['--app', 'Notes'], {}, '/home', read);
+    const on = attachPlan(['--app', 'Notes'], {}, '/home', read);
+    const off = attachPlan(['--app', 'Notes', '--no-electron-switch'], {}, '/home', read);
     expect(on).toMatchObject({ electronSwitch: true });
     expect(off).toMatchObject({ electronSwitch: false });
+  });
+
+  /**
+   * An agent had to give a sessionId on each tool call, because the session was in no project.
+   * The command now takes the project of the folder it runs in, and the tools find the session.
+   */
+  it('takes the project of the folder it runs in, when no folder is named', () => {
+    const read = (path: string) =>
+      '/work/app/.reticle.json' === path ? '{"projectId":"app-1"}' : undefined;
+    expect(attachPlan(['--app', 'Notes'], {}, '/home', read, '/work/app')).toMatchObject({
+      projectId: 'app-1',
+    });
+    // A folder that is no project is not an error: the session is then in no project.
+    const none = attachPlan(['--app', 'Notes'], {}, '/home', read, '/work/other');
+    expect(none).not.toHaveProperty('error');
+    expect(none).not.toHaveProperty('projectId');
+  });
+
+  it('says what to call next, and gives the sessionId only when a call needs it', () => {
+    const inProject = joinedAnswer(
+      { app: 'Notes', projectId: 'app-1', foreground: true },
+      'cu-Notes-7',
+      7,
+    );
+    expect(inProject).toMatchObject({
+      joined: true,
+      sessionId: 'cu-Notes-7',
+      needsSessionId: false,
+    });
+    expect(JSON.stringify(inProject['next'])).not.toContain('sessionId:');
+    const alone = joinedAnswer({ app: 'Notes', foreground: true }, 'cu-Notes-7', 7);
+    expect(alone['needsSessionId']).toBe(true);
+    expect(JSON.stringify(alone['next'])).toContain('sessionId: \\"cu-Notes-7\\"');
   });
 });
 
@@ -100,6 +134,15 @@ describe('pickApp', () => {
     expect(pickApp('Visual Studio Code', running)).toEqual({ pid: 11 });
     expect(pickApp('Code', running)).toEqual({ pid: 11 });
     expect(pickApp('notes', running)).toEqual({ pid: 12 });
+  });
+
+  // Two with one name: the command joined the first in the list, which was one that was ending.
+  it('takes the one that was started last, of several with the same name', () => {
+    const two = [
+      { name: 'Notes', process: 'Notes', pid: 20, launched: 100 },
+      { name: 'Notes', process: 'Notes', pid: 21, launched: 200 },
+    ];
+    expect(pickApp('Notes', two)).toEqual({ pid: 21 });
   });
 
   it('names what is near, when the name fits nothing exactly', () => {

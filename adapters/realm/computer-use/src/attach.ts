@@ -11,7 +11,8 @@ const Flag = {
   PORT: '--port',
   WATCH: '--watch',
   PROJECT: '--project',
-  ELECTRON_SWITCH: '--electron-switch',
+  NO_ELECTRON_SWITCH: '--no-electron-switch',
+  LIST: '--list',
   BACKGROUND_ONLY: '--background-only',
 } as const;
 const Env = {
@@ -56,7 +57,8 @@ export interface AttachPlan {
   /**
    * Turn on the accessibility switch of an Electron application, and turn it off at the end.
    * With the switch off, an Electron application shows its elements and does nothing for a press.
-   * The switch costs that application some speed, so the person asks for it.
+   * On unless the person says `--no-electron-switch`: the switch costs that application some
+   * speed, and an agent that joins one must not have to know about it.
    */
   electronSwitch: boolean;
   /**
@@ -72,12 +74,15 @@ export function attachPlan(
   env: Readonly<Record<string, string | undefined>>,
   home: string,
   readFile: (path: string) => string | undefined,
+  cwd?: string,
 ): AttachPlan | { error: string } {
   const valuesOf = (flag: string): string[] =>
     argv.flatMap((arg, index) => (arg === flag ? [argv[index + 1] ?? ''] : []));
   const app = valuesOf(Flag.APP)[0];
   if (app === undefined || 0 === app.length) {
-    return { error: `Name the application: ${Flag.APP} <name>.` };
+    return {
+      error: `Name the application: ${Flag.APP} <name>. To see the names that are open: ${Flag.LIST}.`,
+    };
   }
   const folder = valuesOf(Flag.PROJECT)[0];
   let projectId: string | undefined;
@@ -88,6 +93,10 @@ export function attachPlan(
         error: `${join(folder, PROJECT_FILE)} has no projectId. Run \`reticle init\` in that folder, or give the folder of the application's source.`,
       };
     }
+  } else if (cwd !== undefined) {
+    // No folder was named: the folder the command runs in, when it is a project. An agent runs
+    // the command where it works, and its tool calls then find this session with no sessionId.
+    projectId = projectIdIn(readFile(join(cwd, PROJECT_FILE)));
   }
   const port = Number(valuesOf(Flag.PORT)[0] ?? env[Env.PORT] ?? RETICLE_DEFAULT_PORT);
   const token =
@@ -99,7 +108,7 @@ export function attachPlan(
     ...(token === undefined || 0 === token.length ? {} : { token }),
     watch: valuesOf(Flag.WATCH),
     ...(projectId === undefined ? {} : { projectId }),
-    electronSwitch: argv.includes(Flag.ELECTRON_SWITCH),
+    electronSwitch: !argv.includes(Flag.NO_ELECTRON_SWITCH),
     foreground: !argv.includes(Flag.BACKGROUND_ONLY),
   };
 }
@@ -108,21 +117,54 @@ export function attachPlan(
 const ELECTRON_MARK = 'Contents/Frameworks/Electron Framework.framework';
 const BUNDLE = /^(.*?\.app)\//;
 
+/** True when the program of a process is in the bundle of an Electron application. */
+export function isElectron(program: string, exists: (path: string) => boolean): boolean {
+  const bundle = BUNDLE.exec(program)?.[1];
+  return bundle !== undefined && exists(join(bundle, ELECTRON_MARK));
+}
+
 /**
  * What to say when an Electron application is joined with its switch off. `program` is the path
  * of the program of the process. Absent answer: the application is not Electron, or the switch
- * is asked for.
+ * is on.
  */
 export function electronWarning(
   program: string,
   plan: Pick<AttachPlan, 'app' | 'electronSwitch'>,
   exists: (path: string) => boolean,
 ): string | undefined {
-  const bundle = BUNDLE.exec(program)?.[1];
-  if (plan.electronSwitch || bundle === undefined || !exists(join(bundle, ELECTRON_MARK))) {
+  if (plan.electronSwitch || !isElectron(program, exists)) {
     return undefined;
   }
-  return `${plan.app} is an Electron application. It shows its elements, and it does NOTHING for a press until its accessibility switch is on. Run again with ${Flag.ELECTRON_SWITCH}: the switch is then set, and it is set back when you stop. It costs ${plan.app} some speed.`;
+  return `${plan.app} is an Electron application. It shows its elements, and it does NOTHING for a press while its accessibility switch is off. Run again without ${Flag.NO_ELECTRON_SWITCH}: the switch is then set, and it is set back when you stop.`;
+}
+
+/**
+ * What the command says on standard output when it has joined: one line of JSON, for an agent
+ * that started it. `sessionId` is needed on a tool call only when the session is in no project:
+ * a session in the project of the folder is found without it.
+ */
+export function joinedAnswer(
+  plan: Pick<AttachPlan, 'app' | 'projectId' | 'foreground'>,
+  sessionId: string,
+  pid: number,
+): Record<string, unknown> {
+  const inProject = plan.projectId !== undefined;
+  const session = inProject ? '' : `, sessionId: "${sessionId}"`;
+  return {
+    joined: true,
+    app: plan.app,
+    pid,
+    sessionId,
+    needsSessionId: !inProject,
+    foreground: plan.foreground,
+    next: [
+      `reticle_look { action: "page"${session} } gives the window as lines with refs.`,
+      `reticle_act_and_wait { ref, action, until${session} } acts and proves the consequence in one call.`,
+      'Actions: click, fill, type, press, clear, check, uncheck, select, submit, scroll. With args.foreground: true also dblclick, hover, drag, focus and a real click.',
+      'Prefer a signal for `until` when the action writes a file or changes a setting: file.written, disk.wrote, settings.changed, clipboard.changed.',
+    ],
+  };
 }
 
 /** One application that is open, as the helper lists it. */
@@ -132,6 +174,8 @@ export interface RunningApp {
   /** The name of the program of the process. */
   process: string;
   pid: number;
+  /** When it was started, in seconds. Absent: not known. */
+  launched?: number;
 }
 
 /** The names a refusal gives when nothing is near the name that was asked for. */
@@ -149,9 +193,12 @@ export function pickApp(
   const fold = (text: string): string => text.toLowerCase();
   const is = (app: RunningApp, same: (a: string, b: string) => boolean): boolean =>
     same(app.name, wanted) || same(app.process, wanted);
+  // Of several with the same name, the one that was started last: it is the one a person just
+  // opened, and an old one can be an application that is ending.
+  const newest = [...running].sort((a, b) => (b.launched ?? 0) - (a.launched ?? 0));
   const found =
-    running.find((app) => is(app, (a, b) => a === b)) ??
-    running.find((app) => is(app, (a, b) => fold(a) === fold(b)));
+    newest.find((app) => is(app, (a, b) => a === b)) ??
+    newest.find((app) => is(app, (a, b) => fold(a) === fold(b)));
   if (found !== undefined) {
     return { pid: found.pid };
   }
