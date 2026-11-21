@@ -1,10 +1,11 @@
 // reticle-hud: what the person at the machine sees of the realm.
 //
-//   - A pointer of the realm's own: a reticle that goes to the element the realm acts on. The
+//   - A pointer of the realm's own: an arrow, as a mouse has, in the colour of Reticle. It goes
+//     to the element the realm acts on, and a ring spreads from its tip when the realm acts. The
 //     pointer of the person does not move for an action in the background, so without this
 //     nothing on the screen says where the realm is.
-//   - A small window, as the HUD in a browser: the application that is joined, what the realm
-//     does now, what that did, and a button to pause the realm.
+//   - The HUD, as in a browser: the mark with a ring in the colour of the state, the application
+//     that is joined, the last actions with what each one did, and a button to pause the realm.
 //
 // The program draws and reports. It never reads an application and never acts on one.
 //
@@ -18,123 +19,230 @@
 // The program ends when standard input closes.
 import AppKit
 
-/// The design values, in one place. They follow the HUD in the browser.
-enum Token {
-  static let ground = NSColor(srgbRed: 0.043, green: 0.043, blue: 0.059, alpha: 0.94)
-  static let text = NSColor(srgbRed: 0.98, green: 0.98, blue: 0.98, alpha: 1)
-  static let quiet = NSColor(srgbRed: 0.98, green: 0.98, blue: 0.98, alpha: 0.6)
-  static let accent = NSColor(srgbRed: 0.655, green: 0.545, blue: 0.98, alpha: 1)
-  static let good = NSColor(srgbRed: 0.29, green: 0.87, blue: 0.5, alpha: 1)
-  static let bad = NSColor(srgbRed: 0.97, green: 0.44, blue: 0.44, alpha: 1)
-  static let line = NSColor(srgbRed: 1, green: 1, blue: 1, alpha: 0.12)
-  static let radius: CGFloat = 14
-  static let gap: CGFloat = 12
-  static let small = NSFont.systemFont(ofSize: 11, weight: .medium)
-  static let body = NSFont.systemFont(ofSize: 13, weight: .regular)
-  static let strong = NSFont.systemFont(ofSize: 13, weight: .semibold)
-  static let panel = NSSize(width: 300, height: 104)
-  static let reticle: CGFloat = 44
-  static let glide = 0.14
-  static let pointerRest = 4.0
+func hex(_ value: UInt32, _ alpha: CGFloat = 1) -> NSColor {
+  NSColor(
+    srgbRed: CGFloat((value >> 16) & 0xff) / 255, green: CGFloat((value >> 8) & 0xff) / 255,
+    blue: CGFloat(value & 0xff) / 255, alpha: alpha)
 }
 
-/// The reticle: a ring, four ticks and a point. A dark edge under it keeps it readable on a
-/// light window.
-final class ReticleView: NSView {
-  var color = Token.accent { didSet { needsDisplay = true } }
+/// The design values, in one place. They are the tokens of the HUD in the browser
+/// (`presenter-design-tokens.ts`, `presenter-shell-styles.ts`): the same ground, text, brand
+/// colour, state colours, radii, sizes and motion.
+enum Token {
+  static let ground = hex(0x0b0b0c)
+  static let surface = hex(0x151417, 0.9)
+  static let hover = hex(0xffffff, 0.12)
+  static let border = hex(0x3a3941)
+  static let text = hex(0xf5f3ef)
+  static let muted = hex(0xa6a29a)
+  static let faint = hex(0x8b867d)
+  static let brand = hex(0xf0872e)
+  static let active = hex(0x3b82f6)
+  static let idle = hex(0xeab308)
+  static let ended = hex(0xef4444)
+  static let radiusLarge: CGFloat = 14
+  static let space1: CGFloat = 4
+  static let space2: CGFloat = 8
+  static let space3: CGFloat = 12
+  static let edge: CGFloat = 20
+  static let extraSmall = NSFont.systemFont(ofSize: 11, weight: .regular)
+  static let small = NSFont.systemFont(ofSize: 12, weight: .regular)
+  static let base = NSFont.systemFont(ofSize: 13, weight: .semibold)
+  static let dockWidth: CGFloat = 320
+  static let toolbarHeight: CGFloat = 44
+  static let control: CGFloat = 36
+  static let rowHeight: CGFloat = 34
+  static let rows = 3
+  static let glide = 0.32
+  static let ease = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
+  static let ripple = 0.45
+  static let pointerRest = 4.0
+  static let pointerBox: CGFloat = 64
+  /// The tip of the arrow, from the top left of its box: the ring spreads from here.
+  static let tip = NSPoint(x: 20, y: 20)
+}
+
+/// The arrow of a mouse, in the colour of Reticle, with a light edge and a soft shadow. A ring
+/// spreads from its tip when the realm acts, as the ripple does in a browser.
+final class ArrowView: NSView {
+  var ring: CGFloat = 0 { didSet { needsDisplay = true } }
+  var ringColor = Token.text
+  override var isFlipped: Bool { true }
   override func draw(_ dirtyRect: NSRect) {
-    let middle = NSPoint(x: bounds.midX, y: bounds.midY)
-    let ring: CGFloat = 12
-    func strokes(_ width: CGFloat, _ paint: NSColor) {
-      paint.setStroke()
+    let tip = Token.tip
+    if ring > 0 {
+      let reach = 6 + ring * 18
+      ringColor.withAlphaComponent(0.55 * (1 - ring)).setStroke()
       let circle = NSBezierPath(
-        ovalIn: NSRect(x: middle.x - ring, y: middle.y - ring, width: ring * 2, height: ring * 2))
-      circle.lineWidth = width
+        ovalIn: NSRect(x: tip.x - reach, y: tip.y - reach, width: reach * 2, height: reach * 2))
+      circle.lineWidth = 2
       circle.stroke()
-      for (dx, dy) in [(1.0, 0.0), (-1.0, 0.0), (0.0, 1.0), (0.0, -1.0)] {
-        let tick = NSBezierPath()
-        tick.move(to: NSPoint(x: middle.x + dx * (ring - 4), y: middle.y + dy * (ring - 4)))
-        tick.line(to: NSPoint(x: middle.x + dx * (ring + 6), y: middle.y + dy * (ring + 6)))
-        tick.lineWidth = width
-        tick.stroke()
-      }
     }
-    strokes(4, NSColor.black.withAlphaComponent(0.45))
-    strokes(2, color)
-    color.setFill()
-    NSBezierPath(ovalIn: NSRect(x: middle.x - 2, y: middle.y - 2, width: 4, height: 4)).fill()
+    // The outline of a pointer: the tip, down the left edge, the notch, the tail, and back.
+    let shape: [(CGFloat, CGFloat)] = [
+      (0, 0), (0, 21), (5.6, 16), (9.4, 24.6), (13, 23), (9.2, 14.6), (16.4, 14.6),
+    ]
+    let arrow = NSBezierPath()
+    for (index, point) in shape.enumerated() {
+      let at = NSPoint(x: tip.x + point.0, y: tip.y + point.1)
+      if index == 0 { arrow.move(to: at) } else { arrow.line(to: at) }
+    }
+    arrow.close()
+    arrow.lineJoinStyle = .round
+    NSGraphicsContext.saveGraphicsState()
+    let shadow = NSShadow()
+    shadow.shadowColor = NSColor.black.withAlphaComponent(0.45)
+    shadow.shadowBlurRadius = 5
+    shadow.shadowOffset = NSSize(width: 0, height: -2)
+    shadow.set()
+    Token.brand.setFill()
+    arrow.fill()
+    NSGraphicsContext.restoreGraphicsState()
+    Token.text.setStroke()
+    arrow.lineWidth = 1.6
+    arrow.stroke()
   }
+}
+
+/// A round button of the toolbar: clear, and lighter under the pointer.
+final class RoundButton: NSButton {
+  override func updateTrackingAreas() {
+    trackingAreas.forEach(removeTrackingArea)
+    addTrackingArea(
+      NSTrackingArea(rect: bounds, options: [.mouseEnteredAndExited, .activeAlways], owner: self))
+  }
+  override func mouseEntered(with event: NSEvent) { layer?.backgroundColor = Token.hover.cgColor }
+  override func mouseExited(with event: NSEvent) { layer?.backgroundColor = NSColor.clear.cgColor }
 }
 
 final class Hud: NSObject, NSApplicationDelegate {
   var pointer: NSWindow!
-  let reticle = ReticleView(frame: NSRect(x: 0, y: 0, width: Token.reticle, height: Token.reticle))
+  let arrow = ArrowView(
+    frame: NSRect(x: 0, y: 0, width: Token.pointerBox, height: Token.pointerBox))
   var panel: NSPanel!
+  let halo = NSView()
+  let title = NSTextField(labelWithString: "Reticle")
   let app = NSTextField(labelWithString: "")
-  let doing = NSTextField(labelWithString: "Waiting for an action")
-  let effect = NSTextField(labelWithString: "")
-  var pause: NSButton!
+  var pause: RoundButton!
+  var log: [(action: NSTextField, effect: NSTextField)] = []
+  var lines: [(action: String, effect: String, kind: String)] = []
   var paused = false
   var rest: Timer?
+  var rippling: Timer?
 
-  func label(_ field: NSTextField, _ font: NSFont, _ color: NSColor, _ frame: NSRect) {
+  /// The colour of the state: the realm acts, the realm waits or is paused, the action was refused.
+  func setState(_ color: NSColor) {
+    halo.layer?.borderColor = color.withAlphaComponent(0.7).cgColor
+    halo.layer?.shadowColor = color.cgColor
+  }
+
+  func text(_ field: NSTextField, _ font: NSFont, _ color: NSColor, _ frame: NSRect, in view: NSView) {
     field.font = font
     field.textColor = color
     field.frame = frame
     field.lineBreakMode = .byTruncatingTail
-    panel.contentView!.addSubview(field)
+    view.addSubview(field)
   }
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     // The pointer: over every window, and a click goes through it to what is under it.
     pointer = NSWindow(
-      contentRect: reticle.frame, styleMask: [.borderless], backing: .buffered, defer: false)
+      contentRect: arrow.frame, styleMask: [.borderless], backing: .buffered, defer: false)
     pointer.isOpaque = false
     pointer.backgroundColor = .clear
     pointer.hasShadow = false
     pointer.ignoresMouseEvents = true
     pointer.level = .screenSaver
     pointer.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
-    pointer.contentView = reticle
+    pointer.contentView = arrow
     pointer.alphaValue = 0
 
-    // The window: it floats, it never takes the keyboard, and the person can move it.
+    // The HUD: the card of the last actions, and the toolbar under it. It floats, it never takes
+    // the keyboard, and the person can move it.
+    let cardHeight = CGFloat(Token.rows) * Token.rowHeight + Token.space2 * 2
+    let size = NSSize(
+      width: Token.dockWidth, height: cardHeight + Token.space2 + Token.toolbarHeight)
     let screen = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1200, height: 800)
     panel = NSPanel(
       contentRect: NSRect(
-        x: screen.maxX - Token.panel.width - Token.gap, y: screen.minY + Token.gap,
-        width: Token.panel.width, height: Token.panel.height),
+        x: screen.maxX - size.width - Token.edge, y: screen.minY + Token.edge, width: size.width,
+        height: size.height),
       styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
     panel.isOpaque = false
     panel.backgroundColor = .clear
     panel.level = .floating
     panel.isMovableByWindowBackground = true
     panel.collectionBehavior = [.canJoinAllSpaces, .ignoresCycle, .fullScreenAuxiliary]
-    let ground = NSView(frame: NSRect(origin: .zero, size: Token.panel))
-    ground.wantsLayer = true
-    ground.layer?.backgroundColor = Token.ground.cgColor
-    ground.layer?.cornerRadius = Token.radius
-    ground.layer?.borderWidth = 1
-    ground.layer?.borderColor = Token.line.cgColor
-    panel.contentView = ground
+    let root = NSView(frame: NSRect(origin: .zero, size: size))
+    panel.contentView = root
 
-    let mark = ReticleView(frame: NSRect(x: Token.gap - 8, y: 64, width: 36, height: 36))
-    ground.addSubview(mark)
-    let name = NSTextField(labelWithString: "Reticle")
-    label(name, Token.strong, Token.text, NSRect(x: 44, y: 74, width: 80, height: 18))
-    label(app, Token.small, Token.quiet, NSRect(x: 104, y: 74, width: 120, height: 16))
-    label(doing, Token.body, Token.text, NSRect(x: Token.gap, y: 42, width: 276, height: 18))
-    label(effect, Token.small, Token.quiet, NSRect(x: Token.gap, y: 16, width: 276, height: 16))
+    func surface(_ frame: NSRect, _ radius: CGFloat) -> NSView {
+      let view = NSView(frame: frame)
+      view.wantsLayer = true
+      view.layer?.backgroundColor = Token.surface.cgColor
+      view.layer?.cornerRadius = radius
+      view.layer?.borderWidth = 1
+      view.layer?.borderColor = Token.border.cgColor
+      root.addSubview(view)
+      return view
+    }
 
-    pause = NSButton(title: "Pause", target: self, action: #selector(togglePause))
+    // The toolbar: a pill, with the mark, the name, the application and the button.
+    let bar = surface(
+      NSRect(x: 0, y: 0, width: size.width, height: Token.toolbarHeight), Token.toolbarHeight / 2)
+    halo.frame = NSRect(x: Token.space1, y: Token.space1, width: Token.control, height: Token.control)
+    halo.wantsLayer = true
+    halo.layer?.cornerRadius = Token.control / 2
+    halo.layer?.backgroundColor = Token.ground.cgColor
+    halo.layer?.borderWidth = 1
+    halo.layer?.shadowOpacity = 0.6
+    halo.layer?.shadowRadius = 7
+    halo.layer?.shadowOffset = .zero
+    bar.addSubview(halo)
+    // The mark is a file beside the source of this program: the same paths as in the browser.
+    let markFile = URL(fileURLWithPath: CommandLine.arguments[0])
+      .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent(
+        "reticle-mark.svg")
+    if let image = NSImage(contentsOf: markFile) {
+      let mark = NSImageView(frame: halo.bounds.insetBy(dx: 9, dy: 9))
+      mark.image = image
+      mark.imageScaling = .scaleProportionallyUpOrDown
+      halo.addSubview(mark)
+    }
+    text(title, Token.base, Token.text, NSRect(x: 50, y: 13, width: 56, height: 18), in: bar)
+    text(app, Token.small, Token.muted, NSRect(x: 106, y: 13, width: 150, height: 17), in: bar)
+    pause = RoundButton(title: "", target: self, action: #selector(togglePause))
     pause.isBordered = false
     pause.wantsLayer = true
-    pause.layer?.cornerRadius = 6
-    pause.layer?.borderWidth = 1
-    pause.layer?.borderColor = Token.line.cgColor
-    setPauseTitle("Pause")
-    pause.frame = NSRect(x: Token.panel.width - 70 - Token.gap, y: 72, width: 70, height: 20)
-    ground.addSubview(pause)
+    pause.layer?.cornerRadius = Token.control / 2
+    pause.frame = NSRect(
+      x: size.width - Token.control - Token.space1, y: Token.space1, width: Token.control,
+      height: Token.control)
+    bar.addSubview(pause)
+    setPauseSign()
+
+    // The card: the last actions, the newest at the bottom, each with what it did.
+    let card = surface(
+      NSRect(
+        x: 0, y: Token.toolbarHeight + Token.space2, width: size.width, height: cardHeight),
+      Token.radiusLarge)
+    for row in 0..<Token.rows {
+      let y = Token.space2 + CGFloat(Token.rows - 1 - row) * Token.rowHeight
+      let action = NSTextField(labelWithString: "")
+      let effect = NSTextField(labelWithString: "")
+      text(
+        action, Token.small, Token.text,
+        NSRect(x: Token.space3, y: y + 15, width: size.width - Token.space3 * 2, height: 16),
+        in: card)
+      text(
+        effect, Token.extraSmall, Token.muted,
+        NSRect(x: Token.space3, y: y + 1, width: size.width - Token.space3 * 2, height: 14),
+        in: card)
+      log.append((action, effect))
+    }
+    lines = [("Waiting for an action", "", "none")]
+    redraw()
+    setState(Token.idle)
     panel.orderFrontRegardless()
 
     // One line of JSON for each thing to show. Read off the main thread; draw on it.
@@ -149,19 +257,62 @@ final class Hud: NSObject, NSApplicationDelegate {
     }
   }
 
-  /// The words of the button, in the colour of the window: a plain button was grey on the dark ground.
-  func setPauseTitle(_ words: String) {
-    pause.attributedTitle = NSAttributedString(
-      string: words, attributes: [.foregroundColor: Token.text, .font: Token.small])
+  /// The sign on the button: two bars to pause, a triangle to go on.
+  func setPauseSign() {
+    let sign = NSImage(size: NSSize(width: 16, height: 16), flipped: false) { _ in
+      Token.text.setFill()
+      if self.paused {
+        let play = NSBezierPath()
+        play.move(to: NSPoint(x: 4.5, y: 2.5))
+        play.line(to: NSPoint(x: 13, y: 8))
+        play.line(to: NSPoint(x: 4.5, y: 13.5))
+        play.close()
+        play.fill()
+      } else {
+        NSBezierPath(roundedRect: NSRect(x: 3.5, y: 3, width: 3.2, height: 10), xRadius: 1, yRadius: 1)
+          .fill()
+        NSBezierPath(roundedRect: NSRect(x: 9.3, y: 3, width: 3.2, height: 10), xRadius: 1, yRadius: 1)
+          .fill()
+      }
+      return true
+    }
+    pause.image = sign
+    pause.setAccessibilityLabel(paused ? "Resume" : "Pause")
+  }
+
+  func redraw() {
+    let shown = Array(lines.suffix(Token.rows))
+    for (row, fields) in log.enumerated() {
+      let line = row < shown.count ? shown[row] : ("", "", "none")
+      let newest = row == shown.count - 1
+      fields.action.stringValue = line.0
+      fields.action.textColor = newest ? Token.text : Token.muted
+      fields.effect.stringValue = line.1
+      fields.effect.textColor =
+        line.2 == "refused" ? Token.ended : (line.2 == "ok" ? Token.text : Token.faint)
+    }
   }
 
   @objc func togglePause() {
     paused.toggle()
-    setPauseTitle(paused ? "Resume" : "Pause")
-    doing.stringValue = paused ? "Paused by you" : "Waiting for an action"
-    doing.textColor = paused ? Token.bad : Token.text
+    setPauseSign()
+    lines.append((paused ? "Paused by you" : "Going on", "", "none"))
+    redraw()
+    setState(Token.idle)
     print(paused ? "{\"paused\":true}" : "{\"paused\":false}")
     fflush(stdout)
+  }
+
+  /// A ring that spreads from the tip of the pointer, once.
+  func ripple(_ color: NSColor) {
+    rippling?.invalidate()
+    arrow.ringColor = color
+    let started = Date()
+    rippling = Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { timer in
+      let part = CGFloat(Date().timeIntervalSince(started) / Token.ripple)
+      self.arrow.ring = part >= 1 ? 0 : max(part, 0.01)
+      if part >= 1 { timer.invalidate() }
+    }
   }
 
   func show(_ say: [String: Any]) {
@@ -172,11 +323,25 @@ final class Hud: NSObject, NSApplicationDelegate {
       guard let x = say["x"] as? Double, let y = say["y"] as? Double else { return }
       // The realm gives points from the top left. AppKit counts from the bottom left.
       let top = NSScreen.screens.first?.frame.height ?? 0
-      let to = NSPoint(x: x - Token.reticle / 2, y: top - y - Token.reticle / 2)
-      reticle.color = Token.accent
+      let target = NSPoint(x: x, y: top - y)
+      // The HUD must not lie over what the realm acts on: the realm presses only what a person
+      // could press, and it would refuse a control that is under the HUD. So the HUD goes to the
+      // other side of the screen when the target is under it.
+      if panel.frame.insetBy(dx: -Token.space3, dy: -Token.space3).contains(target),
+        let screen = NSScreen.main?.visibleFrame
+      {
+        let left = panel.frame.midX > screen.midX
+        panel.setFrameOrigin(
+          NSPoint(
+            x: left ? screen.minX + Token.edge : screen.maxX - panel.frame.width - Token.edge,
+            y: panel.frame.origin.y))
+      }
+      // The tip of the arrow goes to the target.
+      let to = NSPoint(x: target.x - Token.tip.x, y: target.y - (Token.pointerBox - Token.tip.y))
       pointer.orderFrontRegardless()
       NSAnimationContext.runAnimationGroup { move in
         move.duration = pointer.alphaValue > 0 ? Token.glide : 0
+        move.timingFunction = Token.ease
         pointer.animator().setFrameOrigin(to)
         pointer.animator().alphaValue = 1
       }
@@ -186,16 +351,18 @@ final class Hud: NSObject, NSApplicationDelegate {
       }
     case "act":
       guard !paused else { return }
-      doing.stringValue = say["text"] as? String ?? ""
-      doing.textColor = Token.text
-      effect.stringValue = "…"
-      effect.textColor = Token.quiet
+      lines.append((say["text"] as? String ?? "", "…", "none"))
+      redraw()
+      setState(Token.active)
+      ripple(Token.text)
     case "effect":
-      effect.stringValue = say["text"] as? String ?? ""
-      let kind = say["kind"] as? String
-      let color = kind == "ok" ? Token.good : (kind == "refused" ? Token.bad : Token.quiet)
-      effect.textColor = color
-      reticle.color = kind == "refused" ? Token.bad : (kind == "ok" ? Token.good : Token.accent)
+      guard !lines.isEmpty else { return }
+      let kind = say["kind"] as? String ?? "none"
+      lines[lines.count - 1].effect = say["text"] as? String ?? ""
+      lines[lines.count - 1].kind = kind
+      redraw()
+      setState(kind == "refused" ? Token.ended : Token.idle)
+      if kind == "refused" { ripple(Token.ended) }
     case "hide":
       pointer.animator().alphaValue = 0
     default: break

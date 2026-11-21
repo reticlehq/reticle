@@ -119,4 +119,15 @@ describe('MacDriver', () => {
     });
     await expect(driver.read()).rejects.toThrow(/The screen is locked/);
   });
+
+  // A realm that can read the window of Reticle can press Resume in it, and Pause is then no stop.
+  it('does not read or act on the window of Reticle itself', async () => {
+    const driver = new MacDriver({
+      helper: 'reticle-ax',
+      app: 'reticle-hud',
+      pid: 7,
+      run: () => Promise.resolve(JSON.stringify({ error: 'own-window' })),
+    });
+    await expect(driver.read()).rejects.toThrow(/the window of Reticle itself/);
+  });
 });
