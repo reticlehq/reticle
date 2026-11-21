@@ -48,7 +48,12 @@ export const AxNodeSchema: z.ZodType<AxNode> = z.lazy(() =>
   }),
 );
 
-const AxRole = { STATIC_TEXT: 'AXStaticText', CHECKBOX: 'AXCheckBox' } as const;
+const AxRole = {
+  STATIC_TEXT: 'AXStaticText',
+  TEXT_FIELD: 'AXTextField',
+  CHECKBOX: 'AXCheckBox',
+  ROW: 'AXRow',
+} as const;
 const AX_ON = '1';
 const SELECTED = 'selected';
 
@@ -155,6 +160,22 @@ const NAME_OF_SUBROLE: Readonly<Partial<Record<string, string>>> = {
   AXFullScreenButton: 'Full screen',
 };
 
+/**
+ * The first words inside an element: the value of a text or of a field, in the order of the
+ * tree. A row of an outline or of a table has no title, and a person names it by these words.
+ */
+function wordsIn(node: AxNode): string {
+  for (const child of node.children) {
+    const holdsWords = AxRole.STATIC_TEXT === child.role || AxRole.TEXT_FIELD === child.role;
+    const own = holdsWords ? (child.value ?? '') : '';
+    const found = 0 === own.length ? wordsIn(child) : own;
+    if (found.length > 0) {
+      return found;
+    }
+  }
+  return '';
+}
+
 export function fromAx(ax: AxNode): FromAx {
   const unmapped = new Set<string>();
   const convert = (node: AxNode): UiNode => {
@@ -165,7 +186,8 @@ export function fromAx(ax: AxNode): FromAx {
     // A static text has no title: its words are its value, and they are what a person reads.
     const isText = node.role === AxRole.STATIC_TEXT;
     const said = (isText ? node.value : undefined) ?? node.title ?? node.description ?? '';
-    const name = 0 === said.length ? (NAME_OF_SUBROLE[node.subrole ?? ''] ?? '') : said;
+    const fromRow = 0 === said.length && AxRole.ROW === node.role ? wordsIn(node) : '';
+    const name = 0 === said.length ? (NAME_OF_SUBROLE[node.subrole ?? ''] ?? fromRow) : said;
     // ponytail: the wire has no "selected" state, so a chosen row says it in its value. Add the
     // state to `ElementState` in core when a second realm needs it.
     const chosen = true === node.selected ? SELECTED : undefined;

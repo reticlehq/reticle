@@ -49,6 +49,39 @@ describe('fromAx', () => {
     ]);
   });
 
+  // A row of an outline has no title: its words are in a field inside it. An agent could not
+  // ask for "the row Memory", and it saw thirty rows with no name.
+  it('names a row with no title from the first words inside it', () => {
+    const outline = AxNodeSchema.parse({
+      role: 'AXOutline',
+      children: [
+        {
+          role: 'AXRow',
+          children: [
+            {
+              role: 'AXGroup',
+              children: [{ role: 'AXDisclosureTriangle', value: '1', children: [] }],
+            },
+            { role: 'AXTextField', value: 'Hardware', children: [] },
+          ],
+        },
+        { role: 'AXRow', children: [{ role: 'AXStaticText', value: 'Memory', children: [] }] },
+        {
+          role: 'AXRow',
+          title: 'Named',
+          children: [{ role: 'AXStaticText', value: 'x', children: [] }],
+        },
+        { role: 'AXRow', children: [] },
+      ],
+    });
+    expect(fromAx(outline).root.children.map((c) => c.name)).toEqual([
+      'Hardware',
+      'Memory',
+      'Named',
+      '',
+    ]);
+  });
+
   it('names each role it does not know, and keeps the element', () => {
     const { root, unmapped } = fromAx({
       role: 'AXWindow',
