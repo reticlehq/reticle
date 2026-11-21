@@ -5,6 +5,7 @@ import {
   EventMessageSchema,
   EventType,
   MessageKind,
+  TRANSPORT_LIMITS,
 } from '@reticlehq/core';
 import { MAX_QUEUE, Transport } from './transport.js';
 
@@ -135,6 +136,28 @@ describe('transport overflow marker', () => {
     const ws = overflowThenOpen(t, MAX_QUEUE + OVERFLOW_BY);
 
     expect(overflowMarkers(ws)[0]?.data['dropped']).toBe(OVERFLOW_BY);
+  });
+
+  it('evicts by serialized bytes before the message-count cap', () => {
+    const t = makeTransport();
+    t.connect();
+    const ws = FakeWebSocket.instances.at(-1);
+    const text = '水'.repeat(TRANSPORT_LIMITS.MAX_STRING_LENGTH);
+    const count = Math.ceil(
+      TRANSPORT_LIMITS.MAX_BUFFER_BYTES / (TRANSPORT_LIMITS.MAX_STRING_LENGTH * 3),
+    );
+
+    for (let i = 0; i < count; i += 1) {
+      t.sendEvent({ ...evt(i), data: { text } });
+    }
+    ws?.open();
+    const survivors = eventsOn(ws).filter((event) => event.type !== EventType.TRANSPORT_OVERFLOW);
+
+    expect(count).toBeLessThan(MAX_QUEUE);
+    expect(overflowMarkers(ws)[0]?.data['dropped']).toBeGreaterThan(0);
+    expect(survivors.length).toBeLessThan(count);
+    expect(survivors[0]?.seq).toBe(count - survivors.length);
+    expect(survivors.at(-1)?.seq).toBe(count - 1);
   });
 
   it('stays silent when nothing was dropped — silence must keep meaning "complete"', () => {
