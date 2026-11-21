@@ -62,6 +62,9 @@ export class RefTable {
   }
 }
 
+/** Said on the line of an element whose name the realm took from the thing beside it. */
+export const NAME_FROM_NEIGHBOUR = 'name from neighbour';
+
 export interface Written {
   tree: string;
   /** Elements left out because they have no place on the screen: closed menus, for the most part. */
@@ -87,7 +90,8 @@ function writePlaced(placed: readonly Placed[], refs: RefTable): string {
       // A loss is said on the line that has it: scroll to read the rows that are not here.
       const left = node.notShown === undefined ? '' : ` [not shown: ${String(node.notShown)}]`;
       const states = node.states.length > 0 ? ` [${node.states.join(',')}]` : '';
-      return `${INDENT.repeat(depth)}- ${label(node)}${ref}${value}${left}${states}`;
+      const guessed = true === node.nameGuessed ? ` [${NAME_FROM_NEIGHBOUR}]` : '';
+      return `${INDENT.repeat(depth)}- ${label(node)}${ref}${guessed}${value}${left}${states}`;
     })
     .join('\n');
 }

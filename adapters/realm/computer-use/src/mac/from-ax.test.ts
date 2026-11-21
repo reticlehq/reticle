@@ -132,6 +132,32 @@ describe('fromAx', () => {
     expect(fromAx(list).root.children[1]?.name).toBe('Menu by Weekly sync');
   });
 
+  // A row of a list with nothing named in it must not take the name of the row above: an agent
+  // would open the menu of another meeting, and could rename or delete the wrong note.
+  it('takes no name from another row of the same list, and marks a name it guessed', () => {
+    const row = (title: string) => ({
+      role: 'AXGroup',
+      children: [
+        { role: 'AXButton', title, children: [] },
+        { role: 'AXGroup', children: [{ role: 'AXPopUpButton', children: [] }] },
+      ],
+    });
+    const list = AxNodeSchema.parse({
+      role: 'AXList',
+      title: 'Meetings',
+      children: [row('Weekly sync'), row('')],
+    });
+    const { root } = fromAx(list);
+    const first = root.children[0]?.children[1]?.children[0];
+    const second = root.children[1]?.children[1]?.children[0];
+    expect(first?.name).toBe('Menu by Weekly sync');
+    expect(first?.nameGuessed).toBe(true);
+    expect(second?.name).toBe('');
+    expect(writeLines(root, new RefTable())).toContain(
+      '"Menu by Weekly sync" (ref=e3) [name from neighbour]',
+    );
+  });
+
   it('names each role it does not know, and keeps the element', () => {
     const { root, unmapped } = fromAx({
       role: 'AXWindow',

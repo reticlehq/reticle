@@ -58,6 +58,11 @@ export interface UiNode {
    * them from the tree. It does not move a pointer.
    */
   help?: string;
+  /**
+   * True when the application gave no name, and the realm took the name from the nearest named
+   * thing beside the element. It is a guess, and the lines say so.
+   */
+  nameGuessed?: boolean;
   children: readonly UiNode[];
 }
 

@@ -207,6 +207,18 @@ const NAMING_ROLES: ReadonlySet<UiRole> = new Set([
 /** How many parents up a name is looked for. Farther up, it is the name of the whole list. */
 const NEIGHBOUR_LEVELS = 4;
 
+/** True when the child at `at` is a row of a list: a group with no name, with a twin of its shape. */
+function isRowOfList(kids: readonly UiNode[], at: number): boolean {
+  const row = kids[at];
+  const shape = (n: UiNode) => n.children.map((c) => c.role).join(' ');
+  const isGroup = (n: UiNode) => n.role === UiRole.GROUP && 0 === n.name.length;
+  return (
+    row !== undefined &&
+    isGroup(row) &&
+    kids.some((other, i) => i !== at && isGroup(other) && shape(other) === shape(row))
+  );
+}
+
 /** The first name in an element, in the order of the tree, or from its end. */
 function nameIn(node: UiNode, fromEnd: boolean): string {
   if (node.name.length > 0 && NAMING_ROLES.has(node.role)) {
@@ -236,10 +248,16 @@ function nameByNeighbours(
 ): UiNode {
   const word = WORD_OF_ROLE[node.role];
   let name = node.name;
+  let guessed = false;
   if (0 === name.length && word !== undefined) {
     for (let up = chain.length - 1; up >= 0 && chain.length - up <= NEIGHBOUR_LEVELS; up -= 1) {
       const kids = chain[up]?.children ?? [];
       const i = at[up] ?? 0;
+      // Not into another row of the same list: a row with nothing named in it would take the
+      // name of the row above, and an agent would open the menu of another meeting.
+      if (isRowOfList(kids, i)) {
+        break;
+      }
       const before = kids
         .slice(0, i)
         .reverse()
@@ -248,6 +266,7 @@ function nameByNeighbours(
       const found = [...before, ...after].find((one) => one.length > 0);
       if (found !== undefined) {
         name = `${word} by ${found}`;
+        guessed = true;
         break;
       }
     }
@@ -255,6 +274,7 @@ function nameByNeighbours(
   return {
     ...node,
     name,
+    ...(guessed ? { nameGuessed: true } : {}),
     children: node.children.map((child, index) =>
       nameByNeighbours(child, [...chain, node], [...at, index]),
     ),
