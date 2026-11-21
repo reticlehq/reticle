@@ -257,6 +257,57 @@ describe('PeerCommands', () => {
     expect(asked).toHaveLength(2);
   });
 
+  // Chrome gives a page with no scroll bar in its tree, and the scroll was refused there.
+  it('scrolls with a key when the tree has no scroll bar, and says so', async () => {
+    const page = (posts: number): UiRead => ({
+      root: node(UiRole.WINDOW, 'Feed', {
+        frame: [0, 0, 400, 300],
+        children: [
+          node(UiRole.DOCUMENT, 'Feed', {
+            frame: [0, 0, 400, 300],
+            children: Array.from({ length: posts }, (_, i) =>
+              node(UiRole.TEXT, `Post ${String(i + 1)}`, { frame: [0, i * 20, 100, 20] }),
+            ),
+          }),
+        ],
+      }),
+      unread: 0,
+      unmapped: [],
+    });
+    const asked: ActRequest[] = [];
+    const commands = new PeerCommands({
+      driver: {
+        subject: () => ({ app: 'Chrome', pid: 7 }),
+        read: () => Promise.resolve(page(2)),
+        reach: () => Promise.resolve(reachAnswer),
+        act: (request) => {
+          asked.push(request);
+          return Promise.resolve({
+            delivered: true,
+            reachable: false,
+            settled: true,
+            before: page(2),
+            after: page(3),
+          });
+        },
+      },
+      emit: () => undefined,
+    });
+    expect(await commands.answer(ReticleCommand.SCROLL, { fraction: 1 })).toEqual({
+      scrolled: true,
+      by: 'key',
+      key: 'End',
+    });
+    expect(await commands.answer(ReticleCommand.SCROLL, { dy: -300 })).toMatchObject({
+      key: 'PageUp',
+    });
+    // The page is the first child of the window.
+    expect(asked.map((a) => [a.kind, a.value, a.target.path.join('.')])).toEqual([
+      ['key', 'End', '0'],
+      ['key', 'PageUp', '0'],
+    ]);
+  });
+
   it('scrolls by a move of the scroll bar, and says when it took a step and not pixels', async () => {
     const list = (bar: string): UiRead => ({
       root: node(UiRole.WINDOW, 'Notes', {

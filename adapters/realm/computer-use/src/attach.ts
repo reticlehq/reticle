@@ -15,6 +15,7 @@ const Flag = {
   LIST: '--list',
   BACKGROUND_ONLY: '--background-only',
   NO_HUD: '--no-hud',
+  OPEN: '--open',
 } as const;
 const Env = {
   TOKEN: 'RETICLE_TOKEN',
@@ -76,6 +77,11 @@ export interface AttachPlan {
    * machine with nobody at it has no use for them.
    */
   hud: boolean;
+  /**
+   * Start the application when it is not open, and then join it. False unless the caller says
+   * `--open`: a command that joins must not start a program that nobody asked for.
+   */
+  open: boolean;
 }
 
 export function attachPlan(
@@ -115,6 +121,7 @@ export function attachPlan(
     electronSwitch: !argv.includes(Flag.NO_ELECTRON_SWITCH),
     foreground: !argv.includes(Flag.BACKGROUND_ONLY),
     hud: !argv.includes(Flag.NO_HUD),
+    open: argv.includes(Flag.OPEN),
   };
 }
 
@@ -181,6 +188,8 @@ export interface RunningApp {
   pid: number;
   /** When it was started, in seconds. Absent: not known. */
   launched?: number;
+  /** An application a person opens, with a place in the Dock. Absent: not known. */
+  regular?: boolean;
 }
 
 /** The names a refusal gives when nothing is near the name that was asked for. */
@@ -207,7 +216,12 @@ export function pickApp(
   if (found !== undefined) {
     return { pid: found.pid };
   }
-  const names = [...new Set(running.map((app) => app.name).filter((name) => name.length > 0))];
+  // The applications a person opens come first: the helpers of the system are many, and a list
+  // that is cut after them names nothing that can be joined.
+  const person = [...running].sort(
+    (a, b) => Number(true === b.regular) - Number(true === a.regular),
+  );
+  const names = [...new Set(person.map((app) => app.name).filter((name) => name.length > 0))];
   const near = names.filter((name) => fold(name).includes(fold(wanted)));
   const hint =
     near.length > 0

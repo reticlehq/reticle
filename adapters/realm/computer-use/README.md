@@ -45,7 +45,7 @@ The window never takes the keyboard, and the person can move it. Give `--no-hud`
 Three steps. The application needs no project and no set-up of its own.
 
 1. See what is open: `reticle-computer-use --list` prints `{"apps":[{"name","process"}]}`.
-2. Join one, and leave the command running: `reticle-computer-use --app "<name>"`. It waits for the Reticle daemon when there is none yet, and then prints one line of JSON: `{"joined":true,"sessionId":"…","needsSessionId":true,"next":[…]}`. `next` says what to call.
+2. Join one, and leave the command running: `reticle-computer-use --app "<name>"`. It waits for the Reticle daemon when there is none yet, and then prints one line of JSON: `{"joined":true,"sessionId":"…","needsSessionId":true,"next":[…]}`. `next` says what to call. Add `--open` to start an application that is not open; it starts behind the application in front.
 3. Use the tools you have for a web page. `reticle_look { action: "page" }` gives the window. `reticle_act_and_wait { ref, action, until }` acts and proves the consequence.
 
 Give the `sessionId` of that line on each call; `next` shows the calls with it. You set no switch for an Electron application: the command sets it. When an action is refused, the refusal says what to do: for a double-click, a hover, a drag or the menu bar, it says to send the action again with `args: { foreground: true }`.
@@ -129,7 +129,7 @@ The realm waits until the person at the machine has not typed or moved the point
 
 An action that needs the foreground and did not get it is refused, and the refusal says how to ask. Join with `--background-only` and the realm never does it, whatever a caller asks.
 
-A `scroll` moves the scroll bar of the scroll area that holds the element, and sends no wheel event. `fraction` is the place of the bar, 0 to 1. `dy` moves the bar one step in its direction: the realm does not know the height of the content, so it cannot scroll by pixels.
+A `scroll` moves the scroll bar of the scroll area that holds the element, and sends no wheel event. `fraction` is the place of the bar, 0 to 1. `dy` moves the bar one step in its direction: the realm does not know the height of the content, so it cannot scroll by pixels. A page in a Chromium browser has no scroll bar in its tree. There the realm sends one key to the application (`End`, `Home`, `PageDown` or `PageUp`), and the answer says `by: "key"` and names the key; it gives no `fraction`, because the place of the content is then not known. Both ways work while another application is in front.
 
 ### An application that gives no elements
 

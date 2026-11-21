@@ -139,13 +139,19 @@ export function place(root: UiNode): Placed[] {
  * and they are most of an application's elements. A person cannot see or click them, so they are
  * not shown and not offered as a target. When the menu is open its items have a size, and they
  * are here. An element with no frame at all is kept: the reader did not say where it is.
+ *
+ * One pixel counts as no size. A Chromium browser gives the text that is scrolled out of a page
+ * as a strip one pixel high at the edge of the window, and a person cannot see or click that.
  */
+/** The most pixels, of a width or a height, that still count as no size. */
+const THIN = 1;
+
 export function placeShown(root: UiNode): { shown: Placed[]; omitted: number } {
   const hidden = new Set<string>();
   const shown: Placed[] = [];
   for (const p of place(root)) {
     const frame = p.node.frame;
-    const noSize = frame !== undefined && (frame[2] <= 0 || frame[3] <= 0);
+    const noSize = frame !== undefined && (frame[2] <= THIN || frame[3] <= THIN);
     if (noSize || (p.parentKey !== undefined && hidden.has(p.parentKey))) {
       hidden.add(p.key);
     } else {

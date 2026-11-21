@@ -3,7 +3,7 @@
 // has for a web page work on it. macOS only for now. Nothing is installed in the application.
 //
 //   reticle-computer-use --app <name> [--project <folder>] [--port <port>] [--watch <folder>]...
-//                        [--no-electron-switch] [--background-only] [--no-hud]
+//                        [--no-electron-switch] [--background-only] [--no-hud] [--open]
 //   reticle-computer-use --list                   (the applications that are open, as JSON)
 //   reticle-computer-use --app <name> --doctor     (checks that it can work, and says what to do)
 //
@@ -167,9 +167,23 @@ if (!buildHelper('inherit')) {
   say('The helper could not be built. Run with --doctor to see why.');
   process.exit(1);
 }
-const picked = findApp(plan.app);
+let picked = findApp(plan.app);
+if (picked.pid === undefined && plan.open) {
+  // -g leaves the application that is in front where it is. `open` takes the name as an argument
+  // of its own, so a name with a space or a dash is a name and nothing else.
+  if (quiet('open', ['-g', '-a', plan.app]) === undefined) {
+    say(`macOS found no application named ${plan.app} to start.`);
+    process.exit(1);
+  }
+  const until = Date.now() + 15_000;
+  while (Date.now() < until && picked.pid === undefined) {
+    await new Promise((done) => setTimeout(done, 300));
+    picked = findApp(plan.app);
+  }
+}
 if (picked.pid === undefined) {
-  say(`${picked.error} Run with --doctor to check the rest.`);
+  const how = plan.open ? '' : ' To start it and join it, add --open.';
+  say(`${picked.error}${how} Run with --doctor to check the rest.`);
   process.exit(1);
 }
 const pid = picked.pid;

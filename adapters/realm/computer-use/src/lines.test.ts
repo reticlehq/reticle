@@ -117,3 +117,21 @@ describe('writeLines', () => {
     expect(after[3]).toBe('  - row (ref=e6)');
   });
 });
+
+// Chrome gives the text of a page that is scrolled out as a strip one pixel high at the edge of
+// the window. The realm said those posts were on the screen.
+describe('an element one pixel thin', () => {
+  it('is not on the screen', () => {
+    const page = node(UiRole.WINDOW, 'Feed', {
+      frame: [0, 0, 400, 300],
+      children: [
+        node(UiRole.TEXT, 'Post 1', { frame: [10, 0, 50, 1] }),
+        node(UiRole.TEXT, 'Post 2', { frame: [10, 40, 50, 24] }),
+      ],
+    });
+    const written = writeWindows(page, new RefTable());
+    expect(written.omitted).toBe(1);
+    expect(written.tree).not.toContain('Post 1');
+    expect(written.tree).toContain('Post 2');
+  });
+});

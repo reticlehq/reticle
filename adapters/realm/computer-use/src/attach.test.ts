@@ -25,6 +25,14 @@ describe('attachPlan', () => {
       electronSwitch: true,
       foreground: true,
       hud: true,
+      open: false,
+    });
+  });
+
+  it('starts an application that is not open only when the caller says --open', () => {
+    expect(attachPlan(['--app', 'Notes'], {}, '/home', read)).toMatchObject({ open: false });
+    expect(attachPlan(['--app', 'Notes', '--open'], {}, '/home', read)).toMatchObject({
+      open: true,
     });
   });
 
@@ -156,6 +164,17 @@ describe('pickApp', () => {
   it('names what is near, when the name fits nothing exactly', () => {
     expect(pickApp('Studio', running)).toEqual({
       error: 'No application named Studio is open. Did you mean: Visual Studio Code?',
+    });
+  });
+
+  // The list began with the Dock and the wallpaper, and the twelve names had no real application.
+  it('names the applications with a window in the Dock before the helpers of the system', () => {
+    const mixed = [
+      { name: 'Dock', process: 'Dock', pid: 1, regular: false },
+      { name: 'Notes', process: 'Notes', pid: 2, regular: true },
+    ];
+    expect(pickApp('Mail', mixed)).toEqual({
+      error: 'No application named Mail is open. These are open: Notes, Dock.',
     });
   });
 

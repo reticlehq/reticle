@@ -101,6 +101,19 @@ const RESTLESS_LOOKS = 2;
 /** The places in one parent that must change by themselves before the whole parent does. */
 const RESTLESS_PLACES = 3;
 const SCROLL_STEP = 0.1;
+/** Said in the answer of a scroll that was done with a key, because there was no scroll bar. */
+const SCROLL_BY_KEY = 'key';
+
+/** The key that does what a scroll asks: the end or the start for a place, a page for a move. */
+function scrollKeyFor(fraction: unknown, dy: unknown): string | undefined {
+  if ('number' === typeof fraction) {
+    return fraction >= 0.5 ? 'End' : 'Home';
+  }
+  if ('number' === typeof dy && dy !== 0) {
+    return dy > 0 ? 'PageDown' : 'PageUp';
+  }
+  return undefined;
+}
 /** Each check is one question to the operating system. A search this wide is not a check. */
 const MAX_REACH_CHECKS = 8;
 const Field = { VALUE: 'value', STATES: 'states' } as const;
@@ -656,12 +669,34 @@ export class PeerCommands {
         : bars
             .filter((b) => b.parentKey !== undefined && `${key}/`.startsWith(`${b.parentKey}/`))
             .at(-1);
-    if (bar === undefined) {
-      throw new Error('there is no scroll bar to move for this element');
-    }
-    const now = Number(bar.node.value ?? '0');
     const fraction = args['fraction'];
     const dy = args['dy'];
+    if (bar === undefined) {
+      // A page in a Chromium browser has no scroll bar in its tree. A key scrolls it, also when
+      // the browser is not in front. The key goes to the element, or to the page, or to the window.
+      const target =
+        seen.find((s) => s.key === key) ??
+        seen.find((s) => s.node.role === UiRole.DOCUMENT) ??
+        seen[0];
+      const scrollKey = scrollKeyFor(fraction, dy);
+      if (target === undefined || scrollKey === undefined) {
+        throw new Error('there is no scroll bar to move for this element');
+      }
+      const keyed = await this.#drive(
+        target,
+        this.#refs.refFor(target.key),
+        ActKind.KEY,
+        scrollKey,
+        {
+          delivery: Delivery.DIRECT,
+          budgetMs: DEFAULT_SETTLE_MS,
+        },
+      );
+      // Declared: the caller asked for a place or for pixels, and got one key. The place of the
+      // content after the key is not known, so no `fraction` and no `atEnd` are given.
+      return { scrolled: keyed.changes.length > 0, by: SCROLL_BY_KEY, key: scrollKey };
+    }
+    const now = Number(bar.node.value ?? '0');
     let to = now;
     if ('number' === typeof fraction) {
       to = fraction;
