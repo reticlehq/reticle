@@ -2491,11 +2491,6 @@
       "count": 1
     }
   },
-  "src/portal/session/last-act.ts": {
-    "curly": {
-      "count": 2
-    }
-  },
   "src/portal/session/lease-expiry-attribution.test.ts": {
     "curly": {
       "count": 1
@@ -2965,11 +2960,6 @@
   "src/surface/tools/act/durable.ts": {
     "curly": {
       "count": 12
-    }
-  },
-  "src/surface/tools/act/navigation/navigate-arrival.ts": {
-    "curly": {
-      "count": 8
     }
   },
   "src/surface/tools/act/navigation/navigate-result.ts": {

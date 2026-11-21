@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { navigateResult } from './act/navigation/navigate-result.js';
 import {
   absoluteTarget,
+  samePage,
   awaitArrival,
   idsOpenAtDispatch,
   ARRIVAL_TIMEOUT_MS,
@@ -297,6 +298,11 @@ export const BROWSER_TOOLS: ToolDef[] = [
               )
             : null;
         const answer = navigateResult(result, arrival, timeoutMs);
+        // The target did not arrive, and nothing says the tab left: a later check would read the old
+        // document. `assertVerdict` answers unknown until the page reaches the target (#2300).
+        if (false === answer.confirmed && answer.landedOn === undefined) {
+          session.lastAct.markNavigationPending(target, (at) => samePage(at, target));
+        }
         // A lease navigated off its app (an image, a PDF) is kept, and says what still works.
         const offApp =
           null === arrival &&
