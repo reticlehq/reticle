@@ -333,10 +333,11 @@ async function shoot(
   const name = (ext: string): string =>
     `${String(seq).padStart(SEQ_WIDTH, '0')}-${tool.replace(TOOL_PREFIX, '')}${ext}`;
   const predictedPath = join(dir, name(lastExt.get(session.id) ?? JPEG_EXT));
-  const land = taken.then(async (pixels) => {
+  // What the landing wrote: nothing when there was no picture, or why the file is not on disk.
+  const land = taken.then(async (pixels): Promise<{ unwritten?: string }> => {
     if ('string' === typeof pixels) {
       lastSource.set(session.id, NOTHING);
-      return;
+      return {};
     }
     lastSource.set(session.id, pixels.source);
     lastExt.set(session.id, pixels.ext);
@@ -361,20 +362,30 @@ async function shoot(
         join(dir, STEP_SCREENSHOT.MANIFEST_FILE),
         `${JSON.stringify(record)}\n`,
       );
-    } catch {
+    } catch (error) {
       // A disk that cannot take the file loses one picture, never the step.
+      return { unwritten: error instanceof Error ? error.message : String(error) };
     }
+    return {};
   });
-  noteLanding(dir, land);
+  noteLanding(
+    dir,
+    land.then(() => undefined),
+  );
   if (predicted !== undefined) {
     return { path: predictedPath, source: predicted, pending: true };
   }
   // Nothing worked last time: wait, and tell the truth either way.
   const pixels = await taken;
-  await land;
-  return 'string' === typeof pixels
-    ? { error: pixels }
-    : { path: join(dir, name(pixels.ext)), source: pixels.source };
+  const landed = await land;
+  if ('string' === typeof pixels) {
+    return { error: pixels };
+  }
+  // A path without `pending` says the file is on disk, so a failed write is a reason, never a path.
+  if (landed.unwritten !== undefined) {
+    return { error: `no screenshot: the file could not be written (${landed.unwritten})` };
+  }
+  return { path: join(dir, name(pixels.ext)), source: pixels.source };
 }
 
 /** The replay hook that gives every reported flow step its screenshot, filed as `<flow>#<step>`. */
