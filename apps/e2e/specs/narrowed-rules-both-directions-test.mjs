@@ -509,7 +509,10 @@ for (const c of REACH) {
       await cover(true);
     }
     const togglesBefore = await toggles(0);
-    const r = await run(c.target);
+    // The handler throws a refusal; the agent sees it as `{ error }`, so read it the same way.
+    const r = await run(c.target).catch((e) => ({
+      error: e instanceof Error ? e.message : String(e),
+    }));
     if (true === c.covered) {
       await cover(false);
     }
