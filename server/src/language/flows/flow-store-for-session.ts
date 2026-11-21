@@ -26,7 +26,12 @@
 import { dirname } from 'node:path';
 import { FlowStore } from './flows.js';
 import type { NamedFlow } from './change/flow-sources.js';
-import { rootForTarget, sessionTarget, type ProjectTarget } from '@/memory/project/session-root.js';
+import {
+  otherProjectNote,
+  rootForTarget,
+  sessionTarget,
+  type ProjectTarget,
+} from '@/memory/project/session-root.js';
 import { isUnmatchedRoot } from '@/memory/project/dir/reticle-dir.js';
 import type { ProjectId } from '@reticlehq/core';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
@@ -51,6 +56,19 @@ export function flowsForSession(
     ),
     root,
   };
+}
+
+/**
+ * `flowsForSessionId` for a listing, with the note an id-less call needs when it fell back to the
+ * daemon's folder while the connected tabs are another project's (#2427).
+ */
+export function flowsForListing(
+  deps: ToolDeps,
+  sessionId: string | undefined,
+): ReturnType<typeof flowsForSessionId> & { note?: string } {
+  const found = flowsForSessionId(deps, sessionId);
+  const note = otherProjectNote(deps, sessionId, found.root);
+  return note === undefined ? found : { ...found, note };
 }
 
 /** `flowsForSession` for a session id, with the project id to scope the store by. Same refusals. */

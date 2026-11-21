@@ -33,7 +33,7 @@ import { recordingBacktrackWarning } from './recording/recording-backtrack.js';
 import { isValidFlowName, flowPath } from '@/memory/project/dir/reticle-dir.js';
 import { type FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
-import { flowsForSession, flowsForSessionId } from './flow-store-for-session.js';
+import { flowsForListing, flowsForSession, flowsForSessionId } from './flow-store-for-session.js';
 import { rootForTarget, sessionTarget, type ProjectTarget } from '@/memory/project/session-root.js';
 import { originOf } from '@/portal/session/session-manager.js';
 import { resolveSuiteSelection } from './suite-selection.js';
@@ -291,17 +291,21 @@ export const FLOW_TOOLS: ToolDef[] = [
       flows: z.array(
         z.object({ name: z.string(), path: z.string(), createdAt: z.number().optional() }),
       ),
+      note: z
+        .string()
+        .optional()
+        .describe('Set when the list is for another project than the tab.'),
     },
     // Return {name, path} objects to MATCH the declared outputSchema. Returning bare name strings
     // (the prior bug) made schema-validating MCP clients reject the result ("expected object,
     // received string") — caught driving the live demo.
     handler: (deps: ToolDeps, args) => {
-      const target = sessionTarget(deps, asString(args['sessionId']));
-      const { projectId } = target;
-      // The APP's flows, not the daemon's. Listing where the daemon was launched is what showed a
-      // React dashboard a HUD full of Electron and Tauri flows from an unrelated checkout.
-      const { flows: store, root } = flowsForSession(deps, target);
+      // The APP's flows, not the daemon's: a list of the daemon's folder showed a React dashboard a
+      // HUD of Electron and Tauri flows. The note says when the tab is another project's (#2427).
+      const listing = flowsForListing(deps, asString(args['sessionId']));
+      const { flows: store, root, projectId, note } = listing;
       return store.list(projectId).then((names) => ({
+        ...(note === undefined ? {} : { note }),
         // `list` deliberately returns invalid names so they are reported rather than silently
         // dropped — but the declared outputSchema requires `path` on EVERY entry, and omitting it made
         // a strict MCP client reject the whole listing (the agent then sees no flows at all, which is
