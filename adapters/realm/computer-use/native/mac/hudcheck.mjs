@@ -76,7 +76,13 @@ try {
   const status = (await commands.answer(ReticleCommand.QUERY, { role: 'text' })).elements[0]?.name;
   assert.equal(status, 'Slow done');
 
-  process.stdout.write('computer-use hudcheck: 4 of 4 cases held\n');
+  // Stop ends it: no action after it, also not after a time.
+  await press(onHud, 'Stop');
+  await sleep(400);
+  await assert.rejects(press(commands, 'Save'), /stopped Reticle/);
+  assert.equal(hud.stopped(), true);
+
+  process.stdout.write('computer-use hudcheck: 5 of 5 cases held\n');
 } finally {
   hud.close();
   fixture.kill();

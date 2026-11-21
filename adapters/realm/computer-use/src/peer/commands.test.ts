@@ -1193,7 +1193,7 @@ describe('PeerCommands', () => {
    * pause the realm there.
    */
   describe('what the person at the machine sees', () => {
-    const watched = (isPaused = false) => {
+    const watched = (isPaused = false, isStopped = false) => {
       const shown: unknown[][] = [];
       const made = peer();
       const commands = new PeerCommands({
@@ -1217,6 +1217,7 @@ describe('PeerCommands', () => {
           act: (text) => shown.push(['act', text]),
           effect: (text, kind) => shown.push(['effect', text, kind]),
           paused: () => isPaused,
+          stopped: () => isStopped,
           close: () => undefined,
         },
       });
@@ -1238,6 +1239,12 @@ describe('PeerCommands', () => {
         ['act', 'press button "Save"'],
         ['effect', '2 change(s)', 'ok'],
       ]);
+    });
+
+    it('does no action after Stop, and the caller is told why', async () => {
+      const { press, asked } = watched(false, true);
+      await expect(press()).rejects.toThrow(/stopped Reticle/);
+      expect(asked).toEqual([]);
     });
 
     it('stops the realm with Pause: no action is done, and the caller is told why', async () => {

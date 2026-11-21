@@ -179,7 +179,14 @@ if (!(await answers(plan.url))) {
 }
 // The pointer and the window of the realm. Not having them is no reason to stop.
 const hud =
-  plan.hud && buildOne(hudProgram, `${native}hud.swift`, 'ignore') ? macHud(hudProgram) : undefined;
+  plan.hud && buildOne(hudProgram, `${native}hud.swift`, 'ignore')
+    ? macHud(hudProgram, () => {
+        // Stop in the window: leave the application, as Ctrl-C does.
+        say('Stopped in the window of Reticle.');
+        leave();
+      })
+    : undefined;
+let leave = () => process.exit(0);
 const sessionId = `cu-${plan.app}-${String(pid)}`.replace(/[^\w.-]/g, '-');
 const peer = connectPeer({
   url: plan.url,
@@ -228,6 +235,7 @@ const stop = () => {
   peer.close();
   process.exit(0);
 };
+leave = stop;
 process.on('SIGINT', stop);
 process.on('SIGTERM', stop);
 // The terminal was closed.
