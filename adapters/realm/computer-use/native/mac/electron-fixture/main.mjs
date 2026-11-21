@@ -7,7 +7,7 @@ import { app, BrowserWindow } from 'electron';
 
 const page = `<h1>Notes</h1>
 <input aria-label="New note">
-<button id="add">Add</button><button id="slow">Slow</button><button>Dead</button>
+<button id="add" title="Adds the note">Add</button><button id="slow">Slow</button><button>Dead</button>
 <select aria-label="Priority"><option>Low</option><option>High</option></select>
 <label><input type="checkbox"> Pinned</label>
 <p id="count">0 notes</p><ul></ul>

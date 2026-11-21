@@ -96,7 +96,12 @@ try {
   const again = await act('checkbox', 'Pinned', ActionType.CHECK);
   assert.equal(again.alreadyAtValue, true, 'a box that was checked was pressed again');
 
-  process.stdout.write('computer-use electroncheck: 7 of 7 cases held\n');
+  // The tooltip of an element in a web view, with no hover.
+  const add = await commands.answer(ReticleCommand.QUERY, { role: 'button', name: 'Add' });
+  const seen = await commands.answer(ReticleCommand.INSPECT, { ref: add.elements[0]?.ref });
+  assert.equal(seen.help, 'Adds the note', 'the tooltip of the button was not read');
+
+  process.stdout.write('computer-use electroncheck: 8 of 8 cases held\n');
 } finally {
   app.kill();
   await sleep(500);
