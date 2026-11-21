@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — `screenshot.path` is always absolute, and a path without `pending` names a file that is on disk.** An agent got `apps/clinic/.reticle/visual/runs/…/0141-assert.jpg` from `reticle_assert`. A project folder found or registered as a relative path, or a daemon started with a relative root, made every artifact path relative to the daemon's working folder, so the agent's image viewer could not find the file. The artifact root is now made absolute once, where the resolver returns it. Separately, the first capture of a tab named its path even when writing the file failed. It now returns the reason as `error`, and names no path.

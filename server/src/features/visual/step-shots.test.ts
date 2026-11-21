@@ -93,7 +93,9 @@ async function setup(
       if (name === ReticleCommand.CAPTURE && fakes.capturePath !== undefined) {
         return Promise.resolve({ ok: true, result: { ok: true, path: fakes.capturePath } });
       }
-      if (name !== ReticleCommand.RENDER) return Promise.resolve({ ok: false, error: 'no' });
+      if (name !== ReticleCommand.RENDER) {
+        return Promise.resolve({ ok: false, error: 'no' });
+      }
       const result = fakes.render?.();
       return Promise.resolve(
         result === undefined
@@ -230,6 +232,23 @@ describe('takeStepShot', () => {
     ]);
   });
 
+  // #2429: a path without `pending` promises a file that is on disk. A write that failed named one.
+  it('says why, and names no path, when the first capture of a tab could not be written', async () => {
+    const { deps, sessionId } = await setup({ render: rendered(fakeJpeg(8, 6)) });
+    const fs = deps.fs;
+    const failing = {
+      ...fs,
+      mkdir: fs.mkdir.bind(fs),
+      writeFileBytes: () => Promise.reject(new Error('EACCES: permission denied')),
+    } as unknown as ToolDeps['fs'];
+    const shot = await takeStepShot({ ...deps, fs: failing }, sessionId, 'reticle_assert');
+    expect(shot).not.toHaveProperty('path');
+    expect(shot).toMatchObject({
+      error: expect.stringContaining('could not be written') as unknown,
+    });
+    expect(JSON.stringify(shot)).toContain('EACCES');
+  });
+
   it('names an old page SDK, and keeps the reason a lease capture failed', async () => {
     const { deps, sessionId } = await setup({ sdkVersion: '3.6.2', leaseError: 'renderer busy' });
 
@@ -360,7 +379,9 @@ describe('frames between steps', () => {
     vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] });
   });
   afterEach(() => {
-    for (let i = 0; i <= tabs; i += 1) stopFilming(`s${String(i)}`);
+    for (let i = 0; i <= tabs; i += 1) {
+      stopFilming(`s${String(i)}`);
+    }
     vi.useRealTimers();
   });
 
@@ -384,7 +405,9 @@ describe('frames between steps', () => {
     let n = 0;
     const { deps, root, sessionId } = await setup({ browser: () => fakeJpeg(8, 6, n++ % 2) });
     await takeStepShot(deps, sessionId, 'reticle_act');
-    for (let i = 0; i < 20; i += 1) await filmNow(sessionId);
+    for (let i = 0; i < 20; i += 1) {
+      await filmNow(sessionId);
+    }
     await shotsLanded(root, driveRunId(sessionId));
     const shots = await readStepShots(deps.fs, root, driveRunId(sessionId));
     expect(shots.filter((s) => FRAME.TOOL === s.tool).length).toBeLessThanOrEqual(2);
@@ -401,7 +424,9 @@ describe('frames between steps', () => {
     });
     await takeStepShot(deps, sessionId, 'reticle_act');
     const afterStep = captures;
-    for (let i = 0; i < 64; i += 1) await filmNow(sessionId);
+    for (let i = 0; i < 64; i += 1) {
+      await filmNow(sessionId);
+    }
     expect(captures - afterStep).toBeLessThanOrEqual(8);
   });
 
@@ -420,7 +445,9 @@ describe('frames between steps', () => {
       let n = 0;
       const { deps, root, sessionId } = await setup({ browser: () => fakeJpeg(8, 6, n++ % 250) });
       await takeStepShot(deps, sessionId, 'reticle_act');
-      for (let i = 0; i < 2_000; i += 1) await filmNow(sessionId);
+      for (let i = 0; i < 2_000; i += 1) {
+        await filmNow(sessionId);
+      }
       await takeStepShot(deps, sessionId, 'reticle_act');
       await shotsLanded(root, driveRunId(sessionId));
       const shots = await readStepShots(deps.fs, root, driveRunId(sessionId));
