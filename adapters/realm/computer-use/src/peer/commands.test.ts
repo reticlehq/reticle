@@ -1187,6 +1187,66 @@ describe('PeerCommands', () => {
     });
   });
 
+  /**
+   * The realm acts in the background, so nothing on the screen said where it was or what it did.
+   * The person at the machine now sees a pointer of the realm's own and a small window, and can
+   * pause the realm there.
+   */
+  describe('what the person at the machine sees', () => {
+    const watched = (isPaused = false) => {
+      const shown: unknown[][] = [];
+      const made = peer();
+      const commands = new PeerCommands({
+        driver: {
+          ...fakeDriver(),
+          act: (request) => {
+            made.asked.push(request);
+            return Promise.resolve({
+              delivered: true,
+              reachable: true,
+              settled: true,
+              before: read('Ready'),
+              after: read('Saved'),
+            });
+          },
+        },
+        emit: () => undefined,
+        hud: {
+          app: (name) => shown.push(['app', name]),
+          move: (x, y) => shown.push(['move', x, y]),
+          act: (text) => shown.push(['act', text]),
+          effect: (text, kind) => shown.push(['effect', text, kind]),
+          paused: () => isPaused,
+          close: () => undefined,
+        },
+      });
+      const press = async () =>
+        commands.answer(ReticleCommand.ACT, {
+          ref: await refOf(commands, 'Save'),
+          action: ActionType.CLICK,
+        });
+      return { press, shown, asked: made.asked };
+    };
+
+    it('is told the application, where the realm acts, what it does and what that did', async () => {
+      const { press, shown } = watched();
+      await press();
+      expect(shown).toEqual([
+        ['app', 'Notes'],
+        // The middle of the Save button.
+        ['move', 50, 25],
+        ['act', 'press button "Save"'],
+        ['effect', '2 change(s)', 'ok'],
+      ]);
+    });
+
+    it('stops the realm with Pause: no action is done, and the caller is told why', async () => {
+      const { press, asked } = watched(true);
+      await expect(press()).rejects.toThrow(/paused Reticle/);
+      expect(asked).toEqual([]);
+    });
+  });
+
   it('says why a press can have no effect, when the peer was told a reason', async () => {
     const still = { before: read('Ready'), after: read('Ready') };
     const press = async (commands: PeerCommands) =>

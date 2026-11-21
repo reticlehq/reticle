@@ -18,6 +18,15 @@ This package is private. It is not on npm. It runs on macOS only.
 - **It sees that an action put something on the clipboard.** It reads only that the clipboard changed, never what is on it. Over the tools it is a `clipboard.changed` signal.
 - **It can watch folders.** A file that an action writes becomes a `file.written` signal. A claim can then name the file, and not only the words that the application shows.
 
+## What the person at the machine sees
+
+The realm acts in the background, so the pointer of the person does not move. Two things on the screen say what the realm does:
+
+- **A pointer of the realm's own.** A reticle goes to the element the realm acts on. It turns green when the action changed something, and red when the action was refused. A click goes through it.
+- **A small window, as the HUD in a browser.** It names the application that is joined, the action that runs, and what the action did. **Pause** stops the realm: no action is done until the person presses Resume, and the agent is told why.
+
+The window never takes the keyboard, and the person can move it. Give `--no-hud` on a machine with nobody at it.
+
 ## For an agent
 
 Three steps. The application needs no project and no set-up of its own.

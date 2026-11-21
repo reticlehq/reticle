@@ -1,0 +1,21 @@
+/**
+ * What the person at the machine sees of the realm: a pointer of the realm's own, and a small
+ * window that says what the realm does and what that did. The port has no window in it: the
+ * macOS one starts a program that draws, and a test gives a list.
+ */
+export const HudEffect = { OK: 'ok', NONE: 'none', REFUSED: 'refused' } as const;
+export type HudEffect = (typeof HudEffect)[keyof typeof HudEffect];
+
+export interface HudPort {
+  /** The application that is joined. */
+  app(name: string): void;
+  /** The pointer goes to this point of the screen: the middle of the element to act on. */
+  move(x: number, y: number): void;
+  /** What the realm does now, in a few words. */
+  act(text: string): void;
+  /** What that did. */
+  effect(text: string, kind: HudEffect): void;
+  /** The person pressed "Pause" in the window. The realm then does no action. */
+  paused(): boolean;
+  close(): void;
+}

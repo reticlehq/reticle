@@ -3,7 +3,7 @@
 // has for a web page work on it. macOS only for now. Nothing is installed in the application.
 //
 //   reticle-computer-use --app <name> [--project <folder>] [--port <port>] [--watch <folder>]...
-//                        [--no-electron-switch] [--background-only]
+//                        [--no-electron-switch] [--background-only] [--no-hud]
 //   reticle-computer-use --list                   (the applications that are open, as JSON)
 //   reticle-computer-use --app <name> --doctor     (checks that it can work, and says what to do)
 //
@@ -24,6 +24,7 @@ import {
   electronWarning,
   isElectron,
   joinedAnswer,
+  macHud,
   pickApp,
 } from '../dist/index.js';
 
@@ -65,16 +66,18 @@ const findApp = (app) => {
  * ponytail: built on first use, which needs the Xcode command-line tools. Ship a signed helper
  * when this package is published.
  */
-const buildHelper = (stdio) => {
-  if (existsSync(helper) && statSync(helper).mtimeMs >= statSync(source).mtimeMs) return true;
+const hudProgram = `${native}build/reticle-hud`;
+const buildOne = (program, from, stdio) => {
+  if (existsSync(program) && statSync(program).mtimeMs >= statSync(from).mtimeMs) return true;
   mkdirSync(`${native}build`, { recursive: true });
   try {
-    execFileSync('swiftc', ['-O', source, '-o', helper], { stdio });
+    execFileSync('swiftc', ['-O', from, '-o', program], { stdio });
     return true;
   } catch {
     return false;
   }
 };
+const buildHelper = (stdio) => buildOne(helper, source, stdio);
 const answers = (url) =>
   new Promise((resolve) => {
     const { hostname, port } = new URL(url);
@@ -174,6 +177,9 @@ if (!(await answers(plan.url))) {
     await new Promise((resolve) => setTimeout(resolve, 1000));
   }
 }
+// The pointer and the window of the realm. Not having them is no reason to stop.
+const hud =
+  plan.hud && buildOne(hudProgram, `${native}hud.swift`, 'ignore') ? macHud(hudProgram) : undefined;
 const sessionId = `cu-${plan.app}-${String(pid)}`.replace(/[^\w.-]/g, '-');
 const peer = connectPeer({
   url: plan.url,
@@ -183,6 +189,7 @@ const peer = connectPeer({
   driver: new MacDriver({ helper, app: plan.app, pid }),
   ...(warning === undefined ? {} : { noEffectNote: warning }),
   foreground: plan.foreground,
+  ...(hud === undefined ? {} : { hud }),
   ...(0 === plan.watch.length ? {} : { workspace: nodeWorkspace(plan.watch, { exclude: [] }) }),
   now: () => Date.now(),
 });
@@ -214,6 +221,7 @@ if (plan.token === undefined) {
   );
 }
 const stop = () => {
+  hud?.close();
   if (switched) {
     quiet(helper, ['web-tree', String(pid), 'off']);
   }

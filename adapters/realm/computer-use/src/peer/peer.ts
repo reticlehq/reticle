@@ -15,6 +15,7 @@ import type { WorkspacePort } from '@reticlehq/cli-realm';
 import { WebSocket } from 'ws';
 
 import type { UiDriver } from '../driver.js';
+import type { HudPort } from '../hud/port.js';
 import { PEER_ACTIONS, PEER_COMMANDS, PeerCommands } from './commands.js';
 
 /** For a bridge with no token: it admits a dial with no Origin only when it has one. */
@@ -70,6 +71,8 @@ export interface PeerInput {
   noEffectNote?: string;
   /** False: never the foreground, whatever a caller asks. See `PeerCommandsDeps`. */
   foreground?: boolean;
+  /** What the person at the machine sees of the realm. See `PeerCommandsDeps`. */
+  hud?: HudPort;
   /** How long to wait before the first new dial when the bridge goes away. The default is one second. */
   retryMs?: number;
   now: () => number;
@@ -115,6 +118,7 @@ export function connectPeer(input: PeerInput): Peer {
     ...(input.workspace === undefined ? {} : { workspace: input.workspace }),
     ...(input.noEffectNote === undefined ? {} : { noEffectNote: input.noEffectNote }),
     ...(input.foreground === undefined ? {} : { foreground: input.foreground }),
+    ...(input.hud === undefined ? {} : { hud: input.hud }),
   });
   const health = (reason: string): void => {
     emit(EventType.PAGE_HEALTH, {
