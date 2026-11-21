@@ -20,6 +20,7 @@ export interface AxNode {
   focused?: boolean | undefined;
   selected?: boolean | undefined;
   id?: string | undefined;
+  help?: string | undefined;
   frame?: number[] | undefined;
   /** The place among all the children of the parent, when the helper left some out. */
   i?: number | undefined;
@@ -39,6 +40,7 @@ export const AxNodeSchema: z.ZodType<AxNode> = z.lazy(() =>
     focused: z.boolean().optional(),
     selected: z.boolean().optional(),
     id: z.string().optional(),
+    help: z.string().optional(),
     frame: z.array(z.number()).optional(),
     i: z.number().optional(),
     notShown: z.number().optional(),
@@ -157,6 +159,7 @@ export function fromAx(ax: AxNode): FromAx {
       ...(frame === undefined ? {} : { frame }),
       ...(node.i === undefined ? {} : { index: node.i }),
       ...(id === undefined ? {} : { id }),
+      ...(node.help === undefined ? {} : { help: node.help }),
       ...(node.notShown === undefined || 0 === node.notShown ? {} : { notShown: node.notShown }),
       children: node.children.map(convert),
     };

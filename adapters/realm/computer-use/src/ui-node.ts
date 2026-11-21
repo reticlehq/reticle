@@ -53,6 +53,11 @@ export interface UiNode {
    * words on the element change, so a saved flow finds the element by it. Absent: none was given.
    */
   id?: string;
+  /**
+   * The words a person gets when the pointer rests on the element: its tooltip. The realm reads
+   * them from the tree. It does not move a pointer.
+   */
+  help?: string;
   children: readonly UiNode[];
 }
 

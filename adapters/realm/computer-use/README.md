@@ -96,7 +96,7 @@ Read these before you rely on a result.
 - **An action with its proof takes about 350 ms through the tools.** The peer calls an action finished after 150 ms with no change, and it goes on looking: a change that comes later is sent when it comes. A caller of the realm class looks once, so it waits for 500 ms with no change; `RETICLE_AX_QUIET_MS` sets that time.
 - **The realm trusts the place that an application gives for an element.** Some applications give a wrong place on a second display with a high resolution. The question "is this element on top" is then asked at the wrong place, and the realm refuses the action. It does not act on a guess.
 - **Shortcuts use the key places of a US keyboard.**
-- **A drag, a hover and a right-click are not built.**
+- **A drag, a hover and a right-click are not built.** The tooltip of an element, which is what a person most often hovers for, is in the answer to `reticle_look { action: "element" }` as `help`: the realm reads it from the tree.
 - **The tree alone proves little.** The application draws the tree, so a text on the screen is the application's own word. Watch a folder and name the file when the action writes one.
 
 ## Check it

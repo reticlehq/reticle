@@ -1,5 +1,5 @@
 // A small application for the computer-use realm to drive. Each control is one case:
-//   Save     changes the status text at once.
+//   Save     changes the status text at once. It has a tooltip.
 //   Slow     changes the status text after 400 ms.
 //   Dead     does nothing.
 //   Steps    changes the status text at once, and again 300 ms later.
@@ -66,7 +66,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
     status.setAccessibilityIdentifier("status")
     window.contentView!.addSubview(field)
     window.contentView!.addSubview(status)
-    _ = button("Save", 20, #selector(save))
+    button("Save", 20, #selector(save)).toolTip = "Saves the title"
     _ = button("Slow", 100, #selector(slow))
     _ = button("Dead", 180, nil)
     let covered = button("Covered", 260, #selector(save))
