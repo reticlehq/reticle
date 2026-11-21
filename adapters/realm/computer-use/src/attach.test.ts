@@ -133,6 +133,28 @@ describe('attachPlan', () => {
     expect(alone['needsSessionId']).toBe(true);
     expect(JSON.stringify(alone['next'])).toContain('sessionId: \\"cu-Notes-7\\"');
   });
+
+  // An application that was started behind a full-screen Space has its window on another Space.
+  // The join said "joined", and the first look gave a tree with nothing to act on.
+  it('says that the window cannot be read when it is on another Space, and what brings it', () => {
+    const away = joinedAnswer({ app: 'Notes', foreground: true }, 'cu-Notes-7', 7, {
+      windows: 0,
+      windowsNotOnScreen: 1,
+    });
+    expect(away['readable']).toBe(false);
+    expect(String(away['why'])).toContain('another Space');
+    expect(String(away['why'])).toContain('foreground: true');
+    const kept = joinedAnswer({ app: 'Notes', foreground: false }, 'cu-Notes-7', 7, {
+      windows: 0,
+      windowsNotOnScreen: 1,
+    });
+    expect(String(kept['why'])).not.toContain('foreground: true');
+    const here = joinedAnswer({ app: 'Notes', foreground: true }, 'cu-Notes-7', 7, {
+      windows: 1,
+      windowsNotOnScreen: 1,
+    });
+    expect(here).not.toHaveProperty('readable');
+  });
 });
 
 /**

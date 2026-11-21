@@ -248,7 +248,20 @@ if (switched) {
   quiet(helper, ['web-tree', String(pid), 'on']);
 }
 say(`${plan.app} (${String(pid)}) is joined to ${plan.url}.`);
-const joined = joinedAnswer(plan, sessionId, pid);
+// What can be read now. An application that was started behind a full-screen Space has its
+// window on another Space, and the answer must say so before the first look gives nothing.
+let seen;
+try {
+  const first = JSON.parse(quiet(helper, ['tree', String(pid)]) ?? '{}');
+  const windows = (first.tree?.children ?? []).filter((c) => 'AXWindow' === c.role).length;
+  seen = { windows, windowsNotOnScreen: first.windowsNotOnScreen ?? 0 };
+} catch {
+  seen = undefined;
+}
+const joined = joinedAnswer(plan, sessionId, pid, seen);
+if (false === joined.readable) {
+  say(joined.why);
+}
 say(
   joined.needsSessionId
     ? `Give this on each tool call: sessionId "${sessionId}". Stop with Ctrl-C.`

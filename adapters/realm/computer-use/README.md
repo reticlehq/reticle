@@ -45,7 +45,7 @@ The window never takes the keyboard, and the person can move it. Give `--no-hud`
 Three steps. The application needs no project and no set-up of its own.
 
 1. See what is open: `reticle-computer-use --list` prints `{"apps":[{"name","process"}]}`.
-2. Join one, and leave the command running: `reticle-computer-use --app "<name>"`. It waits for the Reticle daemon when there is none yet, and then prints one line of JSON: `{"joined":true,"sessionId":"…","needsSessionId":true,"next":[…]}`. `next` says what to call. Add `--open` to start an application that is not open; it starts behind the application in front.
+2. Join one, and leave the command running: `reticle-computer-use --app "<name>"`. It waits for the Reticle daemon when there is none yet, and then prints one line of JSON: `{"joined":true,"sessionId":"…","needsSessionId":true,"next":[…]}`. `next` says what to call. Add `--open` to start an application that is not open; it starts behind the application in front. When the person works in a full-screen Space, that window is on another Space and cannot be read: the answer then has `readable: false` and `why`, which says how to bring the application to the front.
 3. Use the tools you have for a web page. `reticle_look { action: "page" }` gives the window. `reticle_act_and_wait { ref, action, until }` acts and proves the consequence.
 
 Give the `sessionId` of that line on each call; `next` shows the calls with it. You set no switch for an Electron application: the command sets it. When an action is refused, the refusal says what to do: for a double-click, a hover, a drag or the menu bar, it says to send the action again with `args: { foreground: true }`.

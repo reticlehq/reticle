@@ -160,8 +160,13 @@ export function joinedAnswer(
   plan: Pick<AttachPlan, 'app' | 'projectId' | 'foreground'>,
   sessionId: string,
   pid: number,
+  seen?: { windows: number; windowsNotOnScreen: number },
 ): Record<string, unknown> {
   const inProject = plan.projectId !== undefined;
+  const away = seen !== undefined && 0 === seen.windows && seen.windowsNotOnScreen > 0;
+  const bring = plan.foreground
+    ? `Send the action \`focus\` on the line of the application with args: { foreground: true }. It brings ${plan.app} to the front, and the screen of the person goes to it.`
+    : `Ask the person at the machine to bring ${plan.app} to the Space in front.`;
   const session = inProject ? '' : `, sessionId: "${sessionId}"`;
   return {
     joined: true,
@@ -170,6 +175,12 @@ export function joinedAnswer(
     sessionId,
     needsSessionId: !inProject,
     foreground: plan.foreground,
+    ...(away
+      ? {
+          readable: false,
+          why: `The window of ${plan.app} is on another Space or made small, and the operating system gives no elements there. ${bring}`,
+        }
+      : {}),
     next: [
       `reticle_look { action: "page"${session} } gives the window as lines with refs.`,
       `reticle_act_and_wait { ref, action, until${session} } acts and proves the consequence in one call.`,
