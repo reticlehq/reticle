@@ -418,9 +418,34 @@ func run(_ args: [String]) throws {
     // reader. It costs the application some speed, so it is set only when the person asks, and
     // set back when the realm leaves.
     let on = args.count > 3 && args[3] == "on"
+    // The tree as it is before the switch, read until two reads agree: a web view makes its tree
+    // when it is first asked, and that first growth must not be taken for the switch.
+    var before = snapshot(app).json
+    for _ in 0..<12 {
+      Thread.sleep(forTimeInterval: 0.15)
+      let again = snapshot(app).json
+      if again == before { break }
+      before = again
+    }
     let result = AXUIElementSetAttributeValue(
       app, "AXManualAccessibility" as CFString, on ? kCFBooleanTrue : kCFBooleanFalse)
     readBefore.remove(pid)
+    // The switch is not in effect at once. For some seconds the application gives the same tree
+    // as before, answers "done" to a press, and loses the press. When the switch is in effect the
+    // tree is another one (a heading gets its level, for one). So wait until the tree has changed
+    // and two reads agree, for five seconds at most. With no change in that time, the tree was
+    // the full one already.
+    if on && result == .success {
+      var last = before
+      var changed = false
+      for _ in 0..<34 {
+        Thread.sleep(forTimeInterval: 0.15)
+        let now = snapshot(app).json
+        if now != before { changed = true }
+        if changed && now == last { break }
+        last = now
+      }
+    }
     try emit(["set": result == .success])
   }
 

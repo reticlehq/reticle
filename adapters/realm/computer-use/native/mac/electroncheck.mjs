@@ -57,6 +57,8 @@ async function act(role, name, action, args) {
   const result = await commands.answer(ReticleCommand.ACT, { ref, action, args });
   return result.effect;
 }
+const texts = async () =>
+  (await commands.answer(ReticleCommand.QUERY, { role: 'text' })).elements.map((e) => e.name);
 const press = (name) => act('button', name, ActionType.CLICK, { settleMs: 1200 });
 
 try {
@@ -66,15 +68,21 @@ try {
   assert.equal(off.note, NOTE, 'a press with no effect did not say why');
 
   execFileSync(helper, ['web-tree', String(app.pid), 'on']);
-  await sleep(1000);
   const filled = await act('textbox', 'New note', ActionType.FILL, { value: 'Buy milk' });
   assert.equal(filled.valueChanged, true, 'the field did not take the value');
+  // The words on the page are the proof, and not "something changed": the first press after the
+  // switch was lost once, and a change in the tree that the press did not make hid it.
   const added = await press('Add');
-  assert.ok(added.domMutatedWithin > 0, 'a press did nothing with the switch on');
+  assert.deepEqual(
+    await texts(),
+    ['Notes', '1 notes', 'Buy milk'],
+    'the press did not add the note',
+  );
   assert.equal(added.note, undefined);
 
   const slow = await press('Slow');
   assert.ok(slow.domMutatedWithin > 0, 'a slow effect was not given to its own press');
+  assert.ok((await texts()).includes('slow done'), 'the slow press did nothing');
   const dead = await press('Dead');
   assert.equal(dead.domMutatedWithin, 0, 'a dead button was given the effect of another press');
 
