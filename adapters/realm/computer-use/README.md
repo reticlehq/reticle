@@ -91,7 +91,7 @@ Read these before you rely on a result.
 - **The realm reads one application.** It reads the elements, the settings and the disk count of the application it joined, and the folders you name. Of another application it reports only the name and the role of an element, when that application covers the target. It reports that the clipboard changed, and never what is on it.
 - **The menu bar needs the application in front.** The menu bar of an application that is not in front is not on the screen. It is not read and cannot be pressed. A menu in the window (a pull-down button) works in any case.
 - **An application must give an accessibility tree.** A canvas and a game have no elements to read. A browser can give very little until a switch is set in it, and this realm does not set that switch.
-- **An Electron application needs its switch for a press.** It shows its elements with no switch, answers "done" to a press, and does nothing. `reticle-computer-use` says so when it joins one. Give `--electron-switch`: the realm sets the accessibility switch that Electron documents for such tools, and sets it back when you stop. The switch costs the application some speed. A command that is killed with no warning (`kill -9`) cannot set it back: the switch then stays on until the application is closed. This was measured on Electron 45.
+- **An Electron application needs its switch for a press.** It shows its elements with no switch, answers "done" to a press, and does nothing. `reticle-computer-use` says so when it joins one. Give `--electron-switch`: the realm sets the accessibility switch that Electron documents for such tools, and sets it back when you stop. The switch is not in effect at once: for two or three seconds the application still loses a press. The command waits until the tree of the application has changed, and joins after that. The switch costs the application some speed. A command that is killed with no warning (`kill -9`) cannot set it back: the switch then stays on until the application is closed. This was measured on Electron 45.
 - **A large window is slow to read.** The cost is for each element. A table is read only for the rows on the screen, and its line says how many rows are not shown.
 - **An action with its proof takes about 350 ms through the tools.** The peer calls an action finished after 150 ms with no change, and it goes on looking: a change that comes later is sent when it comes. A caller of the realm class looks once, so it waits for 500 ms with no change; `RETICLE_AX_QUIET_MS` sets that time.
 - **The realm trusts the place that an application gives for an element.** Some applications give a wrong place on a second display with a high resolution. The question "is this element on top" is then asked at the wrong place, and the realm refuses the action. It does not act on a guess.
@@ -107,7 +107,9 @@ Read these before you rely on a result.
 
 `native/mac/electroncheck.mjs` starts a small Electron application and drives it through the peer. It checks that a press does nothing and says why with the switch off, that a press works with the switch on, and that a slow effect belongs to its own press. It is skipped when Electron is not installed.
 
-All three, one after the other, on a Mac with the Accessibility permission:
+`conformance/computer-use-journey.mjs` (run it with `node` from the root of the repository) does a whole journey on the same Electron application through a real bridge and the tools an agent has: it fills a field, adds a note, chooses from a list and checks a box, and each step must be proved. It saves the journey as a flow, opens a new application, and replays the flow with no model.
+
+The first three, one after the other, on a Mac with the Accessibility permission:
 
 ```
 pnpm --filter @reticlehq/computer-use check:live
