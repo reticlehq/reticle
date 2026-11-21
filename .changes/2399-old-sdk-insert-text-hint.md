@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — a page with an older SDK left the agent looping, because the recovery hint blamed the agent's arguments.** The `fill` hint says to use `insertText`. `insertText` arrived on 2026-11-10, so a page that loads an older `@reticlehq/browser` answers `unknown action 'insertText'`. The catch-all `unknown action '<verb>'` rule read that answer as a bad argument, so the agent retried the same call and never typed into the editor. The `fill` hint now ends by naming that answer, and the answer gets its own hint, which names the package to update. Closes [#2399](https://github.com/reticlehq/reticle/issues/2399).
