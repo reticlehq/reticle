@@ -25,6 +25,8 @@ The realm acts in the background, so the pointer of the person does not move. Tw
 - **A pointer of the realm's own.** An arrow, as a mouse has, in the colour of Reticle. It goes to the element the realm acts on, and a ring spreads from its tip when the realm acts: a light ring for an action, a red one for an action that was refused. A click goes through it.
 - **The HUD, as in a browser.** The same colours, shapes and mark. A toolbar with the mark, the application that is joined and a button; over it, the last actions with what each one did. The ring round the mark has the colour of the state: blue while the realm acts, amber while it waits or is paused, red after a refusal. **Pause** stops the realm: no action is done until the person presses the button again, and the agent is told why. **Stop** ends it: the realm does no more actions and leaves the application, as Ctrl-C on the command does.
 
+- **A glow round the window the realm works in**, as the glow at the edge of a page in a browser: blue while an action runs, red when it was refused. It goes away a moment after the action.
+
 The realm does not read its own window and does not act on it, so an agent cannot press the button of the person.
 
 The window never takes the keyboard, and the person can move it. Give `--no-hud` on a machine with nobody at it.

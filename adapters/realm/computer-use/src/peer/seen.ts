@@ -19,6 +19,8 @@ export interface Seen extends Placed {
   visible: boolean;
   /** The name of the dialog the element is in, or an empty string. */
   dialog: string;
+  /** The frame of the window the element is in. Absent: it is in no window. */
+  windowFrame?: readonly [number, number, number, number];
 }
 
 /** What is on the screen. An element with no place on it, as in a closed menu, is not here. */
@@ -49,6 +51,9 @@ export function see(root: UiNode): Seen[] {
       ...p,
       visible: sized && inside,
       dialog: 'dialog' === dialog?.node.role ? dialog.node.name : '',
+      ...('window' === window?.node.role && window.node.frame !== undefined
+        ? { windowFrame: window.node.frame }
+        : {}),
     };
   });
 }

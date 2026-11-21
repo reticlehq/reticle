@@ -515,6 +515,9 @@ export class PeerCommands {
     if (frame !== undefined) {
       hud?.move(frame[0] + frame[2] / 2, frame[1] + frame[3] / 2);
     }
+    if (target.windowFrame !== undefined) {
+      hud?.glow(target.windowFrame);
+    }
     hud?.act(`${kind} ${target.node.role} "${target.node.name}"`);
     // What changed before this action is not its effect: say it first, on its own.
     this.sendFileChanges();
