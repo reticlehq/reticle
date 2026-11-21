@@ -71,6 +71,7 @@ export {
   RETICLE_PRE_ATTACH_ERRORS,
 } from './wire/constants/console-event.js';
 export {
+  ALLOW_OCCLUDED_ARG,
   ActionType,
   ActionWarning,
   ComponentStateReason,

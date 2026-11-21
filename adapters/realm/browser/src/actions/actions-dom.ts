@@ -6,7 +6,12 @@ import { nativeFrame } from '@/timers/native/native-timers.js';
 import { asSyntheticInput } from './synthetic/synthetic-input.js';
 import type { ActionTarget } from '@/dom/realm.js';
 import { type BoxFraction } from '@reticlehq/core';
-import { ClickButton, clickButtonFromArgs, pointInBox } from '@reticlehq/core/page';
+import {
+  ALLOW_OCCLUDED_ARG,
+  ClickButton,
+  clickButtonFromArgs,
+  pointInBox,
+} from '@reticlehq/core/page';
 import { type ModifierFlags, pressModifiers } from './actions-press.js';
 
 interface ClickGeometry {
@@ -291,8 +296,18 @@ export function clickGeometry(el: ActionTarget): ClickGeometry {
     scrolledIntoView = true;
     rect = el.getBoundingClientRect();
   }
+  let hit = hitTest(el, rect);
+  // Covered where it sits, but a person scrolls a control clear of a fixed bar or a sticky header
+  // before clicking it (#2317). Scroll once to the middle and test again: a modal still covers it
+  // there, a bar at the edge does not. The first reading is what a refusal would have stood on.
+  if (hit.occluded && !scrolledIntoView && 'function' === typeof el.scrollIntoView) {
+    scrollIntoViewNow(el, { block: 'center', inline: 'center' });
+    scrolledIntoView = true;
+    rect = el.getBoundingClientRect();
+    hit = hitTest(el, rect);
+  }
   const stillOff = scrolledIntoView && isOffViewport(el, rect);
-  return { ...hitTest(el, rect), scrolledIntoView, ...(stillOff ? { offViewport: true } : {}) };
+  return { ...hit, scrolledIntoView, ...(stillOff ? { offViewport: true } : {}) };
 }
 
 export function firePointer(
@@ -635,4 +650,34 @@ export function assertNotLeaving(el: Element): void {
         'so a person could not click it: look again once it has gone and act on what is open',
     );
   }
+}
+
+/**
+ * Refuse a click whose target another element covers, unless the call allows it.
+ *
+ * Synthetic dispatch reaches the target whatever is on top, so a covered button still fired: a
+ * modal over "Review & sign" opened a second signing dialog while the verdict only said `unknown`.
+ * The refusal names the cover, which is usually the thing to close first.
+ */
+export function assertNotOccluded(
+  geometry: ClickGeometry,
+  args: Record<string, unknown>,
+  /**
+   * A target that is not visible is not "covered": the hit test at its place lands on whatever is
+   * drawn there instead, such as the control beside a closed `<details>`. Its verdict already says
+   * it is not visible, so the cover story would be the wrong one.
+   */
+  visible: boolean,
+): void {
+  if (!visible || !geometry.occluded || true === args[ALLOW_OCCLUDED_ARG]) {
+    return;
+  }
+  const cover = geometry.occluderName ?? 'another element';
+  // The fix leads, the opt-out comes last and narrow. A refusal that ends on its own bypass teaches
+  // the agent to pass it every time, which is how `confirmDangerous` stopped guarding (#2272).
+  throw new Error(
+    `click refused: ${cover} covers the target, so a person could not click it. Close or dismiss ` +
+      `${cover} first, then act again. A transparent cover still catches a click. Only when you ` +
+      `checked that a person's click reaches the target anyway, pass args.${ALLOW_OCCLUDED_ARG}=true`,
+  );
 }

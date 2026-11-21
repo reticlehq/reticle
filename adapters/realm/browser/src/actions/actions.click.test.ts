@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ActionWarning } from '@reticlehq/core';
+import { ActionWarning, ALLOW_OCCLUDED_ARG } from '@reticlehq/core';
 import { executeAction } from './actions.js';
 import { refs } from '@/dom/addressing/refs.js';
 
@@ -86,7 +86,7 @@ describe('click: hit-test occlusion honesty', () => {
     btn.getBoundingClientRect = rect({ left: 0, top: 0, width: 100, height: 40 });
     document.elementFromPoint = () => cover;
 
-    const r = await executeAction(refs.refFor(btn), 'click');
+    const r = await executeAction(refs.refFor(btn), 'click', { [ALLOW_OCCLUDED_ARG]: true });
 
     expect(r.effect.occluded).toBe(true);
     expect(r.warning).toBe(ActionWarning.CLICK_OCCLUDED);

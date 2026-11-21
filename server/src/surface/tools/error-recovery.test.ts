@@ -417,6 +417,18 @@ describe('browser-side action guards are recognized refusals, not unknown defect
     ).toBe(RECOVERY.CONFIRM_DANGEROUS);
   });
 
+  // A covered-click refusal leads with closing the cover. An unrecognised refusal invited a defect
+  // report and gave no next step, and the bypass alone is what an agent would reach for.
+  it('the covered-click refusal is recognised, and its hint leads with closing the cover', () => {
+    const hint = recoveryFor(
+      'click refused: dialog "Reports & AI" covers the target, so a person could not click it. ' +
+        'Close or dismiss dialog "Reports & AI" first, then act again. A transparent cover still catches ' +
+        "a click. Only when you checked that a person's click reaches the target anyway, pass args.allowOccluded=true",
+    );
+    expect(hint).toBe(RECOVERY.COVERED_TARGET);
+    expect(hint?.indexOf('allowOccluded') ?? -1).toBeGreaterThan(hint?.indexOf('Close') ?? 0);
+  });
+
   // The text named `deploy` and `publish`, which the classifier excludes on purpose, so an agent
   // read a wrong reason for the refusal. Every word it names must be one the guard stops on.
   it('the destructive-action block names only words the guard stops on', () => {

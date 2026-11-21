@@ -508,9 +508,26 @@ for (const c of REACH) {
     if (true === c.covered) {
       await cover(true);
     }
-    const r = await run(c.target);
+    const togglesBefore = await toggles(0);
+    // The handler throws a refusal; the agent sees it as `{ error }`, so read it the same way.
+    const r = await run(c.target).catch((e) => ({
+      error: e instanceof Error ? e.message : String(e),
+    }));
     if (true === c.covered) {
       await cover(false);
+    }
+    if (true === c.covered) {
+      // A visible target under a cover is refused before the click is sent: a person could not
+      // click it, and a click that reaches it anyway can submit or sign (the covered-click refusal).
+      chk('the click is not verified yes', VERIFIED_YES !== r?.verified, verdictOf(r));
+      chk(
+        'the refusal names the cover and says why a person could not click it',
+        // A single act carries it as `error`; a sequence carries it on the refused step.
+        /covers the target/.test(`${String(r?.error ?? '')} ${JSON.stringify(r?.steps ?? [])}`),
+        `${String(r?.error ?? '')} ${JSON.stringify(r?.steps ?? [])}`.slice(0, 160),
+      );
+      chk('the refused click sent no request', togglesBefore === (await toggles(0)));
+      continue;
     }
     chk('the click is not verified yes', VERIFIED_YES !== r?.verified, verdictOf(r));
     chk('the reason says why a person could not click it', String(r?.because ?? '').includes(c.because));

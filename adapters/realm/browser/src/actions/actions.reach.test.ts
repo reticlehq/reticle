@@ -5,6 +5,7 @@
  * jsdom has no layout, so boxes and hit tests are stubbed.
  */
 import { afterEach, describe, expect, it } from 'vitest';
+import { ALLOW_OCCLUDED_ARG } from '@reticlehq/core';
 import { executeAction } from './actions.js';
 import { refs } from '@/dom/addressing/refs.js';
 import { setPresenterVisible } from '@/dom/dom-ignore.js';
@@ -28,7 +29,7 @@ describe('a click a person could not make', () => {
       configurable: true,
       writable: true,
     });
-    const r = await executeAction(refs.refFor(link), 'click');
+    const r = await executeAction(refs.refFor(link), 'click', { [ALLOW_OCCLUDED_ARG]: true });
     expect(r.effect.occluded).toBe(true);
     expect(r.effect.occluderName).toBe('[data-testid="sheet"]');
   });

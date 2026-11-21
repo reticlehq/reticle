@@ -136,6 +136,7 @@ describe('tool_refused carries the cause inside the bucket', () => {
         'chromium_path',
         'command_timeout',
         'confirm_dangerous',
+        'covered_target',
         'flow_step_missing',
         'harness_locked',
         'harness_off',

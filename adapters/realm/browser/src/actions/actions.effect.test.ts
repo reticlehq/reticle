@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { ActionType, ActionWarning, ReticleCommand } from '@reticlehq/core';
+import { ActionType, ActionWarning, ReticleCommand, ALLOW_OCCLUDED_ARG } from '@reticlehq/core';
 import { executeAction, executeSequence } from './actions.js';
 import { createCommandRegistry } from '@/commands/commands.js';
 import { registerAdapter, type ReticleAdapter } from '@/registry/stores/adapters.js';
@@ -499,7 +499,7 @@ describe('action effect: occludedBy names the blocker', () => {
     const overlay = document.querySelector('#sheet') as HTMLElement;
     overlayOver(button, overlay);
 
-    const r = await executeAction(refs.refFor(button), 'click');
+    const r = await executeAction(refs.refFor(button), 'click', { [ALLOW_OCCLUDED_ARG]: true });
     expect(r.effect.occluded).toBe(true);
     const by = r.effect.occludedBy;
     expect(by, 'an occlusion the agent cannot name is one it cannot clear').not.toBeNull();
