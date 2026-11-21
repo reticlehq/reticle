@@ -9,7 +9,7 @@
 //
 // The terminal needs Accessibility permission. The command stays open until you stop it.
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { connect } from 'node:net';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
@@ -20,18 +20,33 @@ import {
   MacDriver,
   attachPlan,
   connectPeer,
+  OWNER_SETTINGS_FILE,
+  STOPPED_FILE,
   doctorReport,
   electronWarning,
   isElectron,
   joinedAnswer,
   macHud,
   pickApp,
+  withOwnerLimits,
 } from '../dist/index.js';
 
 const say = (line) => process.stderr.write(`${line}\n`);
 const read = (path) => (existsSync(path) ? readFileSync(path, 'utf8') : undefined);
 
-const plan = attachPlan(process.argv.slice(2), process.env, homedir(), read);
+// The limits of the person at the machine, from files of their own. No flag lifts them.
+const ownerDir = `${homedir()}/.reticle`;
+const stoppedPath = `${ownerDir}/${STOPPED_FILE}`;
+const asked = attachPlan(process.argv.slice(2), process.env, homedir(), read);
+const plan =
+  'error' in asked
+    ? asked
+    : withOwnerLimits(
+        asked,
+        read(`${ownerDir}/${OWNER_SETTINGS_FILE}`),
+        read(stoppedPath),
+        stoppedPath,
+      );
 const LIST = process.argv.includes('--list');
 if ('error' in plan && !LIST) {
   say(plan.error);
@@ -182,7 +197,12 @@ const hud =
   plan.hud && buildOne(hudProgram, `${native}hud.swift`, 'ignore')
     ? macHud(hudProgram, () => {
         // Stop in the window: leave the application, as Ctrl-C does.
-        say('Stopped in the window of Reticle.');
+        // Stop is for good: the file stays until the person removes it, and no join works before.
+        mkdirSync(ownerDir, { recursive: true });
+        writeFileSync(stoppedPath, `${new Date().toISOString()}\n`);
+        say(
+          `Stopped in the window of Reticle. No application is joined until you remove ${stoppedPath}.`,
+        );
         leave();
       })
     : undefined;

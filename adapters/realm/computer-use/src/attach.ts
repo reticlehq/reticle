@@ -215,3 +215,49 @@ export function pickApp(
       : `These are open: ${names.slice(0, NAMES_GIVEN).join(', ')}.`;
   return { error: `No application named ${wanted} is open. ${hint}` };
 }
+
+/** The file of the person at the machine: limits that no flag of the command can lift. */
+export const OWNER_SETTINGS_FILE = 'computer-use.json';
+/** The file that is there after Stop in the window: no application is joined while it is. */
+export const STOPPED_FILE = 'computer-use.stopped';
+
+function ownerSettings(text: string | undefined): { backgroundOnly: boolean; hud: boolean } {
+  let parsed: unknown;
+  try {
+    parsed = text === undefined ? {} : JSON.parse(text);
+  } catch {
+    parsed = {};
+  }
+  const record: Record<string, unknown> =
+    'object' === typeof parsed && null !== parsed ? (parsed as Record<string, unknown>) : {};
+  return { backgroundOnly: true === record['backgroundOnly'], hud: true === record['hud'] };
+}
+
+/**
+ * The plan with the limits of the person at the machine. An agent starts the command, so an
+ * agent picks its flags. These limits are in a file of the person's own and a flag cannot lift
+ * them: `backgroundOnly` forbids the real pointer, and `hud` keeps the window and the pointer of
+ * the realm on the screen. After Stop in the window, no application is joined until the person
+ * removes the file that Stop wrote.
+ *
+ * ponytail: a file in the home folder. A program with a shell can change a file, so this states
+ * what the person wants and makes a change to it a deliberate act. It is not a wall.
+ */
+export function withOwnerLimits(
+  plan: AttachPlan,
+  settingsText: string | undefined,
+  stoppedAt: string | undefined,
+  stoppedPath: string,
+): AttachPlan | { error: string } {
+  if (stoppedAt !== undefined) {
+    return {
+      error: `The person at this machine stopped Reticle in its window (${stoppedAt.trim()}). Reticle joins no application until they remove the file ${stoppedPath}. Do not remove it for them: tell them what you wanted to do.`,
+    };
+  }
+  const limits = ownerSettings(settingsText);
+  return {
+    ...plan,
+    foreground: plan.foreground && !limits.backgroundOnly,
+    hud: plan.hud || limits.hud,
+  };
+}
