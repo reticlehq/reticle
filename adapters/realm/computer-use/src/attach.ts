@@ -145,7 +145,9 @@ const BUNDLE = /^(.*?\.app)\//;
  * A Chromium browser has no Electron in it. Its mark is a framework with the name of its own
  * program: `Google Chrome Framework.framework` beside the program `Google Chrome`.
  */
-export function isElectron(program: string, exists: (path: string) => boolean): boolean {
+export function isElectron(given: string, exists: (path: string) => boolean): boolean {
+  // A program as `ps` gives it ends with a newline, and the name of the program is part of a mark.
+  const program = given.trim();
   const bundle = BUNDLE.exec(program)?.[1];
   if (bundle === undefined) {
     return false;

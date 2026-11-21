@@ -92,6 +92,8 @@ describe('attachPlan', () => {
       '/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework' ===
       path;
     expect(isElectron(chrome, frameworks)).toBe(true);
+    // As `ps -o comm=` gives it, with its newline. The join read it so, and Chrome got no switch.
+    expect(isElectron(`${chrome}\n`, frameworks)).toBe(true);
     expect(isElectron('/Applications/Notes.app/Contents/MacOS/Notes', frameworks)).toBe(false);
   });
 
