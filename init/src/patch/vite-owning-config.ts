@@ -17,7 +17,7 @@
 
 import { ReticleDir } from '@reticlehq/core';
 import { parseMajor } from '@/detect/detect.js';
-import { blockAfter } from './brace-scan.js';
+import { blockAfter, maskStringsAndComments } from './brace-scan.js';
 import { PatchKind, type SourcePatch } from './patch-kind.js';
 
 /** What differs between one Vite-owning framework and the next. */
@@ -71,7 +71,9 @@ const ESBUILD_TARGET_WHOLE = `, ${ESBUILD_TARGET}`;
  * theirs, and is left to Vite's deprecation notice to talk about.
  */
 function withoutStaleEsbuildTarget(source: string, config: ViteOwningConfig): string | null {
-  if (writesEsbuildTarget(config) || !source.includes(ESBUILD_TARGET)) return null;
+  if (writesEsbuildTarget(config) || !source.includes(ESBUILD_TARGET)) {
+    return null;
+  }
   const out = source.replace(ESBUILD_TARGET_INNER, '').replace(ESBUILD_TARGET_WHOLE, '');
   return out === source ? null : out;
 }
@@ -122,13 +124,6 @@ function sdkInclude(config: ViteOwningConfig): string {
  */
 const WATCH_IGNORE_LITERAL = `/(^|[\\\\/])\\.${ReticleDir.ROOT.slice(1)}([\\\\/]|$)/`;
 
-/**
- * An `include:` the app already declared — ours joins that array instead of adding a second key.
- * Deliberately not anchored to a newline: `optimizeDeps: { include: ['x'] }` on one line is the
- * common way to write it, and requiring a line break made the merge miss it and duplicate the key.
- */
-const EXISTING_INCLUDE = /(\s*include\s*:\s*\[)/;
-
 /** A `vite:` key whose value is an object LITERAL — the one shape we can merge into safely. */
 const VITE_OBJECT_KEY = /(^\s*vite\s*:\s*\{)/m;
 /** Any `vite:` key at all. One that is not an object literal (a spread, an imported config) is ours to refuse. */
@@ -146,47 +141,186 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 `;
 
-/**
- * The keys we add inside `vite:`, each with what it must contain.
- *
- * Kept as a list rather than one blob because a config that already sets one of these must be merged
- * INTO, not duplicated: the real astro-nanostores config has `build: { chunkSizeWarningLimit }`, and
- * inserting our own `build` beside it gave the object two — where the last one wins, so
- * `target: 'es2022'` was silently discarded while init reported success. Losing that target is not
- * cosmetic: Astro's default down-levels the modern SDK bundle and dies on a destructuring transform.
- */
-function viteKeys(config: ViteOwningConfig): readonly { key: string; inner: string }[] {
-  const keys: { key: string; inner: string }[] = [
-    { key: 'build', inner: `\n      target: 'es2022',` },
-    {
-      key: 'optimizeDeps',
-      inner: `\n      include: [${sdkInclude(config)}],${writesEsbuildTarget(config) ? ESBUILD_TARGET_INNER : ''}`,
-    },
-    // Merged in first, so a `server: { port }` the app already set keeps its port. An app that
-    // already sets `server.watch` itself is the one shape this loses to — the inner `watch` key would
-    // be duplicated and the app's would win — which is the same nested-merge ceiling `build` has.
-    { key: 'server', inner: `\n      watch: { ignored: [${WATCH_IGNORE_LITERAL}] },` },
-  ];
-  if (usesDefineToken(config)) {
-    keys.splice(2, 0, {
-      key: 'define',
-      inner: `\n      __RETICLE_TOKEN__: JSON.stringify(reticleToken()),\n      __RETICLE_ROOT__: JSON.stringify(process.cwd()),`,
-    });
+/** True when `at` begins a property name: at the block's start, or after `{` or `,`. */
+function isPropertyStart(masked: string, at: number): boolean {
+  for (let i = at - 1; i >= 0; i -= 1) {
+    const c = masked[i] ?? '';
+    if (!/\s/.test(c)) {
+      return '{' === c || ',' === c;
+    }
   }
-  return keys;
+  return true;
 }
 
-/** Whole-key form, for a `vite:` block that does not have the key at all. */
-function wholeKeys(config: ViteOwningConfig): Readonly<Record<string, string>> {
-  const keys: Record<string, string> = {
-    build: `\n    build: { target: 'es2022' },`,
-    optimizeDeps: `\n    optimizeDeps: { include: [${sdkInclude(config)}]${writesEsbuildTarget(config) ? ESBUILD_TARGET_WHOLE : ''} },`,
-    server: `\n    server: { watch: { ignored: [${WATCH_IGNORE_LITERAL}] } },`,
-  };
-  if (usesDefineToken(config)) {
-    keys.define = `\n    define: {\n      __RETICLE_TOKEN__: JSON.stringify(reticleToken()),\n      __RETICLE_ROOT__: JSON.stringify(process.cwd()),\n    },`;
+/**
+ * The property `key` at depth 0 of the object literal whose inner start is `braceAt`.
+ *
+ * Depth 0 only: a `build` under `ssr: { build: … }` is a different key, and matching it put our
+ * target in the wrong object. The scan is on the masked copy, so a `build:` in a string or comment
+ * is not a property, and keys written on one line (`server: { port, watch }`) are found — the old
+ * line-start regex needed the key to begin a line and duplicated `watch` on that shape.
+ */
+function findKeyInBlock(
+  source: string,
+  braceAt: number,
+  key: string,
+): { start: number; at: number; isObject: boolean } | null {
+  const masked = maskStringsAndComments(blockAfter(source, braceAt));
+  if (null === masked) {
+    return null;
   }
-  return keys;
+  let depth = 0;
+  for (let i = 0; i < masked.length; i += 1) {
+    const c = masked[i] ?? '';
+    if ('{' === c) {
+      depth += 1;
+      continue;
+    }
+    if ('}' === c) {
+      depth -= 1;
+      continue;
+    }
+    if (0 !== depth || c !== key[0] || !masked.startsWith(key, i) || !isPropertyStart(masked, i)) {
+      continue;
+    }
+    const colon = /^\s*:\s*/.exec(masked.slice(i + key.length));
+    if (null === colon) {
+      continue;
+    }
+    const valueAt = i + key.length + colon[0].length;
+    return {
+      start: braceAt + i,
+      at: braceAt + valueAt + 1,
+      isObject: '{' === masked[valueAt],
+    };
+  }
+  return null;
+}
+
+/** Whether the object literal at `braceAt` declares `prop` at its own depth. */
+function hasProperty(source: string, braceAt: number, prop: string): boolean {
+  return null !== findKeyInBlock(source, braceAt, prop);
+}
+
+/**
+ * Each of the keys we add inside `vite:` is merged INTO what the app already set, never duplicated
+ * beside it.
+ *
+ * The real astro-nanostores config has `build: { chunkSizeWarningLimit }`; inserting our own `build`
+ * beside it gave the object two, and the last one wins — so `target: 'es2022'` was silently
+ * discarded while init reported success. Losing that target is not cosmetic: Astro's default
+ * down-levels the modern SDK bundle and dies on a destructuring transform.
+ */
+
+function mergeBuild(source: string, braceAt: number): string | null {
+  const existing = findKeyInBlock(source, braceAt, 'build');
+  if (!existing) {
+    return insertAt(source, braceAt, `\n    build: { target: 'es2022' },`);
+  }
+  if (!existing.isObject) {
+    return null;
+  }
+  if (hasProperty(source, existing.at, 'target')) {
+    return source;
+  }
+  return insertAt(source, existing.at, `\n      target: 'es2022',`);
+}
+
+function mergeServer(source: string, braceAt: number): string | null {
+  const existing = findKeyInBlock(source, braceAt, 'server');
+  if (!existing) {
+    return insertAt(
+      source,
+      braceAt,
+      `\n    server: { watch: { ignored: [${WATCH_IGNORE_LITERAL}] } },`,
+    );
+  }
+  if (!existing.isObject) {
+    return null;
+  }
+  const watch = findKeyInBlock(source, existing.at, 'watch');
+  if (!watch) {
+    return insertAt(source, existing.at, `\n      watch: { ignored: [${WATCH_IGNORE_LITERAL}] },`);
+  }
+  if (!watch.isObject) {
+    return null;
+  }
+  const watchContent = blockAfter(source, watch.at);
+  if (watchContent.includes(WATCH_IGNORE_LITERAL)) {
+    return source;
+  }
+  const ignored = findKeyInBlock(source, watch.at, 'ignored');
+  if (ignored) {
+    if (ignored.isObject || '[' !== source[ignored.at - 1]) {
+      return null;
+    }
+    return insertAt(source, ignored.at, `${WATCH_IGNORE_LITERAL}, `);
+  }
+  return insertAt(source, watch.at, `\n        ignored: [${WATCH_IGNORE_LITERAL}],`);
+}
+
+function mergeOptimizeDeps(
+  source: string,
+  braceAt: number,
+  config: ViteOwningConfig,
+): string | null {
+  const existing = findKeyInBlock(source, braceAt, 'optimizeDeps');
+  if (!existing) {
+    const whole = `\n    optimizeDeps: { include: [${sdkInclude(config)}]${writesEsbuildTarget(config) ? ESBUILD_TARGET_WHOLE : ''} },`;
+    return insertAt(source, braceAt, whole);
+  }
+  if (!existing.isObject) {
+    return null;
+  }
+
+  let out = source;
+  let needsEsbuildOptionInsert = false;
+  if (writesEsbuildTarget(config)) {
+    const esbuild = findKeyInBlock(out, existing.at, 'esbuildOptions');
+    if (esbuild) {
+      if (!esbuild.isObject) {
+        return null;
+      }
+      if (!hasProperty(out, esbuild.at, 'target')) {
+        out = insertAt(out, esbuild.at, `\n        target: 'es2022',`);
+      }
+    } else {
+      needsEsbuildOptionInsert = true;
+    }
+  }
+
+  if (!blockAfter(out, existing.at).includes(sdkInclude(config))) {
+    const include = findKeyInBlock(out, existing.at, 'include');
+    if (include && !include.isObject && '[' !== out[include.at - 1]) {
+      return null;
+    }
+    out = include
+      ? insertAt(out, include.at, `${sdkInclude(config)}, `)
+      : insertAt(out, existing.at, `\n      include: [${sdkInclude(config)}],`);
+  }
+
+  if (needsEsbuildOptionInsert) {
+    out = insertAt(out, existing.at, ESBUILD_TARGET_INNER);
+  }
+
+  return out;
+}
+
+function mergeDefine(source: string, braceAt: number): string | null {
+  const existing = findKeyInBlock(source, braceAt, 'define');
+  if (!existing) {
+    const whole = `\n    define: {\n      __RETICLE_TOKEN__: JSON.stringify(reticleToken()),\n      __RETICLE_ROOT__: JSON.stringify(process.cwd()),\n    },`;
+    return insertAt(source, braceAt, whole);
+  }
+  if (!existing.isObject) {
+    return null;
+  }
+  const content = blockAfter(source, existing.at);
+  if (content.includes('__RETICLE_TOKEN__')) {
+    return source;
+  }
+  const inner = `\n      __RETICLE_TOKEN__: JSON.stringify(reticleToken()),\n      __RETICLE_ROOT__: JSON.stringify(process.cwd()),`;
+  return insertAt(source, existing.at, inner);
 }
 
 /**
@@ -201,44 +335,37 @@ function mergeIntoViteBlock(
   config: ViteOwningConfig,
 ): string | null {
   let out = source;
-  const whole = wholeKeys(config);
-  for (const { key, inner } of viteKeys(config)) {
-    // Scoped to the vite block by searching from its opening brace: a `build:` under `markdown:` or
-    // at the top level is somebody else's key and must not be touched.
-    const existing = new RegExp(`(\\n\\s*${key}\\s*:\\s*)([\\{A-Za-z_])`).exec(out.slice(braceAt));
-    if (existing?.index === undefined) {
-      out = `${out.slice(0, braceAt)}${whole[key] ?? ''}${out.slice(braceAt)}`;
-      continue;
-    }
-    // The character after the colon decides: `{` is a literal we can open; anything else is a
-    // reference we must not touch.
-    if (existing[2] !== '{') return null;
-    const at = braceAt + existing.index + existing[0].length; // just past the `{`
-    // An `include:` the app already wrote is an ARRAY, and a second `include:` key in the same
-    // object literal is not a merge — the last one wins and one of the two silently disappears.
-    // That is how `build.target` was lost while init still reported success. Join their array.
-    // Scoped to THIS block's braces: an `include:` under a later key is somebody else's array, and
-    // appending the SDK to it would both miss the target and edit a config we were not asked to.
-    const own = 'optimizeDeps' === key ? EXISTING_INCLUDE.exec(blockAfter(out, at)) : null;
-    if (own?.index === undefined) {
-      out = insertAt(out, at, inner);
-      continue;
-    }
-    // Their array first, then the rest of our keys at the block's start — inserting at the LOWER
-    // offset second keeps the first offset valid.
-    out = insertAt(out, at + own.index + own[0].length, `${sdkInclude(config)}, `);
-    out = insertAt(out, at, withoutInclude(inner, config));
+  const build = mergeBuild(out, braceAt);
+  if (null === build) {
+    return null;
   }
+  out = build;
+
+  const opt = mergeOptimizeDeps(out, braceAt, config);
+  if (null === opt) {
+    return null;
+  }
+  out = opt;
+
+  if (usesDefineToken(config)) {
+    const def = mergeDefine(out, braceAt);
+    if (null === def) {
+      return null;
+    }
+    out = def;
+  }
+
+  const server = mergeServer(out, braceAt);
+  if (null === server) {
+    return null;
+  }
+  out = server;
+
   return out;
 }
 
 function insertAt(source: string, at: number, text: string): string {
   return `${source.slice(0, at)}${text}${source.slice(at)}`;
-}
-
-/** The optimizeDeps inner minus our `include:` line, for when the app already has one to join. */
-function withoutInclude(inner: string, config: ViteOwningConfig): string {
-  return inner.replace(`\n      include: [${sdkInclude(config)}],`, '');
 }
 
 /**
@@ -272,7 +399,9 @@ function withHelper(source: string, config: ViteOwningConfig): string {
 }
 
 function withOwningMarker(source: string, config: ViteOwningConfig, braceAt: number): string {
-  if (usesDefineToken(config) || source.includes(alreadyMarker(config))) return source;
+  if (usesDefineToken(config) || source.includes(alreadyMarker(config))) {
+    return source;
+  }
   return insertAt(source, braceAt, `\n    /* ${alreadyMarker(config)} */`);
 }
 
@@ -369,7 +498,9 @@ export function installedViteMajor(io: ViteReader, pkg: DeclaredDeps): number | 
           ? (parsed as { version?: unknown }).version
           : undefined;
       const major = 'string' === typeof version ? parseMajor(version) : undefined;
-      if (major !== undefined) return major;
+      if (major !== undefined) {
+        return major;
+      }
     } catch {
       // Unreadable manifest: fall through to the store and the declared range.
     }
@@ -381,6 +512,8 @@ export function installedViteMajor(io: ViteReader, pkg: DeclaredDeps): number | 
     .map((name) => PNPM_VITE_ENTRY.exec(name)?.[1])
     .filter((major): major is string => major !== undefined)
     .map(Number);
-  if (stored.length > 0) return Math.max(...stored);
+  if (stored.length > 0) {
+    return Math.max(...stored);
+  }
   return parseMajor(pkg.dependencies?.['vite'] ?? pkg.devDependencies?.['vite']) ?? null;
 }
