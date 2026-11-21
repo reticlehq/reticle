@@ -114,10 +114,19 @@ function statesOf(ax: AxNode): ElementState[] {
 
 /** The start of an identifier that AppKit makes by itself. It changes when the window is built again. */
 const MADE_BY_APPKIT = '_NS:';
+/**
+ * An identifier that a web framework makes by itself: React gives ":r1:" (or "«r1»"), and a
+ * library puts its name before it ("radix-:r1:"). It is another one after the next change to the
+ * page, so a saved flow that finds an element by it does not find the element again.
+ */
+const MADE_BY_A_FRAMEWORK = /:r[0-9a-z]+:|«r[0-9a-z]+»/;
 
-/** The identifier, when a person gave it. One that the toolkit made is not a name for anything. */
+/** The identifier, when a person gave it. One that a toolkit made is not a name for anything. */
 function givenId(id: string | undefined): string | undefined {
-  return id === undefined || 0 === id.length || id.startsWith(MADE_BY_APPKIT) ? undefined : id;
+  if (id === undefined || 0 === id.length) {
+    return undefined;
+  }
+  return id.startsWith(MADE_BY_APPKIT) || MADE_BY_A_FRAMEWORK.test(id) ? undefined : id;
 }
 
 export function fromAx(ax: AxNode): FromAx {
