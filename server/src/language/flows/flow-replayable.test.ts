@@ -16,7 +16,7 @@ import {
   type FlowStep,
 } from '@reticlehq/core';
 import { recordedStepToFlowStep } from './flows.js';
-import { compileActStep, wroteIn } from './replay.js';
+import { compileActStep, WriteOutcome, wroteIn } from './replay.js';
 import { buildSuiteVerdict } from './decision.js';
 import { writingFlows } from './suite-selection.js';
 import { readyForReplay, replayability, Replayable } from './flow-replayable.js';
@@ -174,8 +174,8 @@ describe('a step that sent a write request while it was recorded', () => {
 
   it('is marked writes, even when its expect named no request', () => {
     const events = [request('GET', '/api/me'), request('POST', '/api/login')];
-    expect(wroteIn(events as never)).toBe(true);
-    expect(wroteIn([request('GET', '/api/me')] as never)).toBe(false);
+    expect(wroteIn(events as never)).toBe(WriteOutcome.SENT);
+    expect(wroteIn([request('GET', '/api/me')] as never)).toBeUndefined();
     const step = recordedStepToFlowStep({
       tool: 'reticle_act',
       stable: true,
@@ -189,7 +189,9 @@ describe('a step that sent a write request while it was recorded', () => {
   });
 
   it("does not count the dev server's own requests as the app's writes", () => {
-    expect(wroteIn([request('POST', 'http://localhost:5173/@vite/client')] as never)).toBe(false);
+    expect(
+      wroteIn([request('POST', 'http://localhost:5173/@vite/client')] as never),
+    ).toBeUndefined();
   });
 });
 

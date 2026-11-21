@@ -166,28 +166,47 @@ export function pageOf(url: string | undefined): string | undefined {
 }
 
 /**
- * Did the app send a write request in this window? A step that did is saved `writes: true`, so a
- * replay does not repeat it unasked. The dev server's own traffic is not the app's.
+ * What became of the write requests in an act's window.
+ *
+ * `blocked`: a write the page sent failed at the network level (`status: 0` with an error), which is
+ * what an interception outside Reticle looks like from the page (#2321). The drive did not change
+ * the data, and a flow saved from it would send the write for real on replay.
  */
-export function wroteIn(events: readonly ReticleEvent[]): boolean {
-  return events.some((event) => {
+export const WriteOutcome = { SENT: 'sent', BLOCKED: 'blocked' } as const;
+export type WriteOutcome = (typeof WriteOutcome)[keyof typeof WriteOutcome];
+
+/**
+ * Did the app send a write request in this window? A step that did is saved `writes: true`, so a
+ * replay does not repeat it unasked. The dev server's own traffic is not the app's. One blocked
+ * write makes the window `blocked`: the agent kept a write from happening on purpose.
+ */
+export function wroteIn(events: readonly ReticleEvent[]): WriteOutcome | undefined {
+  let outcome: WriteOutcome | undefined;
+  for (const event of events) {
     if (EventType.NET_REQUEST !== event.type) {
-      return false;
+      continue;
     }
     const method = asString(event.data['method'])?.toUpperCase() ?? '';
-    return MUTATING_METHODS.includes(method) && !isDevToolingUrl(asString(event.data['url']));
-  });
+    if (!MUTATING_METHODS.includes(method) || isDevToolingUrl(asString(event.data['url']))) {
+      continue;
+    }
+    if (0 === event.data['status'] && undefined !== asString(event.data['error'])) {
+      return WriteOutcome.BLOCKED;
+    }
+    outcome = WriteOutcome.SENT;
+  }
+  return outcome;
 }
 
 /** `wroteIn` over a session's window, best-effort: the record must never fail the drive it records. */
 export function wroteSince(
   session: { eventsSince(since: number): readonly ReticleEvent[] },
   since: number,
-): boolean {
+): WriteOutcome | undefined {
   try {
     return wroteIn(session.eventsSince(since));
   } catch {
-    return false;
+    return undefined;
   }
 }
 
@@ -220,7 +239,7 @@ export function captureAct(
   /** The session that acted: only recordings it started take the step. */
   session?: string,
   /** The act's window sent a write request; see `wroteIn`. */
-  wrote = false,
+  wrote?: WriteOutcome,
   /** The act as the ambient tape keeps it, when that differs. See RecordingStore.capture. */
   ambientArgs?: Record<string, unknown>,
 ): void {
@@ -244,12 +263,22 @@ export function captureAct(
   recordings.capture(step, route, session, ambient);
 }
 
+/**
+ * A step whose write was blocked is marked like one run against mocks, so its journey is not
+ * auto-saved at session end (#2321). The mark is recorder-internal: a saved flow never keeps it.
+ */
+export function markBlockedWrite(step: RecordedStep, wrote: WriteOutcome | undefined): void {
+  if (WriteOutcome.BLOCKED === wrote) {
+    step.mocked = true;
+  }
+}
+
 /** One act as a recorded step, with the claim the agent declared on it. */
 function capturedStep(
   args: Record<string, unknown>,
   res: unknown,
   route: string | undefined,
-  wrote: boolean,
+  wrote: WriteOutcome | undefined,
 ): RecordedStep {
   const step = compileActStep(args, res);
   // Keep the assertion the agent actually made. `act_and_wait { until }` IS the agent saying what
@@ -270,9 +299,10 @@ function capturedStep(
   if (intent !== undefined && intent.length > 0) {
     step.intent = intent;
   }
-  if (wrote) {
+  if (wrote !== undefined) {
     step.writes = true;
   }
+  markBlockedWrite(step, wrote);
   return step;
 }
 
@@ -298,7 +328,7 @@ export function captureVerdictedAct(
   held: boolean,
   session?: string,
   /** The act's window sent a write request; see `wroteIn`. */
-  wrote = false,
+  wrote?: WriteOutcome,
 ): void {
   const { until: _until, predicate: _predicate, ...unproved } = args;
   captureAct(recordings, args, res, route, session, wrote, held ? undefined : unproved);
