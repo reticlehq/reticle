@@ -117,11 +117,24 @@ function statesOf(ax: AxNode): ElementState[] {
 /** The start of an identifier that AppKit makes by itself. It changes when the window is built again. */
 const MADE_BY_APPKIT = '_NS:';
 /**
- * An identifier that a web framework makes by itself: React gives ":r1:" (or "«r1»"), and a
- * library puts its name before it ("radix-:r1:"). It is another one after the next change to the
- * page, so a saved flow that finds an element by it does not find the element again.
+ * An identifier that a web framework makes by itself. It is another one after the next change to
+ * the page, so a saved flow that finds an element by it does not find the element again.
+ * ponytail: a list of the makers that are known. An identifier of another maker is kept, and a
+ * flow that is saved by it then goes "not found", which is a failure a person can see.
  */
-const MADE_BY_A_FRAMEWORK = /:r[0-9a-z]+:|«r[0-9a-z]+»/;
+const MADE_BY_A_FRAMEWORK = new RegExp(
+  [
+    // React: a colon, the letter r and a count, in small letters in the browser and in capital
+    // letters from the server. React 19 puts the same between « and ».
+    ':r[0-9a-z]+:',
+    '«r[0-9a-z]+»',
+    // A count that a library puts after its own name: Angular Material and its CDK, Ember,
+    // Headless UI, React Aria.
+    '^(mat|cdk|headlessui|react-aria)-.*\\d+$',
+    '^ember\\d+$',
+  ].join('|'),
+  'i',
+);
 
 /** The identifier, when a person gave it. One that a toolkit made is not a name for anything. */
 function givenId(id: string | undefined): string | undefined {
