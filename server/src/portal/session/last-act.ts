@@ -26,12 +26,20 @@ interface ActEffect {
   mutatedWithin?: number | undefined;
 }
 
+/** A navigate whose target has not arrived, and the rule that says when it has. */
+interface PendingNavigation {
+  target: string;
+  reached: (url: string) => boolean;
+}
+
 export class LastAct {
   #cursor: number | undefined;
   /** The cursor of the most recent navigation, kept apart from an act's so neither overwrites it. */
   #navigated: number | undefined;
   #source: string | undefined;
   #effect: ActEffect | undefined;
+  /** A navigate that answered `confirmed: false`, until a later act or navigate. See below. */
+  #pendingNavigation: PendingNavigation | undefined;
 
   /**
    * Record an action that ACTUALLY DISPATCHED — cursor and effect together, never one without the
@@ -55,6 +63,7 @@ export class LastAct {
   ): void {
     this.#cursor = cursor;
     this.#effect = { action, mutatedWithin, ...(ref === undefined ? {} : { ref }) };
+    this.#pendingNavigation = undefined;
   }
 
   /**
@@ -76,6 +85,34 @@ export class LastAct {
    */
   markNavigated(cursor: number): void {
     this.#navigated = cursor;
+    this.#pendingNavigation = undefined;
+  }
+
+  /**
+   * A navigate answered `confirmed: false`: its target did not arrive in the wait (#2300).
+   *
+   * The tab can still show the old document, for example while a client-side route loads. A check
+   * then reads text that only the old page shows. `reached` is the navigate's own arrival rule, so
+   * "the page reached the target" means the same thing here as in the navigate result.
+   */
+  markNavigationPending(target: string, reached: (url: string) => boolean): void {
+    this.#pendingNavigation = { target, reached };
+  }
+
+  /**
+   * The target of the navigate that has not arrived while the page is on `currentUrl`, or undefined.
+   * A page at the target ends the pending state.
+   */
+  pendingNavigationAt(currentUrl: string): string | undefined {
+    const pending = this.#pendingNavigation;
+    if (pending === undefined) {
+      return undefined;
+    }
+    if (pending.reached(currentUrl)) {
+      this.#pendingNavigation = undefined;
+      return undefined;
+    }
+    return pending.target;
   }
 
   /**
@@ -87,8 +124,12 @@ export class LastAct {
    * exists to exclude.
    */
   cursor(): number | undefined {
-    if (this.#cursor === undefined) return this.#navigated;
-    if (this.#navigated === undefined) return this.#cursor;
+    if (this.#cursor === undefined) {
+      return this.#navigated;
+    }
+    if (this.#navigated === undefined) {
+      return this.#cursor;
+    }
     return Math.max(this.#cursor, this.#navigated);
   }
 
