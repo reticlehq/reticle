@@ -1,4 +1,5 @@
 import { ReticleTool } from '@reticlehq/core';
+import { NoSessionReason } from '@reticlehq/core/telemetry';
 
 const LeaseAction = { ACQUIRE: 'acquire' } as const;
 
@@ -36,7 +37,12 @@ const OpenLaunchFailureCopy = {
  *
  * So the substitution is stated FIRST, with both numbers, before any cause that assumes they match.
  */
-export function openFailureNote(port: number, requestedPort: number): string {
+export function openFailureNote(
+  port: number,
+  requestedPort: number,
+  daemon: DaemonNoSessionAnswer = {},
+): string {
+  const refusal = refusalFrom(daemon);
   const substituted =
     port === requestedPort
       ? ''
@@ -45,10 +51,15 @@ export function openFailureNote(port: number, requestedPort: number): string {
         `${String(requestedPort)}, that is the whole problem — nothing below applies. Start a daemon ` +
         `on ${String(requestedPort)} (\`npx @reticlehq/server serve --port ${String(requestedPort)}\`) ` +
         `or point the app at ${String(port)}. `;
-  return (
+  const handedOver =
     `${substituted}the URL was handed to the system default browser (this command does not use ` +
     `Reticle's own Chromium, so a chromium warning from \`reticle doctor\` is unrelated ` +
-    `to this). No Reticle session appeared. By far the likeliest cause is that the app ` +
+    `to this). No Reticle session appeared.`;
+  if (refusal !== undefined) {
+    return `${handedOver} ${OpenRefusalCopy.NOT_THE_SDK} ${refusal}`;
+  }
+  return (
+    `${handedOver} By far the likeliest cause is that the app ` +
     `carries no Reticle SDK, or dials a port other than ${String(port)} — run ` +
     `\`npx @reticlehq/server init\` in the app's directory and restart its dev server. If the app IS ` +
     `wired, give the page a moment and check the browser console: the SDK announces its ` +
@@ -56,6 +67,32 @@ export function openFailureNote(port: number, requestedPort: number): string {
     `non-localhost host, which needs BOTH allowNonLocalhost: true AND a pairing token ` +
     `(~/.reticle/pairing-token) — the flag alone is not sufficient.`
   );
+}
+
+/** What the daemon's `/status` said about its empty bridge, as `summarizeStatus` reads it. */
+export interface DaemonNoSessionAnswer {
+  whyReason?: string;
+  whyLead?: string;
+  why?: string;
+}
+
+const OpenRefusalCopy = {
+  NOT_THE_SDK:
+    'The SDK is not missing: a page dialled this daemon and the daemon refused it. The daemon says:',
+} as const;
+
+/**
+ * The daemon's own account of a page it refused, or undefined when it refused none.
+ *
+ * A refused hello is positive evidence that the SDK is in the page. Reported from the field: a
+ * window the agent had detached reloaded, the bridge refused it, and `open` said the SDK was
+ * missing (#2435). The bridge records the refusal, so `open` reads that before it guesses.
+ */
+function refusalFrom(daemon: DaemonNoSessionAnswer): string | undefined {
+  if (daemon.whyReason !== NoSessionReason.AUTH_REFUSED) {
+    return undefined;
+  }
+  return daemon.whyLead ?? daemon.why;
 }
 
 /** Recovery when the OS could not open a URL: agents can use Reticle's browser lease instead. */
