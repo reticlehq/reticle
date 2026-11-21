@@ -206,3 +206,79 @@ describe('our chrome over an APP control stays invisible to the hit test', () =>
     expect(hitTestOccluder(app, new DOMRect(0, 0, 100, 100))).toBe(overlay);
   });
 });
+
+/**
+ * #2402: an overlay nobody can see or point at does not cover a control.
+ *
+ * `act_and_wait` on an icon button came back `verified: "unknown"`, covered by a `div`, while the
+ * screenshot showed nothing over the button. A fully transparent element, or one that takes no
+ * pointer events, was counted as the occluder. The hit test now looks past it to the next element.
+ */
+describe('an invisible overlay is not an occluder (#2402)', () => {
+  afterEach(clearStubs);
+
+  function setup(style: string): { button: HTMLButtonElement; overlay: HTMLDivElement } {
+    const button = document.createElement('button');
+    const overlay = document.createElement('div');
+    overlay.setAttribute('style', style);
+    document.body.append(button, overlay);
+    stubStack(() => [overlay, button, document.body]);
+    return { button, overlay };
+  }
+
+  it('looks past a fully transparent overlay', () => {
+    const { button } = setup('opacity: 0');
+    expect(hitTestOccluder(button, new DOMRect(0, 0, 100, 100))).toBeNull();
+  });
+
+  it('looks past an overlay that takes no pointer events', () => {
+    const { button } = setup('pointer-events: none');
+    expect(hitTestOccluder(button, new DOMRect(0, 0, 100, 100))).toBeNull();
+  });
+
+  it('looks past an overlay inside a transparent ancestor', () => {
+    const button = document.createElement('button');
+    const layer = document.createElement('div');
+    layer.setAttribute('style', 'opacity: 0');
+    const overlay = document.createElement('div');
+    layer.append(overlay);
+    document.body.append(button, layer);
+    stubStack(() => [overlay, layer, button, document.body]);
+    expect(hitTestOccluder(button, new DOMRect(0, 0, 100, 100))).toBeNull();
+  });
+
+  it('looks past an invisible overlay when only the singular hit test exists', () => {
+    const button = document.createElement('button');
+    const overlay = document.createElement('div');
+    overlay.setAttribute('style', 'opacity: 0');
+    document.body.append(button, overlay);
+    stubPerPoint(() => overlay);
+    expect(hitTestOccluder(button, new DOMRect(0, 0, 100, 100))).toBeNull();
+  });
+
+  it('still reports a visible overlay under the invisible one', () => {
+    const button = document.createElement('button');
+    const ghost = document.createElement('div');
+    ghost.setAttribute('style', 'opacity: 0');
+    const modal = document.createElement('div');
+    document.body.append(button, modal, ghost);
+    stubStack(() => [ghost, modal, button, document.body]);
+    expect(hitTestOccluder(button, new DOMRect(0, 0, 100, 100))).toBe(modal);
+  });
+
+  it('keeps the target on top when its own wrapper is transparent', () => {
+    const wrapper = document.createElement('div');
+    wrapper.setAttribute('style', 'opacity: 0');
+    const button = document.createElement('button');
+    wrapper.append(button);
+    const app = document.createElement('div');
+    document.body.append(wrapper, app);
+    stubStack(() => [button, wrapper, app, document.body]);
+    expect(hitTestOccluder(button, new DOMRect(0, 0, 100, 100))).toBeNull();
+  });
+
+  it('still reports a faint but visible overlay', () => {
+    const { button, overlay } = setup('opacity: 0.5');
+    expect(hitTestOccluder(button, new DOMRect(0, 0, 100, 100))).toBe(overlay);
+  });
+});
