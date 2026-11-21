@@ -10,6 +10,7 @@
 import type { ElementQuery } from '@/wire/types.js';
 import { PredicateKind } from './consequence.js';
 import type { Predicate } from './predicate.js';
+import { describePropertyAssertion } from './property-assertion.js';
 
 /** Joins the parts of a conjunction in one sentence. */
 const PART_GAP = '; ';
@@ -47,7 +48,13 @@ function noun(predicate: Predicate): string {
         predicate.urlContains === undefined ? '' : ` to ${predicate.urlContains}`
       }`;
     case PredicateKind.TEXT:
-      return `the text "${predicate.contains ?? ''}"`;
+      if (predicate.contains !== undefined) {
+        return `the text "${predicate.contains}"`;
+      }
+      if (predicate.satisfies !== undefined) {
+        return `text ${describePropertyAssertion(predicate.satisfies)}`;
+      }
+      return 'the text';
     case PredicateKind.SIGNAL:
       return predicate.name === undefined ? 'a signal' : `the app reporting "${predicate.name}"`;
     case PredicateKind.ROUTE:
