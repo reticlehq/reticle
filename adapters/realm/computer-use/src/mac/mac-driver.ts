@@ -21,6 +21,7 @@ const HelperError = {
   NOT_TRUSTED: 'not-trusted',
   APP_GONE: 'app-gone',
   SCREEN_LOCKED: 'screen-locked',
+  OWN_WINDOW: 'own-window',
 } as const;
 
 const ErrorSchema = z.object({ error: z.string() });
@@ -184,6 +185,11 @@ export class MacDriver implements UiDriver {
     if (failed.success && failed.data.error === HelperError.SCREEN_LOCKED) {
       throw new Error(
         'The screen is locked. macOS gives no window of an application while the screen is locked. Unlock the screen, and try again.',
+      );
+    }
+    if (failed.success && failed.data.error === HelperError.OWN_WINDOW) {
+      throw new Error(
+        'This is the window of Reticle itself. The realm does not read it and does not act on it: Pause in that window is for the person at the machine.',
       );
     }
     if (failed.success && failed.data.error === HelperError.APP_GONE) {

@@ -447,6 +447,16 @@ func run(_ args: [String]) throws {
   guard !screenIsLocked() else {
     try emit(["error": "screen-locked"])
   }
+  // Not the realm's own window. Pause in that window is for the person at the machine: a realm
+  // that can read the window can press Resume in it, and the pause is then worth nothing. The
+  // check of the window sets this name in the environment, and nothing else does.
+  var program = [CChar](repeating: 0, count: 4096)
+  if proc_pidpath(pid, &program, UInt32(program.count)) > 0,
+    URL(fileURLWithPath: String(cString: program)).lastPathComponent == "reticle-hud",
+    ProcessInfo.processInfo.environment["RETICLE_AX_CHECKS_ITS_OWN_WINDOW"] == nil
+  {
+    try emit(["error": "own-window"])
+  }
   let app = AXUIElementCreateApplication(pid)
 
   if args[1] == "web-tree" {
