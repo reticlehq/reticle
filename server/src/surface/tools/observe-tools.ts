@@ -35,7 +35,7 @@ import {
   waitForPredicate,
   PredicateSchema,
 } from '@reticlehq/engine/question/predicate/predicate.js';
-import { resolveSessionWithin } from '@/portal/session/timing/resolve-within.js';
+import { resolveSessionSpending } from '@/portal/session/timing/resolve-within.js';
 import { WALL_CLOCK } from '@/portal/session/timing/wall-clock.js';
 import { parsePredicate } from '@reticlehq/engine/question/predicate/predicate-parse.js';
 import {
@@ -345,13 +345,15 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       const requestedMs = asNumber(args['timeout_ms']) ?? DEFAULT_ASSERT_TIMEOUT_MS;
       // One call never blocks past what the client allows; the rest comes back as resume_ms.
       const waitBudget = Math.min(requestedMs, MAX_BLOCKING_WAIT_MS);
-      // Spend the budget waiting for the APP as well as for the predicate. See resolve-within.
-      let session = await resolveSessionWithin(
+      // One budget for the APP and the predicate: the predicate gets what is left (#2443).
+      const resolved = await resolveSessionSpending(
         deps.sessions,
         asString(args['sessionId']),
         waitBudget,
         WALL_CLOCK,
       );
+      let session = resolved.session;
+      const predicateBudget = resolved.remainingMs;
       // `until` is act_and_wait's name for this — see alias-args.ts.
       const predicate = parsePredicate(aliasParam(args, 'predicate', ['until'])['predicate']);
       // Refused up front rather than waited out: a body clause this session cannot answer would
@@ -374,8 +376,8 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       const followed = await followLostObservation({
         sessions: deps.sessions,
         session,
-        verdict: await waitForPredicate(session, predicate, waitBudget, since),
-        timeout: waitBudget,
+        verdict: await waitForPredicate(session, predicate, predicateBudget, since),
+        timeout: predicateBudget,
         predicateStarted,
         reevaluate: (next, budget) => waitForPredicate(next, predicate, budget, 0),
       });
@@ -553,13 +555,15 @@ export const OBSERVE_TOOLS: ToolDef[] = [
     },
     handler: async (deps, args) => {
       const timeout = asNumber(args['timeout_ms']) ?? 0;
-      // Spend the budget waiting for the APP as well as for the predicate. See resolve-within.
-      let session = await resolveSessionWithin(
+      // One budget for the APP and the predicate: the predicate gets what is left (#2443).
+      const resolved = await resolveSessionSpending(
         deps.sessions,
         asString(args['sessionId']),
         timeout,
         WALL_CLOCK,
       );
+      let session = resolved.session;
+      const predicateBudget = resolved.remainingMs;
       // `until` is act_and_wait's name for this — see alias-args.ts.
       const predicate = parsePredicate(aliasParam(args, 'predicate', ['until'])['predicate']);
       // Refused up front rather than waited out: a body clause this session cannot answer would
@@ -591,10 +595,10 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         sessions: deps.sessions,
         session,
         verdict:
-          timeout > 0
-            ? await waitForPredicate(session, predicate, timeout, since)
+          predicateBudget > 0
+            ? await waitForPredicate(session, predicate, predicateBudget, since)
             : await evaluatePredicate(session, predicate, since),
-        timeout,
+        timeout: predicateBudget,
         predicateStarted,
         reevaluate: (next, budget) => waitForPredicate(next, predicate, budget, 0),
       });
