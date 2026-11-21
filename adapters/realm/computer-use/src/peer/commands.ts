@@ -101,6 +101,23 @@ const RESTLESS_LOOKS = 2;
 /** The places in one parent that must change by themselves before the whole parent does. */
 const RESTLESS_PLACES = 3;
 const SCROLL_STEP = 0.1;
+/**
+ * Said with a press after which the realm saw no effect of any kind. "Dispatched" means that the
+ * application took the call, and an application can take it and do nothing with it.
+ */
+const NOTHING_SEEN_NOTE =
+  'The press was sent, and nothing changed: not on the screen, not on disk, not in a setting, not on the clipboard. The control may do nothing here, or the application did not act on the press. Do not take the press for done. Read the window again, and give `until` with the consequence you expect.';
+
+/** True when an action left nothing that this realm can see. */
+function sawNothing(outcome: ActOutcome, changesOnScreen: number): boolean {
+  return (
+    0 === changesOnScreen &&
+    0 === (outcome.settingsChanged ?? []).length &&
+    true !== outcome.clipboardChanged &&
+    0 === (outcome.bytesWritten ?? 0)
+  );
+}
+
 /** Said in the answer of a scroll that was done with a key, because there was no scroll bar. */
 const SCROLL_BY_KEY = 'key';
 
@@ -915,8 +932,8 @@ export class PeerCommands {
         ...(byItself > 0 ? { changedByItself: byItself } : {}),
         // Changes to elements that are not on the screen. They are not in the count above.
         ...(offScreen > 0 ? { changedOffScreen: offScreen } : {}),
-        ...(kind === ActKind.PRESS && 0 === changes.length && this.#deps.noEffectNote !== undefined
-          ? { note: this.#deps.noEffectNote }
+        ...(kind === ActKind.PRESS && sawNothing(outcome, changes.length + byItself + offScreen)
+          ? { note: this.#deps.noEffectNote ?? NOTHING_SEEN_NOTE }
           : {}),
         occluded: !outcome.reachable,
       },

@@ -1323,10 +1323,28 @@ describe('PeerCommands', () => {
     };
     const told = new PeerCommands({ driver, emit: () => undefined, noEffectNote: 'the switch' });
     expect((await press(told))['note']).toBe('the switch');
-    // No reason was given: no note. And an action that did something has no note.
-    expect((await press(new PeerCommands({ driver, emit: () => undefined })))['note']).toBe(
-      undefined,
-    );
+    // No reason was given: the note says that nothing was seen, so that "dispatched" is not read
+    // as "done". Chrome answered "done" to a press that its page never got.
+    expect(
+      String((await press(new PeerCommands({ driver, emit: () => undefined })))['note']),
+    ).toContain('nothing changed');
+    // A press that wrote to disk did something, with nothing on the screen: no note.
+    const wrote = new PeerCommands({
+      driver: {
+        ...driver,
+        act: () =>
+          Promise.resolve({
+            delivered: true,
+            reachable: true,
+            settled: true,
+            ...still,
+            bytesWritten: 12,
+          }),
+      },
+      emit: () => undefined,
+    });
+    expect((await press(wrote))['note']).toBe(undefined);
+    // An action that did something on the screen has no note.
     const acted = new PeerCommands({
       driver: {
         ...driver,

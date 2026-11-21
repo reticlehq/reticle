@@ -176,6 +176,8 @@ Read these before you rely on a result.
 
 `conformance/computer-use-browser.mjs` does a form in Google Chrome, on a page of this folder: it fills a field and presses a button, the press is proved by the note that comes on the page, and the saved flow replays with no model in a new Chrome. Chrome runs with a profile of that run. A Chromium browser needs the same accessibility switch as an Electron application, and a second one: with the first alone, Chrome answers "done" to a press and the page gets no click. The join sets both. Chrome takes about four seconds before a press reaches the page, and the join waits for that.
 
+A press after which the realm saw nothing (no change on the screen, on disk, in a setting or on the clipboard) carries `effect.note`. It says that `dispatched` is not `done`: an application can take a press and do nothing with it.
+
 `native/mac/savepanelcheck.mjs` checks the save panel of the system, which most applications use to write a file. The realm reads the panel, fills the name and presses its Save, all in the background, and the proof is the file on disk.
 
 `native/mac/hudcheck.mjs` checks the window of the realm: it shows the action and its effect, and Pause stops the realm. The check presses Pause as a person does: a second realm reads the window and presses its button.
