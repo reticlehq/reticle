@@ -21,7 +21,8 @@ describe('reticle verify --sweep', () => {
   });
 
   it('reaches every flow the run replays, and only when asked', async () => {
-    const deps = {} as ToolDeps;
+    // No tab connected: the run pins no tab, and the replay gets no sessionId.
+    const deps = { sessions: { inScope: () => [] } } as unknown as ToolDeps;
     await createRunnerPort(deps, undefined, { sweep: true }).replayFlow('a');
     expect(vi.mocked(replayAndLearn)).toHaveBeenLastCalledWith(deps, {
       flowName: 'a',
