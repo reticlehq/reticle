@@ -5,13 +5,13 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
-  rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { REPO_ROOT } from '@/machine/repo-root.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 /**
  * The published skills and the Claude Code plugin are shipped artifacts nothing else checks.
@@ -346,7 +346,7 @@ describe('the Claude Code plugin ships the version everything else ships', () =>
 describe('frontmatter is read whatever the line endings', () => {
   const dirs: string[] = [];
   afterEach(() => {
-    for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+    for (const dir of dirs.splice(0)) removeTempDirSync(dir);
   });
 
   function skillWith(newline: string): string {

@@ -1,5 +1,5 @@
 import { createServer } from 'node:net';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { LOOPBACK_HOST } from '@reticlehq/core';
@@ -7,6 +7,7 @@ import { expect, it, vi } from 'vitest';
 import { handleStatus } from '@/command/cli.js';
 import { STATE_DIR_ENV, writePid } from '@/command/daemon/daemon.js';
 import { handleDoctor } from './cli-doctor.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 async function reserveThenReleasePort(): Promise<number> {
   const server = createServer();
@@ -64,6 +65,6 @@ it('doctor and status both report stopped when a live recorded pid has no daemon
     stderr.mockRestore();
     if (undefined === previousStateHome) delete process.env[STATE_DIR_ENV];
     else process.env[STATE_DIR_ENV] = previousStateHome;
-    rmSync(stateHome, { recursive: true, force: true });
+    removeTempDirSync(stateHome);
   }
 });

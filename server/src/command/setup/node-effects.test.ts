@@ -22,6 +22,7 @@ import {
   probePage,
   writableLogDir,
 } from './node-effects.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 /**
  * From the BUILT module, like the handover tests below: the server runs under a supervisor script
@@ -358,7 +359,7 @@ describe('reading the project', () => {
     // "no verdict" for a run whose drive had saved a flow and said so.
     expect(flowsSaved([root])).toBe(false);
     expect(flowsSaved([root, join(root, 'apps', 'web')])).toBe(true);
-    rmSync(root, { recursive: true, force: true });
+    removeTempDirSync(root);
   });
 
   it('knows an unwired project from a wired one', () => {
@@ -366,7 +367,7 @@ describe('reading the project', () => {
     expect(alreadyWired(root)).toBe(false);
     writeFileSync(join(root, '.reticle.json'), '{}');
     expect(alreadyWired(root)).toBe(true);
-    rmSync(root, { recursive: true, force: true });
+    removeTempDirSync(root);
   });
 
   it('tells a binary that exists from one that does not', () => {

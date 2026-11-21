@@ -6,6 +6,7 @@
  * layout, so the box and the hit test are stubbed.
  */
 import { afterEach, describe, expect, it } from 'vitest';
+import { ALLOW_OCCLUDED_ARG } from '@reticlehq/core';
 import { executeAction } from './actions.js';
 import { refs } from '@/dom/addressing/refs.js';
 
@@ -30,7 +31,7 @@ describe('a click on a control that does not take pointer events', () => {
     const button = document.querySelector('button') as HTMLElement;
     button.getBoundingClientRect = () => new DOMRect(0, 0, 18, 18);
     topElementIs(alert);
-    const r = await executeAction(refs.refFor(button), 'click');
+    const r = await executeAction(refs.refFor(button), 'click', { [ALLOW_OCCLUDED_ARG]: true });
     expect(r.effect.occluded).toBe(true);
     expect(r.effect.occluderName).toContain('alert');
   });

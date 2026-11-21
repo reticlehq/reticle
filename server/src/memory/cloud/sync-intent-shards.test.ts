@@ -1,8 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { diskSource } from './sync-disk.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 /**
  * Shared memory has to actually reach the dashboard.
@@ -85,7 +86,7 @@ describe('the intent a sync sends', () => {
       shard(root, 'legacy', ['old:one']);
       expect(idsOf(diskSource(root).derived('intent'))).toEqual(['old:one', 'pay']);
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      removeTempDirSync(root);
     }
   });
 
@@ -95,7 +96,7 @@ describe('the intent a sync sends', () => {
       shard(root, 'checkout', ['inline:pay']);
       expect(idsOf(diskSource(root).derived('intent'))).toEqual(['inline:pay']);
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      removeTempDirSync(root);
     }
   });
 
@@ -107,7 +108,7 @@ describe('the intent a sync sends', () => {
       shard(root, 'checkout', ['new:two']);
       expect(idsOf(diskSource(root).derived('intent'))).toEqual(['new:two', 'old:one']);
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      removeTempDirSync(root);
     }
   });
 
@@ -125,7 +126,7 @@ describe('the intent a sync sends', () => {
       };
       expect(sent.intents['dup']?.subject).toBe('checkout');
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      removeTempDirSync(root);
     }
   });
 
@@ -134,7 +135,7 @@ describe('the intent a sync sends', () => {
     try {
       expect(diskSource(root).derived('intent')).toBeUndefined();
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      removeTempDirSync(root);
     }
   });
 
@@ -146,7 +147,7 @@ describe('the intent a sync sends', () => {
       shard(root, 'checkout', ['inline:pay']);
       expect(idsOf(diskSource(root).derived('intent'))).toEqual(['inline:pay']);
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      removeTempDirSync(root);
     }
   });
 });
@@ -184,7 +185,7 @@ describe('the subject a sync sends', () => {
       );
       expect(sent(root)['i:1']?.subject).toBe('billing');
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      removeTempDirSync(root);
     }
   });
 
@@ -209,7 +210,7 @@ describe('the subject a sync sends', () => {
       );
       expect(sent(root)['i:1']?.subject).toBe('members');
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      removeTempDirSync(root);
     }
   });
 
@@ -220,7 +221,7 @@ describe('the subject a sync sends', () => {
       shard(root, 'checkout', ['inline:pay']);
       expect(sent(root)['inline:pay']?.subject).toBe('checkout');
     } finally {
-      rmSync(root, { recursive: true, force: true });
+      removeTempDirSync(root);
     }
   });
 });
@@ -254,6 +255,6 @@ describe('a record a check proved', () => {
     const intents = (diskSource(root).derived('intent') as { intents: Record<string, unknown> })
       .intents;
     expect(intents['saved']).toMatchObject({ provedBy: 'drive-s1' });
-    rmSync(root, { recursive: true, force: true });
+    removeTempDirSync(root);
   });
 });

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, writeFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const reported: unknown[] = [];
 vi.mock('./onboarding-funnel.js', () => ({
@@ -28,7 +29,7 @@ describe('draining what the installer could not report', () => {
     reported.length = 0;
     dir = mkdtempSync(join(tmpdir(), 'reticle-trace-'));
   });
-  afterEach(() => rmSync(dir, { recursive: true, force: true }));
+  afterEach(() => removeTempDirSync(dir));
 
   it('emits each breadcrumb the installer wrote', () => {
     writeFileSync(

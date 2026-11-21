@@ -6,7 +6,7 @@
  * was refused as "file not found" or as outside every allowed root.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, mkdirSync, realpathSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { ActionType, asRecord, type CommandResult, ReticleCommand } from '@reticlehq/core';
@@ -16,6 +16,7 @@ import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import { actCommand } from './act-command.js';
 import type { ToolDeps } from './tools.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const FIXTURE = 'fixture.txt';
 const FIXTURE_TEXT = 'from worktree B';
@@ -35,7 +36,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  rmSync(base, { recursive: true, force: true });
+  removeTempDirSync(base);
 });
 
 function harness(projectDir = worktreeDir): {

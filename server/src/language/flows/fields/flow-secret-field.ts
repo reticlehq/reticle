@@ -37,6 +37,25 @@ export function anchorFieldName(anchor: FlowAnchor): string | undefined {
  */
 export const REDACTED_FILL = '<redacted: supply at replay>';
 
+/**
+ * The args that carry typed text: `fill` writes `value`, `type` writes `text`.
+ *
+ * Redaction, substitution and the secret checks must all read the same keys. Reading only `value`
+ * saved a password typed with `type` to the flow file verbatim, even when the SDK marked the field.
+ */
+const TYPED_TEXT_KEYS = ['value', 'text'] as const;
+type TypedTextKey = (typeof TYPED_TEXT_KEYS)[number];
+
+/** The arg that holds the text a fill or type step writes, or undefined when it writes none. */
+export function typedTextKey(args: Record<string, unknown> | undefined): TypedTextKey | undefined {
+  return TYPED_TEXT_KEYS.find((key) => 'string' === typeof args?.[key]);
+}
+
+/** Whether a step's typed text was replaced by the placeholder at save. */
+export function isRedactedFill(args: Record<string, unknown> | undefined): boolean {
+  return TYPED_TEXT_KEYS.some((key) => args?.[key] === REDACTED_FILL);
+}
+
 /** The arg a saved redacted fill names its variable in. Dropped before the step reaches the page. */
 export const SECRET_NAME_ARG = 'secret';
 
@@ -116,7 +135,7 @@ export function secretKeyForFill(
   args: Record<string, unknown> | undefined,
   field: string,
 ): string | undefined {
-  if (args?.['value'] !== REDACTED_FILL) {
+  if (args === undefined || !isRedactedFill(args)) {
     return undefined;
   }
   const named = args[SECRET_NAME_ARG];
@@ -164,8 +183,8 @@ export function withDistinctSecretKeys(flow: FlowFile): FlowFile {
     const field = anchorFieldName(step.anchor);
     if (
       field !== undefined &&
-      step.args?.['value'] === REDACTED_FILL &&
-      step.args[SECRET_NAME_ARG] === secretEnvKey(field)
+      isRedactedFill(step.args) &&
+      step.args?.[SECRET_NAME_ARG] === secretEnvKey(field)
     ) {
       const base = secretEnvKey(field);
       let key = base;

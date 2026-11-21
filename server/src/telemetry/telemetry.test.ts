@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -10,6 +10,7 @@ import {
   VerifiedReason,
 } from '@reticlehq/core';
 import { createTelemetry, describeTelemetry, setTelemetryEnabled } from './telemetry.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 /** A key so the emitter is live in tests — dev builds ship an empty embedded key (telemetry off). */
 const TEST_ENV = {
@@ -176,7 +177,7 @@ describe('telemetry emitter', () => {
       // The env-var opt-out wins regardless of the file state.
       expect(describeTelemetry({ RETICLE_TELEMETRY: '0' }, dir, USER_PROJECT).enabled).toBe(false);
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      removeTempDirSync(dir);
     }
   });
 

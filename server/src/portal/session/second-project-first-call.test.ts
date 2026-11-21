@@ -6,7 +6,7 @@
  * The same call from the first project still says to reopen the tab that was there.
  */
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { WebSocket } from 'ws';
@@ -24,11 +24,12 @@ import { firstRunWiring } from './first-run-wiring.js';
 import { Session } from './session.js';
 import { SessionManager } from './session-manager.js';
 import { startNoSessionWatch } from './no-session-watch.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const APP_A_URL = 'http://localhost:5173/orders';
 const roots: string[] = [];
 afterEach(() => {
-  for (const dir of roots.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of roots.splice(0)) removeTempDirSync(dir);
 });
 
 /** Let the watch's port probe finish. One macrotask drains the promise chain; a loop would look like IO. */

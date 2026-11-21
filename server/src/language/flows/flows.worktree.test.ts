@@ -21,14 +21,14 @@ import { FlowStore } from './flows.js';
 import type { CompiledProgram } from './recording/tape/recordings.js';
 
 const clock = { now: (): number => 1 };
-const click = (name: string): CompiledProgram => ({
+const click = (name: string, target = 'save'): CompiledProgram => ({
   name,
   version: 1,
   steps: [
     {
       tool: 'reticle_act',
       stable: true,
-      args: { by: QueryBy.TESTID, value: 'save', action: ActionType.CLICK, args: {} },
+      args: { by: QueryBy.TESTID, value: target, action: ActionType.CLICK, args: {} },
     },
   ],
 });
@@ -121,6 +121,24 @@ describe('FlowStore in a linked git worktree', () => {
       const store = new FlowStore(createNodeFileSystem(), wtRoot, clock);
       expect(await store.list()).toEqual([]);
       expect((await store.load('checkout')).ok).toBe(false);
+    });
+
+    it('keeps the tracked copy when duplicate saved journeys collapse', async () => {
+      await new FlowStore(createNodeFileSystem(), wtRoot, { now: () => 1 }).save(
+        click('drive-untracked', 'archive'),
+      );
+      await new FlowStore(createNodeFileSystem(), wtRoot, { now: () => 2 }).save(
+        click('drive-tracked', 'archive'),
+      );
+      const worktree = join(dir, 'wt');
+      git(worktree, 'add', '.reticle/flows/drive-tracked.json');
+      git(worktree, 'commit', '-q', '-m', 'track saved flow');
+
+      const store = new FlowStore(createNodeFileSystem(), wtRoot, { now: () => 3 });
+      await store.saveJourney(click('drive-fresh', 'archive'), undefined, 'drive-');
+
+      expect(await store.list()).toEqual(['checkout', 'drive-tracked']);
+      expect(existsSync(flowPath(wtRoot, asFlowName('drive-tracked')))).toBe(true);
     });
   });
 });

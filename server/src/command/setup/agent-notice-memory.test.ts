@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -9,6 +9,7 @@ import {
   rememberSaid,
   unsaidNotices,
 } from './agent-notice-memory.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const ZED = {
   name: 'Zed',
@@ -44,7 +45,7 @@ describe('the stamp on disk', () => {
       rememberSaid(home, [noticeKey(CONTINUE)]);
       expect(readSaid(home).sort()).toEqual([noticeKey(ZED), noticeKey(CONTINUE)].sort());
     } finally {
-      rmSync(home, { recursive: true, force: true });
+      removeTempDirSync(home);
     }
   });
 
@@ -55,7 +56,7 @@ describe('the stamp on disk', () => {
       expect(readSaid(home)).toEqual([]);
       expect(unsaidNotices(readSaid(home), [ZED])).toEqual([ZED]);
     } finally {
-      rmSync(home, { recursive: true, force: true });
+      removeTempDirSync(home);
     }
   });
 

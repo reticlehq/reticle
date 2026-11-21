@@ -1,5 +1,5 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -12,7 +12,9 @@ import {
   projectDaemonsElsewhere,
   daemonsServingProjectElsewhere,
   splitBrainNote,
+  wrongDaemonNote,
 } from './daemon-resolve.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 /**
  * Which daemon does THIS project belong to?
@@ -36,7 +38,7 @@ describe('resolveDaemonForProject', () => {
   const dirs: string[] = [];
   afterEach(() => {
     for (const d of dirs.splice(0)) {
-      rmSync(d, { recursive: true, force: true });
+      removeTempDirSync(d);
     }
   });
 
@@ -52,6 +54,20 @@ describe('resolveDaemonForProject', () => {
   it('finds this project’s daemon wherever it is listening', () => {
     const dir = home([{ port: 47311, pid: 1, cwd: '/a', startedAt: 1, projectId: 'shop' }]);
     expect(resolveDaemonForProject('shop', dir, live)).toBe(47311);
+  });
+
+  /**
+   * #2341: the project moved from :4441 to :4442 and both daemons are alive. The page dials the
+   * configured port, so that daemon is the project's own, and `status` must not call it a stranger.
+   */
+  it('takes the configured port over a lower port the project used before', () => {
+    const dir = home([
+      { port: 4441, pid: 1, cwd: '/a', startedAt: 1, projectId: 'shop' },
+      { port: 4442, pid: 2, cwd: '/a', startedAt: 2, projectId: 'shop' },
+    ]);
+    expect(resolveDaemonForProject('shop', dir, live)).toBe(4441);
+    expect(resolveDaemonForProject('shop', dir, live, 4442)).toBe(4442);
+    expect(wrongDaemonNote(4442, resolveDaemonForProject('shop', dir, live, 4442))).toBeUndefined();
   });
 
   /** The whole point: another project's daemon is not ours, however convenient its port. */
@@ -131,7 +147,7 @@ describe('daemonInsideProject', () => {
   const dirs: string[] = [];
   afterEach(() => {
     for (const d of dirs.splice(0)) {
-      rmSync(d, { recursive: true, force: true });
+      removeTempDirSync(d);
     }
   });
   function homeWith(cwd: string): string {
@@ -166,7 +182,7 @@ describe('resolveMcpPort', () => {
   const dirs: string[] = [];
   afterEach(() => {
     for (const d of dirs.splice(0)) {
-      rmSync(d, { recursive: true, force: true });
+      removeTempDirSync(d);
     }
   });
   function home(entries: readonly Record<string, unknown>[]): string {
@@ -333,7 +349,7 @@ describe('daemonsServingProjectElsewhere', () => {
   const dirs: string[] = [];
   afterEach(() => {
     for (const d of dirs.splice(0)) {
-      rmSync(d, { recursive: true, force: true });
+      removeTempDirSync(d);
     }
   });
 
@@ -374,6 +390,42 @@ describe('daemonsServingProjectElsewhere', () => {
   it('ignores a live daemon this project never connected to', () => {
     const dir = home([{ port: 4400, pid: 1, cwd: '/other', startedAt: 1, projectId: 'blog' }]);
     expect(daemonsServingProjectElsewhere('shop', 51234, dir, live, connectedOn())).toEqual([]);
+  });
+
+  /**
+   * #2341: `.reticle.json` moved this project from :4441 to :4442. The daemon on the prior port is
+   * still alive and remembers a session, but the page dials the configured port (core's
+   * `pickDaemonPort`, rule 1), so a lease on the current URL connects here. The record is history.
+   */
+  it('ignores a prior port when the page dials this daemon on the configured port', () => {
+    const dir = home([
+      { port: 4441, pid: 1, cwd: '/shop', startedAt: 1, projectId: 'shop' },
+      { port: 4442, pid: 2, cwd: '/shop', startedAt: 2, projectId: 'shop' },
+    ]);
+    expect(
+      daemonsServingProjectElsewhere('shop', 4442, dir, live, connectedOn(4441, 4442), 4442),
+    ).toEqual([]);
+  });
+
+  it('still names the other daemon when the configured port is not this one', () => {
+    const dir = home([
+      { port: 4441, pid: 1, cwd: '/shop', startedAt: 1, projectId: 'shop' },
+      { port: 4442, pid: 2, cwd: '/shop', startedAt: 2, projectId: 'shop' },
+    ]);
+    expect(
+      daemonsServingProjectElsewhere('shop', 4442, dir, live, connectedOn(4441), 4441),
+    ).toEqual([4441]);
+  });
+
+  /** The page skips a configured port that another project's daemon holds (`pickDaemonPort`). */
+  it('still names the other daemon when another project holds the configured port', () => {
+    const dir = home([
+      { port: 4441, pid: 1, cwd: '/shop', startedAt: 1, projectId: 'shop' },
+      { port: 4442, pid: 2, cwd: '/blog', startedAt: 2, projectId: 'blog' },
+    ]);
+    expect(
+      daemonsServingProjectElsewhere('shop', 4442, dir, live, connectedOn(4441), 4442),
+    ).toEqual([4441]);
   });
 
   /** No identity, no claim: a caller with no projectId cannot tell its own sessions from anyone's. */
@@ -431,7 +483,7 @@ describe('splitBrainNote', () => {
         'RETICLE_PORT=4401',
       );
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      removeTempDirSync(dir);
     }
   });
 
@@ -465,7 +517,7 @@ describe('splitBrainNote', () => {
       expect(note).toContain('restart the dev server');
       expect(note).not.toContain('init');
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      removeTempDirSync(dir);
     }
   });
 
@@ -487,7 +539,7 @@ describe('splitBrainNote', () => {
         'RETICLE_PORT',
       );
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      removeTempDirSync(dir);
     }
   });
 
@@ -503,7 +555,7 @@ describe('splitBrainNote', () => {
       expect(note).toContain('RETICLE_PORT=4400');
       expect(note).not.toContain('.reticle.json');
     } finally {
-      rmSync(dir, { recursive: true, force: true });
+      removeTempDirSync(dir);
     }
   });
 });
@@ -517,7 +569,7 @@ describe('relocationReason', () => {
   const dirs: string[] = [];
   afterEach(() => {
     for (const d of dirs.splice(0)) {
-      rmSync(d, { recursive: true, force: true });
+      removeTempDirSync(d);
     }
   });
   function home(entries: readonly Record<string, unknown>[]): string {

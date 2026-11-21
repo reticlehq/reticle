@@ -9,11 +9,12 @@
  * subdirectory of one app was a different project.
  */
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ProjectIdSource } from '@reticlehq/core/telemetry';
 import { projectFingerprint } from './telemetry.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 let root = '';
 
@@ -21,7 +22,7 @@ beforeEach(() => {
   root = mkdtempSync(join(tmpdir(), 'reticle-identity-'));
 });
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  removeTempDirSync(root);
 });
 
 /** A directory `a/b/c` under the fixture root, created. */

@@ -400,7 +400,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // suite verdict and the suite selection, which all live here.
   // +1: flow-start-path.ts, replay's start-page arrival split out of flow-replay-run.ts at the 1000-line cap (#1705).
   // +1: flow-lease.ts, the leased-context helpers split out of flow-tools.ts at the 1000-line cap (#1705).
-  'server/src/language/flows': 39,
+  // +1: flow-undecided.ts, the replay answers that decide nothing, split out of flow-replay.ts at the cap.
+  'server/src/language/flows': 40,
   // 12 since `drive-flow.ts`: the rule that turns a session's ambient tape into a flow per journey,
   // and the gate that refuses to save one asserting nothing. It sits beside `session-end.ts` because
   // teardown is the only caller and the tape is data by then — the reach guard already refused the

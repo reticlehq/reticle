@@ -307,6 +307,13 @@ export const DriftReason = {
    * Undecided, as the live act answers it, never a pass and never the app's failure.
    */
   TARGET_UNREACHABLE: 'target_unreachable',
+  /**
+   * The step's anchor resolved and its action ran, but its declared consequence could not be
+   * decided: the predicate answered `inconclusive` (for example, the page's SDK did not return the
+   * whole text it was asked to judge). Undecided, never a pass and never the app's failure. As
+   * SIGNAL_NOT_OBSERVED, a correct app replayed as failed.
+   */
+  EXPECT_UNDECIDED: 'expect_undecided',
 } as const;
 export type DriftReason = (typeof DriftReason)[keyof typeof DriftReason];
 
@@ -330,7 +337,9 @@ export function isConsequenceDrift(reason: DriftReason): boolean {
     DriftReason.EXPECT_ELEMENT_NOT_FOUND === reason ||
     // Same class: the anchor resolved, the action ran, and the page is where the step left it. Only
     // the answer is missing. Excluding it would halt a sweep on a slow endpoint.
-    DriftReason.NET_STILL_IN_FLIGHT === reason
+    DriftReason.NET_STILL_IN_FLIGHT === reason ||
+    // The same again: the action ran and only the answer could not be read.
+    DriftReason.EXPECT_UNDECIDED === reason
   );
 }
 

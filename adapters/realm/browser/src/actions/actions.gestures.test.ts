@@ -51,6 +51,36 @@ describe('tap is a TOUCH, not a click with another name', () => {
     expect(onClick).toHaveBeenCalledTimes(1);
   });
 
+  it('puts the pointer at the element centre, where the touch lands', async () => {
+    // A handler that hit-tests from clientX/Y (a canvas, a map, a slider) reads the pointer
+    // events to locate the touch. They carried no coordinates, so every one read (0, 0): a
+    // touch in the top-left corner that never happened (#1851). The touch events already
+    // carry the centre; the pointer half of the same tap must agree with them.
+    const el = mount('<button>Save</button>');
+    el.getBoundingClientRect = () => new DOMRect(10, 20, 100, 40);
+    const seen: Array<[string, number, number]> = [];
+    el.addEventListener('pointerdown', (e) => seen.push(['down', e.clientX, e.clientY]));
+    el.addEventListener('pointerup', (e) => seen.push(['up', e.clientX, e.clientY]));
+    await act(el, ActionType.TAP);
+    expect(seen).toEqual([
+      ['down', 60, 40],
+      ['up', 60, 40],
+    ]);
+  });
+
+  it('puts the pointer at the named point when the tap names one, not at the centre', async () => {
+    const el = mount('<button>Save</button>');
+    el.getBoundingClientRect = () => new DOMRect(10, 20, 100, 40);
+    const seen: Array<[string, number, number]> = [];
+    el.addEventListener('pointerdown', (e) => seen.push(['down', e.clientX, e.clientY]));
+    el.addEventListener('pointerup', (e) => seen.push(['up', e.clientX, e.clientY]));
+    await act(el, ActionType.TAP, { at: { x: 0.25, y: 0.75 } });
+    expect(seen).toEqual([
+      ['down', 35, 50],
+      ['up', 35, 50],
+    ]);
+  });
+
   it('holds for a long press, and reports the hold it ACHIEVED', async () => {
     const el = mount('<button>Hold me</button>');
     const result = await act(el, ActionType.TAP, { holdMs: 30 });
@@ -163,6 +193,53 @@ describe('scroll goes back, and sideways', () => {
     await expect(act(el, ActionType.SCROLL, { fraction: 0.5, wheel: true })).rejects.toThrow(
       /cannot use fraction/,
     );
+  });
+});
+
+describe('hover carries where the pointer is', () => {
+  it('puts the enter and move pointer events at the element centre', async () => {
+    // The tap half of #1851. A hover handler that hit-tests from clientX/Y (a canvas, a
+    // map, a tooltip anchor) read (0, 0) from these events, because they carried no
+    // coordinates at all.
+    const el = mount('<button>Save</button>');
+    el.getBoundingClientRect = () => new DOMRect(10, 20, 100, 40);
+    const seen: Array<[string, number, number]> = [];
+    for (const type of ['pointerover', 'pointerenter', 'pointermove']) {
+      el.addEventListener(type, (e) =>
+        seen.push([type, (e as PointerEvent).clientX, (e as PointerEvent).clientY]),
+      );
+    }
+    await act(el, ActionType.HOVER);
+    expect(seen).toEqual([
+      ['pointerover', 60, 40],
+      ['pointerenter', 60, 40],
+      ['pointermove', 60, 40],
+    ]);
+  });
+
+  it('puts the leave events at the centre of the element the pointer leaves', async () => {
+    // The other half of the same path: moving to a second element leaves the first.
+    // The pointer events on the way out carried the first element's centre, but the
+    // mouse events did not, so a hit-testing handler read (0, 0) from mouseout and
+    // mouseleave for a pointer that was never there (#1851).
+    const first = mount('<button>First</button>');
+    const second = document.createElement('button');
+    second.textContent = 'Second';
+    document.body.appendChild(second);
+    first.getBoundingClientRect = () => new DOMRect(10, 20, 100, 40);
+    const seen: Array<[string, number, number]> = [];
+    for (const type of ['pointerout', 'mouseout', 'mouseleave']) {
+      first.addEventListener(type, (e) =>
+        seen.push([type, (e as MouseEvent).clientX, (e as MouseEvent).clientY]),
+      );
+    }
+    await act(first, ActionType.HOVER);
+    await act(second, ActionType.HOVER);
+    expect(seen).toEqual([
+      ['pointerout', 60, 40],
+      ['mouseout', 60, 40],
+      ['mouseleave', 60, 40],
+    ]);
   });
 });
 

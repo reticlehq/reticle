@@ -11,15 +11,16 @@
  * The flag is now decided from the session that actually went away.
  */
 import { describe, expect, it, afterEach } from 'vitest';
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { startNoSessionWatch } from './no-session-watch.js';
 import type { SessionManager } from './session-manager.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const dirs: string[] = [];
 afterEach(() => {
-  for (const dir of dirs.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of dirs.splice(0)) removeTempDirSync(dir);
 });
 
 function projectDir(): string {

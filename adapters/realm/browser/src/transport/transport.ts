@@ -4,6 +4,7 @@ import {
   EventType,
   MessageKind,
   SESSION_LIFECYCLE,
+  TRANSPORT_LIMITS,
   parseCommandMessage,
 } from '@reticlehq/core/page';
 import { nativeSetTimeout, nativeNow } from '@/timers/native/native-timers.js';
@@ -90,8 +91,31 @@ export const RECONNECT_MAX_DELAY_MS = 30_000;
 export function nextReconnectDelay(previous: number): number {
   return Math.min(previous * 2, RECONNECT_MAX_DELAY_MS);
 }
-/** Offline queue cap. Exported so tests overflow the real bound instead of a mirrored copy of it. */
+/** Offline queue count cap. Exported so tests overflow the real bound instead of a mirrored copy. */
 export const MAX_QUEUE = 500;
+
+function utf8Bytes(text: string): number {
+  let bytes = 0;
+  for (let i = 0; i < text.length; i += 1) {
+    const code = text.charCodeAt(i);
+    if (code < 0x80) {
+      bytes += 1;
+    } else if (code < 0x800) {
+      bytes += 2;
+    } else if (code >= 0xd800 && code <= 0xdbff && i + 1 < text.length) {
+      const next = text.charCodeAt(i + 1);
+      if (next >= 0xdc00 && next <= 0xdfff) {
+        bytes += 4;
+        i += 1;
+      } else {
+        bytes += 3;
+      }
+    } else {
+      bytes += 3;
+    }
+  }
+  return bytes;
+}
 /**
  * Standard WebSocket close code 1008 ("policy violation") — the bridge sends it for TERMINAL refusals:
  * a protocol-version mismatch (the browser package is older than the bridge and must be upgraded),
@@ -112,6 +136,7 @@ interface QueuedMessage {
   text: string;
   event?: { seq: number | undefined; t: number; type: string } | undefined;
   order: number;
+  bytes: number;
 }
 
 /** WebSocket client to the bridge. Reconnects across reloads; buffers events while down. */
@@ -119,6 +144,7 @@ export class Transport {
   #ws: WebSocket | undefined;
   #churnQueue: QueuedMessage[] = [];
   #signalQueue: QueuedMessage[] = [];
+  #queuedBytes = 0;
   #insertOrder = 0;
   #closed = false;
   /** The bridge refused this page (1008): no timed retry, only one when the person returns. */
@@ -227,6 +253,7 @@ export class Transport {
       }
       this.#churnQueue = [];
       this.#signalQueue = [];
+      this.#queuedBytes = 0;
       this.#deps.onConnected?.();
     };
     ws.onmessage = (event: MessageEvent): void => {
@@ -435,11 +462,19 @@ export class Transport {
       this.#ws.send(text);
       return;
     }
-    if (this.#churnQueue.length + this.#signalQueue.length >= MAX_QUEUE) {
+    const bytes = utf8Bytes(text);
+    while (
+      this.#churnQueue.length + this.#signalQueue.length >= MAX_QUEUE ||
+      this.#queuedBytes + bytes > TRANSPORT_LIMITS.MAX_BUFFER_BYTES
+    ) {
       // Prefer sacrificing churn (high-volume, low-signal) over signal events. Falls back to signal
       // FIFO only when the churn queue is empty — the buffer is bounded either way.
       const evicted =
         this.#churnQueue.length > 0 ? this.#churnQueue.shift() : this.#signalQueue.shift();
+      if (evicted === undefined) {
+        break;
+      }
+      this.#queuedBytes -= evicted.bytes;
       if (evicted?.event !== undefined) {
         this.#dropped += 1;
         // Keep the EARLIEST drop, not the latest. Under plain FIFO the two were the same thing, so
@@ -457,10 +492,11 @@ export class Transport {
     const isChurn = event !== undefined && CHURN_TYPES.has(event.type);
     const order = this.#insertOrder++;
     if (isChurn) {
-      this.#churnQueue.push({ text, event, order });
+      this.#churnQueue.push({ text, event, order, bytes });
     } else {
-      this.#signalQueue.push({ text, event, order });
+      this.#signalQueue.push({ text, event, order, bytes });
     }
+    this.#queuedBytes += bytes;
   }
 
   /**

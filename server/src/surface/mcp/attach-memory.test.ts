@@ -11,7 +11,7 @@
  * advice printed beside a working install reads as though something is wrong.
  */
 
-import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -24,6 +24,7 @@ import {
   rememberProxyStarted,
   rememberToolCalled,
 } from './attach-memory.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 describe('attach memory', () => {
   let dir = '';
@@ -32,7 +33,7 @@ describe('attach memory', () => {
     dir = mkdtempSync(join(tmpdir(), 'reticle-attach-'));
   });
   afterEach(() => {
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   });
 
   it('reports never attached when no client has started the MCP server on this port', () => {

@@ -12,6 +12,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { escapeJobViaWmi, JOB_ESCAPE_LAUNCHER, type EscapeRequest } from './win32-escape.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 /** A generous bound for a detached node child to start and write one line. Not a duration check. */
 const CHILD_WRITE_TIMEOUT_MS = 15_000;
@@ -43,7 +44,7 @@ describe('escapeJobViaWmi', () => {
   });
 
   afterEach(() => {
-    rmSync(home, { recursive: true, force: true });
+    removeTempDirSync(home);
   });
 
   /** What the launcher does when WMI starts it: claim the spec, then report the daemon pid. */

@@ -17,15 +17,16 @@
  */
 
 import { describe, expect, it, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir, homedir } from 'node:os';
 import { join } from 'node:path';
 import { reticleStateHome, spawnDaemon, STATE_DIR_ENV } from './daemon.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const created: string[] = [];
 afterEach(() => {
   delete process.env[STATE_DIR_ENV];
-  for (const dir of created.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of created.splice(0)) removeTempDirSync(dir);
 });
 
 describe('reticleStateHome', () => {

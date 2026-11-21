@@ -2198,11 +2198,6 @@
       "count": 1
     }
   },
-  "src/portal/bridge/auth-failure-reason.ts": {
-    "curly": {
-      "count": 2
-    }
-  },
   "src/portal/bridge/bridge-security.ts": {
     "curly": {
       "count": 1

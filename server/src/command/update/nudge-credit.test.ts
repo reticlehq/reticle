@@ -13,7 +13,7 @@
  */
 
 import { beforeEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { creditNudge, wasNudged } from './nudge-credit.js';
@@ -23,13 +23,14 @@ import {
   takeUpdateNudge,
   updateNudgeState,
 } from './update-nudge.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const withDir = (fn: (dir: string) => void): void => {
   const dir = mkdtempSync(join(tmpdir(), 'nudge-'));
   try {
     fn(dir);
   } finally {
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   }
 };
 

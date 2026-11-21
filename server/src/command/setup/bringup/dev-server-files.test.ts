@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { existsSync, mkdtempSync, readdirSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, utimesSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -10,6 +10,7 @@ import {
   stopHandedOver,
   sweepDeadDevServers,
 } from './dev-server-files.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const APP = '/work/next-app';
 const URL = 'http://localhost:3000';
@@ -29,7 +30,7 @@ describe('finding the server init handed over', () => {
       answers: (url) => Promise.resolve(URL === url),
     });
     expect(found).toBe(URL);
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   });
 
   it('does not, when the process is gone or the url answers nothing', async () => {
@@ -39,7 +40,7 @@ describe('finding the server init handed over', () => {
     const silent = { alive: () => true, answers: () => Promise.resolve(false) };
     expect(await handedOverUrl(dir, APP, dead)).toBeUndefined();
     expect(await handedOverUrl(dir, APP, silent)).toBeUndefined();
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   });
 
   it('never hands one project another project’s server', async () => {
@@ -47,7 +48,7 @@ describe('finding the server init handed over', () => {
     recordHandOver(dir, { pid: 4242, url: URL, appDir: APP });
     const live = { alive: () => true, answers: () => Promise.resolve(true) };
     expect(await handedOverUrl(dir, '/work/other-app', live)).toBeUndefined();
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   });
 });
 
@@ -64,7 +65,7 @@ describe('a handed-over server that dials another daemon port', () => {
     recordHandOver(dir, { pid: 4242, url: URL, appDir: APP, bridgePort: 24601 });
     expect(handedOverToOtherPort(dir, APP, 24602, live)).toBe(true);
     expect(handedOverToOtherPort(dir, APP, 24601, live)).toBe(false);
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   });
 
   it('is not stale when the process is gone, the app is another, or no port was recorded', () => {
@@ -74,7 +75,7 @@ describe('a handed-over server that dials another daemon port', () => {
     expect(handedOverToOtherPort(dir, '/work/other-app', 24602, live)).toBe(false);
     recordHandOver(dir, { pid: 4242, url: URL, appDir: APP });
     expect(handedOverToOtherPort(dir, APP, 24602, live)).toBe(false);
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   });
 });
 
@@ -122,7 +123,7 @@ describe('sweeping what dead servers left', () => {
     expect(left.some((f) => f.startsWith(gone.replace('.log', '')))).toBe(false);
     expect(left).toContain(live);
     expect(left).toContain('devserver-5173.json');
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   });
 
   it('removes an unrecorded log only once it is old', () => {
@@ -137,6 +138,6 @@ describe('sweeping what dead servers left', () => {
     sweepDeadDevServers(dir, { alive: () => false, now });
     expect(existsSync(old)).toBe(false);
     expect(existsSync(recent)).toBe(true);
-    rmSync(dir, { recursive: true, force: true });
+    removeTempDirSync(dir);
   });
 });

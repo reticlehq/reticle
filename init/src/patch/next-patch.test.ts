@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   findRouteGroupRootLayout,
+  nextLayoutFallback,
   patchNextConfig,
   patchRootLayout,
   patchPagesApp,
@@ -382,5 +383,57 @@ describe('findRouteGroupRootLayout', () => {
         project({ 'pages/_app.tsx': '', 'app/dashboard/layout.tsx': LAYOUT }),
       ),
     ).toBeNull();
+  });
+
+  // Reported from the field: a next-intl app keeps its root layout at
+  // `app/[locale]/layout.tsx` (it renders <html> and <body>), and init said there was no root layout.
+  it('takes a top-level dynamic segment whose layout renders <html> (next-intl)', () => {
+    const io = project({
+      'app/[locale]/layout.tsx': LAYOUT,
+      'app/[locale]/page.tsx': 'export default function P() { return null; }',
+    });
+    expect(findRouteGroupRootLayout(io)).toEqual({
+      path: 'app/[locale]/layout.tsx',
+      unmounted: [],
+    });
+  });
+
+  it('does the same under src/app', () => {
+    const io = project({ 'src/app/[locale]/layout.tsx': LAYOUT });
+    expect(findRouteGroupRootLayout(io)).toEqual({
+      path: 'src/app/[locale]/layout.tsx',
+      unmounted: [],
+    });
+  });
+
+  it('never takes a dynamic segment layout that is not a root layout', () => {
+    const io = project({
+      'app/[id]/layout.tsx':
+        'export default function L({ children }) { return <section>{children}</section>; }',
+    });
+    expect(findRouteGroupRootLayout(io)).toBeNull();
+  });
+});
+
+/**
+ * Reported from the field (3.10.7): in a monorepo app whose App Router lives in `src/app`, init found
+ * no root layout it could patch, fell back to `app/layout.tsx`, and wrote `app/reticle-dev.tsx` into
+ * a folder the app does not have. The user moved the file and mounted it by hand.
+ */
+describe('nextLayoutFallback', () => {
+  const dirs = (tree: Record<string, string[]>) => ({ listDirs: (d: string) => tree[d] ?? [] });
+
+  it('names src/app when the app has src/app and no app folder', () => {
+    expect(nextLayoutFallback(dirs({ '.': ['src', 'public'], src: ['app', 'lib'] }))).toBe(
+      'src/app/layout.tsx',
+    );
+  });
+
+  it('keeps app/ when the app has an app folder', () => {
+    expect(nextLayoutFallback(dirs({ '.': ['app', 'src'], src: ['app'] }))).toBe('app/layout.tsx');
+  });
+
+  it('keeps app/ when neither folder exists yet', () => {
+    expect(nextLayoutFallback(dirs({ '.': ['public'] }))).toBe('app/layout.tsx');
   });
 });

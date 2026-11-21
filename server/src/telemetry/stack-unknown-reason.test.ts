@@ -1,9 +1,10 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { StackUnknownReason } from '@reticlehq/core/telemetry';
 import { detectStack } from './feedback-context.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 /**
  * An unknown stack has to say WHICH unknown it is.
@@ -24,7 +25,7 @@ describe('detectStack says why the stack is unknown', () => {
     root = mkdtempSync(join(tmpdir(), 'reticle-stack-reason-'));
   });
   afterEach(() => {
-    rmSync(root, { recursive: true, force: true });
+    removeTempDirSync(root);
   });
 
   const write = (rel: string, body: unknown): void => {

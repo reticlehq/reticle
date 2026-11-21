@@ -8,12 +8,13 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { REPO_ROOT } from '@/machine/repo-root.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const REPO = REPO_ROOT;
 const CLAUDE_WORKTREES = '.claude/worktrees';
@@ -58,7 +59,7 @@ const VITEST_CLI = join(
 const planted = join(REPO, CLAUDE_WORKTREES, PROBE_DIR);
 
 afterEach(() => {
-  rmSync(planted, { recursive: true, force: true });
+  removeTempDirSync(planted);
 });
 
 // These read the whole repository and start a second process, so they take about half a second on

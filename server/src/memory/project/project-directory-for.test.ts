@@ -5,7 +5,7 @@
  * daemon's cwd, which for a shared daemon is often `$HOME` or a monorepo root with no app in it.
  * There it named the generic sensor package to a project that never depended on it (#1135).
  */
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,6 +13,7 @@ import { PROJECT_REGISTRY_FILE } from '@reticlehq/core/artifacts';
 import { ReticleDir } from '@reticlehq/core';
 import { sdkFixForDirectory } from '@/command/version/sdk-fix.js';
 import { projectDirectoryFor } from './artifact-root-resolver.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 let scratch: string;
 let app: string;
@@ -42,7 +43,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks();
   vi.unstubAllEnvs();
-  rmSync(scratch, { recursive: true, force: true });
+  removeTempDirSync(scratch);
 });
 
 describe('projectDirectoryFor', () => {

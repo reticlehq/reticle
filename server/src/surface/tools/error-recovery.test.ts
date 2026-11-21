@@ -417,6 +417,18 @@ describe('browser-side action guards are recognized refusals, not unknown defect
     ).toBe(RECOVERY.CONFIRM_DANGEROUS);
   });
 
+  // A covered-click refusal leads with closing the cover. An unrecognised refusal invited a defect
+  // report and gave no next step, and the bypass alone is what an agent would reach for.
+  it('the covered-click refusal is recognised, and its hint leads with closing the cover', () => {
+    const hint = recoveryFor(
+      'click refused: dialog "Reports & AI" covers the target, so a person could not click it. ' +
+        'Close or dismiss dialog "Reports & AI" first, then act again. A transparent cover still catches ' +
+        "a click. Only when you checked that a person's click reaches the target anyway, pass args.allowOccluded=true",
+    );
+    expect(hint).toBe(RECOVERY.COVERED_TARGET);
+    expect(hint?.indexOf('allowOccluded') ?? -1).toBeGreaterThan(hint?.indexOf('Close') ?? 0);
+  });
+
   // The text named `deploy` and `publish`, which the classifier excludes on purpose, so an agent
   // read a wrong reason for the refusal. Every word it names must be one the guard stops on.
   it('the destructive-action block names only words the guard stops on', () => {
@@ -986,5 +998,32 @@ describe('a lease root that names no directory on disk', () => {
     expect(payload.recovery, message).toBeUndefined();
     expect(payload.feedback, message).toBeUndefined();
     expect(refusalReasonFor(message)).toBe(RefusalReason.BAD_ARGS);
+  });
+});
+
+/**
+ * Issue 2399: a page whose SDK predates `insertText` answers `unknown action 'insertText'`.
+ * The catch-all `unknown action '<verb>'` rule read that as a bad argument, so the agent retried
+ * the same call and never typed into the editor. The hint now names the page's version as the
+ * fault. Without the specific rule, the first case below returns RECOVERY.BAD_ARGUMENTS.
+ */
+describe('a page whose SDK predates insertText (issue 2399)', () => {
+  it('names the package to update, not the arguments', () => {
+    const hint = recoveryFor("unknown action 'insertText'");
+
+    expect(hint).toBe(RECOVERY.SDK_PREDATES_INSERT_TEXT);
+    expect(String(hint)).toContain('@reticlehq/browser');
+    expect(hint).not.toBe(RECOVERY.BAD_ARGUMENTS);
+  });
+
+  it('still reads any other unknown action as a bad argument', () => {
+    expect(recoveryFor("unknown action 'clcik'")).toBe(RECOVERY.BAD_ARGUMENTS);
+  });
+
+  it('still sends a real EditContext refusal to the surface hint', () => {
+    const message =
+      'cannot insertText into an EditContext editor (Monaco, CodeMirror 6): code that calls updateText does not fire textupdate, so the editor model would keep the old text. Use press for a key.';
+
+    expect(recoveryFor(message)).toBe(RECOVERY.UNSUPPORTED_SURFACE);
   });
 });

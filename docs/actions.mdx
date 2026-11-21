@@ -52,7 +52,7 @@ Reticle blocks a control that looks destructive before acting on it:
 
 ```json
 {
-  "error": "potentially destructive action blocked; retry with args.confirmDangerous=true",
+  "error": "potentially destructive action blocked: button \"Delete account\" (\"delete\" in its name); retry with args.confirmDangerous=true",
   "recovery": "Reticle blocked a control whose label reads as consequential (delete, remove, revoke, pay…) on purpose. If you mean it, send the SAME call again with `args: { confirmDangerous: true }`: it goes inside the `args` object, not beside it. This is a deliberate refusal, not a defect: there is nothing to report."
 }
 ```

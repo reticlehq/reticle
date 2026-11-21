@@ -280,6 +280,13 @@ const LAYOUT_BASENAMES = ['layout.tsx', 'layout.jsx', 'layout.js'];
 const PAGE_FILE = /^page\.(tsx|ts|jsx|js|mdx)$/;
 /** `(marketing)`: a route group, which organises routes without adding a URL segment. */
 const ROUTE_GROUP = /^\(.+\)$/;
+/**
+ * `[locale]`: a top-level dynamic segment. next-intl keeps the root layout in one
+ * (`app/[locale]/layout.tsx`), so it counts only when its layout renders `<html>`, which a root
+ * layout must do and a nested one must not.
+ */
+const DYNAMIC_SEGMENT = /^\[[^.\]]+\]$/;
+const ROOT_HTML = /<html[\s>]/;
 
 /**
  * What `findRouteGroupRootLayout` found: the layout to mount into, with the other group root layouts
@@ -315,13 +322,20 @@ export function findRouteGroupRootLayout(io: ListingIo): RouteGroupLayouts | nul
   for (const appDir of NEXT_APP_DIRS) {
     const layouts = io
       .listDirs(appDir)
-      .filter((name) => ROUTE_GROUP.test(name))
+      .filter((name) => ROUTE_GROUP.test(name) || DYNAMIC_SEGMENT.test(name))
       .sort()
       .flatMap((group) => {
         const dir = `${appDir}/${group}`;
         const files = io.listFiles(dir);
         const layout = LAYOUT_BASENAMES.find((name) => files.includes(name));
-        return layout === undefined ? [] : [{ dir, path: `${dir}/${layout}` }];
+        if (layout === undefined) {
+          return [];
+        }
+        const path = `${dir}/${layout}`;
+        if (DYNAMIC_SEGMENT.test(group) && !ROOT_HTML.test(io.readFile(path) ?? '')) {
+          return [];
+        }
+        return [{ dir, path }];
       });
     if (0 === layouts.length) continue;
     const mounted = new Set(
@@ -361,6 +375,21 @@ export const NEXT_PAGES_APP_CANDIDATES = [
  * root layouts and none could be chosen, so the manual step can name them; `unmounted` names the
  * other group root layouts when one was chosen, so init can say which routes go without it.
  */
+/** The App Router folders, in the order Next prefers them. */
+const ROOT_APP_LAYOUT = 'app/layout.tsx';
+const SRC_APP_LAYOUT = 'src/app/layout.tsx';
+
+/**
+ * Where the root layout would be, when none was found: `src/app` for an app that has it and no
+ * `app` folder (a `--src-dir` app), else `app`. The dev component lands beside this path, so a wrong
+ * guess writes it into a folder Next never reads.
+ */
+export function nextLayoutFallback(io: Pick<InitIo, 'listDirs'>): string {
+  const rootHasApp = io.listDirs('.').includes('app');
+  const srcHasApp = io.listDirs('src').includes('app');
+  return !rootHasApp && srcHasApp ? SRC_APP_LAYOUT : ROOT_APP_LAYOUT;
+}
+
 export function findNextMountFile(io: ListingIo & Pick<InitIo, 'exists'>): {
   path: string | null;
   candidates?: string[];

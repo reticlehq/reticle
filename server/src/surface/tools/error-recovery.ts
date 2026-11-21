@@ -258,13 +258,26 @@ export const RECOVERY = {
     'on purpose. If you mean it, send the SAME call again with ' +
     '`args: { confirmDangerous: true }` — it goes inside the `args` object, not beside it. This is ' +
     'a deliberate refusal, not a defect: there is nothing to report.',
+  COVERED_TARGET:
+    'Another element covers the target, so a person could not click it, and Reticle did not send ' +
+    'the click. Close or dismiss what covers it first (the refusal names it: usually a dialog, a ' +
+    'menu or a toast), then act again. A transparent cover still catches a click, so it is a real ' +
+    'cover. Only when you checked that a click reaches the target anyway, pass ' +
+    '`args: { allowOccluded: true }`. This is a deliberate ' +
+    'refusal, not a defect: there is nothing to report.',
   UNSUPPORTED_SURFACE:
     'That surface is a rich-text editor: it keeps its own document model, so `fill` and `type` ' +
     'refuse it rather than write the DOM and submit the old content. A contenteditable editor ' +
     '(Tiptap, ProseMirror) takes `insertText` with `{ text }`: it goes through the browser editing ' +
     'pipeline, so the editor model updates. An EditContext editor (Monaco, CodeMirror 6) cannot be ' +
     'typed into yet, because a scripted update fires no textupdate for its model: use `press` for ' +
-    'a key. If the ref points at a wrapper, act on the editor inside it instead.',
+    'a key. If the ref points at a wrapper, act on the editor inside it instead. If the page answers ' +
+    "`unknown action 'insertText'`, its SDK predates the action: update its `@reticlehq/browser` package.",
+  SDK_PREDATES_INSERT_TEXT:
+    "The page answered `unknown action 'insertText'`, so its SDK is older than 2026-11-10, the day " +
+    "`insertText` arrived. The action is valid, so the page's version is at fault, not the call: " +
+    'update the `@reticlehq/browser` package it loads, then type again. Until then, use `press` for ' +
+    'a key.',
   HOVER_NEEDS_POINTER:
     'Hover needs a real pointer: a synthetic mouseover does not apply CSS :hover, and Reticle ' +
     'refuses rather than reporting the styles as applied. Acquire a tab with ' +
@@ -380,9 +393,11 @@ const REASON_OF: Record<keyof typeof RECOVERY, RefusalReason> = {
   AMBIGUOUS_TARGET: RefusalReason.NO_MATCH,
   FLOW_STEP_MISSING: RefusalReason.NO_MATCH,
   UNSUPPORTED_SURFACE: RefusalReason.UNSUPPORTED,
+  SDK_PREDATES_INSERT_TEXT: RefusalReason.UNSUPPORTED,
   HOVER_NEEDS_POINTER: RefusalReason.UNSUPPORTED,
   NOT_EDITABLE: RefusalReason.UNSUPPORTED,
   CONFIRM_DANGEROUS: RefusalReason.UNSUPPORTED,
+  COVERED_TARGET: RefusalReason.UNSUPPORTED,
   WRONG_TARGET: RefusalReason.UNSUPPORTED,
   // The call was valid; the drive's policy refuses what it asked for, as for a destructive control.
   PRODUCTION_POLICY: RefusalReason.UNSUPPORTED,
@@ -420,9 +435,11 @@ const DETAIL_OF: Record<keyof typeof RECOVERY, RefusalDetail> = {
   AMBIGUOUS_TARGET: RefusalDetail.AMBIGUOUS_TARGET,
   FLOW_STEP_MISSING: RefusalDetail.FLOW_STEP_MISSING,
   UNSUPPORTED_SURFACE: RefusalDetail.UNSUPPORTED_SURFACE,
+  SDK_PREDATES_INSERT_TEXT: RefusalDetail.UNSUPPORTED_SURFACE,
   HOVER_NEEDS_POINTER: RefusalDetail.HOVER_NEEDS_POINTER,
   NOT_EDITABLE: RefusalDetail.NOT_EDITABLE,
   CONFIRM_DANGEROUS: RefusalDetail.CONFIRM_DANGEROUS,
+  COVERED_TARGET: RefusalDetail.COVERED_TARGET,
   WRONG_TARGET: RefusalDetail.WRONG_TARGET,
   PRODUCTION_POLICY: RefusalDetail.PRODUCTION_POLICY,
   BAD_ARGUMENTS: RefusalDetail.BAD_ARGUMENTS,
@@ -524,6 +541,10 @@ const RULES: readonly RecoveryRule[] = [
   // broken. Order matters: contenteditable and disabled/readonly are `cannot <verb> …` messages too,
   // so they must be tested before the general wrong-target rule.
   { match: /contenteditable/i, hint: RECOVERY.UNSUPPORTED_SURFACE },
+  // A page whose SDK predates `insertText` answers this to a VALID action. The generic
+  // `unknown action '<verb>'` rule read it as a bad argument, so the agent retried the same call
+  // and never typed into the editor. Specific first: this one names the page's version as the fault.
+  { match: /^unknown action 'insertText'/i, hint: RECOVERY.SDK_PREDATES_INSERT_TEXT },
   // The EditContext refusal from insertText. Its message names no `contenteditable`, so it used to
   // fall through to the feedback ask — a deliberate refusal of a surface we cannot type into yet
   // read as "Reticle may be broken".
@@ -535,6 +556,7 @@ const RULES: readonly RecoveryRule[] = [
     match: /potentially destructive (?:\w+ )*(?:action|tool) blocked/i,
     hint: RECOVERY.CONFIRM_DANGEROUS,
   },
+  { match: /^click refused: .* covers the target/i, hint: RECOVERY.COVERED_TARGET },
   // Split in two because `^` binds to the FIRST alternative only. As one pattern this read as though
   // the anchor governed all four spellings; it never did, and the next person to add a fifth would
   // have had a coin-flip's chance of getting the behaviour they intended. The anchored spelling is

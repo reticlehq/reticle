@@ -12,10 +12,11 @@
  */
 
 import { afterEach, describe, expect, it } from 'vitest';
-import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { readAccountState } from './account-state.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const homes: string[] = [];
 function tempHome(session?: Record<string, unknown>): string {
@@ -28,7 +29,7 @@ function tempHome(session?: Record<string, unknown>): string {
   return dir;
 }
 afterEach(() => {
-  for (const dir of homes.splice(0)) rmSync(dir, { recursive: true, force: true });
+  for (const dir of homes.splice(0)) removeTempDirSync(dir);
 });
 
 const SESSION = {

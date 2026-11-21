@@ -14,7 +14,7 @@
  * however correct its verdict.
  */
 
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, describe, expect, it } from 'vitest';
@@ -27,6 +27,7 @@ import {
   parseChromiumRevision,
   type ChromiumProbe,
 } from './chromium-hint.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const PLAYWRIGHT_VERSION = '1.61.1';
 const MAC_EXECUTABLE =
@@ -244,7 +245,7 @@ describe('what stops a RETICLE_CHROMIUM_PATH from launching', () => {
   writeFileSync(runnable, '');
   chmodSync(runnable, 0o755);
   afterAll(() => {
-    rmSync(root, { recursive: true, force: true });
+    removeTempDirSync(root);
   });
 
   it('finds nothing wrong with an executable file', () => {

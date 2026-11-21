@@ -26,13 +26,13 @@ import {
   mkdtempSync,
   readFileSync,
   readdirSync,
-  rmSync,
   statSync,
   writeFileSync,
 } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { REPO_ROOT } from '@/machine/repo-root.js';
+import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const REPO = REPO_ROOT;
 const DOCS = join(REPO, 'docs');
@@ -104,8 +104,8 @@ describe('the published package does not carry the docs site assets', () => {
           `and nowhere inside node_modules. Shipping them only makes the tarball too large to publish.`,
       ).toEqual([]);
     } finally {
-      rmSync(src, { recursive: true, force: true });
-      rmSync(dest, { recursive: true, force: true });
+      removeTempDirSync(src);
+      removeTempDirSync(dest);
     }
   });
 
@@ -194,7 +194,7 @@ describe('the docs inside the published package still resolve', { timeout: 60_00
           `in the source docs, which are correct where they are written.`,
       ).toEqual([]);
     } finally {
-      rmSync(dest, { recursive: true, force: true });
+      removeTempDirSync(dest);
     }
   });
 });

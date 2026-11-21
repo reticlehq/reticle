@@ -8,6 +8,7 @@ import {
 import {
   REDACTED_FILL,
   SECRET_FIELD_ARG,
+  typedTextKey,
   SECRET_NAME_ARG,
   secretEnvKey,
   withDistinctSecretKeys,
@@ -16,7 +17,7 @@ export { REDACTED_FILL, secretEnvKey } from './fields/flow-secret-field.js';
 import { safeProjectId, type FlowResult } from './flow-result.js';
 import { changeInPlace } from './narrow-write.js';
 import { dirname } from 'node:path';
-import { gitTracks } from '@/machine/git-tracks.js';
+import { gitTracks, gitTracksFile } from '@/machine/git-tracks.js';
 export type { FlowResult } from './flow-result.js';
 import {
   AnchorKind,
@@ -241,7 +242,8 @@ function redactSecretFill(
   /** The SDK said the target holds a secret: redact whatever the field is called. */
   secret = false,
 ): Record<string, unknown> {
-  if (typeof args['value'] !== 'string') {
+  const key = typedTextKey(args);
+  if (key === undefined) {
     return args;
   }
   const field = anchorFieldName(anchor);
@@ -251,22 +253,20 @@ function redactSecretFill(
   }
   // ponytail: a secret field with no name (a component anchor) gets no variable; replay then refuses it.
   if (field === undefined) {
-    return { ...args, value: REDACTED_FILL };
+    return { ...args, [key]: REDACTED_FILL };
   }
   // The variable that supplies it, beside the placeholder: the file alone says what to set.
-  return { ...args, value: REDACTED_FILL, [SECRET_NAME_ARG]: secretEnvKey(field) };
+  return { ...args, [key]: REDACTED_FILL, [SECRET_NAME_ARG]: secretEnvKey(field) };
 }
 
 /**
- * An anchored flow with each credential fill redacted by its field name.
- *
- * An in-page recorder of an older SDK redacts by an English rule only, and its flow arrives here
- * already anchored. A value that is already a placeholder is left as it is, with its variable name.
+ * An anchored flow with each credential fill redacted by its field name. An older SDK's recorder
+ * redacts by an English rule only. A value that is already a placeholder keeps its variable name.
  */
 function redactSavedFills(flow: FlowFile): FlowFile {
   let redacted = false;
   const redact = (step: FlowStep): FlowStep => {
-    const value = step.args?.['value'];
+    const value = step.args?.[typedTextKey(step.args) ?? 'value'];
     let out = step;
     if (
       step.args !== undefined &&
@@ -639,14 +639,7 @@ export class FlowStore {
     return { ok: true, value: this.#summary(flow) };
   }
 
-  /**
-   * Save a flow the session drove, folded into any saved copy of the same journey.
-   *
-   * Every session saves its own drive, so one journey arrived as a near-copy per session. Flows
-   * under `prefix` (the auto-saved ones — a hand-named flow is never merged or removed) that start
-   * on the same page and take the same steps become ONE file: the oldest keeps its name, the others
-   * fill its gaps and are removed. The same scan collapses copies saved before this existed.
-   */
+  /** Fold an auto-saved drive into the tracked copy, or else the oldest copy. */
   async saveJourney(
     program: CompiledProgram,
     projectId: ProjectId | undefined,
@@ -658,6 +651,7 @@ export class FlowStore {
     const pid = safeProjectId(projectId);
     const fresh = this.#build(program, undefined, pid);
     const saved: FlowFile[] = [];
+    const trackedNames = new Set<string>();
     const freshPrint = journeyFingerprint(fresh);
     for (const name of await this.list(pid)) {
       const loaded = await this.load(name, pid);
@@ -666,6 +660,10 @@ export class FlowStore {
       }
       if (name.startsWith(prefix)) {
         saved.push(loaded.value);
+        const path = await this.#resolveReadPath(asFlowName(name), pid);
+        if (path !== null && gitTracksFile(path)) {
+          trackedNames.add(name);
+        }
       }
       // The agent already saved this journey under its own name: one journey, one flow. A web drive
       // saved its named flow and an automatic `drive-saved-<email>` beside it, every time.
@@ -702,14 +700,16 @@ export class FlowStore {
       if (group.length < 2 && groupPrint !== print) {
         continue;
       }
-      const [kept, ...rest] = [...group].sort((a, b) => a.createdAt - b.createdAt);
+      const ordered = [...group].sort((a, b) => a.createdAt - b.createdAt);
+      const kept = ordered.find((flow) => trackedNames.has(flow.name)) ?? ordered[0];
       if (kept === undefined) {
         continue;
       }
+      const rest = ordered.filter((flow) => flow !== kept);
       const merged = await this.#linkIntent(rest.reduce(mergeJourney, kept));
       await this.#writeInPlace(merged, pid);
       for (const dropped of rest) {
-        if (dropped.name !== merged.name && dropped !== named) {
+        if (dropped.name !== merged.name && dropped !== named && !trackedNames.has(dropped.name)) {
           await this.remove(dropped.name, pid);
         }
       }

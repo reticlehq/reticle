@@ -1174,3 +1174,26 @@ describe('visually hidden (sr-only) text', () => {
     expect(isVisible(srOnly(apply))).toBe(true);
   });
 });
+
+describe('a control named by the label that wraps it', () => {
+  // Reported from the field: `{ role: "combobox", name: "Seats" }` did not match
+  // `<label>Seats <select>…</select></label>`, because the name took the label's whole text, every
+  // option included ("Seats Select Under 20 20–50 …"). A browser leaves the control's own content out
+  // of its name, so `{ role: "combobox", name: "Seats" }` matches in Playwright and failed here.
+  afterEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it("names a wrapped select by the label's own words, not its options", () => {
+    document.body.innerHTML =
+      '<label>Seats <select id="s"><option>Select</option><option>Under 20</option><option>20–50</option></select></label>';
+    const select = document.getElementById('s') as HTMLSelectElement;
+    expect(getAccessibleName(select)).toBe('Seats');
+    expect(matchQuery({ role: 'combobox', name: 'Seats' }).count).toBe(1);
+  });
+
+  it("names a wrapped textarea by the label's own words, not its default text", () => {
+    document.body.innerHTML = '<label>Notes <textarea id="t">draft text</textarea></label>';
+    expect(getAccessibleName(document.getElementById('t') as HTMLTextAreaElement)).toBe('Notes');
+  });
+});

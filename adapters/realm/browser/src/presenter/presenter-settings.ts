@@ -258,7 +258,7 @@ function settingsToggleRow(key: keyof typeof SETTING_TEXT, helpTitle: string, ex
   const [label, desc] = SETTING_TEXT[key];
   return `<div class="reticle-settings-row" ${extra}>
     ${settingsLabel(label, helpTitle, desc)}
-    <button type="button" class="reticle-settings-toggle" ${SETTING_KEY_ATTR}="${key}" role="switch" aria-checked="false"></button>
+    <button type="button" class="reticle-settings-toggle" ${SETTING_KEY_ATTR}="${key}" role="switch" aria-checked="false" aria-label="${label}"></button>
   </div>`;
 }
 
@@ -266,7 +266,7 @@ function settingsCheckRow(key: keyof typeof SETTING_TEXT, checked: boolean): str
   const [label, desc] = SETTING_TEXT[key];
   const on = checked ? 'true' : 'false';
   return `<label class="reticle-settings-checkrow" data-reticle-check-row="${key}">
-    <span class="reticle-settings-check" data-reticle-check="${key}" role="checkbox" aria-checked="${on}" tabindex="0"></span>
+    <span class="reticle-settings-check" data-reticle-check="${key}" role="checkbox" aria-checked="${on}" aria-label="${label}" tabindex="0"></span>
     <span class="reticle-settings-labelcol"><span class="reticle-settings-check-label">${label}</span><span class="reticle-settings-desc">${desc}</span></span>
   </label>`;
 }
