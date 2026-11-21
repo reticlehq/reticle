@@ -17,6 +17,7 @@
 import { describe, expect, it } from 'vitest';
 import { ReticleTool } from '@reticlehq/core';
 import { TOOLS } from './tools.js';
+import { ROLE_TEXT_FIND_OPENING } from './read/query-shape.js';
 import type { ToolDeps } from './tool-kit.js';
 
 const queryTool = TOOLS.find((tool) => ReticleTool.QUERY === tool.name);
@@ -63,6 +64,24 @@ describe('reticle_query forwards what it declares', () => {
     expect(payload['by']).toBe('role');
     expect(payload['value']).toBe('button');
     expect(payload['name']).toBe('Save');
+  });
+
+  it('refuses `text` on a role find and sends nothing to the page (#2326)', async () => {
+    for (const args of [
+      { by: 'role', value: 'button', text: 'Save' },
+      { role: 'button', text: 'Save' },
+    ]) {
+      let sent = false;
+      await expect(
+        queryTool?.handler(
+          capturingDeps(() => {
+            sent = true;
+          }),
+          args,
+        ),
+      ).rejects.toThrow(ROLE_TEXT_FIND_OPENING);
+      expect(sent).toBe(false);
+    }
   });
 
   it('declares every field it forwards, so the two lists cannot drift apart silently', () => {

@@ -15,7 +15,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { normalizeQueryArgs } from './query-shape.js';
+import { normalizeQueryArgs, roleTextRefusal, ROLE_TEXT_FIND_OPENING } from './query-shape.js';
 
 describe('normalizeQueryArgs', () => {
   it('passes an explicit by/value through untouched', () => {
@@ -70,5 +70,29 @@ describe('normalizeQueryArgs', () => {
       scope: '#main',
       sessionId: 's1',
     });
+  });
+});
+
+describe('roleTextRefusal', () => {
+  // #2326: a role find with `text` returned every element of the role (by + value), or dropped the
+  // role and searched the text (the named-field spelling). Neither is what the caller asked for.
+  it('refuses `text` on a role find, in both spellings, and echoes the caller’s values', () => {
+    for (const args of [
+      { by: 'role', value: 'link', text: 'Docs' },
+      { role: 'link', text: 'Docs' },
+    ]) {
+      const message = roleTextRefusal(args)?.message ?? '';
+      expect(message).toContain(ROLE_TEXT_FIND_OPENING);
+      expect(message).toContain('{ role: "link", name: "Docs" }');
+      expect(message).toContain('{ text: "Docs" } alone');
+    }
+  });
+
+  it('leaves a role find with `name`, and a text find, alone', () => {
+    expect(roleTextRefusal({ by: 'role', value: 'button', name: 'Save' })).toBeUndefined();
+    expect(roleTextRefusal({ role: 'button', name: 'Save' })).toBeUndefined();
+    expect(roleTextRefusal({ text: 'Save' })).toBeUndefined();
+    expect(roleTextRefusal({ by: 'text', value: 'Save' })).toBeUndefined();
+    expect(roleTextRefusal({ by: 'role', value: 'button', text: '' })).toBeUndefined();
   });
 });
