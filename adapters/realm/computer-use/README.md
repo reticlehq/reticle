@@ -87,6 +87,7 @@ A `scroll` moves the scroll bar of the scroll area that holds the element, and s
 Read these before you rely on a result.
 
 - **macOS only.** There is no reader for Windows or Linux.
+- **The screen must not be locked.** With the screen locked, macOS gives no window of any application. The realm says that the screen is locked; it does not say that the application has no window.
 - **Only the Space that is in front.** The accessibility interface lists the windows on the Space that the person looks at. An application on another Space reads as an application with no window. The realm says how many windows are not on the screen.
 - **A web view inside a native application is read.** The system web view (WebKit) gives its page as elements with no switch to set: headings, fields, buttons, links. It was tried on a small test application and on this repository's Tauri fixture (`apps/tauri-smoke`): the realm read the page, typed in a field, added an item and followed two route changes, with nothing set in the application. The first read of an application waits until two reads agree, because a web view makes its tree when it is first asked.
 - **The bridge must have a pairing token.** With a token, the realm dials with no Origin header. A page in a browser cannot do that, so the bridge knows that the signals of this session are things the realm saw. With no token, the session is joined, and a signal with nothing else changing is not proof.

@@ -394,6 +394,12 @@ let modifierFlags: [String: CGEventFlags] = [
 ]
 
 /// One command: `args` are the words of a command line, the program name first.
+/// The screen is locked, as the session says it.
+func screenIsLocked() -> Bool {
+  let session = CGSessionCopyCurrentDictionary() as? [String: Any]
+  return (session?["CGSSessionScreenIsLocked"] as? Bool) == true
+}
+
 /// The process is there. A process that ended and was not yet collected by its parent still has
 /// its number, so the list of running applications is asked too.
 func isRunning(_ pid: pid_t) -> Bool {
@@ -426,6 +432,11 @@ func run(_ args: [String]) throws {
   // application with no window. Say that it ended.
   guard isRunning(pid) else {
     try emit(["error": "app-gone"])
+  }
+  // With the screen locked, the system gives no window of any application: the application read
+  // as one with no window, and nothing said why.
+  guard !screenIsLocked() else {
+    try emit(["error": "screen-locked"])
   }
   let app = AXUIElementCreateApplication(pid)
 

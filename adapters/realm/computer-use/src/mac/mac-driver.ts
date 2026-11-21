@@ -14,7 +14,11 @@ import type { AxNode } from './from-ax.js';
 import type { Placed } from '../ui-node.js';
 
 const Command = { TREE: 'tree', ACT: 'act', REACH: 'reach' } as const;
-const HelperError = { NOT_TRUSTED: 'not-trusted', APP_GONE: 'app-gone' } as const;
+const HelperError = {
+  NOT_TRUSTED: 'not-trusted',
+  APP_GONE: 'app-gone',
+  SCREEN_LOCKED: 'screen-locked',
+} as const;
 
 const ErrorSchema = z.object({ error: z.string() });
 const TreeSchema = z.object({
@@ -167,6 +171,11 @@ export class MacDriver implements UiDriver {
   async #ask(args: readonly string[]): Promise<unknown> {
     const answer: unknown = JSON.parse(await this.#run(this.#input.helper, args));
     const failed = ErrorSchema.safeParse(answer);
+    if (failed.success && failed.data.error === HelperError.SCREEN_LOCKED) {
+      throw new Error(
+        'The screen is locked. macOS gives no window of an application while the screen is locked. Unlock the screen, and try again.',
+      );
+    }
     if (failed.success && failed.data.error === HelperError.APP_GONE) {
       throw new Error(
         `${this.#input.app} (${String(this.#input.pid)}) is not running. It was closed, or it ended by itself. Open it and join it again.`,

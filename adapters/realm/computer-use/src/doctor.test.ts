@@ -50,4 +50,12 @@ describe('doctorReport', () => {
     expect(report.ready).toBe(false);
     expect(report.lines.join('\n')).toContain('reticle serve');
   });
+
+  // With the screen locked, the check said that the application has no window.
+  it('says that the screen is locked, and not that the application has no window', () => {
+    const report = doctorReport({ ...ready, screenLocked: true, windows: 0 });
+    expect(report.ready).toBe(false);
+    expect(report.lines.join('\n')).toContain('The screen is locked');
+    expect(report.lines.join('\n')).not.toContain('has no window');
+  });
 });

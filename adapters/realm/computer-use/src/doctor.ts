@@ -9,6 +9,8 @@ export interface DoctorFacts {
   platform: string;
   /** The Swift compiler is there to build the helper. */
   compiler: boolean;
+  /** The screen is locked. No window can be read then. */
+  screenLocked?: boolean | undefined;
   /** The terminal has Accessibility permission. Absent: it was not asked. */
   trusted?: boolean | undefined;
   app: string;
@@ -55,6 +57,11 @@ export function doctorReport(facts: DoctorFacts): DoctorReport {
     );
   }
   lines.push(`${OK}Accessibility permission`);
+  if (true === facts.screenLocked) {
+    return stop(
+      'The screen is locked. macOS gives no window of an application while the screen is locked. Unlock the screen, and run this again.',
+    );
+  }
   if (!facts.appOpen) {
     return stop(
       facts.appHint ??

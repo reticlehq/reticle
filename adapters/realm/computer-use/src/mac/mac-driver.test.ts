@@ -107,4 +107,16 @@ describe('MacDriver', () => {
     });
     await expect(driver.read()).rejects.toThrow(/fixture \(7\) is not running/);
   });
+
+  // With the screen locked the application read as one with no window, and an agent then looked
+  // for a window that was there all the time.
+  it('says that the screen is locked, when the helper finds it so', async () => {
+    const driver = new MacDriver({
+      helper: 'reticle-ax',
+      app: 'fixture',
+      pid: 7,
+      run: () => Promise.resolve(JSON.stringify({ error: 'screen-locked' })),
+    });
+    await expect(driver.read()).rejects.toThrow(/The screen is locked/);
+  });
 });

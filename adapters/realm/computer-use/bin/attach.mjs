@@ -90,12 +90,14 @@ if (process.argv.includes('--doctor')) {
   const picked = darwin && compiler ? findApp(plan.app) : { error: undefined };
   const appPid = picked.pid;
   let trusted;
+  let screenLocked;
   let windows;
   let windowsNotOnScreen;
   if (compiler) {
     // Any process will do to learn if the permission is there. The application's own, when open.
     const read = JSON.parse(quiet(helper, ['tree', String(appPid ?? process.pid)]) ?? '{}');
     trusted = 'not-trusted' !== read.error;
+    screenLocked = 'screen-locked' === read.error;
     if (appPid !== undefined && read.tree !== undefined) {
       windows = read.tree.children.filter((child) => 'AXWindow' === child.role).length;
       windowsNotOnScreen = read.windowsNotOnScreen;
@@ -105,6 +107,7 @@ if (process.argv.includes('--doctor')) {
     platform: process.platform,
     compiler,
     trusted,
+    screenLocked,
     app: plan.app,
     appOpen: appPid !== undefined,
     appHint: picked.error,
