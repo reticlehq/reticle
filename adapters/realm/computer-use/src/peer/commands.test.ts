@@ -301,11 +301,14 @@ describe('PeerCommands', () => {
       elements: { ref: string }[];
     };
     const ref = found.elements[0]?.ref;
-    await commands.answer(ReticleCommand.ACT, {
+    const filled = (await commands.answer(ReticleCommand.ACT, {
       ref,
       action: ActionType.FILL,
       args: { value: 'reticle' },
-    });
+    })) as { effect: { valueChanged: boolean } };
+    // The field went from one place to another, and its value is another one: that is a change
+    // of value, and not only "one element went and one came".
+    expect(filled.effect.valueChanged).toBe(true);
     // One set, and no keys after it: the value was read from the field where it is now.
     expect(asked.map((a) => a.kind)).toEqual(['set']);
     // The same ref still names the field.

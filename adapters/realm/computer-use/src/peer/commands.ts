@@ -883,6 +883,8 @@ export class PeerCommands {
       delivery: foreground ? Delivery.FOREGROUND : Delivery.USER_PATH,
       budgetMs: 'number' === typeof more['settleMs'] ? more['settleMs'] : DEFAULT_SETTLE_MS,
     };
+    // True when the field took a new value and the application moved it in the tree.
+    let valueMoved = false;
     let driven = await this.#drive(target, ref, kind, value, how);
     if (kind === ActKind.SET && value !== undefined && TEXT_ROLES.has(target.node.role)) {
       // A field in a web view answers "done" to a value set from outside, and keeps its old
@@ -892,6 +894,7 @@ export class PeerCommands {
       // with the field, and the value is read where the field is now.
       const moved = movedTo(driven.outcome, target, value);
       if (moved !== undefined) {
+        valueMoved = moved.node.value !== target.node.value;
         this.#refs.move(ref, moved.key);
         target = { ...target, ...moved };
       }
@@ -933,7 +936,7 @@ export class PeerCommands {
         targetMatched: true,
         visible: target.visible,
         enabled: true,
-        valueChanged: changes.some((c) => c.value !== undefined),
+        valueChanged: valueMoved || changes.some((c) => c.value !== undefined),
         // Every change in the application, not only those inside the target.
         domMutatedWithin: changes.length,
         // Changes in a place that changes with no action. The action may not be their cause.
