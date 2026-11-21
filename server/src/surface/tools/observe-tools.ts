@@ -35,7 +35,7 @@ import {
   waitForPredicate,
   PredicateSchema,
 } from '@reticlehq/engine/question/predicate/predicate.js';
-import { resolveSessionSpending } from '@/portal/session/timing/resolve-within.js';
+import { resolveSessionSpending, withLateSession } from '@/portal/session/timing/resolve-within.js';
 import { WALL_CLOCK } from '@/portal/session/timing/wall-clock.js';
 import { parsePredicate } from '@reticlehq/engine/question/predicate/predicate-parse.js';
 import {
@@ -382,7 +382,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         reevaluate: (next, budget) => waitForPredicate(next, predicate, budget, 0),
       });
       session = followed.session;
-      const verdict = followed.verdict;
+      const verdict = withLateSession(followed.verdict, resolved);
       // Stopped at the per-call limit before the predicate was seen: "not yet", which is not a "no".
       // Grading it read as a failure of the app while the caller is told to keep waiting (#1119).
       const resume = resumeAfter(requestedMs, waitBudget, verdict);
@@ -607,7 +607,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         since = 0;
       }
       session = followed.session;
-      const verdict = followed.verdict;
+      const verdict = withLateSession(followed.verdict, resolved);
       // A GREEN presence-only assertion is the dangerous case (a wrong element can fake it) — nudge
       // toward a consequence. Never on a failing verdict (moot) or when a signal/net is asserted.
       // Two nudges, both only on a GREEN verdict (a failing one is moot): a presence-only assertion

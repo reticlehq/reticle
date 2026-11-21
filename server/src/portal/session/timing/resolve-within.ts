@@ -78,9 +78,33 @@ export async function resolveSessionSpending<S>(
   sessionId: string | undefined,
   timeoutMs: number,
   deps: { now: () => number; sleep: (ms: number) => Promise<void> },
-): Promise<{ session: S; remainingMs: number }> {
+): Promise<{ session: S; remainingMs: number; connectedLate: boolean }> {
+  try {
+    return { session: sessions.resolve(sessionId), remainingMs: timeoutMs, connectedLate: false };
+  } catch {
+    // No session yet: wait for one inside the budget, and report what the wait left.
+  }
   const started = deps.now();
   const session = await resolveSessionWithin(sessions, sessionId, timeoutMs, deps);
   const remainingMs = Math.max(0, timeoutMs - (deps.now() - started));
-  return { session, remainingMs };
+  return { session, remainingMs, connectedLate: true };
+}
+
+/**
+ * A failed verdict on a session that connected during the call, made inconclusive (#2443).
+ *
+ * The check then had only what the session wait left, on a page that had just connected. A late
+ * `no` there is not a statement about the app, so it is `unknown`, with the time that was left.
+ */
+export function withLateSession<V extends { pass: boolean; inconclusive?: string }>(
+  verdict: V,
+  resolved: { remainingMs: number; connectedLate: boolean },
+): V & { inconclusive?: string; failureReason?: string } {
+  if (!resolved.connectedLate || verdict.pass || verdict.inconclusive !== undefined) {
+    return verdict;
+  }
+  const reason =
+    `the app connected ${String(resolved.remainingMs)} ms before the deadline, so the check ran on ` +
+    'a page that had only just connected and was not decided. Call again, or give a longer timeout_ms';
+  return { ...verdict, inconclusive: reason, failureReason: reason };
 }
