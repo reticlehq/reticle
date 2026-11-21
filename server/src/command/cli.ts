@@ -428,7 +428,7 @@ function handleOpen(requestedPort: number, url: string | undefined, navigate = f
               // about a browser THIS command never uses, so a missing Chromium reads as the
               // explanation for a session that is missing for an unrelated reason. Both misdirects
               // were reported from the field, each costing several calls of app-side wiring hunt.
-              note: openFailureNote(port, requestedPort, daemonAnswer),
+              note: openFailureNote(port, requestedPort, daemonAnswer, decision.url),
             }),
       });
     })

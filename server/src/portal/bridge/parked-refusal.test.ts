@@ -15,7 +15,7 @@ import { Bridge } from './bridge.js';
 import { SESSION_PARKED_REASON } from '@/portal/session/facts/session-replaced.js';
 import { startNoSessionWatch } from '@/portal/session/no-session-watch.js';
 import { openFailureNote } from '@/command/cli/answers/open-note.js';
-import { statusPayload } from '@/status-payload.js';
+import { currentRefusedUrl, statusPayload } from '@/status-payload.js';
 import { summarizeStatus } from '@/command/cli/launch/cli-launch.js';
 
 const PAGE_URL = 'http://localhost:5173/review';
@@ -99,44 +99,69 @@ describe('a detached window that dials again', () => {
     expect(closure?.page).toEqual({ url: PAGE_URL, projectId: PROJECT });
   });
 
-  it('makes `reticle open` say the daemon refused it, not that the SDK is missing', async () => {
-    const bridge = await detachedAndReloaded();
-    const stop = startNoSessionWatch({
-      sessions: bridge.sessions,
-      port: 4400,
-      initialized: true,
-      probe: () => Promise.resolve([5173]),
-    });
-    try {
-      expect(bridge.sessions.noSessionReason()).toBe(NoSessionReason.AUTH_REFUSED);
-      const status = summarizeStatus(
-        statusPayload(
-          bridge.sessions.count(),
-          bridge.sessions.list(),
-          bridge.sessions.noSessionHint(),
-          undefined,
-          bridge.sessions.noSessionLead(),
-          [],
-          [],
-          bridge.sessions.noSessionReason(),
-        ),
-      );
-      const note = openFailureNote(4400, 4400, status);
-      expect(note).not.toContain('carries no Reticle SDK');
-      expect(note).toContain('detached by the agent');
-      expect(note).toContain(PAGE_URL);
-    } finally {
-      stop();
-    }
+  it('makes `reticle open` of that page say the daemon refused it, not that the SDK is missing', async () => {
+    const note = await openNoteAfterRefusal('http://localhost:5173/');
+    expect(note).not.toContain('carries no Reticle SDK');
+    expect(note).toContain('detached by the agent');
+    expect(note).toContain(PAGE_URL);
+  });
+
+  it('keeps the SDK advice for an app on another origin', async () => {
+    // The refusal is daemon-wide. Another app's parked tab says nothing about this app's SDK.
+    const note = await openNoteAfterRefusal('http://localhost:3000/');
+    expect(note).toContain('carries no Reticle SDK');
+    expect(note).not.toContain('detached by the agent');
   });
 });
 
+/** The note `reticle open <openedUrl>` prints when the only refusal is the detached tab's. */
+async function openNoteAfterRefusal(openedUrl: string): Promise<string> {
+  const bridge = await detachedAndReloaded();
+  const stop = startNoSessionWatch({
+    sessions: bridge.sessions,
+    port: 4400,
+    initialized: true,
+    probe: () => Promise.resolve([5173]),
+  });
+  try {
+    expect(bridge.sessions.noSessionReason()).toBe(NoSessionReason.AUTH_REFUSED);
+    const status = summarizeStatus(
+      statusPayload(
+        bridge.sessions.count(),
+        bridge.sessions.list(),
+        bridge.sessions.noSessionHint(),
+        undefined,
+        bridge.sessions.noSessionLead(),
+        [],
+        [],
+        bridge.sessions.noSessionReason(),
+        currentRefusedUrl(bridge.sessions),
+      ),
+    );
+    return openFailureNote(4400, 4400, status, openedUrl);
+  } finally {
+    stop();
+  }
+}
+
 describe('`reticle open` with no refusal on record', () => {
   it('keeps the SDK advice when the daemon refused nothing', () => {
-    const note = openFailureNote(4400, 4400, {
-      whyReason: NoSessionReason.NO_LISTENER,
-      whyLead: 'nothing is listening',
-    });
+    const note = openFailureNote(
+      4400,
+      4400,
+      { whyReason: NoSessionReason.NO_LISTENER, whyLead: 'nothing is listening' },
+      PAGE_URL,
+    );
+    expect(note).toContain('carries no Reticle SDK');
+  });
+
+  it('keeps the SDK advice when the refused page is unknown', () => {
+    const note = openFailureNote(
+      4400,
+      4400,
+      { whyReason: NoSessionReason.AUTH_REFUSED, whyLead: 'a page was refused' },
+      PAGE_URL,
+    );
     expect(note).toContain('carries no Reticle SDK');
   });
 });

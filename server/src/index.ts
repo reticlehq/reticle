@@ -68,7 +68,7 @@ import {
   noteSetupHold,
 } from './command/daemon/lifetime/daemon-usefulness.js';
 import { resolveToolSurface } from './surface/tools/tool-surface.js';
-import { statusPayload } from './status-payload.js';
+import { currentRefusedUrl, statusPayload } from './status-payload.js';
 import type { BrowserPool } from './portal/pool/browser-pool.js';
 import {
   AGENT_ALREADY_DRIVING_ELSEWHERE,
@@ -474,6 +474,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       tabs,
       tabs.map((session) => session.sdkVersion ?? null),
       bridge.sessions.noSessionReason(),
+      currentRefusedUrl(bridge.sessions),
     );
   });
   // Called when an agent connects. The pages already up are the ones a restart would skew (#1709).

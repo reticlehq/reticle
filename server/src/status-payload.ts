@@ -8,6 +8,7 @@
  */
 import type { SessionInfo } from './portal/session/session-info.js';
 import type { NoSessionReason } from '@reticlehq/core/telemetry';
+import type { SessionManager } from './portal/session/session-manager.js';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
 import { SERVER_VERSION } from './command/version/identity/server-version.js';
 import { instrumentationOf, type InstrumentedTab } from './portal/session/recorded-gaps.js';
@@ -38,6 +39,11 @@ interface StatusPayload {
    * because only the code, not the prose, is stable (#2435).
    */
   whyReason?: NoSessionReason;
+  /**
+   * The url of the page the bridge refused last, while that refusal is still current. A reader
+   * compares it with its own url: the refusal can be another app's tab (#2435).
+   */
+  refusedUrl?: string;
   /** Port of the verify HTTP endpoint this daemon serves — present only when started with `--http`. */
   verifyPort?: number;
   /**
@@ -71,6 +77,8 @@ export function statusPayload(
   pageSdkVersions: readonly (string | null)[] = [],
   /** The code of the no-session diagnosis. Absent on a daemon that has no provider wired. */
   whyReason?: NoSessionReason,
+  /** The url of the page the bridge refused, from {@link currentRefusedUrl}. */
+  refusedUrl?: string,
 ): StatusPayload {
   return {
     running: true,
@@ -83,6 +91,7 @@ export function statusPayload(
     ...(0 === sessionCount && why !== undefined ? { why } : {}),
     ...(0 === sessionCount && whyLead !== undefined ? { whyLead } : {}),
     ...(0 === sessionCount && whyReason !== undefined ? { whyReason } : {}),
+    ...(0 === sessionCount && refusedUrl !== undefined ? { refusedUrl } : {}),
     ...(verifyPort === undefined ? {} : { verifyPort }),
     ...(0 === tabs.length
       ? {}
@@ -95,6 +104,21 @@ export function statusPayload(
         }),
     ...(0 === pageSdkVersions.length ? {} : { pageSdkVersions }),
   };
+}
+
+/**
+ * The url of the page the bridge refused last, while no session has connected since.
+ *
+ * Same ordering rule as the no-session diagnosis: a session that connected after the refusal makes
+ * the refusal history, not the current state of the bridge.
+ */
+export function currentRefusedUrl(
+  sessions: Pick<SessionManager, 'lastClosure' | 'connectedSinceLastClosure'>,
+): string | undefined {
+  if (sessions.connectedSinceLastClosure()) {
+    return undefined;
+  }
+  return sessions.lastClosure()?.page?.url;
 }
 
 /**

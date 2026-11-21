@@ -41,8 +41,10 @@ export function openFailureNote(
   port: number,
   requestedPort: number,
   daemon: DaemonNoSessionAnswer = {},
+  /** The url `open` launched. A refusal counts only when its page is on the same origin. */
+  openedUrl?: string,
 ): string {
-  const refusal = refusalFrom(daemon);
+  const refusal = refusalFrom(daemon, openedUrl);
   const substituted =
     port === requestedPort
       ? ''
@@ -74,6 +76,7 @@ export interface DaemonNoSessionAnswer {
   whyReason?: string;
   whyLead?: string;
   why?: string;
+  refusedUrl?: string;
 }
 
 const OpenRefusalCopy = {
@@ -82,17 +85,44 @@ const OpenRefusalCopy = {
 } as const;
 
 /**
- * The daemon's own account of a page it refused, or undefined when it refused none.
+ * The daemon's own account of the page it refused, or undefined when that page is not this one.
  *
  * A refused hello is positive evidence that the SDK is in the page. Reported from the field: a
  * window the agent had detached reloaded, the bridge refused it, and `open` said the SDK was
  * missing (#2435). The bridge records the refusal, so `open` reads that before it guesses.
+ *
+ * The refusal is daemon-wide. It can be another app's tab, and that tab says nothing about the SDK
+ * in this app. So the refusal counts only when its page has the origin of the url `open` launched.
+ * An unknown page or url falls back to the SDK advice.
  */
-function refusalFrom(daemon: DaemonNoSessionAnswer): string | undefined {
+function refusalFrom(
+  daemon: DaemonNoSessionAnswer,
+  openedUrl: string | undefined,
+): string | undefined {
   if (daemon.whyReason !== NoSessionReason.AUTH_REFUSED) {
     return undefined;
   }
+  const refused = originOf(daemon.refusedUrl);
+  if (refused === undefined || refused !== originOf(openedUrl)) {
+    return undefined;
+  }
   return daemon.whyLead ?? daemon.why;
+}
+
+const OPAQUE_ORIGIN = 'null';
+
+/** The origin of a url, or undefined when there is none, it does not parse, or it is opaque. */
+function originOf(url: string | undefined): string | undefined {
+  if (url === undefined) {
+    return undefined;
+  }
+  try {
+    const { origin } = new URL(url);
+    // An opaque origin (`file:`, `data:`) is the string "null", and two of them are not one page.
+    return OPAQUE_ORIGIN === origin ? undefined : origin;
+  } catch {
+    return undefined;
+  }
 }
 
 /** Recovery when the OS could not open a URL: agents can use Reticle's browser lease instead. */
