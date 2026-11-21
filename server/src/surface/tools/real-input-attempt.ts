@@ -515,13 +515,34 @@ async function inspectRevealed(
   return { inspected, inView, scrolled: true === record['scrolledIntoView'] };
 }
 
-function hoverSucceeded(center: { cx: number; cy: number }, scrolled: boolean): RealActResult {
+/**
+ * The role and accessible name INSPECT read for a hovered element (#2431).
+ *
+ * A real pointer reports no element, so a hover result had no field to anchor the saved step on,
+ * and the step was saved as degraded. A click result carries these fields from the page.
+ */
+function hoverTarget(inspected: unknown): Record<string, string> {
+  const record = asRecord(inspected);
+  const role = asString(record['role']);
+  const name = asString(record['name']);
+  if (role === undefined || 0 === role.length || name === undefined || 0 === name.length) {
+    return {};
+  }
+  return { role, name };
+}
+
+function hoverSucceeded(
+  center: { cx: number; cy: number },
+  scrolled: boolean,
+  target: Record<string, string>,
+): RealActResult {
   return {
     result: {
       performed: true,
       center,
       action: ActionType.HOVER,
       ...(scrolled ? { scrolledIntoView: true } : {}),
+      ...target,
     },
     settled: true,
   };
@@ -568,7 +589,11 @@ async function hoverForReal(
       // Hover always has a resolved box, so there is always a center to report: the provider's own
       // reading, or the box's if it reported none. Both are the same point, not a fabricated one.
       if (performed.performed) {
-        return hoverSucceeded(performed.center ?? boxPoint(box, at), scrolled);
+        return hoverSucceeded(
+          performed.center ?? boxPoint(box, at),
+          scrolled,
+          hoverTarget(inspected),
+        );
       }
     } catch {
       // A provider error used to fall back to synthetic dispatch. For hover that is a lie.
@@ -577,7 +602,7 @@ async function hoverForReal(
 
   const { cx, cy } = boxPoint(box, at);
   if (true === (await deps.pool?.hoverLease(session.id, cx, cy))) {
-    return hoverSucceeded({ cx, cy }, scrolled);
+    return hoverSucceeded({ cx, cy }, scrolled, hoverTarget(inspected));
   }
 
   throw new Error(HOVER_NEEDS_POINTER_MSG);
