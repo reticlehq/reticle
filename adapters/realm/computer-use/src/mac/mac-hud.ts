@@ -9,24 +9,29 @@ import { z } from 'zod';
 import type { HudEffect, HudPort } from '../hud/port.js';
 
 const Say = { APP: 'app', MOVE: 'move', ACT: 'act', EFFECT: 'effect' } as const;
-const PausedSchema = z.object({ paused: z.boolean() });
+const SaidSchema = z.object({ paused: z.boolean().optional(), stopped: z.boolean().optional() });
 
-export function macHud(program: string): HudPort {
+export function macHud(program: string, onStop?: () => void): HudPort {
   const child = spawn(program, [], { stdio: ['pipe', 'pipe', 'ignore'] });
   // The window must not keep the command open, and a window that is gone must not break an action.
   child.unref();
   child.on('error', () => undefined);
   child.stdin.on('error', () => undefined);
   let paused = false;
+  let stopped = false;
   let rest = '';
   child.stdout.on('data', (chunk: Buffer) => {
     const lines = (rest + chunk.toString('utf8')).split('\n');
     rest = lines.pop() ?? '';
     for (const line of lines) {
       try {
-        const said = PausedSchema.safeParse(JSON.parse(line));
+        const said = SaidSchema.safeParse(JSON.parse(line));
         if (said.success) {
-          paused = said.data.paused;
+          paused = said.data.paused ?? paused;
+          if (true === said.data.stopped && !stopped) {
+            stopped = true;
+            onStop?.();
+          }
         }
       } catch {
         // Not a line of the program's protocol: nothing to learn from it.
@@ -52,6 +57,7 @@ export function macHud(program: string): HudPort {
       send({ t: Say.EFFECT, text, kind });
     },
     paused: () => paused,
+    stopped: () => stopped,
     close: () => {
       child.stdin.end();
     },

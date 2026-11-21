@@ -501,6 +501,11 @@ export class PeerCommands {
   ): Promise<{ outcome: ActOutcome; changes: Change[]; byItself: number; offScreen: number }> {
     const workspace = this.#deps.workspace;
     const hud = this.#deps.hud;
+    if (true === hud?.stopped()) {
+      throw new Error(
+        'the person at the machine stopped Reticle in its window. The realm does no more actions on this application. Tell them what you were about to do.',
+      );
+    }
     if (true === hud?.paused()) {
       throw new Error(
         'the person at the machine paused Reticle in its window. No action is done while it is paused. Tell them what you were about to do, and wait.',

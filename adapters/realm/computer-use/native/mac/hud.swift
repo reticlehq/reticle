@@ -15,7 +15,8 @@
 //   {"t":"act","text":"press button \"Save\""}
 //   {"t":"effect","text":"2 changes","kind":"ok"}      kind: ok | none | refused
 //   {"t":"hide"}                          the pointer goes away
-// One line on standard output when the person presses the button: {"paused":true} or false.
+// One line on standard output when the person presses a button: {"paused":true} or false for
+// the pause, and {"stopped":true} for the stop. After a stop the realm leaves the application.
 // The program ends when standard input closes.
 import AppKit
 
@@ -124,6 +125,8 @@ final class Hud: NSObject, NSApplicationDelegate {
   let title = NSTextField(labelWithString: "Reticle")
   let app = NSTextField(labelWithString: "")
   var pause: RoundButton!
+  var stop: RoundButton!
+  var stopped = false
   var log: [(action: NSTextField, effect: NSTextField)] = []
   var lines: [(action: String, effect: String, kind: String)] = []
   var paused = false
@@ -210,7 +213,7 @@ final class Hud: NSObject, NSApplicationDelegate {
       halo.addSubview(mark)
     }
     text(title, Token.base, Token.text, NSRect(x: 50, y: 13, width: 56, height: 18), in: bar)
-    text(app, Token.small, Token.muted, NSRect(x: 106, y: 13, width: 150, height: 17), in: bar)
+    text(app, Token.small, Token.muted, NSRect(x: 106, y: 13, width: 122, height: 17), in: bar)
     pause = RoundButton(title: "", target: self, action: #selector(togglePause))
     pause.isBordered = false
     pause.wantsLayer = true
@@ -220,6 +223,20 @@ final class Hud: NSObject, NSApplicationDelegate {
       height: Token.control)
     bar.addSubview(pause)
     setPauseSign()
+    // Stop, beside the pause: it ends the work of the realm on this application.
+    stop = RoundButton(title: "", target: self, action: #selector(pressStop))
+    stop.isBordered = false
+    stop.wantsLayer = true
+    stop.layer?.cornerRadius = Token.control / 2
+    stop.frame = pause.frame.offsetBy(dx: -(Token.control + Token.space1), dy: 0)
+    stop.image = NSImage(size: NSSize(width: 16, height: 16), flipped: false) { _ in
+      Token.text.setFill()
+      NSBezierPath(roundedRect: NSRect(x: 3.5, y: 3.5, width: 9, height: 9), xRadius: 1.5, yRadius: 1.5)
+        .fill()
+      return true
+    }
+    stop.setAccessibilityLabel("Stop")
+    bar.addSubview(stop)
 
     // The card: the last actions, the newest at the bottom, each with what it did.
     let card = surface(
@@ -303,6 +320,19 @@ final class Hud: NSObject, NSApplicationDelegate {
     fflush(stdout)
   }
 
+  @objc func pressStop() {
+    guard !stopped else { return }
+    stopped = true
+    stop.isEnabled = false
+    pause.isEnabled = false
+    lines.append(("Stopped by you", "Reticle left the application", "refused"))
+    redraw()
+    setState(Token.ended)
+    pointer.animator().alphaValue = 0
+    print("{\"stopped\":true}")
+    fflush(stdout)
+  }
+
   /// A ring that spreads from the tip of the pointer, once.
   func ripple(_ color: NSColor) {
     rippling?.invalidate()
@@ -350,7 +380,7 @@ final class Hud: NSObject, NSApplicationDelegate {
         self.pointer.animator().alphaValue = 0
       }
     case "act":
-      guard !paused else { return }
+      guard !paused, !stopped else { return }
       lines.append((say["text"] as? String ?? "", "…", "none"))
       redraw()
       setState(Token.active)

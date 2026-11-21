@@ -17,5 +17,7 @@ export interface HudPort {
   effect(text: string, kind: HudEffect): void;
   /** The person pressed "Pause" in the window. The realm then does no action. */
   paused(): boolean;
+  /** The person pressed "Stop" in the window. The realm does no action after it, and leaves. */
+  stopped(): boolean;
   close(): void;
 }
