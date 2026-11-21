@@ -938,11 +938,11 @@ export const RETICLE_SIGNAL_NAMESPACE = 'reticle:';
  * stream, a polling store, a perf sample and a scroll position all move on their own. What counts:
  *
  *  - a mutation inside the target's own subtree (what the target itself did),
+ *  - a change to the target's own text or attributes — "Copy code" becoming "Copied" (#2318),
  *  - a request (the action asked the server for something),
  *  - a navigation, or a dialog/live region appearing — the two ways a real reaction legitimately
  *    lands OUTSIDE the target, e.g. a modal portalled to the body,
- *  - a store change or an app signal tied to the action (#1531): see
- *    `tiedReaction`.
+ *  - a store change or an app signal tied to the action (#1531): see `tiedReaction`.
  *
  * The last two clauses are what keep this from manufacturing noise: a button that opens a modal
  * mutates nothing within itself, and a Pause button whose store updates on the media `pause` event
@@ -962,7 +962,11 @@ export function didNothing(
   }
   const tied = tiedAppReaction(options);
   return !events.some(
-    (e) => e.type === EventType.ROUTE_CHANGE || e.type === EventType.VISIBLE_SHOWN || tied(e),
+    (e) =>
+      e.type === EventType.ROUTE_CHANGE ||
+      e.type === EventType.VISIBLE_SHOWN ||
+      tied(e) ||
+      (options.ref !== undefined && changeOf(e, options.ref) !== undefined),
   );
 }
 
