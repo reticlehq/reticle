@@ -68,6 +68,8 @@ export interface PeerInput {
   treeEveryMs?: number;
   /** A known reason why a press can do nothing in this application. See `PeerCommandsDeps`. */
   noEffectNote?: string;
+  /** False: never the foreground, whatever a caller asks. See `PeerCommandsDeps`. */
+  foreground?: boolean;
   /** How long to wait before the first new dial when the bridge goes away. The default is one second. */
   retryMs?: number;
   now: () => number;
@@ -112,6 +114,7 @@ export function connectPeer(input: PeerInput): Peer {
     emit,
     ...(input.workspace === undefined ? {} : { workspace: input.workspace }),
     ...(input.noEffectNote === undefined ? {} : { noEffectNote: input.noEffectNote }),
+    ...(input.foreground === undefined ? {} : { foreground: input.foreground }),
   });
   const health = (reason: string): void => {
     emit(EventType.PAGE_HEALTH, {

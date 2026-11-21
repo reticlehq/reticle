@@ -12,6 +12,7 @@ const Flag = {
   WATCH: '--watch',
   PROJECT: '--project',
   ELECTRON_SWITCH: '--electron-switch',
+  BACKGROUND_ONLY: '--background-only',
 } as const;
 const Env = {
   TOKEN: 'RETICLE_TOKEN',
@@ -58,6 +59,12 @@ export interface AttachPlan {
    * The switch costs that application some speed, so the person asks for it.
    */
   electronSwitch: boolean;
+  /**
+   * The realm may bring the application to the front and use the real pointer, when a caller asks
+   * for it on an action. False with `--background-only`: the person at the machine keeps the
+   * pointer and the application in front, whatever a caller asks.
+   */
+  foreground: boolean;
 }
 
 export function attachPlan(
@@ -93,6 +100,7 @@ export function attachPlan(
     watch: valuesOf(Flag.WATCH),
     ...(projectId === undefined ? {} : { projectId }),
     electronSwitch: argv.includes(Flag.ELECTRON_SWITCH),
+    foreground: !argv.includes(Flag.BACKGROUND_ONLY),
   };
 }
 

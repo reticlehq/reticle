@@ -3,7 +3,7 @@
 // has for a web page work on it. macOS only for now. Nothing is installed in the application.
 //
 //   reticle-computer-use --app <name> [--project <folder>] [--port <port>] [--watch <folder>]...
-//                        [--electron-switch]
+//                        [--electron-switch] [--background-only]
 //   reticle-computer-use --app <name> --doctor     (checks that it can work, and says what to do)
 //
 // The terminal needs Accessibility permission. The command stays open until you stop it.
@@ -153,6 +153,7 @@ const peer = connectPeer({
   projectId: plan.projectId ?? `cu-${plan.app}`.replace(/[^\w.-]/g, '-'),
   driver: new MacDriver({ helper, app: plan.app, pid }),
   ...(warning === undefined ? {} : { noEffectNote: warning }),
+  foreground: plan.foreground,
   ...(0 === plan.watch.length ? {} : { workspace: nodeWorkspace(plan.watch, { exclude: [] }) }),
   now: () => Date.now(),
 });

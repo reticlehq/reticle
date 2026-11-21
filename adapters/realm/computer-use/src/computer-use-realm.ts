@@ -141,6 +141,7 @@ const REFUSAL_OF: Readonly<Record<ActRefusal, RefusalReason>> = {
   [ActRefusal.DISABLED]: RefusalReason.GUARDED,
   [ActRefusal.UNREACHABLE]: RefusalReason.GUARDED,
   [ActRefusal.REACH_UNKNOWN]: RefusalReason.UNAVAILABLE,
+  [ActRefusal.NEEDS_FOREGROUND]: RefusalReason.UNAVAILABLE,
 };
 
 const TARGET_PARAMETERS = {

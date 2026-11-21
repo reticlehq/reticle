@@ -13,6 +13,18 @@ export const ActKind = {
   TYPE: 'type',
   /** One key with its modifiers: `Return`, `Meta+s`. */
   KEY: 'key',
+  /** The menu that a right-click gives, asked for by name. No pointer is used. */
+  MENU: 'menu',
+  /** Brings the application to the front and gives the element the keyboard. Foreground only. */
+  RAISE: 'raise',
+  /** The real pointer, at the middle of the element. Foreground only, each of these. */
+  CLICK: 'click',
+  DBLCLICK: 'dblclick',
+  RIGHTCLICK: 'rightclick',
+  /** Moves the pointer to the element and leaves it there. */
+  HOVER: 'hover',
+  /** From the element to the point in `value`, as "x,y" on the screen. */
+  DRAG: 'drag',
 } as const;
 export type ActKind = (typeof ActKind)[keyof typeof ActKind];
 
@@ -22,6 +34,11 @@ export const Delivery = {
   USER_PATH: 'user-path',
   /** Also when the element is under another view or window. It proves less. */
   DIRECT: 'direct',
+  /**
+   * The application is brought to the front and the real pointer is used. It takes the pointer
+   * and the keyboard of the person at the machine for a moment, and puts them back.
+   */
+  FOREGROUND: 'foreground',
 } as const;
 export type Delivery = (typeof Delivery)[keyof typeof Delivery];
 
@@ -33,6 +50,8 @@ export const ActRefusal = {
   UNREACHABLE: 'unreachable',
   /** The operating system did not say whether a person could click it. Nothing is known. */
   REACH_UNKNOWN: 'reach-unknown',
+  /** The action needs the real pointer, and the caller did not ask for the foreground. */
+  NEEDS_FOREGROUND: 'needs-foreground',
 } as const;
 export type ActRefusal = (typeof ActRefusal)[keyof typeof ActRefusal];
 

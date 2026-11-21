@@ -34,7 +34,23 @@ export const KIND_OF: Readonly<Partial<Record<string, ActKind>>> = {
   [ActionType.CHECK]: ActKind.PRESS,
   [ActionType.UNCHECK]: ActKind.PRESS,
   [ActionType.SUBMIT]: ActKind.KEY,
+  [ActionType.DBLCLICK]: ActKind.DBLCLICK,
+  [ActionType.HOVER]: ActKind.HOVER,
+  [ActionType.DRAG]: ActKind.DRAG,
+  [ActionType.FOCUS]: ActKind.RAISE,
 };
+/**
+ * The kinds that use the real pointer or bring the application to the front. Each takes the
+ * pointer or the keyboard of the person at the machine, so a caller asks for it by name.
+ */
+export const FOREGROUND_ONLY: ReadonlySet<string> = new Set([
+  ActKind.CLICK,
+  ActKind.DBLCLICK,
+  ActKind.RIGHTCLICK,
+  ActKind.HOVER,
+  ActKind.DRAG,
+  ActKind.RAISE,
+]);
 /** The actions that carry their own value: a caller gives none. */
 export const VALUE_OF: Readonly<Partial<Record<string, string>>> = {
   [ActionType.CLEAR]: '',
@@ -72,4 +88,23 @@ export function testidOf(target: Seen, before: UiNode): Record<string, unknown> 
     testidOf: sharing.length,
     testidNth: sharing.findIndex((s) => s.key === target.key),
   };
+}
+
+export const SettleReason = { TIMEOUT: 'timeout' } as const;
+
+/** The answer to one action, in the shape the server reads. */
+export interface ActResult {
+  ok: true;
+  ref: string;
+  action: string;
+  /** False when nothing was sent: the element was in the state the caller asked for. */
+  dispatched: boolean;
+  settled: boolean;
+  settleReason: string | null;
+  effect: Record<string, unknown>;
+  role: string;
+  name: string;
+  testid?: string;
+  testidOf?: number;
+  testidNth?: number;
 }

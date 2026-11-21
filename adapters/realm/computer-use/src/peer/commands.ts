@@ -29,12 +29,12 @@ import type { WriteTimeOf, WriteTimes } from '../files.js';
 import { RefTable, writeWindows } from '../lines.js';
 import {
   BOX_ROLES,
-  CHOICES_NAMED,
   DELETE,
-  ESCAPE,
+  FOREGROUND_ONLY,
   KIND_OF,
   PEER_ACTIONS,
   SELECT_ALL,
+  SettleReason,
   TEXT_ROLES,
   VALUE_OF,
   WANTS_CHECKED,
@@ -42,7 +42,9 @@ import {
   isChecked,
   testidOf,
 } from './form.js';
+import type { ActResult } from './form.js';
 import { READ_STATE, see } from './seen.js';
+import { selectChoice } from './select.js';
 import type { Seen } from './seen.js';
 import { UiRole, isAddressable, place, quoted } from '../ui-node.js';
 import type { UiNode } from '../ui-node.js';
@@ -70,6 +72,11 @@ export interface PeerCommandsDeps {
    * no effect carries it as `note`. An Electron application with its switch off is the case.
    */
   noEffectNote?: string;
+  /**
+   * False: the realm never brings the application to the front and never uses the real pointer,
+   * also when a caller asks. The person who joined the application said so.
+   */
+  foreground?: boolean;
 }
 
 /** An application has one screen for the server: it has no address a caller can go to. */
@@ -91,7 +98,6 @@ const RESTLESS_PLACES = 3;
 const SCROLL_STEP = 0.1;
 /** Each check is one question to the operating system. A search this wide is not a check. */
 const MAX_REACH_CHECKS = 8;
-const SettleReason = { TIMEOUT: 'timeout' } as const;
 const Field = { VALUE: 'value', STATES: 'states' } as const;
 
 /**
@@ -133,22 +139,6 @@ function text(value: unknown): string | undefined {
 }
 function record(value: unknown): Args {
   return 'object' === typeof value && value !== null ? (value as Args) : {};
-}
-
-interface ActResult {
-  ok: true;
-  ref: string;
-  action: string;
-  /** False when nothing was sent: the element was in the state the caller asked for. */
-  dispatched: boolean;
-  settled: boolean;
-  settleReason: string | null;
-  effect: Record<string, unknown>;
-  role: string;
-  name: string;
-  testid?: string;
-  testidOf?: number;
-  testidNth?: number;
 }
 
 export { PEER_ACTIONS };
@@ -510,10 +500,17 @@ export class PeerCommands {
         `${this.#deps.driver.subject().app} ended while the action on ${target.node.role} "${target.node.name}" ran: it quit, or it crashed. The action can be the cause. Do not send it again before you know.`,
       );
     }
+    if (outcome.refused === ActRefusal.NEEDS_FOREGROUND) {
+      throw new Error(needsForeground(kind, this.#deps.driver.subject().app));
+    }
     if (outcome.refused === ActRefusal.REACH_UNKNOWN) {
       throw new Error(
         `could not tell if a person can reach ${target.node.role} "${target.node.name}": ${outcome.detail ?? 'the operating system did not answer'}. The menu bar of an application is on the screen only when the application is in front. Bring ${this.#deps.driver.subject().app} to the front, or use a control in its window.`,
       );
+    }
+    // The application has no menu to give by name for this element. The real button can try.
+    if (kind === ActKind.MENU && outcome.refused === undefined && !outcome.delivered) {
+      throw new Error(needsForeground('a right-click here', this.#deps.driver.subject().app));
     }
     if (outcome.refused !== undefined || !outcome.delivered) {
       throw new Error(
@@ -651,90 +648,25 @@ export class PeerCommands {
   }
 
   /**
-   * Chooses one item of a pop-up as a person does: press the pop-up, read its choices, press the
-   * one asked for. When that choice is not there, the pop-up is closed again and the answer
-   * names the choices that are.
+   * The point a drag ends at, as "x,y" on the screen: the middle of the element with the ref
+   * `to.ref`, or the point `to.x`, `to.y`.
    */
-  async #select(ref: string, more: Args, allowed?: readonly string[]): Promise<ActResult> {
-    const wanted = text(more['value']);
-    if (wanted === undefined) {
-      throw new Error(`${ActionType.SELECT} needs the name of the choice: args: { value: "…" }.`);
-    }
-    const read = await this.#deps.driver.read();
-    const key = this.#refs.keyOf(ref);
-    const popup = see(read.root).find((s) => s.key === key);
-    if (popup === undefined) {
-      throw new Error(`ref '${ref}' no longer resolves to an element`);
-    }
-    const how = { delivery: Delivery.USER_PATH, budgetMs: DEFAULT_SETTLE_MS };
-    // A list in a web view has no choice with a name below it, open or closed. A person types
-    // the name into the list, and the list goes to that choice. The pop-up is not opened: it is
-    // a window of its own there, and a key that is sent to the application does not close it.
-    const named = place(read.root).some(
-      (p) =>
-        p.key.startsWith(`${popup.key}/`) && p.node.role === UiRole.MENUITEM && '' !== p.node.name,
-    );
-    if (popup.node.role === UiRole.COMBOBOX && !named) {
-      return this.#selectByTyping(popup, ref, wanted, how);
-    }
-    await this.#drive(popup, ref, ActKind.PRESS, undefined, how);
-    const choices = see((await this.#deps.driver.read()).root).filter(
-      (s) => s.visible && s.node.role === UiRole.MENUITEM && s.key.startsWith(popup.key),
-    );
-    const choice = choices.find((s) => s.node.name === wanted);
-    if (choice === undefined) {
-      // The pop-up that this action opened lies over its own control, so the control is "not
-      // reachable" now. The key that closes the pop-up goes to the application without that check.
-      await this.#drive(popup, ref, ActKind.KEY, ESCAPE, { ...how, delivery: Delivery.DIRECT });
-      throw new Error(
-        `${popup.node.role} "${popup.node.name}" has no choice ${quoted(wanted)}. It has: ${choices
-          .slice(0, CHOICES_NAMED)
-          .map((s) => quoted(s.node.name))
-          .join(', ')}.`,
-      );
-    }
-    const pressed = await this.#act(
-      { ref: this.#refs.refFor(choice.key), action: ActionType.CLICK, args: more },
-      allowed,
-    );
-    return { ...pressed, ref, action: ActionType.SELECT };
-  }
-
-  async #selectByTyping(
-    popup: Seen,
-    ref: string,
-    wanted: string,
-    how: { delivery: Delivery; budgetMs: number },
-  ): Promise<ActResult> {
-    const typed = await this.#drive(popup, ref, ActKind.TYPE, wanted, how);
-    const held = heldBy(typed.outcome, popup.key);
-    const was = popup.node.value ?? '';
-    if (held !== wanted) {
-      if (held !== was) {
-        // The keys went to another choice that starts the same way. Put the old one back.
-        await this.#drive(popup, ref, ActKind.TYPE, was, how);
+  async #dragPoint(to: unknown): Promise<string> {
+    const end = record(to);
+    const ref = text(end['ref']);
+    if (ref !== undefined) {
+      const frame = (await this.#resolve(ref)).node.frame;
+      if (frame === undefined) {
+        throw new Error(`the element ${ref} has no place on the screen to drag to.`);
       }
-      throw new Error(
-        `${popup.node.role} "${popup.node.name}" did not go to the choice ${quoted(wanted)}: it holds ${quoted(was)}. The list does not name its choices, so the realm typed the name.`,
-      );
+      return `${String(frame[0] + frame[2] / 2)},${String(frame[1] + frame[3] / 2)}`;
     }
-    const settled = typed.outcome.settled;
-    return {
-      ok: true,
-      ref,
-      action: ActionType.SELECT,
-      dispatched: true,
-      settled,
-      settleReason: settled ? null : SettleReason.TIMEOUT,
-      effect: {
-        dispatched: true,
-        targetMatched: true,
-        valueChanged: typed.changes.some((c) => c.value !== undefined),
-        domMutatedWithin: typed.changes.length,
-      },
-      role: popup.node.role,
-      name: popup.node.name,
-    };
+    if ('number' === typeof end['x'] && 'number' === typeof end['y']) {
+      return `${String(end['x'])},${String(end['y'])}`;
+    }
+    throw new Error(
+      `${ActionType.DRAG} needs where to drag to: args: { to: { ref: "…" } } or { to: { x, y } } on the screen.`,
+    );
   }
 
   async #act(args: Args, allowed?: readonly string[]): Promise<ActResult> {
@@ -757,9 +689,21 @@ export class PeerCommands {
       };
     }
     if (action === ActionType.SELECT) {
-      return this.#select(ref, record(args['args']), allowed);
+      return selectChoice(
+        {
+          driver: this.#deps.driver,
+          refs: this.#refs,
+          drive: (target, at, kind, value, how) => this.#drive(target, at, kind, value, how),
+          act: (step, limit) => this.#act(step, limit),
+        },
+        ref,
+        record(args['args']),
+        allowed,
+      );
     }
-    const kind = KIND_OF[action];
+    const more = record(args['args']);
+    const foreground = true === more['foreground'];
+    const kind = kindFor(action, more, foreground);
     if (kind === undefined) {
       throw new Error(
         `the computer-use realm does not have the action ${action}. It has: ${PEER_ACTIONS.join(', ')}.`,
@@ -773,7 +717,6 @@ export class PeerCommands {
         throw new Error(outwardRefusal(outward));
       }
     }
-    const more = record(args['args']);
     const modifiers = Array.isArray(more['modifiers']) ? more['modifiers'].map(String) : [];
     const key = text(more['text']);
     // `fill` gives `value`. `type` gives `text`. `press` gives the key in `text`, with modifiers.
@@ -781,7 +724,16 @@ export class PeerCommands {
       kind === ActKind.KEY && key !== undefined
         ? [...modifiers, key].join('+')
         : (text(more['value']) ?? key);
-    const value = VALUE_OF[action] ?? given;
+    if (FOREGROUND_ONLY.has(kind) && !foreground) {
+      throw new Error(needsForeground(action, this.#deps.driver.subject().app));
+    }
+    if (foreground && false === this.#deps.foreground) {
+      throw new Error(
+        `this session was joined with --background-only: the realm does not take the pointer or bring ${this.#deps.driver.subject().app} to the front.`,
+      );
+    }
+    const value =
+      kind === ActKind.DRAG ? await this.#dragPoint(more['to']) : (VALUE_OF[action] ?? given);
     const wanted = WANTS_CHECKED[action];
     if (wanted !== undefined) {
       if (!BOX_ROLES.has(target.node.role)) {
@@ -805,7 +757,7 @@ export class PeerCommands {
       }
     }
     const how = {
-      delivery: Delivery.USER_PATH,
+      delivery: foreground ? Delivery.FOREGROUND : Delivery.USER_PATH,
       budgetMs: 'number' === typeof more['settleMs'] ? more['settleMs'] : DEFAULT_SETTLE_MS,
     };
     let driven = await this.#drive(target, ref, kind, value, how);
@@ -868,4 +820,27 @@ export class PeerCommands {
       ...testidOf(target, outcome.before.root),
     };
   }
+}
+
+/** The mouse button a click asks for. Only the right one changes anything. */
+const RIGHT_BUTTON = 'right';
+
+/**
+ * The kind of action of the realm for an action of a tool. A click with the right button is the
+ * menu a right-click gives: asked for by name in the background, and the real button in the
+ * foreground. A click in the foreground is the real pointer.
+ */
+function kindFor(action: string, more: Args, foreground: boolean): ActKind | undefined {
+  if (action === ActionType.CLICK && RIGHT_BUTTON === more['button']) {
+    return foreground ? ActKind.RIGHTCLICK : ActKind.MENU;
+  }
+  if (action === ActionType.CLICK && foreground) {
+    return ActKind.CLICK;
+  }
+  return KIND_OF[action];
+}
+
+/** What to say when an action needs the real pointer and the caller did not ask for it. */
+function needsForeground(action: string, app: string): string {
+  return `${action} needs the real pointer. It brings ${app} to the front and takes the pointer of the person at the machine for a moment, then puts both back. Send it again with args: { foreground: true }.`;
 }
