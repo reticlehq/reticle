@@ -13,6 +13,8 @@ export interface DoctorFacts {
   trusted?: boolean | undefined;
   app: string;
   appOpen: boolean;
+  /** What to say when the application is not open: the names near it, or what is open. */
+  appHint?: string | undefined;
   /** Windows of the application on this screen. Absent: they were not read. */
   windows?: number | undefined;
   windowsNotOnScreen?: number | undefined;
@@ -55,7 +57,8 @@ export function doctorReport(facts: DoctorFacts): DoctorReport {
   lines.push(`${OK}Accessibility permission`);
   if (!facts.appOpen) {
     return stop(
-      `No application named ${facts.app} is open. Open ${facts.app}, or give its exact name with --app.`,
+      facts.appHint ??
+        `No application named ${facts.app} is open. Open ${facts.app}, or give its exact name with --app.`,
     );
   }
   if (0 === (facts.windows ?? 0)) {

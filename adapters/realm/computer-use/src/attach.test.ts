@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { attachPlan, electronWarning } from './attach.js';
+import { attachPlan, electronWarning, pickApp } from './attach.js';
 
 const files: Record<string, string> = {
   '/home/.reticle/pairing-token': 'tok-file\n',
@@ -73,5 +73,36 @@ describe('attachPlan', () => {
     const off = attachPlan(['--app', 'Notes'], {}, '/home', read);
     expect(on).toMatchObject({ electronSwitch: true });
     expect(off).toMatchObject({ electronSwitch: false });
+  });
+});
+
+/**
+ * The command found an application by the name of its process only. "Visual Studio Code" runs as
+ * "Code", so the name a person sees found nothing, and the refusal did not say what was open.
+ */
+describe('pickApp', () => {
+  const running = [
+    { name: 'Visual Studio Code', process: 'Code', pid: 11 },
+    { name: 'Notes', process: 'Notes', pid: 12 },
+    { name: 'Notes Helper', process: 'NotesHelper', pid: 13 },
+  ];
+
+  it('finds an application by the name a person sees, and by the name of its process', () => {
+    expect(pickApp('Visual Studio Code', running)).toEqual({ pid: 11 });
+    expect(pickApp('Code', running)).toEqual({ pid: 11 });
+    expect(pickApp('notes', running)).toEqual({ pid: 12 });
+  });
+
+  it('names what is near, when the name fits nothing exactly', () => {
+    expect(pickApp('Studio', running)).toEqual({
+      error: 'No application named Studio is open. Did you mean: Visual Studio Code?',
+    });
+  });
+
+  it('names what is open, when nothing is near', () => {
+    expect(pickApp('Mail', running)).toEqual({
+      error:
+        'No application named Mail is open. These are open: Visual Studio Code, Notes, Notes Helper.',
+    });
   });
 });

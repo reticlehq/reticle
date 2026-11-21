@@ -116,3 +116,42 @@ export function electronWarning(
   }
   return `${plan.app} is an Electron application. It shows its elements, and it does NOTHING for a press until its accessibility switch is on. Run again with ${Flag.ELECTRON_SWITCH}: the switch is then set, and it is set back when you stop. It costs ${plan.app} some speed.`;
 }
+
+/** One application that is open, as the helper lists it. */
+export interface RunningApp {
+  /** The name a person sees in the Dock and the menu bar. */
+  name: string;
+  /** The name of the program of the process. */
+  process: string;
+  pid: number;
+}
+
+/** The names a refusal gives when nothing is near the name that was asked for. */
+const NAMES_GIVEN = 12;
+
+/**
+ * The application a person means by a name. The name a person sees is often not the name of the
+ * process: "Visual Studio Code" runs as "Code". A name that fits nothing gets the names that are
+ * near it, or the names of what is open.
+ */
+export function pickApp(
+  wanted: string,
+  running: readonly RunningApp[],
+): { pid: number } | { error: string } {
+  const fold = (text: string): string => text.toLowerCase();
+  const is = (app: RunningApp, same: (a: string, b: string) => boolean): boolean =>
+    same(app.name, wanted) || same(app.process, wanted);
+  const found =
+    running.find((app) => is(app, (a, b) => a === b)) ??
+    running.find((app) => is(app, (a, b) => fold(a) === fold(b)));
+  if (found !== undefined) {
+    return { pid: found.pid };
+  }
+  const names = [...new Set(running.map((app) => app.name).filter((name) => name.length > 0))];
+  const near = names.filter((name) => fold(name).includes(fold(wanted)));
+  const hint =
+    near.length > 0
+      ? `Did you mean: ${near.join(', ')}?`
+      : `These are open: ${names.slice(0, NAMES_GIVEN).join(', ')}.`;
+  return { error: `No application named ${wanted} is open. ${hint}` };
+}

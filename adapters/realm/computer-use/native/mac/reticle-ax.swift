@@ -17,6 +17,7 @@
 // Output is one JSON object on stdout. The helper decides nothing. It reports what it read.
 //
 //   reticle-ax web-tree <pid> on|off   (Electron: its accessibility switch)
+//   reticle-ax apps                    (the applications that are open: name, process, pid)
 //   reticle-ax serve      (one command for each line on standard input, as a JSON list of words)
 import AppKit
 import ApplicationServices
@@ -401,6 +402,20 @@ func isRunning(_ pid: pid_t) -> Bool {
 }
 
 func run(_ args: [String]) throws {
+  if args.count >= 2, args[1] == "apps" {
+    // The applications a person could mean by a name: the name they see, and the name of the
+    // process. Only names and numbers, and only of applications that have a face.
+    let list = NSWorkspace.shared.runningApplications
+      .filter { $0.activationPolicy != .prohibited }
+      .map { app -> [String: Any] in
+        [
+          "name": app.localizedName ?? "",
+          "process": app.executableURL?.lastPathComponent ?? "",
+          "pid": Int(app.processIdentifier),
+        ]
+      }
+    try emit(["apps": list])
+  }
   guard args.count >= 3, let pid = Int32(args[2]) else {
     try emit(["error": "usage"])
   }
