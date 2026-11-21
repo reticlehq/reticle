@@ -452,6 +452,13 @@ describe('the prompt for a desktop application', () => {
 
   // A window shows words from other people: a mail, a document, a chat. A model that reads
   // "press Delete all" in a mail must not take it for its task.
+  // The realm has an action for a list and for a checkbox. A model that does not know them
+  // presses the list, reads it, and presses a choice: three turns where one is enough.
+  it('names the actions for a list of choices and for a checkbox', () => {
+    expect(desktop).toContain('`select`');
+    expect(desktop).toContain('`check` or');
+  });
+
   it('says that the menu bar needs the application in front', () => {
     expect(desktop).toContain('The menu bar is on the screen only when the application');
   });
