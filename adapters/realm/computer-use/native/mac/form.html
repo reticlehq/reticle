@@ -1,0 +1,27 @@
+<!doctype html>
+<meta charset="utf-8" />
+<title>Notes form</title>
+<style>
+  body {
+    font: 18px system-ui;
+    padding: 24px;
+  }
+</style>
+<label>New note <input id="note" /></label>
+<button id="add">Add</button>
+<p id="count">0 notes</p>
+<ul id="list"></ul>
+<script>
+  const note = document.getElementById('note');
+  const list = document.getElementById('list');
+  document.getElementById('add').addEventListener('click', () => {
+    if ('' === note.value) {
+      return;
+    }
+    const item = document.createElement('li');
+    item.textContent = note.value;
+    list.append(item);
+    note.value = '';
+    document.getElementById('count').textContent = `${list.children.length} notes`;
+  });
+</script>

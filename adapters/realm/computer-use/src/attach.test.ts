@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { attachPlan, electronWarning, joinedAnswer, pickApp, withOwnerLimits } from './attach.js';
+import {
+  attachPlan,
+  electronWarning,
+  isElectron,
+  joinedAnswer,
+  pickApp,
+  withOwnerLimits,
+} from './attach.js';
 
 const files: Record<string, string> = {
   '/home/.reticle/pairing-token': 'tok-file\n',
@@ -75,6 +82,17 @@ describe('attachPlan', () => {
     expect(electronWarning(program, { ...off, electronSwitch: true }, electron)).toBeUndefined();
     expect(electronWarning(program, off, () => false)).toBeUndefined();
     expect(electronWarning('/usr/bin/tool', off, electron)).toBeUndefined();
+  });
+
+  // Chrome has no Electron in it, so the join set no switch, and a press on a page of Chrome was
+  // answered with "done" and never reached the page.
+  it('takes a Chromium browser for an application that needs the switch', () => {
+    const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+    const frameworks = (path: string) =>
+      '/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework' ===
+      path;
+    expect(isElectron(chrome, frameworks)).toBe(true);
+    expect(isElectron('/Applications/Notes.app/Contents/MacOS/Notes', frameworks)).toBe(false);
   });
 
   it('shows the pointer and the window of the realm unless the person says not to', () => {

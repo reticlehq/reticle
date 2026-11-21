@@ -493,6 +493,12 @@ func run(_ args: [String]) throws {
     }
     let result = AXUIElementSetAttributeValue(
       app, "AXManualAccessibility" as CFString, on ? kCFBooleanTrue : kCFBooleanFalse)
+    // The second switch, the one a screen reader sets. Electron does a press with the first one
+    // alone. Chrome does not: it gives its tree, answers "done" to a press, and the page gets no
+    // click. With this one the click comes. Its answer is not read: Chrome says "not implemented"
+    // and takes it.
+    _ = AXUIElementSetAttributeValue(
+      app, "AXEnhancedUserInterface" as CFString, on ? kCFBooleanTrue : kCFBooleanFalse)
     readBefore.remove(pid)
     // The switch is not in effect at once. For some seconds the application gives the same tree
     // as before, answers "done" to a press, and loses the press. When the switch is in effect the
@@ -502,13 +508,21 @@ func run(_ args: [String]) throws {
     if on && result == .success {
       var last = before
       var changed = false
-      for _ in 0..<34 {
+      // By the clock, and not by a count of reads: a read of a large page takes time of its own.
+      let until = Date().addingTimeInterval(5)
+      while Date() < until {
         Thread.sleep(forTimeInterval: 0.15)
         let now = snapshot(app).json
         if now != before { changed = true }
         if changed && now == last { break }
         last = now
       }
+    } else if on {
+      // Chrome refuses the first switch and takes the second one. Its tree does not change when
+      // the switch is in effect, so there is nothing to wait for but time. Measured on Chrome: a
+      // press is lost up to 2.4 s after the switch, and it comes from 3.3 s on.
+      // ponytail: a fixed four seconds. Wait for a true sign when one is found.
+      Thread.sleep(forTimeInterval: 4)
     }
     try emit(["set": result == .success])
   }

@@ -2,7 +2,7 @@
  * What `reticle-computer-use` needs to join a bridge: which application, which bridge, the token
  * of that bridge, and the folders to watch. Pure, so a test gives it arguments and files.
  */
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 import { RETICLE_DEFAULT_PORT, bridgeWsUrl } from '@reticlehq/core';
 
@@ -129,10 +129,24 @@ export function attachPlan(
 const ELECTRON_MARK = 'Contents/Frameworks/Electron Framework.framework';
 const BUNDLE = /^(.*?\.app)\//;
 
-/** True when the program of a process is in the bundle of an Electron application. */
+/**
+ * True when the program of a process is in the bundle of an Electron application or of a
+ * Chromium browser. Both show a page, and both need the accessibility switch: without it a press
+ * on the page is answered with "done" and does not reach the page.
+ *
+ * A Chromium browser has no Electron in it. Its mark is a framework with the name of its own
+ * program: `Google Chrome Framework.framework` beside the program `Google Chrome`.
+ */
 export function isElectron(program: string, exists: (path: string) => boolean): boolean {
   const bundle = BUNDLE.exec(program)?.[1];
-  return bundle !== undefined && exists(join(bundle, ELECTRON_MARK));
+  if (bundle === undefined) {
+    return false;
+  }
+  const name = basename(program);
+  return (
+    exists(join(bundle, ELECTRON_MARK)) ||
+    exists(join(bundle, 'Contents/Frameworks', `${name} Framework.framework`))
+  );
 }
 
 /**

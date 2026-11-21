@@ -174,6 +174,8 @@ Read these before you rely on a result.
 
 `conformance/computer-use-calculator.mjs` does a whole task on an application that Reticle did not write: the system Calculator works out 7 × 6. Each of the four presses is proved by what the display then shows. The task is saved as a flow, Calculator is closed and opened again, and the flow replays with no model. It does not run when Calculator is open already.
 
+`conformance/computer-use-browser.mjs` does a form in Google Chrome, on a page of this folder: it fills a field and presses a button, the press is proved by the note that comes on the page, and the saved flow replays with no model in a new Chrome. Chrome runs with a profile of that run. A Chromium browser needs the same accessibility switch as an Electron application, and a second one: with the first alone, Chrome answers "done" to a press and the page gets no click. The join sets both. Chrome takes about four seconds before a press reaches the page, and the join waits for that.
+
 `native/mac/savepanelcheck.mjs` checks the save panel of the system, which most applications use to write a file. The realm reads the panel, fills the name and presses its Save, all in the background, and the proof is the file on disk.
 
 `native/mac/hudcheck.mjs` checks the window of the realm: it shows the action and its effect, and Pause stops the realm. The check presses Pause as a person does: a second realm reads the window and presses its button.
