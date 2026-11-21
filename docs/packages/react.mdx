@@ -69,9 +69,28 @@ The [Vite plugin](/packages/vite-plugin) injects `install()` and `reticle.connec
 
 `installRenderMeter`, `resetRenderMeter`, `getRenderStats`, and the `RenderStats` type. This is what makes a render loop visible as a number rather than a hunch.
 
+`RenderStats` has two fields, and the `__reticle_renders` store reports both:
+
+| Field | Type | What it says |
+| --- | --- | --- |
+| `commits` | `number` | React commits since `install()`. |
+| `hydration` | `HydrationState` | `none`: no React root on the page. `pending`: a root, or a Suspense or Activity boundary in it, is still dehydrated, so its server-rendered controls have no handlers. `done`: nothing waits for hydration. `unknown`: the adapter could not read the tree to the end. `done` stays once reached; before that, each read looks at the page again. |
+
+Flow replay reads `hydration` on each page that loads (the start page and each `navigate` step). It waits only while the value is `pending`. `HydrationState` comes from `@reticlehq/core`.
+
 ### Hydration
 
-`HYDRATION_COMPLETE_SIGNAL`, `createHydrationTracker`, type `HydrationTracker`.
+`HYDRATION_COMPLETE_SIGNAL`, `createHydrationTracker`, types `HydrationTracker` and `HydrationRead`.
+
+`install()` fires `reticle:hydration-complete` once, when the page reads `done`. That is at the first React commit after which no part is dehydrated, or at `install()` when React hydrated the page before it. A commit that leaves a Suspense boundary dehydrated does not fire it. A page with no React tree never fires it.
+
+| Export | Signature |
+| --- | --- |
+| `createHydrationTracker` | `(onHydrated: () => void, read?: HydrationRead) => HydrationTracker` |
+| `HydrationRead` | `(roots: readonly unknown[]) => HydrationState` |
+| `HydrationTracker` | `{ onCommit(root?: unknown): void; onInstall(): void; isHydrated(): boolean; state(): HydrationState }` |
+
+Without `read`, a tracker fires on the first commit, as before, and `onInstall` does nothing. With `read`, it fires on the first `onCommit` or `onInstall` that reads `done`. Until the answer is fixed (`done` or `unknown`), `onCommit` keeps each FiberRoot it gets, and gives them all to `read`. After that it keeps none.
 
 ### Error boundaries
 

@@ -16,22 +16,33 @@
  * complete minimal hook. MUST be installed before `react-dom` initializes (React reads the hook at
  * renderer-inject time) — import this as the first side-effect in the app entry, before React.
  */
-import { RETICLE_RENDER_PREHOOK, RETICLE_RENDERS_STORE } from '@reticlehq/core';
+import { HydrationState, RETICLE_RENDER_PREHOOK, RETICLE_RENDERS_STORE } from '@reticlehq/core';
 import { registerStore } from '@reticlehq/browser';
 import { HYDRATION_COMPLETE_SIGNAL, createHydrationTracker } from './hydration.js';
+import { readHydrationState } from './hydration-state.js';
 import { createCommitAggregator } from './commit-aggregator.js';
 import { autoRegisterStores } from './auto-stores.js';
 
 const HOOK_KEY = '__REACT_DEVTOOLS_GLOBAL_HOOK__';
+/** Where the FiberRoot is in the arguments of `onCommitFiberRoot(rendererID, root, ...)`. */
+const COMMIT_ROOT_ARG = 1;
 const RENDER_STORE = RETICLE_RENDERS_STORE;
 
-// Fire the hydration-complete signal (once, on the first commit) via the SDK instance if it is present.
-// Structural access avoids importing the whole Reticle type into this tooling module.
-const hydration = createHydrationTracker(() => {
-  const instance = (globalThis as { __reticleInstance?: { signal?: (name: string) => void } })
-    .__reticleInstance;
-  instance?.signal?.(HYDRATION_COMPLETE_SIGNAL);
-});
+// Fire the hydration-complete signal (once, when no server-rendered part waits) via the SDK instance if
+// it is present. Structural access avoids importing the whole Reticle type into this tooling module.
+function createPageHydration(): ReturnType<typeof createHydrationTracker> {
+  return createHydrationTracker(
+    () => {
+      const instance = (globalThis as { __reticleInstance?: { signal?: (name: string) => void } })
+        .__reticleInstance;
+      instance?.signal?.(HYDRATION_COMPLETE_SIGNAL);
+    },
+    // No document (a server import) has no React tree to wait for.
+    (roots) =>
+      'undefined' === typeof document ? HydrationState.NONE : readHydrationState(document, roots),
+  );
+}
+let hydration = createPageHydration();
 
 // Access the SDK instance structurally (avoids importing the whole Reticle type into this tooling module).
 function reticleInstance(): { renderCommit?: (n: number) => void } | undefined {
@@ -43,8 +54,11 @@ function reticleInstance(): { renderCommit?: (n: number) => void } | undefined {
 // storm is one event of magnitude N, never a per-render flood. requestAnimationFrame when available.
 const commitStream = createCommitAggregator({
   schedule: (fn) => {
-    if ('function' === typeof requestAnimationFrame) requestAnimationFrame(() => fn());
-    else setTimeout(fn, 16);
+    if ('function' === typeof requestAnimationFrame) {
+      requestAnimationFrame(() => fn());
+    } else {
+      setTimeout(fn, 16);
+    }
   },
   flush: (n) => reticleInstance()?.renderCommit?.(n),
 });
@@ -68,10 +82,14 @@ const DISCOVERY_COMMITS = 10;
 let discoveryAttempts = 0;
 let shouldDiscover = true;
 
-/** One React commit: bump the counter, fire hydration on the first, and feed the throttled stream. */
-function onReactCommit(): void {
+/**
+ * One React commit: bump the counter, check hydration, and feed the throttled stream. React calls the
+ * hook as `onCommitFiberRoot(rendererID, root, ...)`; the root is how hydration finds a tree that the
+ * page scan does not reach.
+ */
+function onReactCommit(...args: unknown[]): void {
   commits += 1;
-  hydration.onCommit();
+  hydration.onCommit(args[COMMIT_ROOT_ARG]);
   commitStream.onCommit();
   if (shouldDiscover && discoveryAttempts < DISCOVERY_COMMITS && 'undefined' !== typeof document) {
     discoveryAttempts += 1;
@@ -104,7 +122,9 @@ let commits = 0;
  * rest of this layer refuses to make.
  */
 function seedCommits(prior: number): void {
-  if (Number.isFinite(prior) && prior > commits) commits = prior;
+  if (Number.isFinite(prior) && prior > commits) {
+    commits = prior;
+  }
 }
 let installed = false;
 
@@ -116,10 +136,16 @@ function noop(): void {
 export interface RenderStats {
   /** Total React commits observed since install (monotonic; diff over a window for a rate). */
   commits: number;
+  /**
+   * Whether React hydrated every server-rendered part of the page (`RenderStatsField.HYDRATION`).
+   * `done` stays once reached. Before that, each read looks at the page again. Replay waits while it
+   * is `pending`, because a click on a part that is not hydrated does nothing (#1654).
+   */
+  hydration: HydrationState;
 }
 
 export function getRenderStats(): RenderStats {
-  return { commits };
+  return { commits, hydration: hydration.state() };
 }
 
 /** Reset the commit counter — call before a measured window so the count is window-scoped. */
@@ -139,6 +165,7 @@ export interface RenderMeterOptions {
 /** Reset internal state for test isolation. */
 export function resetRenderMeterForTest(): void {
   installed = false;
+  hydration = createPageHydration();
   shouldDiscover = true;
   discoveryAttempts = 0;
   commits = 0;
@@ -149,7 +176,9 @@ export function resetRenderMeterForTest(): void {
  * never throws. Call BEFORE react-dom loads.
  */
 export function installRenderMeter(options?: RenderMeterOptions): void {
-  if (installed) return;
+  if (installed) {
+    return;
+  }
   installed = true;
   if (false === options?.discoverStores) {
     shouldDiscover = false;
@@ -168,6 +197,7 @@ export function installRenderMeter(options?: RenderMeterOptions): void {
       seedCommits(pre.commits);
       pre.sinks.push(onReactCommit);
       registerStore(RENDER_STORE, () => getRenderStats());
+      hydration.onInstall();
       return;
     }
     const existing = root[HOOK_KEY];
@@ -187,7 +217,7 @@ export function installRenderMeter(options?: RenderMeterOptions): void {
           ? existing.onCommitFiberRoot.bind(existing)
           : undefined;
       existing.onCommitFiberRoot = (...args: unknown[]) => {
-        onReactCommit();
+        onReactCommit(...args);
         if (original !== undefined) {
           try {
             original(...args);
@@ -198,6 +228,8 @@ export function installRenderMeter(options?: RenderMeterOptions): void {
       };
     }
     registerStore(RENDER_STORE, () => getRenderStats());
+    // React may have hydrated the page before this ran, and no commit may come after it.
+    hydration.onInstall();
   } catch {
     /* never break the host app */
   }

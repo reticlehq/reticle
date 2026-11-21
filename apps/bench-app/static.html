@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Reticle · Static page</title>
+  </head>
+  <body>
+    <!--
+      A second entry of this Vite app, with no React tree (#1654). The React adapter is installed
+      and connected, as on every page of this app, but nothing here renders with React. The button
+      works through a plain DOM handler from the first paint.
+    -->
+    <main>
+      <h1>Static page</h1>
+      <button data-testid="static-reveal" type="button">Reveal</button>
+    </main>
+    <script>
+      document.querySelector('[data-testid="static-reveal"]').addEventListener('click', () => {
+        const shown = document.createElement('p');
+        shown.dataset.testid = 'static-revealed';
+        shown.textContent = 'Revealed';
+        document.querySelector('main').append(shown);
+      });
+    </script>
+    <script type="module">
+      import { installReticle } from '/src/reticle-dev.ts';
+      installReticle();
+    </script>
+  </body>
+</html>
