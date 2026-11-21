@@ -136,3 +136,103 @@ describe('what keeps one role', () => {
     expect(step?.ok).toBe(false);
   });
 });
+
+/**
+ * The SDK answers a `textbox` query with search boxes too (`matchesRole` in the browser's
+ * query-finders). The first fake page above matches one exact role, so it could not see this.
+ */
+interface Field {
+  ref: string;
+  role: string;
+  name: string;
+}
+function sdkPage(fields: readonly Field[]): FlowReplaySession & { acted: string[] } {
+  const acted: string[] = [];
+  const matchesRole = (actual: string, queried: string): boolean =>
+    actual === queried || ('textbox' === queried && 'searchbox' === actual);
+  return {
+    acted,
+    command(name: string, args: Record<string, unknown> = {}): Promise<CommandResult> {
+      if (ReticleCommand.QUERY === name) {
+        const role = asString(args['value']) ?? '';
+        const wanted = asString(args['name']);
+        const elements = fields
+          .filter((f) => matchesRole(f.role, role) && (wanted === undefined || wanted === f.name))
+          .map((f) => ({
+            ref: asRef(f.ref),
+            role: f.role,
+            name: f.name,
+            states: [],
+            visible: true,
+          }));
+        const hint = { route: '/', presentTestids: [], knownEmptyState: false };
+        return Promise.resolve({
+          kind: 'command_result',
+          id: 'q',
+          ok: true,
+          result: { elements, hint },
+        });
+      }
+      const ref = asString(args['ref']);
+      if (ref !== undefined) {
+        acted.push(ref);
+      }
+      const result = { dispatched: true, settled: true, valueChanged: true };
+      return Promise.resolve({ kind: 'command_result', id: 'c', ok: true, result });
+    },
+    eventsSince: () => [],
+    onEvent: () => () => undefined,
+    elapsed: () => 0,
+  };
+}
+
+describe('replay on a page that answers like the SDK', () => {
+  const search: Field = { ref: 'e-search', role: 'searchbox', name: LABEL };
+
+  // One search input matched by both the `textbox` and the `searchbox` query is one control.
+  it('a recorded search field acts on the one search input', async () => {
+    const page = sdkPage([search]);
+    const [step] = await replayFlow(page, fillFlow(recorded('searchbox')), waitForPredicate, 60);
+    expect(step?.ok).toBe(true);
+    expect(page.acted).toEqual(['e-search']);
+  });
+
+  it('a recorded text field acts on the one search input', async () => {
+    const page = sdkPage([search]);
+    const [step] = await replayFlow(page, fillFlow(recorded('textbox')), waitForPredicate, 60);
+    expect(step?.ok).toBe(true);
+    expect(page.acted).toEqual(['e-search']);
+  });
+
+  /*
+   * A text field and a number field with one label. The recorder saw one field of its own role,
+   * so it saved no position. The role it recorded is tried first; the other roles are the fallback
+   * for a build that changed the input type, so this page is not ambiguous.
+   */
+  it('a page with a text field and a number field of one label uses the recorded role', async () => {
+    const page = sdkPage([
+      { ref: 'e-text', role: 'textbox', name: LABEL },
+      { ref: 'e-number', role: 'spinbutton', name: LABEL },
+    ]);
+    const [fromText] = await replayFlow(page, fillFlow(recorded('textbox')), waitForPredicate, 60);
+    const [fromNumber] = await replayFlow(
+      page,
+      fillFlow(recorded('spinbutton')),
+      waitForPredicate,
+      60,
+    );
+    expect(fromText?.ok).toBe(true);
+    expect(fromNumber?.ok).toBe(true);
+    expect(page.acted).toEqual(['e-text', 'e-number']);
+  });
+
+  it('two fields of the recorded role are still ambiguous', async () => {
+    const page = sdkPage([
+      { ref: 'e-1', role: 'textbox', name: LABEL },
+      { ref: 'e-2', role: 'textbox', name: LABEL },
+    ]);
+    const [step] = await replayFlow(page, fillFlow(recorded('textbox')), waitForPredicate, 60);
+    expect(step?.ok).toBe(false);
+    expect(page.acted).toEqual([]);
+  });
+});
