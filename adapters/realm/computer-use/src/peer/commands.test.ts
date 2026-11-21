@@ -257,6 +257,63 @@ describe('PeerCommands', () => {
     expect(asked).toHaveLength(2);
   });
 
+  // Dictionary puts its search field in another group when it shows results. The fill had worked,
+  // the realm said "did not resolve", and the ref was dead for the Return that came next.
+  it('follows a field that the application moves in its tree when it takes the value', async () => {
+    const window = (value: string, moved: boolean): UiRead => {
+      const field = node(UiRole.TEXTBOX, '', { frame: [10, 10, 200, 20], value });
+      const bar = node(UiRole.GROUP, '', { frame: [0, 0, 400, 40], children: [field] });
+      const results = node(UiRole.GROUP, '', { frame: [0, 40, 400, 200] });
+      return {
+        root: node(UiRole.WINDOW, 'Dictionary', {
+          frame: [0, 0, 400, 300],
+          children: moved ? [bar, results] : [results, bar],
+        }),
+        unread: 0,
+        unmapped: [],
+      };
+    };
+    let now = window('', false);
+    const asked: ActRequest[] = [];
+    const commands = new PeerCommands({
+      driver: {
+        subject: () => ({ app: 'Dictionary', pid: 7 }),
+        read: () => Promise.resolve(now),
+        reach: () => Promise.resolve(reachAnswer),
+        act: (request) => {
+          asked.push(request);
+          const before = now;
+          if ('set' === request.kind) {
+            now = window(request.value ?? '', true);
+          }
+          return Promise.resolve({
+            delivered: true,
+            reachable: true,
+            settled: true,
+            before,
+            after: now,
+          });
+        },
+      },
+      emit: () => undefined,
+    });
+    const found = (await commands.answer(ReticleCommand.QUERY, { role: 'textbox' })) as {
+      elements: { ref: string }[];
+    };
+    const ref = found.elements[0]?.ref;
+    await commands.answer(ReticleCommand.ACT, {
+      ref,
+      action: ActionType.FILL,
+      args: { value: 'reticle' },
+    });
+    // One set, and no keys after it: the value was read from the field where it is now.
+    expect(asked.map((a) => a.kind)).toEqual(['set']);
+    // The same ref still names the field.
+    await commands.answer(ReticleCommand.ACT, { ref, action: ActionType.SUBMIT });
+    expect(asked.at(-1)?.kind).toBe('key');
+    expect(asked.at(-1)?.target.path.join('.')).toBe('0.0');
+  });
+
   // Chrome gives a page with no scroll bar in its tree, and the scroll was refused there.
   it('scrolls with a key when the tree has no scroll bar, and says so', async () => {
     const page = (posts: number): UiRead => ({

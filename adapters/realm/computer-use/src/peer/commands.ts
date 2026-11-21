@@ -40,6 +40,7 @@ import {
   VALUE_OF,
   WANTS_CHECKED,
   heldBy,
+  movedTo,
   isChecked,
   testidOf,
 } from './form.js';
@@ -830,7 +831,7 @@ export class PeerCommands {
         `the computer-use realm does not have the action ${action}. It has: ${PEER_ACTIONS.join(', ')}.`,
       );
     }
-    const target = await this.#resolve(ref);
+    let target = await this.#resolve(ref);
     if (allowed !== undefined) {
       // The dialog's name is part of the meaning: "OK" in "Delete the project?" is a delete.
       const outward = outwardActionOf(`${target.node.name} ${target.dialog}`, target.node.role);
@@ -887,6 +888,13 @@ export class PeerCommands {
       // A field in a web view answers "done" to a value set from outside, and keeps its old
       // value. The field then gets the keys, as from a person: all of its text selected first,
       // so that the new text replaces it.
+      // The application can move the field in its tree as it takes the value. The ref then goes
+      // with the field, and the value is read where the field is now.
+      const moved = movedTo(driven.outcome, target, value);
+      if (moved !== undefined) {
+        this.#refs.move(ref, moved.key);
+        target = { ...target, ...moved };
+      }
       const first = heldBy(driven.outcome, target.key);
       if (first !== value) {
         if ('' !== first) {

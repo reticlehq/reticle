@@ -7,7 +7,7 @@ import { ActionType, ElementState } from '@reticlehq/core';
 import { ActKind } from '../driver.js';
 import type { ActOutcome } from '../driver.js';
 import { UiRole, place } from '../ui-node.js';
-import type { UiNode } from '../ui-node.js';
+import type { Placed, UiNode } from '../ui-node.js';
 import { see } from './seen.js';
 import type { Seen } from './seen.js';
 
@@ -23,6 +23,27 @@ export const TEXT_ROLES: ReadonlySet<string> = new Set([UiRole.TEXTBOX, UiRole.C
 /** The value an element holds after an action. */
 export function heldBy(outcome: ActOutcome, key: string): string {
   return place(outcome.after.root).find((p) => p.key === key)?.node.value ?? '';
+}
+
+/**
+ * Where a field is after it took a value, when it is not at its key any more: an application can
+ * put the field in another group as it shows results. The answer is the one element with the
+ * same role, name and identifier that holds exactly the value that was set. With two such
+ * elements, or none, there is no answer: a guess would give the ref to another element.
+ */
+export function movedTo(outcome: ActOutcome, target: Placed, value: string): Placed | undefined {
+  const after = place(outcome.after.root);
+  if (after.some((p) => p.key === target.key)) {
+    return undefined;
+  }
+  const same = after.filter(
+    (p) =>
+      p.node.role === target.node.role &&
+      p.node.name === target.node.name &&
+      p.node.id === target.node.id &&
+      p.node.value === value,
+  );
+  return 1 === same.length ? same[0] : undefined;
 }
 
 export const KIND_OF: Readonly<Partial<Record<string, ActKind>>> = {

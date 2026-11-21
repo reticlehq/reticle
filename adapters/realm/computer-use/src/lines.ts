@@ -17,16 +17,33 @@ const INDENT = '  ';
 export class RefTable {
   private readonly refOfKey = new Map<string, string>();
   private readonly keyOfRef = new Map<string, string>();
+  /** Refs given so far. Not the size of a map: a ref that moved leaves no key behind. */
+  private given = 0;
 
   refFor(key: string): string {
     const known = this.refOfKey.get(key);
     if (known !== undefined) {
       return known;
     }
-    const ref = `e${String(this.refOfKey.size + 1)}`;
+    this.given += 1;
+    const ref = `e${String(this.given)}`;
     this.refOfKey.set(key, ref);
     this.keyOfRef.set(ref, key);
     return ref;
+  }
+
+  /**
+   * The element of a ref is at another key now: the application changed the tree round it. The
+   * ref goes with the element. The old key is forgotten, so that another element that comes to
+   * that place gets a ref of its own.
+   */
+  move(ref: string, key: string): void {
+    const old = this.keyOfRef.get(ref);
+    if (old !== undefined) {
+      this.refOfKey.delete(old);
+    }
+    this.refOfKey.set(key, ref);
+    this.keyOfRef.set(ref, key);
   }
 
   /** The key a ref was given for, to find the element again in a new read. */
