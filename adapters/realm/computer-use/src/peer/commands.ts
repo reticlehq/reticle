@@ -48,6 +48,7 @@ import type { ActResult } from './form.js';
 import { READ_STATE, see } from './seen.js';
 import { NO_SCREEN_RECORDING, kindFor, needsForeground, pointOnScreen } from './pointer.js';
 import type { Picture } from './pointer.js';
+import { scrollBy } from './scroll.js';
 import { selectChoice } from './select.js';
 import type { Seen } from './seen.js';
 import { UiRole, isAddressable, place, quoted } from '../ui-node.js';
@@ -89,7 +90,6 @@ export interface PeerCommandsDeps {
 const ROUTE = '/';
 /** Room for an effect that comes up to a second late, and then the quiet time after it. */
 const DEFAULT_SETTLE_MS = 1500;
-/** How far one `dy` scroll moves the bar: a tenth of its range. */
 /**
  * The quiet time for an action through the peer. It is shorter than the driver's own 500 ms,
  * because the peer goes on looking: a change that comes after the action is sent when it comes.
@@ -101,7 +101,6 @@ const LOOKS_AFTER_ACT = 2;
 const RESTLESS_LOOKS = 2;
 /** The places in one parent that must change by themselves before the whole parent does. */
 const RESTLESS_PLACES = 3;
-const SCROLL_STEP = 0.1;
 /**
  * Said with a press after which the realm saw no effect of any kind. "Dispatched" means that the
  * application took the call, and an application can take it and do nothing with it.
@@ -119,19 +118,6 @@ function sawNothing(outcome: ActOutcome, changesOnScreen: number): boolean {
   );
 }
 
-/** Said in the answer of a scroll that was done with a key, because there was no scroll bar. */
-const SCROLL_BY_KEY = 'key';
-
-/** The key that does what a scroll asks: the end or the start for a place, a page for a move. */
-function scrollKeyFor(fraction: unknown, dy: unknown): string | undefined {
-  if ('number' === typeof fraction) {
-    return fraction >= 0.5 ? 'End' : 'Home';
-  }
-  if ('number' === typeof dy && dy !== 0) {
-    return dy > 0 ? 'PageDown' : 'PageUp';
-  }
-  return undefined;
-}
 /** Each check is one question to the operating system. A search this wide is not a check. */
 const MAX_REACH_CHECKS = 8;
 const Field = { VALUE: 'value', STATES: 'states' } as const;
@@ -658,91 +644,15 @@ export class PeerCommands {
     return { outcome, changes, byItself: all.length - changes.length, offScreen: effect.offScreen };
   }
 
-  /**
-   * Scrolls the scroll area that holds an element, by moving its scroll bar. No wheel event is
-   * sent: a wheel event does not reach an application that is not in front, and it would use the
-   * pointer of the person at the machine.
-   *
-   * `fraction` is the place of the bar, 0 to 1. `dy` moves the bar one step in its direction; the
-   * realm does not know the height of the content, so it cannot scroll by pixels, and it says so.
-   */
-  async #scroll(args: Args): Promise<Record<string, unknown>> {
-    const ref = text(args['ref']);
-    const read = await this.#deps.driver.read();
-    const seen = see(read.root);
-    const key = ref === undefined ? undefined : this.#refs.keyOf(ref);
-    if (ref !== undefined && !seen.some((s) => s.key === key)) {
-      throw new Error(`ref '${ref}' no longer resolves to an element`);
-    }
-    // The first vertical bar that is in the element's own line of parents, or the first of all.
-    const bars = seen.filter(
-      (s) =>
-        s.node.role === UiRole.SCROLLBAR &&
-        s.node.frame !== undefined &&
-        s.node.frame[3] > s.node.frame[2],
-    );
-    const bar =
-      key === undefined
-        ? bars[0]
-        : bars
-            .filter((b) => b.parentKey !== undefined && `${key}/`.startsWith(`${b.parentKey}/`))
-            .at(-1);
-    const fraction = args['fraction'];
-    const dy = args['dy'];
-    if (bar === undefined) {
-      // A page in a Chromium browser has no scroll bar in its tree. A key scrolls it, also when
-      // the browser is not in front. The key goes to the element, or to the page, or to the window.
-      const target =
-        seen.find((s) => s.key === key) ??
-        seen.find((s) => s.node.role === UiRole.DOCUMENT) ??
-        seen[0];
-      const scrollKey = scrollKeyFor(fraction, dy);
-      if (target === undefined || scrollKey === undefined) {
-        throw new Error('there is no scroll bar to move for this element');
-      }
-      const keyed = await this.#drive(
-        target,
-        this.#refs.refFor(target.key),
-        ActKind.KEY,
-        scrollKey,
-        {
-          delivery: Delivery.DIRECT,
-          budgetMs: DEFAULT_SETTLE_MS,
-        },
-      );
-      // Declared: the caller asked for a place or for pixels, and got one key. The place of the
-      // content after the key is not known, so no `fraction` and no `atEnd` are given.
-      return { scrolled: keyed.changes.length > 0, by: SCROLL_BY_KEY, key: scrollKey };
-    }
-    const now = Number(bar.node.value ?? '0');
-    let to = now;
-    if ('number' === typeof fraction) {
-      to = fraction;
-    } else if ('number' === typeof dy && dy !== 0) {
-      to = now + Math.sign(dy) * SCROLL_STEP;
-    }
-    to = Math.min(1, Math.max(0, to));
-    const { changes } = await this.#drive(
-      bar,
-      this.#refs.refFor(bar.key),
-      ActKind.SET,
-      String(to),
+  #scroll(args: Args): Promise<Record<string, unknown>> {
+    return scrollBy(
       {
-        // A person scrolls with a wheel over the content, not by a click on the bar, and the bar
-        // of a modern scroll area is not drawn until then. So no reach check is made on the bar.
-        delivery: Delivery.DIRECT,
-        budgetMs: DEFAULT_SETTLE_MS,
+        driver: this.#deps.driver,
+        refs: this.#refs,
+        drive: (target, at, kind, value, how) => this.#drive(target, at, kind, value, how),
       },
+      args,
     );
-    return {
-      scrolled: changes.length > 0,
-      atEnd: 0 === to || 1 === to,
-      fraction: to,
-      // Declared, because the caller asked for pixels and got a step.
-      ...('number' === typeof dy && 'number' !== typeof fraction
-        ? { stepInsteadOfPixels: SCROLL_STEP }
-        : {}),
-    };
   }
 
   /**
