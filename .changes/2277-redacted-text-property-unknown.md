@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine` — a text property check answered `no` about text it could not read.** When an app redacts text, the page can send the redaction marker or no text for an element that has a name. A `text` check with `satisfies` (for example `matchesPattern`) then judged that empty text and answered `no` for a visible cell. Now the check answers `unknown` and says that the text was redacted or hidden, also when the marker itself would satisfy the property (for example `nonEmpty`). Text that Reticle did read is judged as before. Closes [#2277](https://github.com/reticlehq/reticle/issues/2277).
