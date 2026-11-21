@@ -108,6 +108,14 @@ const RESTLESS_PLACES = 3;
 const NOTHING_SEEN_NOTE =
   'The press was sent, and nothing changed: not on the screen, not on disk, not in a setting, not on the clipboard. The control may do nothing here, or the application did not act on the press. Do not take the press for done. Read the window again, and give `until` with the consequence you expect.';
 
+/** True when a window is not where it was when its picture was taken. Half a point is noise. */
+function moved(then: readonly number[] | undefined, now: readonly number[] | undefined): boolean {
+  if (then === undefined || now === undefined) {
+    return false;
+  }
+  return then.some((value, at) => Math.abs(value - (now[at] ?? value)) > 0.5);
+}
+
 /** True when an action left nothing that this realm can see. */
 function sawNothing(outcome: ActOutcome, changesOnScreen: number): boolean {
   return (
@@ -765,6 +773,11 @@ export class PeerCommands {
       );
     }
     const at = pointOnScreen(this.#picture, more['at'], kind);
+    if (at !== undefined && moved(this.#picture?.window, target.windowFrame)) {
+      throw new Error(
+        `the window of ${this.#deps.driver.subject().app} moved or changed its size after the picture was taken, so the point of the picture is now on something else. Take a new picture with reticle_screenshot, and give the point of that one.`,
+      );
+    }
     const value =
       kind === ActKind.DRAG ? await this.#dragPoint(more['to']) : (at ?? VALUE_OF[action] ?? given);
     const wanted = WANTS_CHECKED[action];

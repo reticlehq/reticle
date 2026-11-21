@@ -1360,7 +1360,8 @@ describe('PeerCommands', () => {
     const shot = {
       ok: true,
       path: '/tmp/reticle-capture-1.png',
-      window: [100, 50, 400, 300],
+      // Where the window of the test is. A picture of a window at another place is old.
+      window: [0, 0, 400, 300],
       scale: 2,
     };
 
@@ -1382,10 +1383,21 @@ describe('PeerCommands', () => {
       const { commands, clickAt, asked } = picturing(shot);
       await commands.answer(ReticleCommand.CAPTURE, {});
       await clickAt({ foreground: true, at: { x: 200, y: 100 } });
-      // The window is at 100,50 and the picture has two pixels for each point.
+      // The window is at 0,0 and the picture has two pixels for each point.
       expect(asked.map((request) => [request.kind, request.value])).toEqual([
-        [ActKind.CLICK, '200,100'],
+        [ActKind.CLICK, '100,50'],
       ]);
+    });
+
+    // A point of a picture is a place in the window as it was. When the window moved or changed
+    // its size after the picture, the click lands on something else, and the log says "click".
+    it('refuses a point of a picture of a window that moved after the picture', async () => {
+      const { commands, clickAt, asked } = picturing({ ...shot, window: [100, 50, 400, 300] });
+      await commands.answer(ReticleCommand.CAPTURE, {});
+      await expect(clickAt({ foreground: true, at: { x: 200, y: 100 } })).rejects.toThrow(
+        /moved or changed its size.*reticle_screenshot/s,
+      );
+      expect(asked).toEqual([]);
     });
 
     it('refuses a point with no picture, and a point with no foreground', async () => {
