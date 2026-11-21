@@ -249,6 +249,22 @@ func reach(_ target: AXUIElement, _ rect: CGRect) -> Reach {
       else { break }
       at = up as! AXUIElement
     }
+    // A text or a picture that takes no click is not the answer of a hit test: the system gives
+    // the element that holds it. That is no cover. Only for those two roles, and only for an
+    // element near above the target: a button that is not the answer has something on top of it.
+    var targetRole: AnyObject?
+    AXUIElementCopyAttributeValue(target, kAXRoleAttribute as CFString, &targetRole)
+    if let role = targetRole as? String, role == "AXStaticText" || role == "AXImage" {
+      var up = target
+      for _ in 0..<3 {
+        var parent: AnyObject?
+        guard AXUIElementCopyAttributeValue(up, kAXParentAttribute as CFString, &parent) == .success,
+          let above = parent, CFGetTypeID(above) == AXUIElementGetTypeID()
+        else { break }
+        up = above as! AXUIElement
+        if CFEqual(up, top) { return .yes }
+      }
+    }
     let v = values(top)
     let role = v.flatMap { text($0[0]) } ?? "element"
     let name = v.flatMap { text($0[2]) ?? text($0[3]) } ?? ""

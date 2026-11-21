@@ -69,6 +69,18 @@ try {
     assert.ok(last.effect.domMutatedWithin > 0, 'the press of Equals reported no effect');
     const shown = (await names('text')).join(' ').replace(/[^\d]/g, '');
     assert.equal(shown.endsWith('42'), true, `the display did not say 42: ${shown}`);
+    // The display is a text that takes no click, and the system gives the area that holds it
+    // as the answer of a hit test. The realm said that the text was covered, and a check for
+    // "42 is visible" failed on a display that showed 42.
+    const visible = await commands.answer(ReticleCommand.MATCH, {
+      query: { text: '42' },
+      state: 'visible',
+    });
+    assert.equal(
+      visible.matched,
+      true,
+      'the display shows 42, and the realm said it is not visible',
+    );
     process.stdout.write('computer-use thirdpartycheck: Calculator gave 42\n');
   }
 } finally {

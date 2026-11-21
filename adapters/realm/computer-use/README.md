@@ -172,6 +172,8 @@ Read these before you rely on a result.
 
 `conformance/computer-use-journey.mjs` (run it with `node` from the root of the repository) does two whole journeys through a real bridge and the tools an agent has, and each step must be proved. On the Electron application it fills a field, adds a note, chooses from a list and checks a box. On the native application it fills a field and exports it, and the proof is the file on disk. It saves each journey as a flow, opens a new application, and replays the flow with no model; the replay of the export must write the file in a new folder. Last, the Harness drives the native application with a model that is a script: the check is on the Harness, its prompt for a desktop application and the tools as it calls them, and it costs nothing.
 
+`conformance/computer-use-calculator.mjs` does a whole task on an application that Reticle did not write: the system Calculator works out 7 × 6. Each of the four presses is proved by what the display then shows. The task is saved as a flow, Calculator is closed and opened again, and the flow replays with no model. It does not run when Calculator is open already.
+
 `native/mac/savepanelcheck.mjs` checks the save panel of the system, which most applications use to write a file. The realm reads the panel, fills the name and presses its Save, all in the background, and the proof is the file on disk.
 
 `native/mac/hudcheck.mjs` checks the window of the realm: it shows the action and its effect, and Pause stops the realm. The check presses Pause as a person does: a second realm reads the window and presses its button.
