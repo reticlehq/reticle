@@ -257,6 +257,107 @@ describe('PeerCommands', () => {
     expect(asked).toHaveLength(2);
   });
 
+  // A row is added above the rows an agent read. The ref of the Delete of "beta" must not press
+  // the Delete of the row that is now in the place where "beta" was.
+  it('does not press another row when a row comes above the row of a ref', async () => {
+    const list = (rows: readonly string[]): UiRead => ({
+      root: node(UiRole.WINDOW, 'Notes', {
+        frame: [0, 0, 400, 300],
+        children: rows.map((row, at) =>
+          node(UiRole.GROUP, '', {
+            frame: [0, 40 * at, 400, 40],
+            children: [
+              node(UiRole.TEXT, row, { frame: [10, 40 * at, 100, 30] }),
+              node(UiRole.BUTTON, 'Delete', { frame: [200, 40 * at, 80, 30] }),
+            ],
+          }),
+        ),
+      }),
+      unread: 0,
+      unmapped: [],
+    });
+    let now = list(['alpha', 'beta']);
+    const pressed: string[] = [];
+    const commands = new PeerCommands({
+      driver: {
+        subject: () => ({ app: 'Notes', pid: 7 }),
+        read: () => Promise.resolve(now),
+        reach: () => Promise.resolve(reachAnswer),
+        act: (request) => {
+          const row = now.root.children[request.target.path[0] ?? -1]?.children[0]?.name ?? '';
+          pressed.push(row);
+          return Promise.resolve({
+            delivered: true,
+            reachable: true,
+            settled: true,
+            before: now,
+            after: now,
+          });
+        },
+      },
+      emit: () => undefined,
+    });
+    const page = (await commands.answer(ReticleCommand.SNAPSHOT, {})) as { tree: string };
+    const refs = [...page.tree.matchAll(/button "Delete" \(ref=(e\d+)\)/g)].map((m) => m[1]);
+    const beta = refs[1];
+    now = list(['new', 'alpha', 'beta']);
+    await commands
+      .answer(ReticleCommand.ACT, { ref: beta, action: ActionType.CLICK })
+      .catch(() => undefined);
+    // The Delete of "beta", or no press at all. Never the Delete of "alpha".
+    expect(pressed.filter((row) => 'beta' !== row)).toEqual([]);
+  });
+
+  // Calculator: a group that holds the display and the keys, beside a toolbar, which is a group
+  // with no name too. They are not two items of a list. When the key 7 changed the display, the
+  // refs of every key went dead.
+  it('keeps the refs of a group that is beside a group of another shape', async () => {
+    const pad = (shown: string): UiRead => ({
+      root: node(UiRole.WINDOW, 'Calculator', {
+        frame: [0, 0, 300, 400],
+        children: [
+          node(UiRole.GROUP, '', {
+            frame: [0, 0, 300, 360],
+            children: [
+              node(UiRole.TEXT, shown, { frame: [10, 10, 280, 40] }),
+              node(UiRole.BUTTON, '7', { frame: [10, 60, 60, 60] }),
+            ],
+          }),
+          node(UiRole.GROUP, '', {
+            frame: [0, 360, 300, 40],
+            children: [node(UiRole.BUTTON, 'Show Sidebar', { frame: [10, 365, 30, 30] })],
+          }),
+        ],
+      }),
+      unread: 0,
+      unmapped: [],
+    });
+    let now = pad('0');
+    const commands = new PeerCommands({
+      driver: {
+        subject: () => ({ app: 'Calculator', pid: 7 }),
+        read: () => Promise.resolve(now),
+        reach: () => Promise.resolve(reachAnswer),
+        act: () => {
+          const before = now;
+          now = pad('7');
+          return Promise.resolve({
+            delivered: true,
+            reachable: true,
+            settled: true,
+            before,
+            after: now,
+          });
+        },
+      },
+      emit: () => undefined,
+    });
+    const seven = await refOf(commands, '7');
+    await commands.answer(ReticleCommand.ACT, { ref: seven, action: ActionType.CLICK });
+    // The display says 7 now. The same ref still names the key.
+    await commands.answer(ReticleCommand.ACT, { ref: seven, action: ActionType.CLICK });
+  });
+
   // Dictionary puts its search field in another group when it shows results. The fill had worked,
   // the realm said "did not resolve", and the ref was dead for the Return that came next.
   it('follows a field that the application moves in its tree when it takes the value', async () => {

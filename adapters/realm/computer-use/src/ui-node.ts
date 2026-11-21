@@ -108,6 +108,29 @@ export interface Placed {
  * ponytail: a path key changes when an ancestor is renamed. Use the operating system's own
  * identifier (`AXIdentifier`, `AutomationId`) when the reader has one.
  */
+/** A group with no name: the item of a list, when it has twins beside it. */
+function isListItem(node: UiNode): boolean {
+  return node.role === UiRole.GROUP && 0 === node.name.length;
+}
+
+/** The roles of the children of an element, in order. Two items of one list have the same. */
+function shapeOf(node: UiNode): string {
+  return node.children.map((child) => child.role).join(' ');
+}
+
+/** The first words in an element, from a text or a field below it. Only for a key. */
+function firstWords(node: UiNode): string {
+  for (const child of node.children) {
+    const holds = child.role === UiRole.TEXT || child.role === UiRole.TEXTBOX;
+    const own = holds ? child.name || (child.value ?? '') : '';
+    const found = 0 === own.length ? firstWords(child) : own;
+    if (found.length > 0) {
+      return found;
+    }
+  }
+  return '';
+}
+
 export function place(root: UiNode): Placed[] {
   const out: Placed[] = [];
   const visit = (
@@ -118,8 +141,20 @@ export function place(root: UiNode): Placed[] {
   ): void => {
     out.push({ node, depth: path.length, key, parentKey, path });
     const seen = new Map<string, number>();
+    // Groups with no name, two or more side by side, are the items of a list. Their place among
+    // their twins is not who they are: a row that comes above them moves each one down, and the
+    // key of the second row was then the key of the row that took its place. A ref given for the
+    // Delete of "beta" pressed the Delete of "alpha". So each such item is known by its words.
+    // Only twins of the same shape: a group of keys beside a toolbar is no list, and the words of
+    // the display in it change with each key.
+    const shapes = new Map<string, number>();
+    for (const child of node.children.filter(isListItem)) {
+      shapes.set(shapeOf(child), (shapes.get(shapeOf(child)) ?? 0) + 1);
+    }
     node.children.forEach((child, order) => {
-      const own = label(child);
+      const item = isListItem(child) && (shapes.get(shapeOf(child)) ?? 0) > 1;
+      const words = item ? firstWords(child) : '';
+      const own = 0 === words.length ? label(child) : `${label(child)} ${quoted(words)}`;
       const twin = seen.get(own) ?? 0;
       seen.set(own, twin + 1);
       // A row of a table keeps its place in the whole table. After a scroll the first row that
