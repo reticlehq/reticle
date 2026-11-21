@@ -140,6 +140,10 @@ export function place(root: UiNode): Placed[] {
  * not shown and not offered as a target. When the menu is open its items have a size, and they
  * are here. An element with no frame at all is kept: the reader did not say where it is.
  *
+ * An element of a page that is wholly outside its window is scrolled out, and it is not shown.
+ * Safari gives the text below the window with its true place. The rule is for a page alone: a
+ * menu of the application can open past the edge of its window, and a person sees it there.
+ *
  * One pixel counts as no size. A Chromium browser gives the text that is scrolled out of a page
  * as a strip one pixel high at the edge of the window, and a person cannot see or click that.
  */
@@ -149,14 +153,43 @@ const THIN = 1;
 export function placeShown(root: UiNode): { shown: Placed[]; omitted: number } {
   const hidden = new Set<string>();
   const shown: Placed[] = [];
+  // For each element: the frame of its window, and true when it is in a page.
+  const windows = new Map<string, Frame | undefined>();
+  const inPage = new Set<string>();
   for (const p of place(root)) {
     const frame = p.node.frame;
+    const above = p.parentKey;
+    const fromAbove = above === undefined ? undefined : windows.get(above);
+    windows.set(p.key, p.node.role === UiRole.WINDOW ? frame : fromAbove);
+    if (p.node.role === UiRole.DOCUMENT || (above !== undefined && inPage.has(above))) {
+      inPage.add(p.key);
+    }
     const noSize = frame !== undefined && (frame[2] <= THIN || frame[3] <= THIN);
-    if (noSize || (p.parentKey !== undefined && hidden.has(p.parentKey))) {
+    const scrolledOut =
+      frame !== undefined &&
+      p.node.role !== UiRole.DOCUMENT &&
+      inPage.has(p.key) &&
+      outside(frame, windows.get(p.key));
+    if (noSize || scrolledOut || (above !== undefined && hidden.has(above))) {
       hidden.add(p.key);
     } else {
       shown.push(p);
     }
   }
   return { shown, omitted: hidden.size };
+}
+
+type Frame = readonly [number, number, number, number];
+
+/** True when no part of the frame is in the window. A window with no frame hides nothing. */
+function outside(frame: Frame, window: Frame | undefined): boolean {
+  if (window === undefined) {
+    return false;
+  }
+  return (
+    frame[0] >= window[0] + window[2] ||
+    frame[0] + frame[2] <= window[0] ||
+    frame[1] >= window[1] + window[3] ||
+    frame[1] + frame[3] <= window[1]
+  );
 }

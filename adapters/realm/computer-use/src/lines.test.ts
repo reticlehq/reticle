@@ -135,3 +135,33 @@ describe('an element one pixel thin', () => {
     expect(written.tree).toContain('Post 2');
   });
 });
+
+// Safari gives the text of a page that is below the window with its true place. The realm said
+// that ten posts were on the screen when a person could see three.
+describe('an element of a page that is outside the window', () => {
+  const page = (menuFrame: readonly [number, number, number, number]): UiNode =>
+    node(UiRole.WINDOW, 'Feed', {
+      frame: [0, 0, 400, 300],
+      children: [
+        node(UiRole.DOCUMENT, 'Feed', {
+          frame: [0, 0, 400, 2200],
+          children: [
+            node(UiRole.TEXT, 'Post 1', { frame: [10, 40, 50, 24] }),
+            node(UiRole.TEXT, 'Post 2', { frame: [10, 290, 50, 24] }),
+            node(UiRole.TEXT, 'Post 3', { frame: [10, 500, 50, 24] }),
+          ],
+        }),
+        // Not in a page: a menu of the application can open past the edge of its window.
+        node(UiRole.MENU, 'Font', { frame: menuFrame }),
+      ],
+    });
+
+  it('is not on the screen, and one that the edge cuts is', () => {
+    const written = writeWindows(page([0, 320, 100, 80]), new RefTable());
+    expect(written.tree).toContain('Post 1');
+    expect(written.tree).toContain('Post 2');
+    expect(written.tree).not.toContain('Post 3');
+    expect(written.tree).toContain('menu "Font"');
+    expect(written.omitted).toBe(1);
+  });
+});
