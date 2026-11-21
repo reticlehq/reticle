@@ -3,7 +3,11 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { resolveSessionWithin, type ResolvableSessions } from './resolve-within.js';
+import {
+  resolveSessionSpending,
+  resolveSessionWithin,
+  type ResolvableSessions,
+} from './resolve-within.js';
 
 const SESSION = { id: 'live' };
 const NO_SESSION =
@@ -28,7 +32,9 @@ function sessions(appearsAfter: number): ResolvableSessions<typeof SESSION> & { 
     count: () => (state.calls >= appearsAfter ? 1 : 0),
     resolve: () => {
       state.calls += 1;
-      if (state.calls > appearsAfter) return SESSION;
+      if (state.calls > appearsAfter) {
+        return SESSION;
+      }
       throw new Error(NO_SESSION);
     },
   };
@@ -86,5 +92,35 @@ describe('resolving a session within the caller’s budget', () => {
       },
     };
     await expect(resolveSessionWithin(s, 'typo', 30_000, fakeClock())).rejects.toThrow(/typo/);
+  });
+});
+
+// #2443: the session wait and the predicate wait shared no deadline, so one call ran for two times
+// its timeout_ms and the client stopped waiting before the verdict came back.
+describe('the budget left after a session arrives', () => {
+  it('is the whole budget when a session is already connected', async () => {
+    const got = await resolveSessionSpending(sessions(0), undefined, 5_000, fakeClock());
+    expect(got).toEqual({ session: SESSION, remainingMs: 5_000 });
+  });
+
+  it('is the budget less the time spent waiting for the session', async () => {
+    const got = await resolveSessionSpending(sessions(3), undefined, 1_000, fakeClock());
+    expect(got.session).toBe(SESSION);
+    expect(got.remainingMs).toBe(250);
+  });
+
+  it('is never below zero', async () => {
+    const clock = fakeClock();
+    const late = {
+      count: () => 0,
+      resolve: () => {
+        if (clock.now() >= 1_000) {
+          return SESSION;
+        }
+        throw new Error(NO_SESSION);
+      },
+    };
+    const got = await resolveSessionSpending(late, undefined, 1_000, clock);
+    expect(got.remainingMs).toBe(0);
   });
 });
