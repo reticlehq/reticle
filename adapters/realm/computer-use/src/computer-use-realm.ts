@@ -290,7 +290,7 @@ export class ComputerUseRealm extends Realm {
           (want['name'] === undefined || want['name'] === p.node.name) &&
           (want['role'] === undefined || want['role'] === p.node.role),
       )
-      .map((p) => ({ ref: this.#refs.refFor(p.key), describes: label(p.node) }));
+      .map((p) => ({ ref: this.#refs.refFor(p.key, p.node), describes: label(p.node) }));
   }
 
   protected async dispatch(action: Action): Promise<ActionReceipt> {

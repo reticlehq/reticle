@@ -20,16 +20,26 @@ export class RefTable {
   /** Refs given so far. Not the size of a map: a ref that moved leaves no key behind. */
   private given = 0;
 
-  refFor(key: string): string {
+  /** What each ref named when it was given: to know the element again at another key. */
+  private readonly whoOfRef = new Map<string, UiNode>();
+
+  refFor(key: string, node?: UiNode): string {
     const known = this.refOfKey.get(key);
-    if (known !== undefined) {
-      return known;
+    const ref = known ?? `e${String(this.given + 1)}`;
+    if (known === undefined) {
+      this.given += 1;
+      this.refOfKey.set(key, ref);
+      this.keyOfRef.set(ref, key);
     }
-    this.given += 1;
-    const ref = `e${String(this.given)}`;
-    this.refOfKey.set(key, ref);
-    this.keyOfRef.set(ref, key);
+    if (node !== undefined) {
+      this.whoOfRef.set(ref, node);
+    }
     return ref;
+  }
+
+  /** The element a ref named when it was given or last seen. Absent: not known. */
+  whoOf(ref: string): UiNode | undefined {
+    return this.whoOfRef.get(ref);
   }
 
   /**
@@ -71,7 +81,7 @@ export function writeLines(root: UiNode, refs: RefTable): string {
 function writePlaced(placed: readonly Placed[], refs: RefTable): string {
   return placed
     .map(({ node, depth, key }) => {
-      const ref = isAddressable(node) ? ` (ref=${refs.refFor(key)})` : '';
+      const ref = isAddressable(node) ? ` (ref=${refs.refFor(key, node)})` : '';
       const value =
         node.value !== undefined && node.value.length > 0 ? ` [value=${quoted(node.value)}]` : '';
       // A loss is said on the line that has it: scroll to read the rows that are not here.

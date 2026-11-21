@@ -123,6 +123,30 @@ function moved(then: readonly number[] | undefined, now: readonly number[] | und
   return then.some((value, at) => Math.abs(value - (now[at] ?? value)) > 0.5);
 }
 
+/**
+ * The element that a ref named, when its key is gone: an application can change the groups round
+ * a control and leave the control where it was. The answer is the one element with the same role,
+ * name and identifier at the same place. With no name, two such elements, or another place, there
+ * is no answer: the OK of a new dialog is not the OK of the dialog before it.
+ */
+function sameAtItsPlace(all: readonly Seen[], who: UiNode | undefined): Seen | undefined {
+  const was = who?.frame;
+  if (who === undefined || was === undefined || 0 === who.name.length) {
+    return undefined;
+  }
+  const same = all.filter((s) => {
+    const is = s.node.frame;
+    return (
+      s.node.role === who.role &&
+      s.node.name === who.name &&
+      s.node.id === who.id &&
+      is !== undefined &&
+      was.every((value, at) => Math.abs(value - (is[at] ?? Number.NaN)) <= 1)
+    );
+  });
+  return 1 === same.length ? same[0] : undefined;
+}
+
 /** True when an action left nothing that this realm can see. */
 function sawNothing(outcome: ActOutcome, changesOnScreen: number): boolean {
   return (
@@ -354,7 +378,7 @@ export class PeerCommands {
       states.push(ElementState.ENABLED);
     }
     return {
-      ref: this.#refs.refFor(seen.key),
+      ref: this.#refs.refFor(seen.key, seen.node),
       role: seen.node.role,
       name: seen.node.name,
       ...(seen.node.value === undefined ? {} : { value: seen.node.value }),
@@ -460,9 +484,16 @@ export class PeerCommands {
   async #resolve(ref: string): Promise<Seen> {
     const key = this.#refs.keyOf(ref);
     const read = await this.#deps.driver.read();
-    const seen = key === undefined ? undefined : see(read.root).find((s) => s.key === key);
+    const all = see(read.root);
+    const seen =
+      (key === undefined ? undefined : all.find((s) => s.key === key)) ??
+      sameAtItsPlace(all, this.#refs.whoOf(ref));
     if (seen === undefined) {
       throw new Error(`ref '${ref}' no longer resolves to an element`);
+    }
+    if (seen.key !== key) {
+      // The application changed the tree round the element, and the element stayed.
+      this.#refs.move(ref, seen.key);
     }
     return seen;
   }

@@ -257,6 +257,60 @@ describe('PeerCommands', () => {
     expect(asked).toHaveLength(2);
   });
 
+  // Granola rebuilds the groups round its Sidebar button when the sidebar closes. The button stays
+  // where it was, with its name, and the ref of it was dead for the second press.
+  it('follows a named control that stays at its place while the tree round it changes', async () => {
+    const shell = (wrapped: boolean, dialog: string, okAt: number): UiRead => {
+      const toggle = node(UiRole.BUTTON, 'Sidebar', { frame: [10, 10, 30, 30] });
+      const ok = node(UiRole.DIALOG, dialog, {
+        frame: [50, 150, 300, 120],
+        children: [node(UiRole.BUTTON, 'OK', { frame: [okAt, 200, 60, 30] })],
+      });
+      return {
+        root: node(UiRole.WINDOW, 'Granola', {
+          frame: [0, 0, 400, 300],
+          children: wrapped
+            ? [node(UiRole.GROUP, '', { frame: [0, 0, 400, 50], children: [toggle] }), ok]
+            : [toggle, ok],
+        }),
+        unread: 0,
+        unmapped: [],
+      };
+    };
+    let now = shell(false, 'Save?', 100);
+    const pressed: string[] = [];
+    const commands = new PeerCommands({
+      driver: {
+        subject: () => ({ app: 'Granola', pid: 7 }),
+        read: () => Promise.resolve(now),
+        reach: () => Promise.resolve(reachAnswer),
+        act: (request) => {
+          pressed.push(request.target.path.join('.'));
+          return Promise.resolve({
+            delivered: true,
+            reachable: true,
+            settled: true,
+            before: now,
+            after: now,
+          });
+        },
+      },
+      emit: () => undefined,
+    });
+    const toggle = await refOf(commands, 'Sidebar');
+    const ok = await refOf(commands, 'OK');
+    now = shell(true, 'Save?', 100);
+    await commands.answer(ReticleCommand.ACT, { ref: toggle, action: ActionType.CLICK });
+    // The button is the first child of the new group now.
+    expect(pressed).toEqual(['0.0']);
+    // The OK of another dialog, at another place, is another OK: the ref is refused.
+    now = shell(true, 'Delete?', 250);
+    await expect(
+      commands.answer(ReticleCommand.ACT, { ref: ok, action: ActionType.CLICK }),
+    ).rejects.toThrow(/no longer resolves/);
+    expect(pressed).toEqual(['0.0']);
+  });
+
   // A row is added above the rows an agent read. The ref of the Delete of "beta" must not press
   // the Delete of the row that is now in the place where "beta" was.
   it('does not press another row when a row comes above the row of a ref', async () => {
