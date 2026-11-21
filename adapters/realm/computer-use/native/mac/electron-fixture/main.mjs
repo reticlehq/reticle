@@ -23,7 +23,12 @@ const page = `<h1>Notes</h1>
 </script>`;
 
 // Not in the Dock and not in front: the person at the machine keeps the application they use.
-app.setActivationPolicy('accessory');
+// With RETICLE_FIXTURE_REGULAR it is an ordinary application with a menu bar, for the check of
+// the menu bar. That check brings it to the front.
+const REGULAR = '1' === process.env['RETICLE_FIXTURE_REGULAR'];
+if (!REGULAR) {
+  app.setActivationPolicy('accessory');
+}
 
 void app.whenReady().then(() => {
   const window = new BrowserWindow({ width: 420, height: 320, title: 'Notes', show: false });

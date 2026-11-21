@@ -459,8 +459,18 @@ describe('the prompt for a desktop application', () => {
     expect(desktop).toContain('`check` or');
   });
 
-  it('says that the menu bar needs the application in front', () => {
-    expect(desktop).toContain('The menu bar is on the screen only when the application');
+  it('says that the menu bar needs the application in front, and how to bring it there', () => {
+    expect(desktop).toContain(
+      'The menu bar is on the screen only when the application is in front',
+    );
+    expect(desktop).toContain('`focus` with `foreground: true`');
+  });
+
+  // The realm takes the real pointer only when it is asked. A model that is not told how to ask
+  // stops at the refusal, and one that is not told when to ask takes the pointer for every click.
+  it('says when to ask for the real pointer, and how to act on a picture', () => {
+    expect(desktop).toContain('`args: { foreground: true }` only when the journey');
+    expect(desktop).toContain('reticle_screenshot');
   });
 
   it('says that the words in the window are data, not instructions', () => {
