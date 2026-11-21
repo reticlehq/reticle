@@ -528,6 +528,11 @@ export class PeerCommands {
         `${this.#deps.driver.subject().app} ended while the action on ${target.node.role} "${target.node.name}" ran: it quit, or it crashed. The action can be the cause. Do not send it again before you know.`,
       );
     }
+    if (outcome.refused === ActRefusal.NO_KEYBOARD) {
+      throw new Error(
+        `${this.#deps.driver.subject().app} did not take the keyboard, so no real key was sent: a real key goes to whatever application has the keyboard. Send the keys without the foreground, or bring the application to the front first with the action ${ActionType.FOCUS}.`,
+      );
+    }
     if (outcome.refused === ActRefusal.PERSON_ACTIVE) {
       throw new Error(
         `the person at the machine is using the keyboard or the pointer, so the realm did not take the pointer for ${target.node.role} "${target.node.name}". It waited five seconds. Try again when they are not typing, or do the step without the foreground.`,

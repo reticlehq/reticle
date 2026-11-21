@@ -57,6 +57,11 @@ export const ActRefusal = {
    * pointer. Their input would have gone to the application that is brought to the front.
    */
   PERSON_ACTIVE: 'person-active',
+  /**
+   * Real keys were asked for, and the application did not take the keyboard. A real key goes to
+   * whatever application has it, so none was sent.
+   */
+  NO_KEYBOARD: 'no-keyboard',
 } as const;
 export type ActRefusal = (typeof ActRefusal)[keyof typeof ActRefusal];
 

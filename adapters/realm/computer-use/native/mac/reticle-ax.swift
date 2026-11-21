@@ -565,6 +565,22 @@ func run(_ args: [String]) throws {
   // moment, so a caller asks for it by name. The pointer and the application that was in front
   // are put back after the action.
   let foreground = how.first == "foreground"
+  /// A key goes to the application alone, with no use of the keyboard of the person at the machine.
+  /// In the foreground it goes the way a real key goes: a panel that the system draws for the
+  /// application (the save panel, the open panel) is another process, and a key that is sent to
+  /// the application does not reach it.
+  ///
+  /// A real key goes to whatever application has the keyboard. So it is sent only when the system
+  /// says that THIS application has it. A key that was meant for this application was once typed
+  /// into the terminal of the person at the machine, because the application had not taken the
+  /// keyboard. When it has not, no key is sent at all, and the action is refused.
+  func hasKeyboard() -> Bool {
+    RunLoop.current.run(until: Date())
+    return NSWorkspace.shared.frontmostApplication?.processIdentifier == pid
+  }
+  func deliver(_ event: CGEvent) {
+    if foreground { event.post(tap: .cghidEventTap) } else { event.postToPid(pid) }
+  }
   let quietWanted = how.count > 1 ? Int(how[1]) ?? quietNeededMs : quietNeededMs
   let folders = Array(args.dropFirst(10))
 
@@ -652,16 +668,19 @@ func run(_ args: [String]) throws {
   let clipboardBefore = clipboard.changeCount
   var canReach = false
   var coveredBy = ""
+  // To bring an application to the front, nothing has to be reached: an application with no
+  // window has no place on the screen at all, and it can still come to the front.
+  let needsReach = !direct && action != "raise"
   switch frame(now[7], now[8]).map({ reach(target, $0) }) ?? .unknown(code: -1) {
   case .yes: canReach = true
   case .no(let by):
     coveredBy = by
-    if !direct {
+    if needsReach {
       putBack()
       try emit(["refused": "unreachable", "detail": by])
     }
   case .unknown(let code):
-    if !direct {
+    if needsReach {
       putBack()
       try emit(["refused": "reach-unknown", "detail": "the hit test failed with \(code)"])
     }
@@ -683,6 +702,10 @@ func run(_ args: [String]) throws {
     result = AXUIElementSetAttributeValue(
       target, kAXValueAttribute as CFString, number ?? (value as CFString))
   case "type":
+    if foreground && !hasKeyboard() {
+      putBack()
+      try emit(["refused": "no-keyboard", "detail": "the application did not take the keyboard"])
+    }
     // Key events, one for each character, sent to the application and not to the screen: the
     // pointer and the keyboard of the person at the machine are not used. The element takes the
     // keyboard first, as a click in it does. Delivery proves nothing here. The caller reads the
@@ -696,12 +719,16 @@ func run(_ args: [String]) throws {
           continue
         }
         event.keyboardSetUnicodeString(stringLength: 1, unicodeString: &character)
-        event.postToPid(pid)
+        deliver(event)
       }
       usleep(4000)
     }
     result = .success
   case "key":
+    if foreground && !hasKeyboard() {
+      putBack()
+      try emit(["refused": "no-keyboard", "detail": "the application did not take the keyboard"])
+    }
     // One key, with its modifiers: "Return", "Tab", "Meta+s". Sent to the application, as "type" is.
     let parts = value.split(separator: "+").map(String.init)
     guard let name = parts.last, let code = keyCodes[name.lowercased()] else {
@@ -719,7 +746,7 @@ func run(_ args: [String]) throws {
         continue
       }
       event.flags = flags
-      event.postToPid(pid)
+      deliver(event)
     }
     result = .success
   case "menu":

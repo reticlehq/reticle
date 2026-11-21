@@ -86,19 +86,18 @@ describe('attachPlan', () => {
   });
 
   /**
-   * An agent had to give a sessionId on each tool call, because the session was in no project.
-   * The command now takes the project of the folder it runs in, and the tools find the session.
+   * The command took the project of the folder it ran in, to spare an agent the sessionId. A
+   * browser tab of that project then shared its scope with the application, and a call for the
+   * page could go to the application. A desktop application is in a project only when the
+   * person names the folder.
    */
-  it('takes the project of the folder it runs in, when no folder is named', () => {
+  it('is in no project unless a folder is named', () => {
     const read = (path: string) =>
       '/work/app/.reticle.json' === path ? '{"projectId":"app-1"}' : undefined;
-    expect(attachPlan(['--app', 'Notes'], {}, '/home', read, '/work/app')).toMatchObject({
-      projectId: 'app-1',
-    });
-    // A folder that is no project is not an error: the session is then in no project.
-    const none = attachPlan(['--app', 'Notes'], {}, '/home', read, '/work/other');
-    expect(none).not.toHaveProperty('error');
-    expect(none).not.toHaveProperty('projectId');
+    expect(attachPlan(['--app', 'Notes'], {}, '/home', read)).not.toHaveProperty('projectId');
+    expect(
+      attachPlan(['--app', 'Notes', '--project', '/work/app'], {}, '/home', read),
+    ).toMatchObject({ projectId: 'app-1' });
   });
 
   it('says what to call next, and gives the sessionId only when a call needs it', () => {

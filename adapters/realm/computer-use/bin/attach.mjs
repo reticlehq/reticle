@@ -30,7 +30,7 @@ import {
 const say = (line) => process.stderr.write(`${line}\n`);
 const read = (path) => (existsSync(path) ? readFileSync(path, 'utf8') : undefined);
 
-const plan = attachPlan(process.argv.slice(2), process.env, homedir(), read, process.cwd());
+const plan = attachPlan(process.argv.slice(2), process.env, homedir(), read);
 const LIST = process.argv.includes('--list');
 if ('error' in plan && !LIST) {
   say(plan.error);
@@ -204,18 +204,13 @@ const joined = joinedAnswer(plan, sessionId, pid);
 say(
   joined.needsSessionId
     ? `Give this on each tool call: sessionId "${sessionId}". Stop with Ctrl-C.`
-    : 'The tools find this session with no sessionId, from the project of this folder. Stop with Ctrl-C.',
+    : 'The session is in the project you named. When a browser tab of that project is connected too, give the sessionId on each call. Stop with Ctrl-C.',
 );
 // One line for an agent that started this command: what was joined, and what to call next.
 process.stdout.write(`${JSON.stringify(joined)}\n`);
 if (plan.token === undefined) {
   say(
     'No pairing token was found. The session is joined, but a file or a setting that changes with nothing else is then not proof: the bridge cannot tell this command from a page. Start the daemon with `reticle serve`, which writes the token.',
-  );
-}
-if (plan.projectId === undefined) {
-  say(
-    'No project: the runs and flows of this session stay on this machine and do not reach the dashboard. Give --project <folder> with the folder of the application that has a .reticle.json.',
   );
 }
 const stop = () => {
