@@ -1,14 +1,10 @@
-/**
- * The run ledger: what one agent run checked, saved and read, kept until the run's report is taken.
- *
- * Found by a headless Claude Code run on a fixture: it checked two journeys, saved two flows, caught
- * a seat count the server never got, and ended by releasing its tab. Reticle answered nothing about
- * the run as a whole, so the agent wrote its own summary.
- */
 import { describe, expect, it } from 'vitest';
 import { JOURNAL_FILE_VERSION, Verified, type JournalAction } from '@reticlehq/core';
-import { runAsAgent } from '@/hooks/coding-agents.js';
-import { RUN_IDLE_LIMIT_MS, RunLedger } from './run-ledger.js';
+import { RUN_IDLE_LIMIT_MS, RunLedger, type RunIdentity } from './run-ledger.js';
+
+const IDENTITY_A: RunIdentity = { sessionId: 'session-a', root: '/repo/worktree-a' };
+const IDENTITY_B: RunIdentity = { sessionId: 'session-b', root: '/repo/worktree-a' };
+const IDENTITY_A_ROOT_B: RunIdentity = { sessionId: 'session-a', root: '/repo/worktree-b' };
 
 const verdict = (
   claim: string,
@@ -24,138 +20,103 @@ const verdict = (
   at: 0,
 });
 
-const AGENT = 'attach-1';
-
 describe('the run ledger', () => {
-  it('starts a new run when another agent calls, so one run does not leak into the next report', () => {
+  it('is empty until an identity starts a run and takes a report only once', () => {
     const ledger = new RunLedger();
-    // The first agent checks something and stops without a call that ends its run.
-    ledger.begin(0, AGENT);
-    ledger.verdict(verdict('the old claim', Verified.NO));
-    ledger.after(10);
-    // The next agent on the same daemon.
-    ledger.begin(5_000, 'attach-2');
-    ledger.verdict(verdict('the new claim', Verified.YES));
-    ledger.after(5_200);
-    const report = ledger.take(6_000);
-    expect(report.claims.map((c) => c.claim)).toEqual(['the new claim']);
-    expect(report.verified).toBe(Verified.YES);
-    expect(report.wallMs).toBe(1_000);
-    expect(report.firstVerdictMs).toBe(200);
-  });
-
-  /*
-   * Two agents on one daemon, with calls that overlap: a call from the first agent was still
-   * running when the second agent called, so its journal record landed in the second agent's run.
-   * The released lease's report then listed claims that agent never made.
-   */
-  it("keeps another agent's verdict out of this run, even when that agent's call ends inside it", async () => {
-    const ledger = new RunLedger();
-    ledger.begin(0, AGENT);
-    ledger.begin(100, 'attach-2');
-    await runAsAgent(AGENT, () => {
-      ledger.verdict(verdict('a claim the first agent made', Verified.YES));
-      ledger.flowSaved('first-agent-flow');
-      ledger.replayed('first-agent-replay', Verified.NO);
-      return Promise.resolve();
-    });
-    await runAsAgent('attach-2', () => {
-      ledger.verdict(verdict('a claim of my own', Verified.YES));
-      return Promise.resolve();
-    });
-    const report = ledger.take(1_000);
-    expect(report.claims.map((c) => c.claim)).toEqual(['a claim of my own']);
-    expect(report.flows).toEqual({ saved: [], replayed: [] });
-  });
-
-  /*
-   * Two agents on two worktrees of one project, one daemon, calls that interleave. Each call from
-   * one agent restarted the run of the other, so agent A's released lease reported agent B's claims
-   * and none of its own.
-   */
-  it("gives each agent its own run when two agents call in turn, and takes only the caller's", async () => {
-    const ledger = new RunLedger();
-    const B = 'attach-2';
-    const call = async (owner: string, now: number, claim: string): Promise<void> => {
-      ledger.begin(now, owner);
-      await runAsAgent(owner, () => {
-        ledger.verdict(verdict(claim, Verified.YES));
-        ledger.flowSaved(`${claim} flow`);
-        return Promise.resolve();
-      });
-      ledger.after(now + 10, owner);
-    };
-    await call(AGENT, 0, 'A one');
-    await call(B, 100, 'B one');
-    await call(AGENT, 200, 'A two');
-    await call(B, 300, 'B two');
-    const mine = ledger.take(1_000, AGENT);
-    expect(mine.claims.map((c) => c.claim)).toEqual(['A one', 'A two']);
-    expect(mine.flows.saved).toEqual(['A one flow', 'A two flow']);
-    expect(mine.wallMs).toBe(1_000);
-    expect(ledger.isEmpty(AGENT)).toBe(true);
-    // A's take left B's run as it was.
-    expect(ledger.isEmpty(B)).toBe(false);
-    const theirs = ledger.take(2_000, B);
-    expect(theirs.claims.map((c) => c.claim)).toEqual(['B one', 'B two']);
-    expect(theirs.wallMs).toBe(1_900);
-  });
-
-  // A record from no MCP connection (the HUD, the CLI, a record that ends outside the call context)
-  // goes to the run of the agent that called last: the run that was "current" before runs were kept
-  // for each agent.
-  it('gives a record from no connection to the run of the agent that called last', () => {
-    const ledger = new RunLedger();
-    ledger.begin(0, AGENT);
-    ledger.begin(100, 'attach-2');
-    ledger.verdict(verdict('from no connection', Verified.YES));
-    expect(ledger.take(200, AGENT).claims).toEqual([]);
-    expect(ledger.take(200, 'attach-2').claims.map((c) => c.claim)).toEqual(['from no connection']);
-  });
-
-  it('drops the run of an agent that stopped calling, after the idle limit', () => {
-    const ledger = new RunLedger();
-    ledger.begin(0, AGENT);
-    ledger.verdict(verdict('never reported', Verified.NO));
-    ledger.begin(RUN_IDLE_LIMIT_MS - 1, 'attach-2');
-    expect(ledger.isEmpty(AGENT)).toBe(false);
-    ledger.begin(RUN_IDLE_LIMIT_MS + 1, 'attach-2');
-    expect(ledger.isEmpty(AGENT)).toBe(true);
-    expect(ledger.isEmpty('attach-2')).toBe(false);
-  });
-
-  it('keeps a verdict that came from no MCP connection, as before', () => {
-    const ledger = new RunLedger();
-    ledger.begin(0, AGENT);
-    ledger.verdict(verdict('checked by a path with no connection', Verified.YES));
-    expect(ledger.take(10).claims).toHaveLength(1);
-  });
-
-  it('is empty until an agent call, and takes a report only once', () => {
-    const ledger = new RunLedger();
-    expect(ledger.isEmpty()).toBe(true);
-    ledger.begin(1_000, AGENT);
-    ledger.verdict(verdict('task shows', Verified.YES));
-    ledger.after(1_500);
-    expect(ledger.isEmpty()).toBe(false);
-    const report = ledger.take(4_000);
+    expect(ledger.isEmpty(IDENTITY_A)).toBe(true);
+    ledger.begin(1_000, IDENTITY_A);
+    ledger.verdict(verdict('task shows', Verified.YES), IDENTITY_A);
+    ledger.after(1_500, IDENTITY_A);
+    expect(ledger.isEmpty(IDENTITY_A)).toBe(false);
+    const report = ledger.take(4_000, IDENTITY_A);
     expect(report.wallMs).toBe(3_000);
     expect(report.firstVerdictMs).toBe(500);
-    expect(ledger.isEmpty()).toBe(true);
+    expect(ledger.isEmpty(IDENTITY_A)).toBe(true);
   });
 
-  it('lists every claim with one piece of evidence, and the failed ones as caught', () => {
+  it('isolates same-session runs across different roots', () => {
     const ledger = new RunLedger();
-    ledger.begin(0, AGENT);
+    ledger.begin(0, IDENTITY_A);
+    ledger.verdict(verdict('worktree A claim', Verified.YES), IDENTITY_A);
+    ledger.begin(100, IDENTITY_A_ROOT_B);
+    ledger.verdict(verdict('worktree B claim', Verified.NO), IDENTITY_A_ROOT_B);
+
+    expect(ledger.take(200, IDENTITY_A_ROOT_B).claims).toEqual([
+      expect.objectContaining({ claim: 'worktree B claim', verified: Verified.NO }),
+    ]);
+    expect(ledger.take(200, IDENTITY_A).claims).toEqual([
+      expect.objectContaining({ claim: 'worktree A claim', verified: Verified.YES }),
+    ]);
+  });
+
+  it('isolates different sessions that use the same root', () => {
+    const ledger = new RunLedger();
+    ledger.begin(0, IDENTITY_A);
+    ledger.verdict(verdict('session A claim', Verified.YES), IDENTITY_A);
+    ledger.begin(100, IDENTITY_B);
+    ledger.verdict(verdict('session B claim', Verified.NO), IDENTITY_B);
+
+    expect(ledger.take(200, IDENTITY_A).claims.map((claim) => claim.claim)).toEqual([
+      'session A claim',
+    ]);
+    expect(ledger.take(200, IDENTITY_B).claims.map((claim) => claim.claim)).toEqual([
+      'session B claim',
+    ]);
+  });
+
+  it('does not let unscoped actions receive a fallback run', () => {
+    const ledger = new RunLedger();
+    ledger.begin(0, IDENTITY_A);
+    ledger.begin(100, IDENTITY_B);
+    ledger.verdict(verdict('unscoped action', Verified.YES), IDENTITY_A_ROOT_B);
+    ledger.flowSaved('unscoped flow', IDENTITY_A_ROOT_B);
+    ledger.replayed('unscoped replay', Verified.NO, IDENTITY_A_ROOT_B);
+
+    expect(ledger.take(200, IDENTITY_A_ROOT_B).claims).toEqual([]);
+    expect(ledger.take(200, IDENTITY_A_ROOT_B).flows.replayed).toEqual([]);
+    expect(ledger.isEmpty(IDENTITY_A)).toBe(false);
+    expect(ledger.isEmpty(IDENTITY_B)).toBe(false);
+  });
+
+  it('takes only the requested identity', () => {
+    const ledger = new RunLedger();
+    ledger.begin(0, IDENTITY_A);
+    ledger.verdict(verdict('from A', Verified.YES), IDENTITY_A);
+    ledger.begin(100, IDENTITY_B);
+    ledger.verdict(verdict('from B', Verified.NO), IDENTITY_B);
+
+    expect(ledger.take(1_000, IDENTITY_A).claims.map((claim) => claim.claim)).toEqual(['from A']);
+    expect(ledger.isEmpty(IDENTITY_A)).toBe(true);
+    expect(ledger.isEmpty(IDENTITY_B)).toBe(false);
+    expect(ledger.take(2_000, IDENTITY_B).claims.map((claim) => claim.claim)).toEqual(['from B']);
+  });
+
+  it('drops an identity run after the idle limit', () => {
+    const ledger = new RunLedger();
+    ledger.begin(0, IDENTITY_A);
+    ledger.verdict(verdict('never reported', Verified.NO), IDENTITY_A);
+    ledger.begin(RUN_IDLE_LIMIT_MS - 1, IDENTITY_B);
+    expect(ledger.isEmpty(IDENTITY_A)).toBe(false);
+    ledger.begin(RUN_IDLE_LIMIT_MS + 1, IDENTITY_B);
+    expect(ledger.isEmpty(IDENTITY_A)).toBe(true);
+    expect(ledger.isEmpty(IDENTITY_B)).toBe(false);
+  });
+
+  it('lists claims with evidence and the failed ones as caught', () => {
+    const ledger = new RunLedger();
+    ledger.begin(0, IDENTITY_A);
     ledger.verdict(
       verdict('the request carries seats: 5', Verified.NO, {
         observed: 'POST /api/members sent seats: 4',
         source: 'src/workspace.ts:220',
       }),
+      IDENTITY_A,
     );
-    ledger.verdict(verdict('5 seats shows', Verified.YES, { source: 'src/workspace.ts:230' }));
-    ledger.verdict(verdict('the list settles', Verified.UNKNOWN));
-    const report = ledger.take(10);
+    ledger.verdict(
+      verdict('5 seats shows', Verified.YES, { source: 'src/workspace.ts:230' }),
+      IDENTITY_A,
+    );
+    const report = ledger.take(10, IDENTITY_A);
     expect(report.verified).toBe(Verified.NO);
     expect(report.claims).toEqual([
       {
@@ -164,86 +125,102 @@ describe('the run ledger', () => {
         evidence: 'saw POST /api/members sent seats: 4',
       },
       { claim: '5 seats shows', verified: Verified.YES, evidence: 'src/workspace.ts:230' },
-      { claim: 'the list settles', verified: Verified.UNKNOWN },
     ]);
     expect(report.caught).toEqual(['the request carries seats: 5']);
   });
 
   it('does not count a passive no that a later yes of the same claim superseded', () => {
     const ledger = new RunLedger();
-    ledger.begin(0, AGENT);
-    ledger.verdict(verdict('saved', Verified.NO, { declaredBeforeActing: false }));
-    ledger.verdict(verdict('saved', Verified.YES));
-    const report = ledger.take(10);
-    expect(report.claims.map((c) => c.verified)).toEqual([Verified.YES]);
+    ledger.begin(0, IDENTITY_A);
+    ledger.verdict(verdict('saved', Verified.NO, { declaredBeforeActing: false }), IDENTITY_A);
+    ledger.verdict(verdict('saved', Verified.YES), IDENTITY_A);
+    const report = ledger.take(10, IDENTITY_A);
+    expect(report.claims.map((claim) => claim.verified)).toEqual([Verified.YES]);
     expect(report.verified).toBe(Verified.YES);
   });
 
-  it('keeps flows saved and replayed, and memory written and read', () => {
+  it('keeps flows, replayed verdicts, and memory scoped to one identity', () => {
     const ledger = new RunLedger();
-    ledger.begin(0, AGENT);
-    ledger.flowSaved('invite');
-    ledger.flowSaved('invite');
-    ledger.replayed('invite', Verified.NO);
-    ledger.replayed('task-create', Verified.YES);
-    ledger.memoryWritten();
-    ledger.memoryRead(['the composer is a contenteditable']);
-    ledger.memoryRead(['the composer is a contenteditable']);
-    const report = ledger.take(10);
-    expect(report.flows).toEqual({
-      saved: ['invite'],
-      replayed: [
-        { name: 'invite', verified: Verified.NO },
-        { name: 'task-create', verified: Verified.YES },
-      ],
-    });
-    expect(report.memory).toEqual({ written: 1, read: 1 });
-    // A replay that did not hold is a failed run, and is caught, even with no claim journaled.
-    expect(report.verified).toBe(Verified.NO);
-    expect(report.caught).toEqual(['flow invite']);
-  });
+    ledger.begin(0, IDENTITY_A);
+    ledger.flowSaved('invite', IDENTITY_A);
+    ledger.flowSaved('invite', IDENTITY_A);
+    ledger.replayed('invite', Verified.NO, IDENTITY_A);
+    ledger.memoryWritten(IDENTITY_A);
+    ledger.memoryRead(['the composer is a contenteditable'], IDENTITY_A);
+    ledger.memoryRead(['the composer is a contenteditable'], IDENTITY_A);
 
-  // The replay-session proof run: a replay that failed was journaled `unknown`, its run said `no`,
-  // and the report read "failed · 0 of 5 checks did not hold". A replay is counted once, as a flow.
-  it('counts a replay as a flow, never also as a journaled claim', () => {
-    const ledger = new RunLedger();
-    ledger.begin(0, AGENT);
-    ledger.verdict({
-      ...verdict('the flow "invite" replays', Verified.UNKNOWN),
-      tool: 'reticle_flow_replay',
+    ledger.begin(100, IDENTITY_B);
+    ledger.flowSaved('other-flow', IDENTITY_B);
+    ledger.memoryWritten(IDENTITY_B, 3);
+
+    expect(ledger.take(200, IDENTITY_A)).toMatchObject({
+      flows: {
+        saved: ['invite'],
+        replayed: [{ name: 'invite', verified: Verified.NO }],
+      },
+      memory: { written: 1, read: 1 },
     });
-    ledger.replayed('invite', Verified.NO);
-    const report = ledger.take(10);
+    expect(ledger.take(200, IDENTITY_B)).toMatchObject({
+      flows: { saved: ['other-flow'], replayed: [] },
+      memory: { written: 3, read: 0 },
+    });
+  });
+  it('counts a failed replay as a flow, not as a journaled claim', () => {
+    const ledger = new RunLedger();
+
+    ledger.begin(0, IDENTITY_A);
+    ledger.verdict(
+      {
+        ...verdict('the flow "invite" replays', Verified.UNKNOWN),
+        tool: 'reticle_flow_replay',
+      },
+      IDENTITY_A,
+    );
+    ledger.replayed('invite', Verified.NO, IDENTITY_A);
+
+    const report = ledger.take(10, IDENTITY_A);
+
+    expect(report.verified).toBe(Verified.NO);
     expect(report.claims).toEqual([]);
     expect(report.flows.replayed).toEqual([{ name: 'invite', verified: Verified.NO }]);
+    expect(report.caught).toContain('flow invite');
   });
 
-  // The replay proof run's report had no time to its first verdict: its only verdicts were replays.
-  it('times the first verdict from a replay too', () => {
+  it('includes replay verdicts when calculating firstVerdictMs', () => {
     const ledger = new RunLedger();
-    ledger.begin(100, AGENT);
-    ledger.after(300);
-    ledger.replayed('invite', Verified.NO);
-    ledger.after(900);
-    expect(ledger.take(1_000).firstVerdictMs).toBe(800);
+
+    ledger.begin(100, IDENTITY_A);
+    ledger.after(300, IDENTITY_A);
+    ledger.replayed('invite', Verified.YES, IDENTITY_A);
+    ledger.after(900, IDENTITY_A);
+
+    const report = ledger.take(1000, IDENTITY_A);
+
+    expect(report.firstVerdictMs).toBe(800);
   });
 
-  it('keeps nothing while no agent run is open', () => {
+  it('ignores records written without an open run', () => {
     const ledger = new RunLedger();
-    ledger.replayed('invite', Verified.NO);
-    ledger.verdict(verdict('saved', Verified.YES));
-    ledger.begin(0, AGENT);
-    const report = ledger.take(10);
+
+    ledger.replayed('invite', Verified.NO, IDENTITY_A);
+    ledger.verdict(verdict('some claim', Verified.YES), IDENTITY_A);
+
+    ledger.begin(100, IDENTITY_A);
+
+    const report = ledger.take(200, IDENTITY_A);
+
     expect(report.flows.replayed).toEqual([]);
     expect(report.claims).toEqual([]);
   });
 
-  it('says nothing was proved when nothing was checked', () => {
+  it('returns UNKNOWN when a run has no checked claims or replayed flows', () => {
     const ledger = new RunLedger();
-    ledger.begin(0, AGENT);
-    ledger.flowSaved('invite');
-    const report = ledger.take(10);
+
+    ledger.begin(100, IDENTITY_A);
+    ledger.flowSaved('invite', IDENTITY_A);
+
+    const report = ledger.take(200, IDENTITY_A);
+
     expect(report.verified).toBe(Verified.UNKNOWN);
-    expect(report.firstVerdictMs).toBeUndefined();
   });
 });

@@ -34,7 +34,13 @@ function evt(seq: number): ReticleEvent {
 
 function newSession(reader: JournalReader): Session {
   const session = new Session(hello(), noopSocket, () => 0);
-  session.setJournal(new JournalRecorder(noopSink, { now: () => session.elapsed() }), reader);
+  session.setJournal(
+    new JournalRecorder(noopSink, {
+      now: () => session.elapsed(),
+      identity: { sessionId: 'demo', root: '/repo/demo' },
+    }),
+    reader,
+  );
   return session;
 }
 

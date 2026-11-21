@@ -6,14 +6,8 @@
  * the Harness's are never counted. Taking the report ends that run, so the agent's next run starts
  * at zero.
  *
- * The ledger keeps one run for each MCP attach id. Two agents on one daemon (two worktrees of one
- * project) call in turn. When the ledger kept one run, each call restarted the other agent's run,
- * and a released lease reported the other agent's claims and none of its own. A record goes to the
- * run of the connection that wrote it, and a call that ends a run takes the caller's run (#1900).
- *
- * A record from no connection (the HUD, the CLI, an agent record that ends outside its call
- * context) goes to the run of the agent that called last. An agent that stops without a call that
- * ends its run leaves its run here. That run is dropped when it is idle for `RUN_IDLE_LIMIT_MS`.
+ * The ledger keeps one run for each `(sessionId, root)` identity. Attach IDs, project IDs, and roots
+ * describe different scopes. Events without a matching identity do not join another run.
  */
 import { supersededChecks } from '@reticlehq/engine/evidence/superseded-checks.js';
 import {
@@ -25,8 +19,6 @@ import {
   type RunReport,
   type RunReportClaim,
 } from '@reticlehq/core';
-import { callingAttachId } from '@/hooks/coding-agents.js';
-
 const SAW = 'saw ';
 const FLOW = 'flow ';
 
@@ -74,13 +66,21 @@ const openRun = (now: number): Run => ({
   written: 0,
   read: new Set(),
 });
+export interface RunIdentity {
+  sessionId: string;
+  root: string;
+}
+
+function runIdentityKey(identity: RunIdentity): string {
+  return JSON.stringify([identity.sessionId, identity.root]);
+}
 
 export class RunLedger {
   readonly #runs = new Map<string, Run>();
-  #last: string | undefined;
 
   /** An agent call starts. The agent's first call starts its run. A run idle too long is dropped. */
-  begin(now: number, owner: string): void {
+  begin(now: number, identity: RunIdentity): void {
+    const owner = runIdentityKey(identity);
     for (const [id, run] of this.#runs) {
       if (now - run.lastAt > RUN_IDLE_LIMIT_MS) {
         this.#runs.delete(id);
@@ -89,12 +89,11 @@ export class RunLedger {
     const run = this.#runs.get(owner) ?? openRun(now);
     run.lastAt = now;
     this.#runs.set(owner, run);
-    this.#last = owner;
   }
 
   /** An agent call ended. The first one that left a verdict sets the time to the first verdict. */
-  after(now: number, owner?: string): void {
-    const run = this.#run(owner);
+  after(now: number, identity: RunIdentity): void {
+    const run = this.#run(identity);
     if (run === undefined) {
       return;
     }
@@ -105,8 +104,8 @@ export class RunLedger {
   }
 
   /** A journal record from the agent's own call. A record with no verdict is not a claim. */
-  verdict(action: JournalAction): void {
-    const run = this.#run();
+  verdict(action: JournalAction, identity: RunIdentity): void {
+    const run = this.#run(identity);
     if (run === undefined || action.drivenBy !== undefined) {
       return;
     }
@@ -121,25 +120,25 @@ export class RunLedger {
     }
   }
 
-  flowSaved(name: string): void {
-    this.#run()?.saved.add(name);
+  flowSaved(name: string, identity: RunIdentity): void {
+    this.#run(identity)?.saved.add(name);
   }
 
   /** The last replay of a flow in this run is its verdict. */
-  replayed(name: string, verified: Verified): void {
-    this.#run()?.replayed.set(name, verified);
+  replayed(name: string, verified: Verified, identity: RunIdentity): void {
+    this.#run(identity)?.replayed.set(name, verified);
   }
 
-  memoryWritten(count = 1): void {
-    const run = this.#run();
+  memoryWritten(identity: RunIdentity, count = 1): void {
+    const run = this.#run(identity);
     if (run !== undefined) {
       run.written += count;
     }
   }
 
   /** Notes given to the agent. Each one counts once, however often it is shown. */
-  memoryRead(notes: readonly string[]): void {
-    const run = this.#run();
+  memoryRead(notes: readonly string[], identity: RunIdentity): void {
+    const run = this.#run(identity);
     if (run === undefined) {
       return;
     }
@@ -148,28 +147,27 @@ export class RunLedger {
     }
   }
 
-  isEmpty(owner?: string): boolean {
-    return this.#run(owner) === undefined;
+  isEmpty(identity: RunIdentity): boolean {
+    return this.#run(identity) === undefined;
   }
 
-  /** The named owner, else the calling connection, else the agent that called last. */
-  #owner(owner: string | undefined): string | undefined {
-    return owner ?? callingAttachId() ?? this.#last;
+  /** The composite identity for strict lookup and removal. */
+  #owner(identity: RunIdentity): string {
+    return runIdentityKey(identity);
   }
 
   /**
    * The run a record belongs to. None while no agent call has begun one: a CLI `reticle verify`
    * replays through the same code, and what it did is not the next agent's run.
    */
-  #run(owner?: string): Run | undefined {
-    const id = this.#owner(owner);
-    return id === undefined ? undefined : this.#runs.get(id);
+  #run(identity: RunIdentity): Run | undefined {
+    return this.#runs.get(this.#owner(identity));
   }
 
   /** The owner's report, without the cloud line (the caller knows the project). Ends that run. */
-  take(now: number, owner?: string): RunReport {
-    const id = this.#owner(owner);
-    const run = this.#run(owner) ?? openRun(now);
+  take(now: number, identity: RunIdentity): RunReport {
+    const id = this.#owner(identity);
+    const run = this.#run(identity) ?? openRun(now);
     if (id !== undefined) {
       this.#runs.delete(id);
     }

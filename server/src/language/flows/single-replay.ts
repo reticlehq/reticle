@@ -16,13 +16,20 @@ export function replayOneFlow(
   appUrl: string | undefined,
 ): Promise<FlowReplayResult> {
   return withShotRun(defaultRunId(), async (): Promise<FlowReplayResult> => {
+    const target = safeSessionTarget(deps, asString(args['sessionId']));
+    const sessionId = deps.sessions.resolve(asString(args['sessionId'])).id;
+    const identity = { sessionId, root: rootForTarget(deps, target) };
+
     const start = deps.now();
     const replay = await replaySeededOrNot(deps, args, appUrl);
     const durationMs = deps.now() - start;
-    const target = safeSessionTarget(deps, asString(args['sessionId']));
-    // Written down as a run, and named in the answer: the platform's Re-verify ties its check to
-    // it, and a check with no run could never resolve the issue it was for.
-    const runId = await persistAndSyncVerificationRun(deps, [{ replay, durationMs }], target);
+
+    const runId = await persistAndSyncVerificationRun(
+      deps,
+      [{ replay, durationMs }],
+      target,
+      identity,
+    );
     return {
       ...replay,
       ...(runId === undefined ? {} : { runId }),

@@ -27,6 +27,7 @@ const INERT_SINK = {
   appendEvents: (): Promise<void> => Promise.resolve(),
   appendAction: (): Promise<void> => Promise.resolve(),
 };
+const TEST_IDENTITY = { sessionId: 'demo', root: '/repo/demo' };
 
 /** A reader that holds no events and declares whatever loss the test is about. */
 function readerDeclaring(loss: JournalReadLoss | undefined): {
@@ -43,7 +44,10 @@ function readerDeclaring(loss: JournalReadLoss | undefined): {
 
 function sessionWithLoss(loss: JournalReadLoss | undefined): ReturnType<typeof createFakeSession> {
   const session = createFakeSession();
-  session.setJournal(new JournalRecorder(INERT_SINK, { now: () => 0 }), readerDeclaring(loss));
+  session.setJournal(
+    new JournalRecorder(INERT_SINK, { now: () => 0, identity: TEST_IDENTITY }),
+    readerDeclaring(loss),
+  );
   return session;
 }
 
@@ -127,7 +131,10 @@ describe('Session.lostSince — after the real durable fall-through', () => {
     const journal = new SessionJournal(createNodeFileSystem(), root, 'demo', { maxReadBytes });
     await journal.appendEvents(written);
     const session = createFakeSession();
-    session.setJournal(new JournalRecorder(journal, { now: () => 0 }), journal);
+    session.setJournal(
+      new JournalRecorder(journal, { now: () => 0, identity: TEST_IDENTITY }),
+      journal,
+    );
     // Churn eviction, so the BUFFER declares no scarce loss: whatever `lostSince` reports here came
     // from the journal, which is the thing under test.
     session.pushEvent(churn(100), OVER_BUDGET_BYTES);

@@ -12,7 +12,7 @@ import { isSelfObservation } from './self-observation.js';
 import { currentDrivenBy } from '@/hooks/driven-by.js';
 import { callerClientName } from '@/hooks/coding-agents.js';
 import { log } from '@/log.js';
-import { runLedger } from '@/judgement/runs/run-ledger.js';
+import { runLedger, type RunIdentity } from '@/judgement/runs/run-ledger.js';
 
 /**
  * Logged the FIRST time a journal write is lost, and never again for that recorder.
@@ -148,6 +148,8 @@ export interface JournalLedgerSize {
 interface JournalRecorderOptions {
   /** Injected elapsed-ms clock (never read from Date here — the clock-injection rule). */
   now: () => number;
+  /** The identity of the run to which journal entries belong. */
+  identity: RunIdentity;
   /** Flush the pending-event batch once this many accumulate. */
   flushAt?: number;
 }
@@ -184,11 +186,13 @@ export class JournalRecorder {
   #active: ActiveAction | undefined;
   #chain: Promise<void> = Promise.resolve();
   #lossReported = false;
+  readonly #identity: RunIdentity;
 
   constructor(sink: JournalSink, options: JournalRecorderOptions) {
     this.#sink = sink;
     this.#now = options.now;
     this.#flushAt = options.flushAt ?? DEFAULT_FLUSH_AT;
+    this.#identity = options.identity;
   }
 
   /**
@@ -258,7 +262,7 @@ export class JournalRecorder {
       ...(active.agent === undefined ? {} : { agent: active.agent }),
     };
     // The agent's own verdicts make its run's report; the ledger ignores the Harness's.
-    runLedger.verdict(action);
+    runLedger.verdict(action, this.#identity);
     this.#enqueueFlush();
     this.#chain = this.#chain
       .then(() => this.#sink.appendAction(action))
@@ -311,7 +315,7 @@ export class JournalRecorder {
       })(),
     };
     // The agent's own verdicts make its run's report; the ledger ignores the Harness's.
-    runLedger.verdict(action);
+    runLedger.verdict(action, this.#identity);
     this.#enqueueFlush();
     this.#chain = this.#chain
       .then(() => this.#sink.appendAction(action))
