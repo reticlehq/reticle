@@ -64,5 +64,22 @@ describe('fromAx', () => {
       ],
     });
     expect(root.children.map((child) => child.id)).toEqual(['delete-beta', undefined, undefined]);
+
+    const web = fromAx({
+      role: 'AXWebArea',
+      children: [':r1:', 'radix-:r3:', '«r2»', 'add', 'row:3'].map((id) => ({
+        role: 'AXButton',
+        title: 'Open',
+        id,
+        children: [],
+      })),
+    });
+    expect(web.root.children.map((child) => child.id)).toEqual([
+      undefined,
+      undefined,
+      undefined,
+      'add',
+      'row:3',
+    ]);
   });
 });
