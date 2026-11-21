@@ -3,7 +3,8 @@
 // has for a web page work on it. macOS only for now. Nothing is installed in the application.
 //
 //   reticle-computer-use --app <name> [--project <folder>] [--port <port>] [--watch <folder>]...
-//                        [--electron-switch] [--background-only]
+//                        [--no-electron-switch] [--background-only]
+//   reticle-computer-use --list                   (the applications that are open, as JSON)
 //   reticle-computer-use --app <name> --doctor     (checks that it can work, and says what to do)
 //
 // The terminal needs Accessibility permission. The command stays open until you stop it.
@@ -21,14 +22,17 @@ import {
   connectPeer,
   doctorReport,
   electronWarning,
+  isElectron,
+  joinedAnswer,
   pickApp,
 } from '../dist/index.js';
 
 const say = (line) => process.stderr.write(`${line}\n`);
 const read = (path) => (existsSync(path) ? readFileSync(path, 'utf8') : undefined);
 
-const plan = attachPlan(process.argv.slice(2), process.env, homedir(), read);
-if ('error' in plan) {
+const plan = attachPlan(process.argv.slice(2), process.env, homedir(), read, process.cwd());
+const LIST = process.argv.includes('--list');
+if ('error' in plan && !LIST) {
   say(plan.error);
   process.exit(2);
 }
@@ -83,6 +87,21 @@ const answers = (url) =>
     socket.once('connect', () => done(true));
     socket.once('error', () => done(false));
   });
+
+if (LIST) {
+  // For an agent: the names it can give to --app. Names only.
+  if ('darwin' !== process.platform || !buildHelper('ignore')) {
+    say(
+      'reticle-computer-use runs on macOS only, and needs the Swift compiler: xcode-select --install',
+    );
+    process.exit(2);
+  }
+  const listed = JSON.parse(quiet(helper, ['apps']) ?? '{}').apps ?? [];
+  process.stdout.write(
+    `${JSON.stringify({ apps: listed.filter((app) => true === app.regular).map(({ name, process: program }) => ({ name, process: program })) })}\n`,
+  );
+  process.exit(0);
+}
 
 if (process.argv.includes('--doctor')) {
   const darwin = 'darwin' === process.platform;
@@ -145,6 +164,16 @@ const warning = electronWarning(
 if (warning !== undefined) {
   say(warning);
 }
+// The daemon ends when it is idle, and the next tool call starts it again. An agent that runs
+// this command first found no daemon and gave up. So the command waits for the bridge for a time.
+const WAIT_FOR_BRIDGE_MS = 30_000;
+if (!(await answers(plan.url))) {
+  say(`Waiting for the Reticle daemon at ${plan.url}. Call a Reticle tool, or run: reticle serve`);
+  const until = Date.now() + WAIT_FOR_BRIDGE_MS;
+  while (Date.now() < until && !(await answers(plan.url))) {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+  }
+}
 const sessionId = `cu-${plan.app}-${String(pid)}`.replace(/[^\w.-]/g, '-');
 const peer = connectPeer({
   url: plan.url,
@@ -165,11 +194,20 @@ try {
   process.exit(1);
 }
 // Only after the bridge answered: a command that ends before this leaves the application as it was.
-if (plan.electronSwitch) {
+const program = quiet('ps', ['-o', 'comm=', '-p', String(pid)]) ?? '';
+const switched = plan.electronSwitch && isElectron(program, existsSync);
+if (switched) {
   quiet(helper, ['web-tree', String(pid), 'on']);
 }
 say(`${plan.app} (${String(pid)}) is joined to ${plan.url}.`);
-say(`Give this on each tool call: sessionId "${sessionId}". Stop with Ctrl-C.`);
+const joined = joinedAnswer(plan, sessionId, pid);
+say(
+  joined.needsSessionId
+    ? `Give this on each tool call: sessionId "${sessionId}". Stop with Ctrl-C.`
+    : 'The tools find this session with no sessionId, from the project of this folder. Stop with Ctrl-C.',
+);
+// One line for an agent that started this command: what was joined, and what to call next.
+process.stdout.write(`${JSON.stringify(joined)}\n`);
 if (plan.token === undefined) {
   say(
     'No pairing token was found. The session is joined, but a file or a setting that changes with nothing else is then not proof: the bridge cannot tell this command from a page. Start the daemon with `reticle serve`, which writes the token.',
@@ -181,7 +219,7 @@ if (plan.projectId === undefined) {
   );
 }
 const stop = () => {
-  if (plan.electronSwitch) {
+  if (switched) {
     quiet(helper, ['web-tree', String(pid), 'off']);
   }
   peer.close();
