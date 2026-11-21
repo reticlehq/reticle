@@ -1112,6 +1112,81 @@ describe('PeerCommands', () => {
     });
   });
 
+  /**
+   * An application that draws its own window gives no elements: a canvas, a game. The realm
+   * read nothing of it. It now takes a picture of the window, and a caller can click at a point
+   * of that picture.
+   */
+  describe('a picture of the window', () => {
+    const picturing = (taken: unknown) => {
+      const made = peer();
+      const commands = new PeerCommands({
+        driver: {
+          ...fakeDriver(),
+          ...(taken === undefined ? {} : { capture: () => Promise.resolve(taken as never) }),
+          act: (request) => {
+            made.asked.push(request);
+            return Promise.resolve({
+              delivered: true,
+              reachable: true,
+              settled: true,
+              before: read('Ready'),
+              after: read('Saved'),
+            });
+          },
+        },
+        emit: () => undefined,
+      });
+      const clickAt = async (args: Record<string, unknown>) =>
+        commands.answer(ReticleCommand.ACT, {
+          ref: await refOf(commands, 'Save'),
+          action: ActionType.CLICK,
+          args,
+        });
+      return { commands, clickAt, asked: made.asked };
+    };
+    const shot = {
+      ok: true,
+      path: '/tmp/reticle-capture-1.png',
+      window: [100, 50, 400, 300],
+      scale: 2,
+    };
+
+    it('gives the file of the picture, in the shape the server reads', async () => {
+      const { commands } = picturing(shot);
+      expect(await commands.answer(ReticleCommand.CAPTURE, {})).toEqual({
+        ok: true,
+        path: '/tmp/reticle-capture-1.png',
+      });
+    });
+
+    it('says what to do when the terminal may not record the screen', async () => {
+      const { commands } = picturing({ ok: false, reason: 'no-screen-recording-permission' });
+      const answer = (await commands.answer(ReticleCommand.CAPTURE, {})) as { reason: string };
+      expect(answer.reason).toContain('Screen Recording');
+    });
+
+    it('clicks at a point of the picture: its pixels become a point on the screen', async () => {
+      const { commands, clickAt, asked } = picturing(shot);
+      await commands.answer(ReticleCommand.CAPTURE, {});
+      await clickAt({ foreground: true, at: { x: 200, y: 100 } });
+      // The window is at 100,50 and the picture has two pixels for each point.
+      expect(asked.map((request) => [request.kind, request.value])).toEqual([
+        [ActKind.CLICK, '200,100'],
+      ]);
+    });
+
+    it('refuses a point with no picture, and a point with no foreground', async () => {
+      const none = picturing(shot);
+      await expect(none.clickAt({ foreground: true, at: { x: 1, y: 1 } })).rejects.toThrow(
+        /no picture was taken/,
+      );
+      await none.commands.answer(ReticleCommand.CAPTURE, {});
+      await expect(none.clickAt({ at: { x: 1, y: 1 } })).rejects.toThrow(/foreground: true/);
+      expect(none.asked).toEqual([]);
+    });
+  });
+
   it('says why a press can have no effect, when the peer was told a reason', async () => {
     const still = { before: read('Ready'), after: read('Ready') };
     const press = async (commands: PeerCommands) =>

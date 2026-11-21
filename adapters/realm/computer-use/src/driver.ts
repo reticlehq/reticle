@@ -52,6 +52,11 @@ export const ActRefusal = {
   REACH_UNKNOWN: 'reach-unknown',
   /** The action needs the real pointer, and the caller did not ask for the foreground. */
   NEEDS_FOREGROUND: 'needs-foreground',
+  /**
+   * The foreground was asked for while the person at the machine was typing or moving the
+   * pointer. Their input would have gone to the application that is brought to the front.
+   */
+  PERSON_ACTIVE: 'person-active',
 } as const;
 export type ActRefusal = (typeof ActRefusal)[keyof typeof ActRefusal];
 
@@ -152,4 +157,21 @@ export interface UiDriver {
   /** Asks about one element of the last read, and acts on nothing. */
   reach(target: Placed): Promise<ReachAnswer>;
   act(request: ActRequest): Promise<ActOutcome>;
+  /**
+   * A picture of the application's own window, as a PNG file. Absent: this driver takes none.
+   * For an application that gives no elements, the picture is what a caller reads.
+   */
+  capture?(): Promise<Captured>;
 }
+
+/** A picture that was taken, or the reason there is none. */
+export type Captured =
+  | {
+      ok: true;
+      path: string;
+      /** The window on the screen, in points: x, y, width, height. */
+      window: readonly [number, number, number, number];
+      /** The pixels of the picture for each point of the screen. */
+      scale: number;
+    }
+  | { ok: false; reason: string };

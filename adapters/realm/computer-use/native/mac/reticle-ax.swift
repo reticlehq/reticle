@@ -17,6 +17,7 @@
 // Output is one JSON object on stdout. The helper decides nothing. It reports what it read.
 //
 //   reticle-ax web-tree <pid> on|off   (Electron: its accessibility switch)
+//   reticle-ax capture <pid> <file.png>   (a picture of the application's window)
 //   reticle-ax apps                    (the applications that are open: name, process, pid)
 //   reticle-ax serve      (one command for each line on standard input, as a JSON list of words)
 import AppKit
@@ -482,6 +483,45 @@ func run(_ args: [String]) throws {
     try emit(["set": result == .success])
   }
 
+  if args[1] == "capture" {
+    // A picture of the application's own window, and of nothing else: the window server draws
+    // the window by its number, also when another window is over it. For an application that
+    // gives no elements (a canvas, a game), the picture is what there is to read.
+    guard args.count >= 4 else { try emit(["error": "usage"]) }
+    guard CGPreflightScreenCaptureAccess() else {
+      try emit(["ok": false, "reason": "no-screen-recording-permission"])
+    }
+    let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+    let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
+    var best: (id: Int, rect: CGRect)?
+    for window in list where (window[kCGWindowOwnerPID as String] as? pid_t) == pid {
+      guard let bounds = window[kCGWindowBounds as String] as? NSDictionary,
+        let rect = CGRect(dictionaryRepresentation: bounds),
+        let id = window[kCGWindowNumber as String] as? Int,
+        (window[kCGWindowAlpha as String] as? Double ?? 1) > 0, rect.width > 40, rect.height > 40
+      else { continue }
+      if best == nil || rect.width * rect.height > best!.rect.width * best!.rect.height {
+        best = (id, rect)
+      }
+    }
+    guard let window = best else { try emit(["ok": false, "reason": "no-window-on-this-screen"]) }
+    let shot = Process()
+    shot.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+    // -x: no sound. -o: no shadow, so the picture is the window and its points are the window's.
+    shot.arguments = ["-x", "-o", "-l", String(window.id), args[3]]
+    try? shot.run()
+    shot.waitUntilExit()
+    guard shot.terminationStatus == 0, FileManager.default.fileExists(atPath: args[3]) else {
+      try emit(["ok": false, "reason": "the capture failed"])
+    }
+    let scale =
+      NSScreen.screens.first { $0.frame.intersects(window.rect) }?.backingScaleFactor ?? 2
+    try emit([
+      "ok": true, "path": args[3], "scale": Double(scale),
+      "window": [window.rect.origin.x, window.rect.origin.y, window.rect.width, window.rect.height],
+    ])
+  }
+
   if args[1] == "tree" {
     let started = Date()
     var shot = snapshot(app)
@@ -570,6 +610,21 @@ func run(_ args: [String]) throws {
   var appBefore: NSRunningApplication?
   var pointerBefore: CGPoint?
   if foreground {
+    // Not while the person at the machine types or moves the pointer: a key or a click of theirs
+    // would land in the application that is brought to the front. Wait for a moment with no
+    // input from them, and refuse when there is none in five seconds.
+    func idleSeconds() -> Double {
+      let any = CGEventType(rawValue: ~0)!
+      return CGEventSource.secondsSinceLastEventType(.hidSystemState, eventType: any)
+    }
+    var waited = 0.0
+    while idleSeconds() < 0.8 && waited < 5 {
+      Thread.sleep(forTimeInterval: 0.1)
+      waited += 0.1
+    }
+    guard idleSeconds() >= 0.8 else {
+      try emit(["refused": "person-active", "detail": "the person at the machine is typing or moving the pointer"])
+    }
     RunLoop.current.run(until: Date())
     appBefore = NSWorkspace.shared.frontmostApplication
     pointerBefore = CGEvent(source: nil)?.location
@@ -677,7 +732,12 @@ func run(_ args: [String]) throws {
     guard foreground, let rect = frame(now[7], now[8]) else {
       try emit(["refused": "needs-foreground"])
     }
-    let at = CGPoint(x: rect.midX, y: rect.midY)
+    // The middle of the element, or the point the caller gives as "x,y" on the screen: for an
+    // application that gives no elements, a point in its picture is all a caller has.
+    let given = action == "drag" ? [] : value.split(separator: ",").compactMap { Double($0) }
+    let at =
+      given.count == 2
+      ? CGPoint(x: given[0], y: given[1]) : CGPoint(x: rect.midX, y: rect.midY)
     let source = CGEventSource(stateID: .hidSystemState)
     func send(_ type: CGEventType, _ point: CGPoint, _ button: CGMouseButton, clicks: Int64 = 1) {
       guard
