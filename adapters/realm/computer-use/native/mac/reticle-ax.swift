@@ -673,7 +673,14 @@ func run(_ args: [String]) throws {
   func putBack() {
     guard foreground, action != "hover", action != "raise" else { return }
     if let was = pointerBefore { CGWarpMouseCursorPosition(was) }
-    if let was = appBefore, was.processIdentifier != pid { was.activate(options: []) }
+    if let was = appBefore, was.processIdentifier != pid {
+      // The same two ways as above: the plain request alone can be passed over, and the person
+      // would then be left with the keyboard in the wrong application.
+      AXUIElementSetAttributeValue(
+        AXUIElementCreateApplication(was.processIdentifier), kAXFrontmostAttribute as CFString,
+        kCFBooleanTrue)
+      was.activate(options: [])
+    }
   }
 
   let before = snapshot(app)
