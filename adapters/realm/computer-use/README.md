@@ -113,7 +113,7 @@ For those, give `args.foreground: true` on the action. The realm then brings the
 
 - `click` with `foreground: true` is a real click. With `button: "right"` too, it is a real right-click.
 - `drag` needs `args.to`: `{ ref }` for the middle of another element, or `{ x, y }` on the screen.
-- `type` and `press` with `foreground: true` send real keys. A panel that the system draws for the application, such as the save panel, takes only real keys. A real key goes to whatever application has the keyboard, so the realm sends one only when the system says that the joined application has it. When it has not, no key is sent and the action is refused: use `focus` first.
+- `type` and `press` with `foreground: true` send real keys. A panel that the system draws for the application, such as the save panel, takes `fill` and `click` in the background, and takes a key only as a real key. A real key goes to whatever application has the keyboard, so the realm sends one only when the system says that the joined application has it. When it has not, no key is sent and the action is refused: use `focus` first.
 - `focus` brings the application to the front and gives the element the keyboard. After it, the menu bar is on the screen and can be read and pressed.
 
 The realm waits until the person at the machine has not typed or moved the pointer for a moment. When they do not stop in five seconds, it refuses the action and takes nothing.
@@ -162,11 +162,13 @@ Read these before you rely on a result.
 
 `conformance/computer-use-journey.mjs` (run it with `node` from the root of the repository) does two whole journeys through a real bridge and the tools an agent has, and each step must be proved. On the Electron application it fills a field, adds a note, chooses from a list and checks a box. On the native application it fills a field and exports it, and the proof is the file on disk. It saves each journey as a flow, opens a new application, and replays the flow with no model; the replay of the export must write the file in a new folder. Last, the Harness drives the native application with a model that is a script: the check is on the Harness, its prompt for a desktop application and the tools as it calls them, and it costs nothing.
 
+`native/mac/savepanelcheck.mjs` checks the save panel of the system, which most applications use to write a file. The realm reads the panel, fills the name and presses its Save, all in the background, and the proof is the file on disk.
+
 `native/mac/hudcheck.mjs` checks the window of the realm: it shows the action and its effect, and Pause stops the realm. The check presses Pause as a person does: a second realm reads the window and presses its button.
 
 `native/mac/pointercheck.mjs` (`pnpm --filter @reticlehq/computer-use check:pointer`) checks the real pointer: a click, a double-click, a right-click, a drag and a hover. It takes the pointer for a few seconds.
 
-The first three and the check of the window, one after the other, on a Mac with the Accessibility permission:
+The first three, the check of the window and the check of the save panel, one after the other, on a Mac with the Accessibility permission:
 
 ```
 pnpm --filter @reticlehq/computer-use check:live
