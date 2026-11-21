@@ -4,6 +4,13 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+## [3.10.10] — 2026-11-21
+
+### Fixed
+
+- **`@reticlehq/server` — a page refused at the origin gate was diagnosed as a closed tab.** When an app had connected once and its page was then refused at the origin gate (for example a multi-tenant app on a `*.test` host), `reticle_session list` and `reticle status` said "a session was connected to this daemon earlier, so the wiring is correct" and told the agent to reopen the app. Reopening is refused again. The fix, `RETICLE_ALLOWED_ORIGINS`, was only in the daemon log. The diagnosis and the next action now name the refused origin and the allow-list.
+- **`@reticlehq/server` — a password entered with `type` was saved in plain text in the flow file.** Redaction read only the `value` that a `fill` writes. A `type` step carries its text in `text`, so a password typed key by key reached the saved flow verbatim, even when the SDK marked the field as a secret. Flow files are often in git. The typed text of a `type` step is now redacted like a fill, in the saved flow and in the recorded steps a tool returns, and replay puts the secret back into `text`.
+
 ## [3.10.9] — 2026-11-21
 
 ### Fixed
