@@ -2133,11 +2133,6 @@
       "count": 1
     }
   },
-  "src/memory/project/session-root.ts": {
-    "curly": {
-      "count": 2
-    }
-  },
   "src/memory/project/sync-status.ts": {
     "curly": {
       "count": 15

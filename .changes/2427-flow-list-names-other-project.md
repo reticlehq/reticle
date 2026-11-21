@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — an id-less `reticle_flow { action: "list" }` says whose flows it lists when the connected tab is another project's.** The daemon's project was one app, and the only connected tab was a lease on another app. With no `sessionId`, the scope guard refused that tab on purpose, so the list came from the daemon's own folder. It showed 43 flows of the other app, and nothing in the answer said so. The answer now has a `note` that names the daemon's project folder and each connected tab with its `sessionId`, and tells the agent to pass that `sessionId`. The scope guard does not change.
