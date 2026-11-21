@@ -188,9 +188,12 @@ function journalStep(session: Session, args: Record<string, unknown>, effect: un
   }
 }
 
-/** A step error that means nothing was acted on, or the page went away with the observation. */
+/**
+ * A step error that means nothing was acted on, or the page went away with the observation. A click
+ * refused for a cover never reached the app, so it says nothing about the app either.
+ */
 const UNJUDGED_STEP =
-  /matched no element|no longer resolves|session disconnected|session (was )?replaced/i;
+  /matched no element|no longer resolves|session disconnected|session (was )?replaced|click refused: .* covers the target/i;
 
 export const ACT_SEQUENCE_TOOL: ToolDef = {
   name: ReticleTool.ACT_SEQUENCE,

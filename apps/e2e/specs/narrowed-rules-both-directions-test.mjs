@@ -522,8 +522,9 @@ for (const c of REACH) {
       chk('the click is not verified yes', VERIFIED_YES !== r?.verified, verdictOf(r));
       chk(
         'the refusal names the cover and says why a person could not click it',
-        /covers the target/.test(String(r?.error ?? '')),
-        String(r?.error ?? '').slice(0, 160),
+        // A single act carries it as `error`; a sequence carries it on the refused step.
+        /covers the target/.test(`${String(r?.error ?? '')} ${JSON.stringify(r?.steps ?? [])}`),
+        `${String(r?.error ?? '')} ${JSON.stringify(r?.steps ?? [])}`.slice(0, 160),
       );
       chk('the refused click sent no request', togglesBefore === (await toggles(0)));
       continue;
