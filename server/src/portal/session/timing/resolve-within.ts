@@ -78,9 +78,53 @@ export async function resolveSessionSpending<S>(
   sessionId: string | undefined,
   timeoutMs: number,
   deps: { now: () => number; sleep: (ms: number) => Promise<void> },
-): Promise<{ session: S; remainingMs: number }> {
+): Promise<{ session: S; budgetMs: number; remainingMs: number; connectedLate: boolean }> {
+  try {
+    return {
+      session: sessions.resolve(sessionId),
+      budgetMs: timeoutMs,
+      remainingMs: timeoutMs,
+      connectedLate: false,
+    };
+  } catch {
+    // No session yet: wait for one inside the budget, and report what the wait left.
+  }
   const started = deps.now();
   const session = await resolveSessionWithin(sessions, sessionId, timeoutMs, deps);
   const remainingMs = Math.max(0, timeoutMs - (deps.now() - started));
-  return { session, remainingMs };
+  return { session, budgetMs: timeoutMs, remainingMs, connectedLate: true };
+}
+
+/**
+ * The share of the budget the predicate must get before its `no` is a statement about the app.
+ *
+ * A session that connected 100 ms into a 10 s budget left the check most of its window, and its
+ * `no` is correct. One that connected near the deadline left it a moment on a page that had just
+ * connected. Half of the requested budget is the line between the two.
+ */
+const LATE_SESSION_MIN_SHARE = 0.5;
+
+/**
+ * A failed verdict on a session that connected late in the call, made inconclusive (#2443).
+ *
+ * Only when the predicate got less than {@link LATE_SESSION_MIN_SHARE} of the budget: then the check
+ * ran briefly on a page that had just connected, so a `no` there is not a statement about the app.
+ */
+export function withLateSession<V extends { pass: boolean; inconclusive?: string }>(
+  verdict: V,
+  resolved: { budgetMs: number; remainingMs: number; connectedLate: boolean },
+): V & { inconclusive?: string; failureReason?: string } {
+  const shortWindow = resolved.remainingMs < resolved.budgetMs * LATE_SESSION_MIN_SHARE;
+  if (
+    !resolved.connectedLate ||
+    !shortWindow ||
+    verdict.pass ||
+    verdict.inconclusive !== undefined
+  ) {
+    return verdict;
+  }
+  const reason =
+    `the app connected ${String(resolved.remainingMs)} ms before the deadline, so the check ran on ` +
+    'a page that had only just connected and was not decided. Call again, or give a longer timeout_ms';
+  return { ...verdict, inconclusive: reason, failureReason: reason };
 }

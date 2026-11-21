@@ -19,8 +19,10 @@ import { createFakeSession } from '@/portal/session/fake-session.js';
 
 const SIGNAL_NAME = 'order:placed';
 const TIMEOUT_MS = 2_000;
-/** The session connects after this much of the budget. */
+/** The session connects after this much of the budget: three quarters of it. */
 const SESSION_LATE_MS = 1_500;
+/** The session connects after this much of the budget: a tenth of it. */
+const SESSION_EARLY_MS = 200;
 /** Room for the grading work after the deadline. Fixed, and far below a second budget. */
 const GRADING_BOUND_MS = 300;
 
@@ -43,9 +45,9 @@ function lateSession(saw: boolean): Session {
   );
 }
 
-/** An empty session map until `SESSION_LATE_MS` after the call starts. */
-function depsWithLateSession(session: Session): ToolDeps {
-  const connectsAt = Date.now() + SESSION_LATE_MS;
+/** An empty session map until `lateMs` after the call starts. */
+function depsWithLateSession(session: Session, lateMs = SESSION_LATE_MS): ToolDeps {
+  const connectsAt = Date.now() + lateMs;
   const connected = (): boolean => Date.now() >= connectsAt;
   const sessions: Partial<SessionManager> = {
     resolve: () => {
@@ -70,23 +72,29 @@ function tool(name: string) {
 }
 
 /** Start the call, move the fake clock to the deadline plus the bound, and say if it answered. */
-async function answeredByDeadline(args: Record<string, unknown>, saw: boolean): Promise<boolean> {
+async function answeredByDeadline(
+  args: Record<string, unknown>,
+  saw: boolean,
+  lateMs = SESSION_LATE_MS,
+): Promise<{ answered: boolean; result: Record<string, unknown> }> {
   let answered = false;
+  let result: Record<string, unknown> = {};
   const call = tool(ReticleTool.ASSERT)
-    .handler(depsWithLateSession(lateSession(saw)), args)
+    .handler(depsWithLateSession(lateSession(saw), lateMs), args)
     .then(
-      () => {
+      (value) => {
         answered = true;
+        result = value as Record<string, unknown>;
       },
       () => {
         answered = true;
       },
     );
   await vi.advanceTimersByTimeAsync(TIMEOUT_MS + GRADING_BOUND_MS);
-  const result = answered;
+  const byDeadline = answered;
   await vi.runAllTimersAsync();
   await call;
-  return result;
+  return { answered: byDeadline, result };
 }
 
 describe('reticle_assert spends one budget on the session wait and the predicate wait', () => {
@@ -97,18 +105,65 @@ describe('reticle_assert spends one budget on the session wait and the predicate
     vi.useRealTimers();
   });
 
-  it('answers within timeout_ms when the session connects late and the predicate never holds', async () => {
+  // The check ran only on what the session wait left, on a page that had just connected. A late
+  // `no` there is not a statement about the app, so the verdict is `unknown`, not `no`.
+  it('answers within timeout_ms, unknown, when the session connects late and the predicate never holds', async () => {
     const args = { predicate: { kind: 'signal', name: SIGNAL_NAME }, timeout_ms: TIMEOUT_MS };
-    expect(await answeredByDeadline(args, false)).toBe(true);
+    const { answered, result } = await answeredByDeadline(args, false);
+    expect(answered).toBe(true);
+    expect(result['pass']).toBe(false);
+    expect(result['verified']).toBe('unknown');
+    expect(String(result['inconclusive'])).toContain('ms before the deadline');
   });
 
-  it('answers within timeout_ms in the wait form too', async () => {
+  it('answers within timeout_ms, unknown, in the wait form too', async () => {
     const args = {
       action: 'wait',
       predicate: { kind: 'signal', name: SIGNAL_NAME },
       timeout_ms: TIMEOUT_MS,
     };
-    expect(await answeredByDeadline(args, false)).toBe(true);
+    const { answered, result } = await answeredByDeadline(args, false);
+    expect(answered).toBe(true);
+    expect(result['verified']).toBe('unknown');
+    expect(String(result['inconclusive'])).toContain('ms before the deadline');
+  });
+
+  // Connected early, the check had most of its window: a `no` there is about the app (review on #2444).
+  it('answers a plain no when the session connects early and the predicate never holds', async () => {
+    const args = { predicate: { kind: 'signal', name: SIGNAL_NAME }, timeout_ms: TIMEOUT_MS };
+    const { answered, result } = await answeredByDeadline(args, false, SESSION_EARLY_MS);
+    expect(answered).toBe(true);
+    expect(result['pass']).toBe(false);
+    expect(result['inconclusive']).toBeUndefined();
+    expect(result['verified']).toBe('no');
+  });
+
+  it('still answers yes when the late session shows the consequence', async () => {
+    const args = { predicate: { kind: 'signal', name: SIGNAL_NAME }, timeout_ms: TIMEOUT_MS };
+    const { answered, result } = await answeredByDeadline(args, true);
+    expect(answered).toBe(true);
+    expect(result['pass']).toBe(true);
+    expect(result['inconclusive']).toBeUndefined();
+  });
+
+  it('still answers a plain no when the session was connected from the start', async () => {
+    vi.useRealTimers();
+    const session = lateSession(false);
+    const deps = {
+      sessions: {
+        resolve: () => session,
+        count: () => 1,
+        get: () => session,
+        all: () => [session],
+      },
+      recordings: new RecordingStore(),
+    } as unknown as ToolDeps;
+    const result = (await tool(ReticleTool.ASSERT).handler(deps, {
+      predicate: { kind: 'signal', name: SIGNAL_NAME },
+      timeout_ms: 0,
+    })) as { pass: boolean; inconclusive?: string };
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toBeUndefined();
   });
 
   it('still passes when the late session shows the consequence', async () => {

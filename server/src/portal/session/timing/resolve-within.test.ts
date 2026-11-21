@@ -100,13 +100,20 @@ describe('resolving a session within the caller’s budget', () => {
 describe('the budget left after a session arrives', () => {
   it('is the whole budget when a session is already connected', async () => {
     const got = await resolveSessionSpending(sessions(0), undefined, 5_000, fakeClock());
-    expect(got).toEqual({ session: SESSION, remainingMs: 5_000 });
+    expect(got).toEqual({
+      session: SESSION,
+      budgetMs: 5_000,
+      remainingMs: 5_000,
+      connectedLate: false,
+    });
   });
 
   it('is the budget less the time spent waiting for the session', async () => {
     const got = await resolveSessionSpending(sessions(3), undefined, 1_000, fakeClock());
     expect(got.session).toBe(SESSION);
-    expect(got.remainingMs).toBe(250);
+    // Three refused attempts: the first look, then two polls of 250 ms each.
+    expect(got.remainingMs).toBe(500);
+    expect(got.connectedLate).toBe(true);
   });
 
   it('is never below zero', async () => {
