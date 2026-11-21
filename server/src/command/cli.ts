@@ -411,6 +411,8 @@ function handleOpen(requestedPort: number, url: string | undefined, navigate = f
       // was printed unconditionally, so a run where nothing ever opened looked identical to a run
       // where it did — reported from the field as twenty minutes lost to a phantom port problem.
       const connected = await waitForNewSession(port, sessions.length);
+      // Read only when nothing arrived: the daemon may have refused the page, and says so here.
+      const daemonAnswer = connected ? {} : summarizeStatus(await fetchStatus(port));
       log('reticle_open', {
         port,
         ...(port === requestedPort ? {} : { requestedPort }),
@@ -426,7 +428,7 @@ function handleOpen(requestedPort: number, url: string | undefined, navigate = f
               // about a browser THIS command never uses, so a missing Chromium reads as the
               // explanation for a session that is missing for an unrelated reason. Both misdirects
               // were reported from the field, each costing several calls of app-side wiring hunt.
-              note: openFailureNote(port, requestedPort),
+              note: openFailureNote(port, requestedPort, daemonAnswer, decision.url),
             }),
       });
     })

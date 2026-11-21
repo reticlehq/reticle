@@ -154,6 +154,10 @@ export function summarizeStatus(payload: unknown): {
   why?: string;
   /** The same diagnosis without the differential, for a surface a person reads. */
   whyLead?: string;
+  /** The code of that diagnosis. Absent on a daemon older than the field. */
+  whyReason?: string;
+  /** The url of the page the daemon refused. Absent on a daemon older than the field. */
+  refusedUrl?: string;
 } {
   if (typeof payload !== 'object' || null === payload) return { sessionCount: 0, sessions: [] };
   const obj = payload as Record<string, unknown>;
@@ -162,6 +166,8 @@ export function summarizeStatus(payload: unknown): {
   const why = 'string' === typeof obj['why'] ? obj['why'] : undefined;
   // Absent on a daemon older than this field, which is why every reader falls back to `why`.
   const whyLead = 'string' === typeof obj['whyLead'] ? obj['whyLead'] : undefined;
+  const whyReason = 'string' === typeof obj['whyReason'] ? obj['whyReason'] : undefined;
+  const refusedUrl = 'string' === typeof obj['refusedUrl'] ? obj['refusedUrl'] : undefined;
   const raw = Array.isArray(obj['sessions']) ? obj['sessions'] : [];
   const sessions = raw
     .map((s): StatusSession | null => {
@@ -192,5 +198,7 @@ export function summarizeStatus(payload: unknown): {
     sessions,
     ...(why === undefined ? {} : { why }),
     ...(whyLead === undefined ? {} : { whyLead }),
+    ...(whyReason === undefined ? {} : { whyReason }),
+    ...(refusedUrl === undefined ? {} : { refusedUrl }),
   };
 }

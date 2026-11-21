@@ -633,8 +633,9 @@ export class Bridge {
             socket.close(1008, admission.reason);
             return;
           }
-          // A window the agent detached stays detached across its own reloads. See SessionManager.park.
+          // A detached window stays detached across reloads, and each refusal is recorded (#2435).
           if (this.sessions.isParked(parsed.sessionId)) {
+            this.sessions.noteClosure(SESSION_PARKED_REASON, this.#clock(), peekHelloPage(text));
             socket.close(1008, SESSION_PARKED_REASON);
             return;
           }
