@@ -73,6 +73,38 @@ They compose cleanly, and the combination is better than either alone:
 
 Reticle also has a driven mode (`reticle drive`) that provides real CDP input and screenshots, so a lot of teams do not need both. Start with whichever matches the question you ask most often.
 
+## Driving the app with Playwright while Reticle is embedded
+
+Your agent or test runner may drive the browser with its own Playwright instance while Reticle's dev SDK is embedded. Clicks must reach your app rather than Reticle's UI.
+
+### Tour under automation
+
+In `@reticlehq/browser` 3.3.0 and later, the first-run onboarding tour does not start when a browser runs under automation.
+
+The tour does not start when `navigator.webdriver` is `true`. Playwright sets `navigator.webdriver` to `true` by default, so a Playwright context never mounts the tour or its click-intercepting scrim. On `@reticlehq/browser` 3.2.0 or earlier, upgrade to 3.3.0 or higher so the tour scrim does not capture initial clicks.
+
+### Identifying Reticle's UI roots
+
+Reticle mounts separate UI roots rather than a single subtree:
+
+- `[data-reticle-overlay]` marks the HUD panel root in `document.body`, a `<style>` element in `<head>`, and the `overlay: true` status chip in `document.body`.
+- `[data-reticle-mark="root"]` marks the page annotator root in `document.body`, with `[data-reticle-mark="style"]` in `<head>`.
+- `[data-reticle-tour]` marks the onboarding tour root in `document.body`.
+
+To minimise the HUD panel during automation, click the minimise button or set `reticle-presenter-minimised` to `'1'` in `sessionStorage` before page load:
+
+```ts
+await page.addInitScript(() => sessionStorage.setItem('reticle-presenter-minimised', '1'));
+```
+
+This value lasts for one tab only and persists across reloads in that tab.
+
+To scope Playwright locators away from Reticle, target your app root (such as `#root`, `#app`, or `main`) or exclude `[data-reticle-overlay]`, `[data-reticle-mark]`, and `[data-reticle-tour]`.
+
+### If an overlay covers a control
+
+If any Reticle element blocks an app interaction during automation, file an issue with the selector and layout details. We treat this as a bug.
+
 ## Choosing
 
 <CardGroup cols={2}>
