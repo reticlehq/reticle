@@ -26,6 +26,8 @@ import { ChangeKind, effectOf } from '../effect.js';
 import type { Change } from '../effect.js';
 import { REWRITTEN, rewrittenSince, writeTimeOnDisk, writeTimesOf } from '../files.js';
 import type { WriteTimeOf, WriteTimes } from '../files.js';
+import { HudEffect } from '../hud/port.js';
+import type { HudPort } from '../hud/port.js';
 import { RefTable, writeWindows } from '../lines.js';
 import {
   BOX_ROLES,
@@ -78,6 +80,8 @@ export interface PeerCommandsDeps {
    * also when a caller asks. The person who joined the application said so.
    */
   foreground?: boolean;
+  /** What the person at the machine sees of the realm. Absent: nothing is shown. */
+  hud?: HudPort;
 }
 
 /** An application has one screen for the server: it has no address a caller can go to. */
@@ -176,6 +180,7 @@ export class PeerCommands {
   readonly #restlessIn = new Map<string, Set<string>>();
   constructor(deps: PeerCommandsDeps) {
     this.#deps = deps;
+    deps.hud?.app(deps.driver.subject().app);
     // The first look. A file that is there now is not a change.
     this.sendFileChanges();
   }
@@ -495,6 +500,17 @@ export class PeerCommands {
     how: { delivery: Delivery; budgetMs: number },
   ): Promise<{ outcome: ActOutcome; changes: Change[]; byItself: number; offScreen: number }> {
     const workspace = this.#deps.workspace;
+    const hud = this.#deps.hud;
+    if (true === hud?.paused()) {
+      throw new Error(
+        'the person at the machine paused Reticle in its window. No action is done while it is paused. Tell them what you were about to do, and wait.',
+      );
+    }
+    const frame = target.node.frame;
+    if (frame !== undefined) {
+      hud?.move(frame[0] + frame[2] / 2, frame[1] + frame[3] / 2);
+    }
+    hud?.act(`${kind} ${target.node.role} "${target.node.name}"`);
     // What changed before this action is not its effect: say it first, on its own.
     this.sendFileChanges();
     this.#acting += 1;
@@ -512,6 +528,9 @@ export class PeerCommands {
         this.#tree = outcome.after.root;
       }
       this.#looksSinceAct = 0;
+      if (outcome.refused !== undefined || !outcome.delivered) {
+        hud?.effect(`refused: ${outcome.refused ?? 'not taken'}`, HudEffect.REFUSED);
+      }
     } finally {
       this.#acting -= 1;
     }
@@ -569,6 +588,10 @@ export class PeerCommands {
       this.#send(change);
     }
     const changes = all.filter((change) => change.ambient === undefined);
+    hud?.effect(
+      0 === changes.length ? 'no change' : `${String(changes.length)} change(s)`,
+      0 === changes.length ? HudEffect.NONE : HudEffect.OK,
+    );
     // The bytes that the process wrote to disk, when the driver counts them. A signal only when
     // there were some: a claim with `count: 0` then says "the application wrote nothing".
     // A setting that the action changed. It is often not on the screen and in no watched file.

@@ -24,6 +24,7 @@ describe('attachPlan', () => {
       watch: ['/out'],
       electronSwitch: true,
       foreground: true,
+      hud: true,
     });
   });
 
@@ -66,6 +67,14 @@ describe('attachPlan', () => {
     expect(electronWarning(program, { ...off, electronSwitch: true }, electron)).toBeUndefined();
     expect(electronWarning(program, off, () => false)).toBeUndefined();
     expect(electronWarning('/usr/bin/tool', off, electron)).toBeUndefined();
+  });
+
+  it('shows the pointer and the window of the realm unless the person says not to', () => {
+    const read = () => undefined;
+    expect(attachPlan(['--app', 'Notes'], {}, '/home', read)).toMatchObject({ hud: true });
+    expect(attachPlan(['--app', 'Notes', '--no-hud'], {}, '/home', read)).toMatchObject({
+      hud: false,
+    });
   });
 
   it('lets a person keep the pointer: no foreground with --background-only', () => {

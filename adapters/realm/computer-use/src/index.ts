@@ -34,3 +34,6 @@ export { attachPlan, electronWarning, isElectron, joinedAnswer, pickApp } from '
 export type { AttachPlan } from './attach.js';
 export { doctorReport } from './doctor.js';
 export type { DoctorFacts, DoctorReport } from './doctor.js';
+export { HudEffect } from './hud/port.js';
+export type { HudPort } from './hud/port.js';
+export { macHud } from './mac/mac-hud.js';

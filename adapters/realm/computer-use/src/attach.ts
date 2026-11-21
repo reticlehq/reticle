@@ -14,6 +14,7 @@ const Flag = {
   NO_ELECTRON_SWITCH: '--no-electron-switch',
   LIST: '--list',
   BACKGROUND_ONLY: '--background-only',
+  NO_HUD: '--no-hud',
 } as const;
 const Env = {
   TOKEN: 'RETICLE_TOKEN',
@@ -70,6 +71,11 @@ export interface AttachPlan {
    * pointer and the application in front, whatever a caller asks.
    */
   foreground: boolean;
+  /**
+   * Show the realm's own pointer and its small window on the screen. False with `--no-hud`: a
+   * machine with nobody at it has no use for them.
+   */
+  hud: boolean;
 }
 
 export function attachPlan(
@@ -108,6 +114,7 @@ export function attachPlan(
     ...(projectId === undefined ? {} : { projectId }),
     electronSwitch: !argv.includes(Flag.NO_ELECTRON_SWITCH),
     foreground: !argv.includes(Flag.BACKGROUND_ONLY),
+    hud: !argv.includes(Flag.NO_HUD),
   };
 }
 
