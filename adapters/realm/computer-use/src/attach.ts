@@ -50,7 +50,10 @@ export interface AttachPlan {
   watch: string[];
   /**
    * The project the application belongs to, from the `.reticle.json` in the folder that
-   * `--project` names. Absent: no folder was named. The runs and flows of the session then go to
+   * `--project` names. Absent: no folder was named, which is the usual case: a desktop
+   * application is driven for itself, and it is in no project. The command does NOT take the
+   * project of the folder it runs in: a browser tab of that project would then share its scope,
+   * and a call with no sessionId that was meant for the page could go to the application. The runs and flows of the session then go to
    * a folder for sessions with no project, and they do not reach the dashboard.
    */
   projectId?: string;
@@ -74,7 +77,6 @@ export function attachPlan(
   env: Readonly<Record<string, string | undefined>>,
   home: string,
   readFile: (path: string) => string | undefined,
-  cwd?: string,
 ): AttachPlan | { error: string } {
   const valuesOf = (flag: string): string[] =>
     argv.flatMap((arg, index) => (arg === flag ? [argv[index + 1] ?? ''] : []));
@@ -93,10 +95,6 @@ export function attachPlan(
         error: `${join(folder, PROJECT_FILE)} has no projectId. Run \`reticle init\` in that folder, or give the folder of the application's source.`,
       };
     }
-  } else if (cwd !== undefined) {
-    // No folder was named: the folder the command runs in, when it is a project. An agent runs
-    // the command where it works, and its tool calls then find this session with no sessionId.
-    projectId = projectIdIn(readFile(join(cwd, PROJECT_FILE)));
   }
   const port = Number(valuesOf(Flag.PORT)[0] ?? env[Env.PORT] ?? RETICLE_DEFAULT_PORT);
   const token =

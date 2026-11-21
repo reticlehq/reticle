@@ -20,13 +20,13 @@ This package is private. It is not on npm. It runs on macOS only.
 
 ## For an agent
 
-Three steps. Run the commands in the folder of your project.
+Three steps. The application needs no project and no set-up of its own.
 
 1. See what is open: `reticle-computer-use --list` prints `{"apps":[{"name","process"}]}`.
-2. Join one, and leave the command running: `reticle-computer-use --app "<name>"`. It waits for the Reticle daemon when there is none yet, and then prints one line of JSON: `{"joined":true,"sessionId":"…","needsSessionId":false,"next":[…]}`. `next` says what to call.
+2. Join one, and leave the command running: `reticle-computer-use --app "<name>"`. It waits for the Reticle daemon when there is none yet, and then prints one line of JSON: `{"joined":true,"sessionId":"…","needsSessionId":true,"next":[…]}`. `next` says what to call.
 3. Use the tools you have for a web page. `reticle_look { action: "page" }` gives the window. `reticle_act_and_wait { ref, action, until }` acts and proves the consequence.
 
-You give no `sessionId` when the folder is a Reticle project (`needsSessionId` is false). You set no switch for an Electron application: the command sets it. When an action is refused, the refusal says what to do: for a double-click, a hover, a drag or the menu bar, it says to send the action again with `args: { foreground: true }`.
+Give the `sessionId` of that line on each call; `next` shows the calls with it. You set no switch for an Electron application: the command sets it. When an action is refused, the refusal says what to do: for a double-click, a hover, a drag or the menu bar, it says to send the action again with `args: { foreground: true }`.
 
 ## Use it
 
@@ -58,7 +58,7 @@ The application is now a Reticle session. The tools an agent already has for a w
 - `reticle_act_and_wait { ref, action, until }` acts and proves the consequence in one call.
 - `reticle_act { steps }` does several actions in one call.
 
-The command takes the project of the folder it runs in, when that folder has a `.reticle.json`. The tools then find the session with no `sessionId`, and its runs and flows go to that project. Give `--project <folder>` for another folder. In a folder that is no project, the session is in no project: give its `sessionId` on each call (the command prints it), and its runs and flows stay on this machine.
+A desktop application is in no project: give the `sessionId` that the command prints on each call. Its runs and flows stay on this machine. To put it in a project, give `--project <folder>` with the folder that has the `.reticle.json`; its runs and flows then go to that project. When a browser tab of the same project is connected too, still give the `sessionId`: a call with none goes to the session the daemon heard from last.
 
 To prove that a file was written, name the file:
 
@@ -100,6 +100,7 @@ For those, give `args.foreground: true` on the action. The realm then brings the
 
 - `click` with `foreground: true` is a real click. With `button: "right"` too, it is a real right-click.
 - `drag` needs `args.to`: `{ ref }` for the middle of another element, or `{ x, y }` on the screen.
+- `type` and `press` with `foreground: true` send real keys. A panel that the system draws for the application, such as the save panel, takes only real keys. A real key goes to whatever application has the keyboard, so the realm sends one only when the system says that the joined application has it. When it has not, no key is sent and the action is refused: use `focus` first.
 - `focus` brings the application to the front and gives the element the keyboard. After it, the menu bar is on the screen and can be read and pressed.
 
 The realm waits until the person at the machine has not typed or moved the pointer for a moment. When they do not stop in five seconds, it refuses the action and takes nothing.
