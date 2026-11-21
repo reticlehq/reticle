@@ -401,11 +401,15 @@ func screenIsLocked() -> Bool {
   return (session?["CGSSessionScreenIsLocked"] as? Bool) == true
 }
 
-/// The process is there. A process that ended and was not yet collected by its parent still has
-/// its number, so the list of running applications is asked too.
+/// The process is there, and it is not one that ended and waits to be collected by its parent.
+///
+/// The system is asked for the path of the program: it has none for a process that ended. The
+/// list of running applications was asked before. It said "not there" for a moment while an
+/// application came to the front, and the realm then said that a living application had ended.
 func isRunning(_ pid: pid_t) -> Bool {
   if kill(pid, 0) != 0 && errno == ESRCH { return false }
-  return NSRunningApplication(processIdentifier: pid) != nil
+  var path = [CChar](repeating: 0, count: 4096)
+  return proc_pidpath(pid, &path, UInt32(path.count)) > 0
 }
 
 func run(_ args: [String]) throws {
@@ -738,6 +742,24 @@ func run(_ args: [String]) throws {
     let at =
       given.count == 2
       ? CGPoint(x: given[0], y: given[1]) : CGPoint(x: rect.midX, y: rect.midY)
+    if given.count == 2 {
+      // The reach test above is for the middle of the element. A point is another place: when a
+      // window of another application is at that point, the click would go to that application.
+      var hit: AXUIElement?
+      var owner: pid_t = 0
+      let found =
+        AXUIElementCopyElementAtPosition(
+          AXUIElementCreateSystemWide(), Float(at.x), Float(at.y), &hit) == .success
+      if let top = hit { AXUIElementGetPid(top, &owner) }
+      guard found, owner == pid else {
+        putBack()
+        let other = NSRunningApplication(processIdentifier: owner)?.localizedName ?? "another application"
+        try emit([
+          "refused": "unreachable",
+          "detail": found ? "a window of \(other)" : "nothing this realm can name",
+        ])
+      }
+    }
     let source = CGEventSource(stateID: .hidSystemState)
     func send(_ type: CGEventType, _ point: CGPoint, _ button: CGMouseButton, clicks: Int64 = 1) {
       guard
