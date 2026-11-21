@@ -7,6 +7,7 @@
  * flow's types" still answers for both halves.
  */
 import type { Contradiction } from '@/verdict/findings.js';
+import type { VerifiedReason } from '@/verdict/verified-constants.js';
 import type {
   DriftReason,
   HealStatus,
@@ -412,6 +413,13 @@ export interface FlowReplayResult {
    * from the same function, to the single-flow caller who would otherwise never see it.
    */
   unverifiable?: { reason: string };
+  /**
+   * The clause that decided this replay, from the set every verdict tool uses. `status` says what
+   * happened; this says why, so a caller can choose its next step without reading the prose.
+   * `reticle_flow_replay` always sets it. A replay path that knows a narrower cause than its status
+   * (a lost document) sets it first.
+   */
+  verifiedReason?: VerifiedReason;
   /**
    * The confident rebind proposals aggregated across drifted steps (additive,
    * optional — present only when at least one drifted step has a confident nearest match).

@@ -1445,14 +1445,6 @@
       "count": 1
     }
   },
-  "src/language/flows/flow-result.ts": {
-    "curly": {
-      "count": 3
-    },
-    "no-nested-ternary": {
-      "count": 1
-    }
-  },
   "src/language/flows/flow-save-nudges-sync.test.ts": {
     "curly": {
       "count": 1
@@ -3836,11 +3828,6 @@
   "src/telemetry/telemetry-integrity.test.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/telemetry/verification-of.ts": {
-    "curly": {
-      "count": 10
     }
   },
   "src/trace.test.ts": {
