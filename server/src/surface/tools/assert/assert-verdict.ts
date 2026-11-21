@@ -1,4 +1,11 @@
-import { CaptureLoss, channelsReadBy, PredicateKind } from '@reticlehq/core';
+import {
+  CaptureLoss,
+  channelsReadBy,
+  PredicateKind,
+  redactUrl,
+  VerdictAttribution,
+  verdictAttributionOf,
+} from '@reticlehq/core';
 import { sessionVerdictFacts } from '@/portal/session/session-verdict-facts.js';
 import { gapsForAction } from '@reticlehq/engine/evidence/instrumentation-gaps.js';
 import { noteSessionGaps } from '@reticlehq/engine/evidence/gap-ledger.js';
@@ -45,24 +52,9 @@ import {
 } from '@/surface/tools/act/settle-in-flight.js';
 import { gradeOfPredicate } from './assert-grade.js';
 import { assertSource, stampedSourceIn } from './assert-source.js';
-import { VerdictAttribution, verdictAttributionOf } from '@reticlehq/core';
 import { noteSourceSeen } from '@/portal/session/recorded-gaps.js';
 import { diagnoseTimeout } from '@/surface/tools/act/act-observation.js';
-import { redactUrl } from '@reticlehq/core';
 
-/**
- * The honesty verdict for a plain `reticle_assert`.
- *
- * This is the single field an agent reads, and it was missing from the most-used verdict path.
- * `act_and_wait` has always returned it; `reticle_assert` returned a bare `pass: true`.
- *
- * Measured on a shipments console: a dispatch answered 202 Accepted, the row rendered "dispatched"
- * optimistically, an assert taken right after the click returned `pass: true` with no caveat, and the
- * server reverted the write to "held" 1.2s later. The 202 machinery that exists precisely to report
- * that as `verified: "unknown"` was never reached, because the tool an agent actually calls did not
- * consult it. Asserting a moment earlier — while the POST was still open — is the same story with a
- * different name: `request-never-settled`, also unreported.
- */
 /**
  * Why a check must not read the page now, when a navigate to another page has not arrived (#2300).
  *
@@ -102,6 +94,19 @@ export function withPendingNavigation<V extends { pass: boolean; failureReason?:
   return { ...verdict, pass: false, failureReason: reason, inconclusive: reason };
 }
 
+/**
+ * The honesty verdict for a plain `reticle_assert`.
+ *
+ * This is the single field an agent reads, and it was missing from the most-used verdict path.
+ * `act_and_wait` has always returned it; `reticle_assert` returned a bare `pass: true`.
+ *
+ * Measured on a shipments console: a dispatch answered 202 Accepted, the row rendered "dispatched"
+ * optimistically, an assert taken right after the click returned `pass: true` with no caveat, and the
+ * server reverted the write to "held" 1.2s later. The 202 machinery that exists precisely to report
+ * that as `verified: "unknown"` was never reached, because the tool an agent actually calls did not
+ * consult it. Asserting a moment earlier — while the POST was still open — is the same story with a
+ * different name: `request-never-settled`, also unreported.
+ */
 export async function assertVerdict(
   session: Session,
   predicate: Predicate,
