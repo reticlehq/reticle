@@ -82,6 +82,26 @@ describe('fromAx', () => {
     ]);
   });
 
+  // The small arrow that opens a row of an outline. It was a group with the value 1, so an agent
+  // could not know that the row opens, or that it is open.
+  it('reads the arrow that opens a row as a button, and says when the row is open', () => {
+    const row = AxNodeSchema.parse({
+      role: 'AXRow',
+      children: [
+        { role: 'AXDisclosureTriangle', value: '1', children: [] },
+        { role: 'AXDisclosureTriangle', value: '0', children: [] },
+        { role: 'AXSplitter', children: [] },
+      ],
+    });
+    const { root, unmapped } = fromAx(row);
+    expect(unmapped).toEqual([]);
+    expect(root.children.map((c) => [c.role, c.name, c.value, c.states])).toEqual([
+      ['button', 'Show or hide rows', undefined, [ElementState.EXPANDED]],
+      ['button', 'Show or hide rows', undefined, []],
+      ['group', '', undefined, []],
+    ]);
+  });
+
   it('names each role it does not know, and keeps the element', () => {
     const { root, unmapped } = fromAx({
       role: 'AXWindow',

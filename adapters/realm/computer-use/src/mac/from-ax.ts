@@ -53,6 +53,7 @@ const AxRole = {
   TEXT_FIELD: 'AXTextField',
   CHECKBOX: 'AXCheckBox',
   ROW: 'AXRow',
+  DISCLOSURE: 'AXDisclosureTriangle',
 } as const;
 const AX_ON = '1';
 const SELECTED = 'selected';
@@ -79,6 +80,9 @@ const ROLE_OF: Readonly<Record<string, UiRole>> = {
   AXMenuBarItem: UiRole.MENUITEM,
   AXMenuButton: UiRole.MENUITEM,
   AXRow: UiRole.ROW,
+  // The arrow that opens a row. A press on it opens or closes the row.
+  [AxRole.DISCLOSURE]: UiRole.BUTTON,
+  AXSplitter: UiRole.GROUP,
   AXCell: UiRole.CELL,
   AXList: UiRole.LIST,
   AXTable: UiRole.LIST,
@@ -112,6 +116,9 @@ function statesOf(ax: AxNode): ElementState[] {
   }
   if (ax.role === AxRole.CHECKBOX && ax.value === AX_ON) {
     states.push(ElementState.CHECKED);
+  }
+  if (ax.role === AxRole.DISCLOSURE && ax.value === AX_ON) {
+    states.push(ElementState.EXPANDED);
   }
   if (true === ax.focused) {
     states.push(ElementState.FOCUSED);
@@ -160,6 +167,9 @@ const NAME_OF_SUBROLE: Readonly<Partial<Record<string, string>>> = {
   AXFullScreenButton: 'Full screen',
 };
 
+/** The name of the arrow that opens a row. The system gives it none. */
+const DISCLOSURE_NAME = 'Show or hide rows';
+
 /**
  * The first words inside an element: the value of a text or of a field, in the order of the
  * tree. A row of an outline or of a table has no title, and a person names it by these words.
@@ -187,11 +197,14 @@ export function fromAx(ax: AxNode): FromAx {
     const isText = node.role === AxRole.STATIC_TEXT;
     const said = (isText ? node.value : undefined) ?? node.title ?? node.description ?? '';
     const fromRow = 0 === said.length && AxRole.ROW === node.role ? wordsIn(node) : '';
-    const name = 0 === said.length ? (NAME_OF_SUBROLE[node.subrole ?? ''] ?? fromRow) : said;
+    const fromRole = AxRole.DISCLOSURE === node.role ? DISCLOSURE_NAME : fromRow;
+    const name = 0 === said.length ? (NAME_OF_SUBROLE[node.subrole ?? ''] ?? fromRole) : said;
     // ponytail: the wire has no "selected" state, so a chosen row says it in its value. Add the
     // state to `ElementState` in core when a second realm needs it.
     const chosen = true === node.selected ? SELECTED : undefined;
-    const value = isText || AxRole.CHECKBOX === node.role ? undefined : (chosen ?? node.value);
+    // The value of a checkbox and of the arrow of a row is said as a state, and not twice.
+    const asState = AxRole.CHECKBOX === node.role || AxRole.DISCLOSURE === node.role;
+    const value = isText || asState ? undefined : (chosen ?? node.value);
     const id = givenId(node.id);
     const [x, y, w, h] = node.frame ?? [];
     const frame =
