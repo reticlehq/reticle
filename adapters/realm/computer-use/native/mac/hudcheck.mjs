@@ -59,6 +59,11 @@ try {
     driver: new MacDriver({ helper, app: 'reticle-hud', pid: hudPid }),
     emit: () => undefined,
   });
+  // At rest the HUD is one circle, as in a browser. A press opens it.
+  const atRest = (await onHud.answer(ReticleCommand.SNAPSHOT, {})).tree;
+  assert.ok(!atRest.includes('"Pause"'), 'the HUD was open before anybody opened it');
+  await press(onHud, 'Open Reticle');
+  await sleep(300);
   const window = (await onHud.answer(ReticleCommand.SNAPSHOT, {})).tree;
   // The action is shown with its quotes, and the tree writes a quote in a name with a mark
   // before it. So the words are looked for without the quotes.
@@ -82,7 +87,7 @@ try {
   await assert.rejects(press(commands, 'Save'), /stopped Reticle/);
   assert.equal(hud.stopped(), true);
 
-  process.stdout.write('computer-use hudcheck: 5 of 5 cases held\n');
+  process.stdout.write('computer-use hudcheck: 6 of 6 cases held\n');
 } finally {
   hud.close();
   fixture.kill();

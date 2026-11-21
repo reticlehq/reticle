@@ -201,7 +201,7 @@ const hud =
         mkdirSync(ownerDir, { recursive: true });
         writeFileSync(stoppedPath, `${new Date().toISOString()}\n`);
         say(
-          `Stopped in the window of Reticle. No application is joined until you remove ${stoppedPath}.`,
+          `Stopped in the window of Reticle. No application is joined until you remove the file: rm ${stoppedPath}`,
         );
         leave();
       })
