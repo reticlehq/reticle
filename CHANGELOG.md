@@ -4,6 +4,17 @@ All notable changes to the **`@reticlehq/*`** packages are documented here (each
 
 ## [Unreleased]
 
+## [3.10.11] — 2026-11-21
+
+### Fixed
+
+- **`@reticlehq/browser` — a tap's pointer events now carry the element's centre, like its touch events do.** `firePointerTouch` built the `pointerdown`/`pointerup` of a tap with no coordinates, so a handler that hit-tests from `clientX`/`clientY` (a canvas, a map, a slider) read (0, 0): a touch in the top-left corner that never happened. The pointer events now carry the same centre the touch list is built with, matching the mouse path's rule from #1003. The hover enter, move and leave pointer events carry the centre too. Closes [#1851](https://github.com/reticlehq/reticle/issues/1851).
+- **`@reticlehq/server` — a page with an older SDK left the agent looping, because the recovery hint blamed the agent's arguments.** The `fill` hint says to use `insertText`. `insertText` arrived on 2026-11-10, so a page that loads an older `@reticlehq/browser` answers `unknown action 'insertText'`. The catch-all `unknown action '<verb>'` rule read that answer as a bad argument, so the agent retried the same call and never typed into the editor. The `fill` hint now ends by naming that answer, and the answer gets its own hint, which names the package to update. Closes [#2399](https://github.com/reticlehq/reticle/issues/2399).
+- **`@reticlehq/browser` — a disconnected session could retain a large event backlog before reaching the 500-message limit.** The offline queue now applies the existing 8 MiB byte limit too, evicts older buffered events under byte pressure, and reports the loss when the bridge reconnects. Closes [#2407](https://github.com/reticlehq/reticle/issues/2407).
+- **`@reticlehq/server` — a drive whose write request was blocked was auto-saved as a flow that sends the write for real.** An agent blocked a POST outside Reticle and drove Save, so nothing was written. Session end saved the drive as a flow, which kept the click and not the block, so its next replay sent the real POST. A write request that failed at the network level (`status: 0` with an error) is now read as blocked, and its journey is left out of the auto-save, as a drive run against network mocks already is. Closes [#2321](https://github.com/reticlehq/reticle/issues/2321).
+- **`@reticlehq/browser` — a click reached a target that another element covered.** A synthetic click reaches its target whatever is on top of it. An agent clicked "Review & sign" while a modal covered it: Reticle saw the cover and answered `verified: unknown`, but the click still opened a second signing dialog. A click, double click, check or uncheck on a covered target is now refused before it is sent. The refusal names what covers the target and says to close it first. A transparent cover still catches a click, so it counts as a cover. `args.allowOccluded: true` clicks through only when the agent checked that a click reaches the target anyway. A flow step recorded with `allowOccluded` keeps it on replay, so a step whose cover check is wrong still replays; a step recorded without it is refused like any other click.
+- **`@reticlehq/browser` — a click read as covered when a fixed bar or sticky header sat over the target's centre.** A person scrolls such a control clear before clicking it. The check now scrolls the target to the middle once and tests again: a modal still covers it there, a bar at the edge does not. Closes [#2317](https://github.com/reticlehq/reticle/issues/2317).
+
 ## [3.10.10] — 2026-11-21
 
 ### Fixed
