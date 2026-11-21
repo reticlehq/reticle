@@ -439,6 +439,8 @@ export class PeerCommands {
     const frame = seen.node.frame;
     return {
       ...this.#describe(seen),
+      // What a hover gives a person. The realm has no hover, and it does not need one for this.
+      ...(seen.node.help === undefined ? {} : { help: seen.node.help }),
       ...(frame === undefined
         ? {}
         : { box: { x: frame[0], y: frame[1], width: frame[2], height: frame[3] } }),

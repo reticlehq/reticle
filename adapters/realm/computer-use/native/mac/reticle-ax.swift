@@ -30,6 +30,8 @@ let attributes =
     kAXSizeAttribute, kAXChildrenAttribute, kAXIdentifierAttribute, kAXSelectedAttribute,
     // The `id` of an element in a web view. A web view does not give it as the identifier.
     "AXDOMIdentifier",
+    // The words a person gets when the pointer rests on the element.
+    kAXHelpAttribute,
   ] as CFArray
 
 func values(_ element: AXUIElement) -> [AnyObject]? {
@@ -81,6 +83,7 @@ func readElement(_ element: AXUIElement, _ depth: Int, _ unread: inout Int) -> [
     node["id"] = s
   }
   if let b = v[11] as? Bool, b { node["selected"] = true }
+  if v.count > 13, let s = text(v[13]), !s.isEmpty { node["help"] = s }
   var children = depth < 80 ? (v[9] as? [AXUIElement]) ?? [] : []
   // A table gives every row it has, and makes each one when it is asked. A table of 5,000 rows
   // did not answer in four minutes. A person sees the rows that are on the screen, so those are

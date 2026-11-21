@@ -1001,6 +1001,32 @@ describe('PeerCommands', () => {
     });
   });
 
+  // A person rests the pointer on a button to read what it does. The realm has no hover. The
+  // tooltip is in the tree, so the answer to `inspect` gives its words.
+  it('gives the tooltip of an element when it is inspected', async () => {
+    const tipped: UiRead = {
+      root: node(UiRole.WINDOW, 'Notes', {
+        frame: [0, 0, 400, 300],
+        children: [
+          node(UiRole.BUTTON, 'Save', { frame: [10, 10, 80, 30], help: 'Saves the title' }),
+          node(UiRole.BUTTON, 'Dead', { frame: [100, 10, 80, 30] }),
+        ],
+      }),
+      unread: 0,
+      unmapped: [],
+    };
+    const commands = new PeerCommands({
+      driver: { ...fakeDriver(), read: () => Promise.resolve(tipped) },
+      emit: () => undefined,
+    });
+    const inspect = async (name: string) =>
+      (await commands.answer(ReticleCommand.INSPECT, { ref: await refOf(commands, name) })) as {
+        help?: string;
+      };
+    expect((await inspect('Save')).help).toBe('Saves the title');
+    expect((await inspect('Dead')).help).toBeUndefined();
+  });
+
   it('says why a press can have no effect, when the peer was told a reason', async () => {
     const still = { before: read('Ready'), after: read('Ready') };
     const press = async (commands: PeerCommands) =>
