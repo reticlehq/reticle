@@ -17,7 +17,7 @@ import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
-import { MacDriver, connectPeer } from '../adapters/realm/computer-use/dist/index.js';
+import { MacDriver, connectPeer, isElectron } from '../adapters/realm/computer-use/dist/index.js';
 import { Bridge } from '../server/dist/portal/bridge/bridge.js';
 import { callTool, makeDeps, waitUntil } from '../server/dist/portal/bridge/bridge.test-harness.js';
 
@@ -70,8 +70,11 @@ async function open() {
     pid = pidOf();
   }
   assert.ok(0 !== pid, `${APP} did not start`);
-  // A Chromium browser gives its page only after the accessibility switch is set.
-  if (!SAFARI) {
+  // The switch is set when the join would set it, by the same test, and never by hand: a check
+  // that set it by hand passed while the join never set it for Chrome.
+  const program = execFileSync('ps', ['-o', 'comm=', '-p', String(pid)], { encoding: 'utf8' });
+  assert.equal(isElectron(program, existsSync), !SAFARI, `the join takes ${APP} for another kind`);
+  if (isElectron(program, existsSync)) {
     execFileSync(helper, ['web-tree', String(pid), 'on']);
   }
   const peer = connectPeer({

@@ -19,7 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 import { ReticleCommand } from '@reticlehq/core';
 
-import { MacDriver, PeerCommands } from '../../dist/index.js';
+import { MacDriver, PeerCommands, isElectron } from '../../dist/index.js';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const helper = `${here}build/reticle-ax`;
@@ -81,13 +81,19 @@ try {
             .filter((n) => n !== undefined)
             .map(Number),
         );
-      let switched = false;
+      // The switch is set when the join would set it, by the same test, and never by hand: a
+      // check that set it by hand passed while the join never set it for Chrome.
+      const program = execFileSync('ps', ['-o', 'comm=', '-p', String(pid)], { encoding: 'utf8' });
+      const switched = isElectron(program, existsSync);
+      assert.equal(
+        switched,
+        'key' === browser.by,
+        `the join takes ${browser.app} for another kind`,
+      );
+      if (switched) {
+        execFileSync(helper, ['web-tree', String(pid), 'on']);
+      }
       for (let tries = 0; tries < 100 && 0 === (await posts()); tries += 1) {
-        // A Chromium browser gives its page only after the accessibility switch is set.
-        if (10 === tries) {
-          execFileSync(helper, ['web-tree', String(pid), 'on']);
-          switched = true;
-        }
         await sleep(250);
       }
       // A browser that just started does not give its page the keyboard at once, and a key that
