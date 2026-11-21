@@ -72,7 +72,7 @@ export function doctorReport(facts: DoctorFacts): DoctorReport {
     const elsewhere = facts.windowsNotOnScreen ?? 0;
     return stop(
       elsewhere > 0
-        ? `${facts.app} has ${String(elsewhere)} window(s) on another Space or made small. Only the Space in front can be read. Bring ${facts.app} to this Space.`
+        ? `${facts.app} has ${String(elsewhere)} window(s) on another Space, in another set of Stage Manager, or made small. Only the windows on the screen can be read. Bring ${facts.app} to the front.`
         : `${facts.app} has no window. Open a window in it.`,
     );
   }

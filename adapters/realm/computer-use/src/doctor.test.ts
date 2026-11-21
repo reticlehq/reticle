@@ -33,6 +33,7 @@ describe('doctorReport', () => {
     const elsewhere = doctorReport({ ...ready, windows: 0, windowsNotOnScreen: 2 });
     expect(elsewhere.ready).toBe(false);
     expect(elsewhere.lines.join('\n')).toContain('another Space');
+    expect(elsewhere.lines.join('\n')).toContain('Stage Manager');
     const closed = doctorReport({ ...ready, windows: 0, windowsNotOnScreen: 0 });
     expect(closed.lines.join('\n')).toContain('has no window');
   });

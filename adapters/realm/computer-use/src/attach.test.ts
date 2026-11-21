@@ -180,6 +180,9 @@ describe('attachPlan', () => {
     });
     expect(away['readable']).toBe(false);
     expect(String(away['why'])).toContain('another Space');
+    // Stage Manager hides the windows of the other sets in the same way. It was on, on the machine
+    // where Granola read as an application with no window, and the answer named only Spaces.
+    expect(String(away['why'])).toContain('Stage Manager');
     expect(String(away['why'])).toContain('foreground: true');
     const kept = joinedAnswer({ app: 'Notes', foreground: false }, 'cu-Notes-7', 7, {
       windows: 0,

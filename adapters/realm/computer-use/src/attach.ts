@@ -201,7 +201,7 @@ export function joinedAnswer(
     ...(away
       ? {
           readable: false,
-          why: `The window of ${plan.app} is on another Space or made small, and the operating system gives no elements there. ${bring}`,
+          why: `The window of ${plan.app} is on another Space, in another set of Stage Manager, or made small, and the operating system gives no elements there. ${bring}`,
         }
       : {}),
     next: [
