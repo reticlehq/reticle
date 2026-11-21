@@ -30,7 +30,16 @@ export {
 export type { Emit, PeerCommandsDeps } from './peer/commands.js';
 export { connectPeer } from './peer/peer.js';
 export type { Peer, PeerInput } from './peer/peer.js';
-export { attachPlan, electronWarning, isElectron, joinedAnswer, pickApp } from './attach.js';
+export {
+  OWNER_SETTINGS_FILE,
+  STOPPED_FILE,
+  attachPlan,
+  electronWarning,
+  isElectron,
+  joinedAnswer,
+  pickApp,
+  withOwnerLimits,
+} from './attach.js';
 export type { AttachPlan } from './attach.js';
 export { doctorReport } from './doctor.js';
 export type { DoctorFacts, DoctorReport } from './doctor.js';

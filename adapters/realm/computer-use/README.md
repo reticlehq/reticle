@@ -29,6 +29,16 @@ The realm acts in the background, so the pointer of the person does not move. Tw
 
 The realm does not read its own window and does not act on it, so an agent cannot press the button of the person.
 
+### Limits that only the person sets
+
+An agent starts the command, so an agent picks its flags. The limits of the person at the machine are in a file of their own, `~/.reticle/computer-use.json`, and no flag lifts them:
+
+```json
+{ "backgroundOnly": true, "hud": true }
+```
+
+`backgroundOnly` forbids the real pointer and real keys. `hud` keeps the window and the pointer of the realm on the screen, also with `--no-hud`. After **Stop** in the window, the command writes `~/.reticle/computer-use.stopped`, and no application is joined until the person removes that file. A program with a shell can change a file, so these files say what the person wants; they are not a wall.
+
 The window never takes the keyboard, and the person can move it. Give `--no-hud` on a machine with nobody at it.
 
 ## For an agent

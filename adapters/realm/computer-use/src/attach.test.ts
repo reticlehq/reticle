@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { attachPlan, electronWarning, joinedAnswer, pickApp } from './attach.js';
+import { attachPlan, electronWarning, joinedAnswer, pickApp, withOwnerLimits } from './attach.js';
 
 const files: Record<string, string> = {
   '/home/.reticle/pairing-token': 'tok-file\n',
@@ -163,6 +163,52 @@ describe('pickApp', () => {
     expect(pickApp('Mail', running)).toEqual({
       error:
         'No application named Mail is open. These are open: Visual Studio Code, Notes, Notes Helper.',
+    });
+  });
+});
+
+/**
+ * An agent starts the command, so an agent picks its flags: it could leave out the window of the
+ * realm, or allow itself the real pointer, and it could join again after the person pressed Stop.
+ * The limits of the person are in a file of their own, and a flag does not lift them.
+ */
+describe('withOwnerLimits', () => {
+  const plan = (argv: string[]) => {
+    const made = attachPlan(['--app', 'Notes', ...argv], {}, '/home', () => undefined);
+    if ('error' in made) {
+      throw new Error(made.error);
+    }
+    return made;
+  };
+  const stopped = '/home/.reticle/computer-use.stopped';
+
+  it('forbids the real pointer when the person said so, whatever the flags', () => {
+    expect(withOwnerLimits(plan([]), '{"backgroundOnly":true}', undefined, stopped)).toMatchObject({
+      foreground: false,
+    });
+    expect(withOwnerLimits(plan([]), undefined, undefined, stopped)).toMatchObject({
+      foreground: true,
+    });
+  });
+
+  it('keeps the window of the realm on the screen when the person said so', () => {
+    expect(withOwnerLimits(plan(['--no-hud']), '{"hud":true}', undefined, stopped)).toMatchObject({
+      hud: true,
+    });
+    expect(withOwnerLimits(plan(['--no-hud']), '{}', undefined, stopped)).toMatchObject({
+      hud: false,
+    });
+  });
+
+  it('joins nothing after Stop, until the person removes the file', () => {
+    const refused = withOwnerLimits(plan([]), undefined, '2026-11-21 12:00', stopped);
+    expect(refused).toEqual({ error: expect.stringContaining(stopped) as unknown });
+    expect(refused).toEqual({ error: expect.stringContaining('Do not remove it') as unknown });
+  });
+
+  it('reads a broken file as no limits, and does not stop the command', () => {
+    expect(withOwnerLimits(plan([]), '{not json', undefined, stopped)).toMatchObject({
+      foreground: true,
     });
   });
 });
