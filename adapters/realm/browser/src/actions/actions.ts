@@ -7,6 +7,7 @@ import {
   clampHoldMs,
   clickInputProblem,
   DRAG_TO_POINT_ARG,
+  ALLOW_OCCLUDED_ARG,
   DANGEROUS_ACTION_CONFIRM_ARG,
   ElementState,
   NATIVE_INPUT_ARG,
@@ -148,6 +149,7 @@ function dragTargetRef(args: Record<string, unknown>): string {
  */
 const UPLOAD_ARG_KEYS: ReadonlySet<string> = new Set(['content', 'name', 'type', '__base64']);
 const GENERIC_ACTION_ARG_KEYS: ReadonlySet<string> = new Set([
+  ALLOW_OCCLUDED_ARG,
   DANGEROUS_ACTION_CONFIRM_ARG,
   NATIVE_INPUT_ARG,
   'holdMs',
@@ -251,6 +253,7 @@ function optionValueFor(options: readonly HTMLOptionElement[], named: string): s
 /** Best-effort click-point geometry. All-false default when there is nothing measurable to test. */
 import {
   NO_GEOMETRY,
+  assertNotOccluded,
   fireClickSequence,
   fireTapSequence,
   clickGeometry,
@@ -797,13 +800,16 @@ export async function executeAction(
   const visible = isVisible(el);
   const enabled = enabledOf(el);
   const valueBefore = valueOf(el);
+  // Click-like: scroll an off-viewport target in + hit-test the click point BEFORE installing the
+  // mutation observer (scroll/hit-test never mutate the DOM, but keep the probe window clean).
+  const geometry = CLICK_LIKE.has(action) ? clickGeometry(el) : NO_GEOMETRY;
+  // Refused before anything is installed: a person could not click a covered target, and a click
+  // that reaches it anyway can open, submit or sign before the verdict can say it was covered.
+  assertNotOccluded(geometry, args);
   // Before dispatch, so a click that toggles `checked` during the event cannot erase the pre-action
   // reading, and so a script write during the action is seen. Published after settle, once React
   // has restored or committed the controlled property.
   const actedField = watchActedField(el);
-  // Click-like: scroll an off-viewport target in + hit-test the click point BEFORE installing the
-  // mutation observer (scroll/hit-test never mutate the DOM, but keep the probe window clean).
-  const geometry = CLICK_LIKE.has(action) ? clickGeometry(el) : NO_GEOMETRY;
   // Read BEFORE dispatch, from the same predicate the dispatch branch uses.
   const alreadyAtValue = alreadyAtCheckedState(el, action);
   const hitsNoControl = clickHitsNoControl(el, action);

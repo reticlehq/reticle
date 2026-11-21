@@ -75,6 +75,8 @@ export const RefusalDetail = {
   HOVER_NEEDS_POINTER: 'hover_needs_pointer',
   NOT_EDITABLE: 'not_editable',
   CONFIRM_DANGEROUS: 'confirm_dangerous',
+  /** A click refused because another element covers its target. */
+  COVERED_TARGET: 'covered_target',
   WRONG_TARGET: 'wrong_target',
   PRODUCTION_POLICY: 'production_policy',
   BAD_ARGUMENTS: 'bad_arguments',

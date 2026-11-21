@@ -278,6 +278,12 @@ export const REDACTED_VALUE = '[REDACTED]';
 export const DANGEROUS_ACTION_CONFIRM_ARG = 'confirmDangerous';
 
 /**
+ * Explicit opt-in to click a target that another element covers. Without it a covered click is
+ * refused before dispatch: a synthetic click reaches a target no person could click.
+ */
+export const ALLOW_OCCLUDED_ARG = 'allowOccluded';
+
+/**
  * Opt-in argument for a TRUSTED native click, for the handlers a synthetic one cannot satisfy —
  * file pickers, clipboard, anything gated on `isTrusted`. Only `reticle_act` can honour it: the
  * native driver is a pointer gesture at coordinates, and the act-then-wait tool drives the page
