@@ -75,6 +75,14 @@ Add `"absent": true` to assert something is **gone**. The predicate for a remova
 
 `contains` is the field the published schema declares. `value`, `text` and `query` are accepted as aliases and rewritten to it. The match is case-sensitive. `ignoreCase: true` relaxes that. Curly quotes (`‘ ’ “ ”`), the en dash and the em dash match their plain forms. So `It's saved - done` matches a page that shows `It’s saved – done`. Text that Reticle reports back keeps the page's own characters. `absent: true` asserts the text is not present, and `visible: true` requires it to be on screen rather than merely in the DOM.
 
+`count` asks for an exact number of copies. That is the check for a page that already shows the text once, such as a chat that repeats the same heading in every answer:
+
+```json
+{ "kind": "text", "contains": "Answer", "count": 2, "visible": true }
+```
+
+A copy is an element whose own text contains `contains`: one element that reads "Answer Answer" counts once, and a copy that is hidden counts unless `visible: true` is set. `count: 0` means none, the same as `absent: true`. `count` cannot be combined with `absent` or `satisfies`. A phrase split across child elements (`<span>Total:</span><span> 5</span>`) has no element whose own text holds it, so it cannot be counted: the check answers unknown and says so. Count a part of the phrase that sits whole in one element.
+
 `text` reads the text that the page renders. It does not read what is typed into an `<input>` or a `<textarea>`, because that is the field's value, not text on the page. `value` on a `text` predicate is only an alias for `contains`, so it also reads rendered text. To assert what a field holds, use an `element` predicate with `value`:
 
 ```json
@@ -194,7 +202,7 @@ The app emitted a named signal via `reticle.signal()`. `dataMatches` matches fie
 { "kind": "signal", "name": "order:placed", "count": 1 }
 ```
 
-**Exactly once.** A handler wired twice fires the signal twice and leaves the store in the right shape either way, so every state-only check stays green. `count` is exact on `signal` and on `net`. Leave it out to ask for at least one. `count: 0` means never, and Reticle holds it like every other absence: for at least one second, and until the page goes quiet. A signal or a request that comes late still fails it.
+**Exactly once.** A handler wired twice fires the signal twice and leaves the store in the right shape either way, so every state-only check stays green. `count` is exact on `signal`, `net` and `text`. Leave it out to ask for at least one. `count: 0` means never, and Reticle holds it like every other absence: for at least one second, and until the page goes quiet. A signal or a request that comes late still fails it.
 
 Nothing outranks this. A `200` proves the server was reachable; a rendered row proves React ran. A signal is the application itself saying the thing succeeded. See [instrumentation](/instrumentation) for how to emit them.
 

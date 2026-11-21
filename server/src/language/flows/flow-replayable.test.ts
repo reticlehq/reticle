@@ -51,6 +51,13 @@ describe('a flow made ready to replay at save', () => {
 
   // "3 items" is absent. Made word-level, it said that no "<number> items" is on the page, so a
   // page that shows "5 items" failed on replay while the drive had passed: a false `no`.
+  // #2291: made word-level, it would carry `satisfies` beside `count`, which the schema refuses.
+  it('keeps a counted text exact, so a saved flow stays valid', () => {
+    const counted = { kind: 'text', contains: 'Answer 2', count: 2 } as const;
+    const ready = readyForReplay(flowOf([click('tab', counted)]));
+    expect(ready.steps[0]?.expect).toEqual(counted);
+  });
+
   it('keeps an absent count exact, because any count would then fail it', () => {
     const absent = { kind: 'text', contains: '3 items', absent: true } as const;
     const ready = readyForReplay(flowOf([click('tab', absent)]));

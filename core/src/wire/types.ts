@@ -164,6 +164,12 @@ export interface MatchResult {
    */
   scopeMatches?: number;
   /**
+   * Present only when no element's own text held the phrase, and the match is the one tightest
+   * element whose visible text does (the phrase is split across its children). `count` is then 1
+   * however many such copies the page shows, so a caller that counts copies cannot use it.
+   */
+  splitOwner?: true;
+  /**
    * Present only when a framework error dialog (Next.js, Vite) is open over the page and a match is
    * under it: the name of that dialog. The match is in the DOM, but a user sees only the dialog, so a
    * presence check is not a plain pass (#1768).

@@ -211,7 +211,8 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
         }
         return;
       case PredicateKind.TEXT:
-        if (true !== p.absent) {
+        // `count: 0` is an absence written as a number, and renders nothing.
+        if (true !== p.absent && 0 !== p.count) {
           rendersContent = true;
           if (p.contains !== undefined && isDenialPhrase(p.contains)) {
             pushAuthDenialStatuses(netFailures);
@@ -264,7 +265,7 @@ export function declaresBodyIndependentChannel(predicate: Predicate | undefined)
       case PredicateKind.ANY_OF:
         return p.predicates.every(walk);
       case PredicateKind.TEXT:
-        return true !== p.absent;
+        return true !== p.absent && 0 !== p.count;
       case PredicateKind.SIGNAL:
       case PredicateKind.STATE:
       case PredicateKind.ROUTE:

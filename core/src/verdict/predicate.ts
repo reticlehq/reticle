@@ -61,6 +61,13 @@ export type Predicate =
       satisfies?: PropertyAssertion;
       /** Match `contains` regardless of case. Off by default: a check compares case exactly. */
       ignoreCase?: boolean;
+      /**
+       * Exactly this many elements whose own text holds `contains`, as `count` on `net` and
+       * `signal`. Without it the check passes on the first copy, so a chat that repeats one heading
+       * in every answer could never wait for the next answer (#2291). Hidden copies count unless
+       * `visible: true` is set.
+       */
+      count?: number;
     }
   | {
       kind: typeof PredicateKind.NET;
@@ -608,6 +615,7 @@ function predicateUnion() {
          * against "Saved priya" could never catch a capitalisation defect.
          */
         ignoreCase: z.boolean().optional(),
+        count: z.number().int().nonnegative().optional(),
       })
       .strict(),
     z
@@ -821,6 +829,8 @@ function checkPredicateShape(predicate: unknown, ctx: z.RefinementCtx): void {
     scope?: unknown;
     repeatable?: unknown;
     urlContains?: unknown;
+    count?: unknown;
+    absent?: unknown;
   };
   if (PredicateKind.NET === p.kind) {
     checkRepeatableShape(p.repeatable, p.urlContains, ctx);
@@ -847,6 +857,17 @@ function checkPredicateShape(predicate: unknown, ctx: z.RefinementCtx): void {
         '`self: true` to read the scope root itself) or a `contains` that selects one. Without ' +
         'either, the locator is every element on the page and the property would run against ' +
         'whichever one happened to match first',
+    });
+  }
+  // A count is of the copies `contains` names. With `absent` it would say two things about one
+  // number (`count: 0` already is the absence), and with `satisfies` it would leave open whether
+  // copies that fail the property are counted.
+  if (undefined !== p.count && (true === p.absent || undefined !== p.satisfies)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message:
+        '`count` on a text predicate cannot be combined with `absent` or `satisfies`. For none, ' +
+        'write `count: 0` or `absent: true`; for N copies, write `contains` with `count: N`',
     });
   }
 }
