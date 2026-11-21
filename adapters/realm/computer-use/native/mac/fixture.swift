@@ -14,6 +14,8 @@
 //   Export   writes the title to note.txt in the folder given as the first argument, then says so.
 //   Fake     says "Exported" and writes nothing.
 //   Quit     ends the application 100 ms after the press, as a crash does.
+//   SaveAs   opens the save panel of the system, in the folder given as the first argument, and
+//            writes the title to the file the person names there.
 //   Pad      says which gesture of the real pointer it got: click, double, right, hover, dragged.
 //   Clock    a count that goes up every 400 ms with no action. Only with a second argument `clock`.
 // The window floats and the application never takes the keyboard, so a run does not disturb the
@@ -131,6 +133,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
     _ = button("Export", 20, #selector(export), y: 20)
     _ = button("Fake", 100, #selector(fake), y: 20)
     _ = button("Quit", 350, #selector(quit), y: 20)
+    _ = button("SaveAs", 350, #selector(saveAs), y: 60)
     let pad = Pad(frame: NSRect(x: 350, y: 150, width: 90, height: 50))
     pad.setAccessibilityElement(true)
     pad.setAccessibilityRole(.button)
@@ -157,6 +160,20 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
     window.orderFrontRegardless()
   }
 
+  @objc func saveAs() {
+    let panel = NSSavePanel()
+    let folder = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : NSTemporaryDirectory()
+    panel.directoryURL = URL(fileURLWithPath: folder)
+    panel.nameFieldStringValue = "untitled.txt"
+    panel.beginSheetModal(for: window) { answer in
+      guard answer == .OK, let url = panel.url else {
+        self.status.stringValue = "Not saved"
+        return
+      }
+      try? self.field.stringValue.write(to: url, atomically: true, encoding: .utf8)
+      self.status.stringValue = "Saved as \(url.lastPathComponent)"
+    }
+  }
   @objc func quit() { DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) { exit(0) } }
   @objc func save() { status.stringValue = "Saved: \(field.stringValue)" }
   @objc func export() {
