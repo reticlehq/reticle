@@ -1357,16 +1357,6 @@
       "count": 1
     }
   },
-  "src/language/flows/flow-expect-grammar.test.ts": {
-    "curly": {
-      "count": 6
-    }
-  },
-  "src/language/flows/flow-expect-grammar.ts": {
-    "curly": {
-      "count": 11
-    }
-  },
   "src/language/flows/flow-intent-gap.test.ts": {
     "curly": {
       "count": 1
