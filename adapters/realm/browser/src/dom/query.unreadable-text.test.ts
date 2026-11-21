@@ -111,3 +111,55 @@ describe('a fade-in stalled by a hidden tab', () => {
     expect(matchQuery(TOTAL).unreadable).toContain('opacity');
   });
 });
+
+/**
+ * The background is the colour painted under the text, not the colour of its DOM ancestors (#2297).
+ *
+ * A heading sat over an absolutely positioned white panel, inside a black frame. The panel is a
+ * sibling, so the ancestor walk read the black frame and reported about 1:1 for dark text that a
+ * person reads with no effort. The check now reads the elements under the centre of the text.
+ * jsdom has no layout, so these tests give the page a hit test.
+ */
+describe('text over a positioned panel', () => {
+  const stack = (...ids: string[]): void => {
+    (document as unknown as { elementsFromPoint: () => Element[] }).elementsFromPoint = () =>
+      [
+        ...ids.map((id) => document.getElementById(id)),
+        document.body,
+        document.documentElement,
+      ].filter((el): el is HTMLElement => el !== null);
+  };
+  const panelPage = (panel: string, frame: string, ink: string): void => {
+    document.body.innerHTML =
+      `<div id="frame" style="background-color: ${frame}">` +
+      `<div id="panel" style="position: absolute; background-color: ${panel}"></div>` +
+      `<h1 id="title" style="color: ${ink}">Total: $50</h1></div>`;
+    const title = document.getElementById('title');
+    if (null === title) {
+      throw new Error('no title');
+    }
+    title.getBoundingClientRect = () => new DOMRect(10, 10, 200, 40);
+  };
+  afterEach(() => {
+    delete (document as Partial<Document>).elementsFromPoint;
+  });
+
+  it('does not flag dark text on the white panel under it', () => {
+    panelPage('rgb(255, 255, 255)', 'rgb(0, 0, 0)', 'rgb(17, 17, 17)');
+    stack('title', 'panel', 'frame');
+    expect(matchQuery(TOTAL).unreadable).toBeUndefined();
+  });
+
+  it('flags dark text on a dark panel inside a white frame', () => {
+    panelPage('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 'rgb(17, 17, 17)');
+    stack('title', 'panel', 'frame');
+    expect(matchQuery(TOTAL).unreadable).toContain('contrast');
+  });
+
+  it('reads the ancestors when the text is not under its own centre', () => {
+    // Covered by another element, or `pointer-events: none`: the hit test does not reach the text.
+    panelPage('rgb(255, 255, 255)', 'rgb(0, 0, 0)', 'rgb(17, 17, 17)');
+    stack('panel', 'frame');
+    expect(matchQuery(TOTAL).unreadable).toContain('contrast');
+  });
+});
