@@ -1,4 +1,5 @@
 import { DEFAULT_ASSERT_TIMEOUT_MS, ReticleTool, asString as asText } from '@reticlehq/core';
+import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import { decideOpen } from '@/command/cli/launch/cli-launch.js';
 import {
   acquireLease,
@@ -219,7 +220,7 @@ async function waitForExpectation(
   predicate: unknown,
   pin: { sessionId?: string },
   timeoutMs: number | undefined,
-): Promise<{ result: unknown } | { refused: string }> {
+): Promise<{ result: unknown } | { refused: string } | { timedOutMs: number }> {
   const budget = Math.max(0, timeoutMs ?? DEFAULT_EXPECT_WAIT_MS);
   let settle = budget - ASSERT_MAX_WAIT_MS;
   while (0 < settle) {
@@ -249,13 +250,37 @@ async function waitForExpectation(
     settle = resume;
   }
   const assertMs = Math.min(budget, ASSERT_MAX_WAIT_MS);
-  return {
-    result: await caller.call(
-      ReticleTool.ASSERT,
-      { predicate, timeout_ms: assertMs, ...pin },
-      assertMs + WAIT_CALL_SLACK_MS,
-    ),
-  };
+  const deadlineMs = assertMs + WAIT_CALL_SLACK_MS;
+  try {
+    return {
+      result: await caller.call(
+        ReticleTool.ASSERT,
+        { predicate, timeout_ms: assertMs, ...pin },
+        deadlineMs,
+      ),
+    };
+  } catch (error) {
+    // The daemon can still reach a verdict after this call stops waiting. The raw MCP error does not
+    // say that, so name the wait and the next step (#2443).
+    if (isRequestTimeout(error)) {
+      return { timedOutMs: deadlineMs };
+    }
+    throw error;
+  }
+}
+
+/** The MCP SDK rejects a call that outlives its deadline with this code. */
+function isRequestTimeout(error: unknown): boolean {
+  return error instanceof McpError && Number(ErrorCode.RequestTimeout) === error.code;
+}
+
+/** What `--expect` prints when the final assert call outlives its deadline. */
+export function assertTimedOutLines(deadlineMs: number): string[] {
+  return [
+    'verified: unknown',
+    `reason: the daemon did not answer within ${String(deadlineMs)} ms`,
+    'Run the command again with a longer `--timeout`.',
+  ];
 }
 
 /** `verified` is the only field that decides the exit code. Everything else is for the reader. */
@@ -317,6 +342,9 @@ export async function runAdhocVerdict(options: AdhocVerdictOptions): Promise<Adh
     const waited = await waitForExpectation(caller, options.predicate, pin, options.timeoutMs);
     if ('refused' in waited) {
       return { code: 1, lines: ['verified: unknown', waited.refused] };
+    }
+    if ('timedOutMs' in waited) {
+      return { code: 1, lines: assertTimedOutLines(waited.timedOutMs) };
     }
     const result = waited.result;
     const refusal = refusalText(result);
