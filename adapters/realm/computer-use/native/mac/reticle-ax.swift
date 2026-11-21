@@ -755,31 +755,34 @@ func run(_ args: [String]) throws {
   switch action {
   case "press":
     let pressed = AXUIElementPerformAction(target, kAXPressAction as CFString)
+    var targetRole: AnyObject?
+    AXUIElementCopyAttributeValue(target, kAXRoleAttribute as CFString, &targetRole)
+    // The words of a row: a text, a field or a picture inside it. They take no press, and a click
+    // of a person on them chooses the row. Only these: a button or a box inside a row that
+    // refuses its press (it is busy, or it is off) must be reported as refused, and never turned
+    // into a choice of its row that the answer then calls done.
+    let isWords = ["AXStaticText", "AXTextField", "AXImage"].contains(targetRole as? String ?? "")
     // A row of a table has no press. A click on it chooses it, so choose it.
-    // Not only "no such action": a field in a row of an outline answers a press with another
-    // error, and it has no press all the same.
-    if pressed != .success {
-      var chosen = AXUIElementSetAttributeValue(
-        target, kAXSelectedAttribute as CFString, kCFBooleanTrue)
-      // The words of a row are a text or a field inside it, and they have no press and cannot
-      // be chosen. A click of a person on those words chooses the row. So choose the row that
-      // holds the target, when one is near above it.
+    var done =
+      pressed == .actionUnsupported
+      ? AXUIElementSetAttributeValue(target, kAXSelectedAttribute as CFString, kCFBooleanTrue)
+      : pressed
+    if done != .success && isWords {
+      // The row that holds the words, when one is near above them.
       var up = target
-      for _ in 0..<4 where chosen != .success {
+      for _ in 0..<4 {
         var parent: AnyObject?
         guard AXUIElementCopyAttributeValue(up, kAXParentAttribute as CFString, &parent) == .success,
           let above = parent, CFGetTypeID(above) == AXUIElementGetTypeID()
         else { break }
         up = above as! AXUIElement
         if let v = values(up), text(v[0]) == "AXRow" {
-          chosen = AXUIElementSetAttributeValue(up, kAXSelectedAttribute as CFString, kCFBooleanTrue)
+          done = AXUIElementSetAttributeValue(up, kAXSelectedAttribute as CFString, kCFBooleanTrue)
           break
         }
       }
-      result = chosen
-    } else {
-      result = pressed
     }
+    result = done
   case "set":
     // An element whose value is a number (a slider, a scroll bar) takes a number, not its text.
     let number = now[4] is NSNumber ? Double(value).map { NSNumber(value: $0) } : nil
