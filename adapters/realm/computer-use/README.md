@@ -30,6 +30,8 @@ reticle-computer-use --app Notes --watch ~/Documents/out
 
 The command needs the Xcode command-line tools the first time, because it compiles its helper. It stays open until you stop it.
 
+Give the name you see in the Dock, or the name of the process: `--app "Visual Studio Code"` and `--app Code` are the same application. When no application has that name, the command names the ones that are near it, or the ones that are open.
+
 When it does not work, ask it why:
 
 ```
