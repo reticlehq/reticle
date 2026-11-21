@@ -11,6 +11,7 @@ import { SAFE_SEGMENT_PATTERN, type ProjectId } from '@reticlehq/core';
 import { z } from 'zod';
 import { FlowParseNote } from './flow-expect-grammar.js';
 import { isAmbient } from './recording/tape/recordings.js';
+import { SUCCESS_STEP_TOOL } from './flow-success.js';
 
 /** Discriminated result so callers never branch on free strings. */
 export type FlowResult<T> =
@@ -106,15 +107,31 @@ function channelsDisagreed(replay: FlowReplayResult): boolean {
   return 0 < (replay.crossStep?.length ?? 0);
 }
 
-/** The clause behind an `ok` replay. Only a flow that can fail, with no channel disagreeing, is proved. */
+/**
+ * The clause behind an `ok` replay. Only a flow that can fail, with no channel disagreeing, is proved.
+ * A disagreement is decided first, in the order `decideVerified` uses: it is the finding even on a
+ * flow that asserts nothing.
+ */
 function okReplayReason(replay: FlowReplayResult): VerifiedReason {
-  if (replay.unverifiable !== undefined) {
-    return VerifiedReason.NOTHING_DECLARED;
-  }
   if (channelsDisagreed(replay)) {
     return VerifiedReason.CONTRADICTED;
   }
+  if (replay.unverifiable !== undefined) {
+    return VerifiedReason.NOTHING_DECLARED;
+  }
   return VerifiedReason.PROVED;
+}
+
+/**
+ * The clause behind an `error` replay. Replay adds the flow's `success` condition as a step row. When
+ * that row failed, the condition was evaluated and did not hold. Anything else that errors is a flow
+ * that did not load or an action that did not run, which was never evaluated.
+ */
+function errorReplayReason(replay: FlowReplayResult): VerifiedReason {
+  const successFailed = replay.steps.some(
+    (step) => SUCCESS_STEP_TOOL === step.tool && !step.ok && step.drift === undefined,
+  );
+  return successFailed ? VerifiedReason.ASSERTION_FAILED : VerifiedReason.INCONCLUSIVE;
 }
 
 /**
@@ -134,8 +151,9 @@ export function replayVerifiedReason(replay: FlowReplayResult): VerifiedReason {
     // An anchor or a declared consequence that was there when the flow was saved is not there now.
     case ReplayStatus.DRIFT:
       return VerifiedReason.ASSERTION_FAILED;
-    // The flow did not load, an action did not run, or the run could not start: nothing was graded.
     case ReplayStatus.ERROR:
+      return errorReplayReason(replay);
+    // The run could not start or could not be graded: nothing was evaluated.
     case ReplayStatus.UNVERIFIABLE:
       return VerifiedReason.INCONCLUSIVE;
   }

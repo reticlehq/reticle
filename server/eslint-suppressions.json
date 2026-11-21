@@ -3918,11 +3918,6 @@
       "count": 1
     }
   },
-  "src/telemetry/verification-of.ts": {
-    "curly": {
-      "count": 10
-    }
-  },
   "src/trace.test.ts": {
     "curly": {
       "count": 1

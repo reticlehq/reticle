@@ -18,6 +18,8 @@ import { DocumentLostDuringReplay } from './flow-replay.js';
 import { lostDocumentResult } from './flow-replay-run.js';
 import { replayVerifiedReason, withReplayReason } from './flow-result.js';
 import { verificationOf } from '@/telemetry/verification-of.js';
+import { SUCCESS_STEP_TOOL } from './flow-success.js';
+import { Verified } from '@reticlehq/core';
 
 const REASONS: readonly string[] = Object.values(VerifiedReason);
 
@@ -90,5 +92,72 @@ describe('a replay verdict carries its reason', () => {
       const sent = verificationOf(ReticleTool.FLOW_REPLAY, answer, 10);
       expect(REASONS, `status ${status}`).toContain(sent?.reason);
     }
+  });
+});
+
+/* Review on #2241: a reason must not contradict what happened, or the verdict sent beside it. */
+describe('a replay reason agrees with the evidence', () => {
+  // The flow's `success` row was evaluated and did not hold: that is a failed assertion.
+  it('a success condition that did not hold is assertion_failed, not inconclusive', () => {
+    const failedSuccess = replay(ReplayStatus.ERROR, {
+      steps: [
+        { step: 0, anchor: 'pay', ok: true },
+        {
+          step: 1,
+          tool: SUCCESS_STEP_TOOL,
+          anchor: 'order:placed',
+          ok: false,
+          error: 'flow.success not satisfied',
+        },
+      ],
+      error: { code: ReplayStatus.ERROR, message: 'flow.success not satisfied' },
+    });
+    expect(replayVerifiedReason(failedSuccess)).toBe(VerifiedReason.ASSERTION_FAILED);
+  });
+
+  it('an action that did not run stays inconclusive', () => {
+    const failedAction = replay(ReplayStatus.ERROR, {
+      steps: [{ step: 0, anchor: 'pay', ok: false, error: 'command act timed out' }],
+    });
+    expect(replayVerifiedReason(failedAction)).toBe(VerifiedReason.INCONCLUSIVE);
+  });
+
+  // decideVerified decides `contradicted` before `nothing_declared`; replay uses the same order.
+  it('a contradiction outranks a flow that asserts nothing', () => {
+    const both = replay(ReplayStatus.OK, {
+      unverifiable: { reason: 'asserts nothing' },
+      crossStep: [disagreement],
+    });
+    expect(replayVerifiedReason(both)).toBe(VerifiedReason.CONTRADICTED);
+  });
+
+  it.each([
+    [VerifiedReason.PROVED, replay(ReplayStatus.OK), Verified.YES, true],
+    [
+      VerifiedReason.CONTRADICTED,
+      replay(ReplayStatus.OK, { crossStep: [disagreement] }),
+      Verified.NO,
+      true,
+    ],
+    [
+      VerifiedReason.NOTHING_DECLARED,
+      replay(ReplayStatus.OK, { unverifiable: { reason: 'asserts nothing' } }),
+      Verified.UNKNOWN,
+      true,
+    ],
+    [VerifiedReason.ASSERTION_FAILED, replay(ReplayStatus.DRIFT), Verified.NO, false],
+    [VerifiedReason.INCONCLUSIVE, replay(ReplayStatus.ERROR), Verified.UNKNOWN, false],
+  ])(
+    'the event for a %s replay sends a verdict that agrees with it',
+    (reason, r, verified, passed) => {
+      const sent = verificationOf(ReticleTool.FLOW_REPLAY, { ...withReplayReason(r) }, 10);
+      expect(sent).toMatchObject({ reason, verified, passed });
+    },
+  );
+
+  // A green that a channel refuted is the false green this product catches.
+  it('a contradicted replay counts as a false green caught', () => {
+    const r = withReplayReason(replay(ReplayStatus.OK, { crossStep: [disagreement] }));
+    expect(verificationOf(ReticleTool.FLOW_REPLAY, { ...r }, 10)?.falseGreenCaught).toBe(true);
   });
 });
