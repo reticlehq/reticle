@@ -7,6 +7,7 @@
  * answering requests. See takeVersionSkewOnto in command/version/version-nudge.ts.
  */
 import type { SessionInfo } from './portal/session/session-info.js';
+import type { NoSessionReason } from '@reticlehq/core/telemetry';
 import { CONTRACT_FINGERPRINT } from '@reticlehq/core';
 import { SERVER_VERSION } from './command/version/identity/server-version.js';
 import { instrumentationOf, type InstrumentedTab } from './portal/session/recorded-gaps.js';
@@ -32,6 +33,11 @@ interface StatusPayload {
    * and was printing roughly five hundred words of it in one paragraph.
    */
   whyLead?: string;
+  /**
+   * The code of the same diagnosis. A CLI reads it to tell a refused page from an absent one,
+   * because only the code, not the prose, is stable (#2435).
+   */
+  whyReason?: NoSessionReason;
   /** Port of the verify HTTP endpoint this daemon serves — present only when started with `--http`. */
   verifyPort?: number;
   /**
@@ -63,6 +69,8 @@ export function statusPayload(
    * Absent when nothing is connected. A newer CLI reads this to choose skew advice (#1709).
    */
   pageSdkVersions: readonly (string | null)[] = [],
+  /** The code of the no-session diagnosis. Absent on a daemon that has no provider wired. */
+  whyReason?: NoSessionReason,
 ): StatusPayload {
   return {
     running: true,
@@ -74,6 +82,7 @@ export function statusPayload(
     // contradict it.
     ...(0 === sessionCount && why !== undefined ? { why } : {}),
     ...(0 === sessionCount && whyLead !== undefined ? { whyLead } : {}),
+    ...(0 === sessionCount && whyReason !== undefined ? { whyReason } : {}),
     ...(verifyPort === undefined ? {} : { verifyPort }),
     ...(0 === tabs.length
       ? {}

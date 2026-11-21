@@ -473,6 +473,7 @@ export async function startDaemon(options: StartOptions = {}): Promise<RunningSe
       bridge.sessions.noSessionLead(),
       tabs,
       tabs.map((session) => session.sdkVersion ?? null),
+      bridge.sessions.noSessionReason(),
     );
   });
   // Called when an agent connects. The pages already up are the ones a restart would skew (#1709).
