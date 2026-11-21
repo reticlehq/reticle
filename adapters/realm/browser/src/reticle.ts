@@ -45,7 +45,7 @@ import { Transport, type CommandOutcome } from './transport/transport.js';
 import { unreachableMessage } from './transport/unreachable-message.js';
 import { adapterNames } from './registry/stores/adapters.js';
 import { declaredChannels } from './registry/declared-channels.js';
-import { declaredCommands, declaredPlatform } from './registry/declared-platform.js';
+import { declaredCommands, declaredPlatform, pageLang } from './registry/declared-platform.js';
 import {
   registerCapabilities,
   setCapabilitiesListener,
@@ -774,6 +774,7 @@ export class Reticle {
   }
 
   #hello(): HelloMessage {
+    const lang = pageLang();
     return {
       kind: MessageKind.HELLO,
       protocolVersion: RETICLE_PROTOCOL_VERSION,
@@ -781,6 +782,7 @@ export class Reticle {
       ...(this.#projectId === undefined ? {} : { projectId: this.#projectId }),
       url: pageHref(),
       title: scrubKnownSecrets(document.title),
+      ...(lang === undefined ? {} : { lang }),
       adapters: adapterNames(),
       ...(this.#token === undefined ? {} : { token: this.#token }),
       ...this.#mode,

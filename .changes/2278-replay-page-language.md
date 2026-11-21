@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server`, `@reticlehq/browser` — a flow replayed on a page in another language blamed the page state.** A flow recorded on an English page found no match on the same page in Arabic. The replay said to start from the state the step needs, so the agent replayed again on the wrong advice. A recorded flow now keeps the page language (`startLang`, from `<html lang>`). When a role, name or text step finds no match and the page language is different, the replay says that the language changed and suggests an anchor that does not change with the language, such as a test id. The HELLO message carries the page language as the optional `lang` field. Closes [#2278](https://github.com/reticlehq/reticle/issues/2278).

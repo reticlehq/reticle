@@ -396,6 +396,12 @@ export const FlowFileSchema = z.object({
    */
   startPath: z.string().optional(),
   /**
+   * The page language (`<html lang>`) when the journey started, captured beside `startPath`. When a
+   * step finds no match and the replayed page has another language, the drift names the language
+   * change instead of a lost element. Optional + back-compat: a flow without it replays as before.
+   */
+  startLang: z.string().optional(),
+  /**
    * The saved flow this one was generated from, with different parameters (a fixture's customer,
    * a seeded id). A suite that writes runtime copies of a template and deletes them after replay
    * proved the template, and a strict pass of a copy counts toward it in the gate (#1321).

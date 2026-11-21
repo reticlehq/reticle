@@ -87,6 +87,18 @@ describe('the route a recorded journey began on', () => {
   });
 });
 
+describe('the page language a recorded journey began on (#2278)', () => {
+  it('is written to the flow, so replay can name a language change', async () => {
+    await save?.handler(deps(stored({ startPath: '/', startLang: 'en' })), { flowName: 'triage' });
+    expect((await readSaved()).startLang).toBe('en');
+  });
+
+  it('is absent when the page set no language', async () => {
+    await save?.handler(deps(stored({ startPath: '/' })), { flowName: 'triage' });
+    expect((await readSaved()).startLang).toBeUndefined();
+  });
+});
+
 describe('asking for a recording that is not there', () => {
   it('names the ones that ARE, and says which name it wanted', async () => {
     const res = (await save?.handler(deps(stored()), { flowName: 'sign-in' })) as {

@@ -599,6 +599,7 @@ export class FlowStore {
        * the app. Observed doing exactly that.
        */
       ...(program.startPath === undefined ? {} : { startPath: program.startPath }),
+      ...(program.startLang === undefined ? {} : { startLang: program.startLang }),
     };
     const intent = program.steps.find((step) => step.intent !== undefined)?.intent;
     const annotated = withAnnotations(base, annotations);

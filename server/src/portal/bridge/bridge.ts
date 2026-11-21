@@ -19,7 +19,6 @@ import {
   isOpaqueOrigin,
   isHighValueEvent,
   RATE_CAP_HIGH_VALUE_RESERVE_RATIO,
-  type HelloMessage,
   CONTRACT_FINGERPRINT,
   CONTRACT_PARTS,
 } from '@reticlehq/core';
@@ -30,6 +29,7 @@ import { FollowRefusal, OriginFollower, normalizeOrigin } from './origin/origin-
 import type { FollowNavigation } from './origin/origin-follow.js';
 import { admitHello } from '@/portal/production/production-hello.js';
 import { forgetRecordedGaps } from '@/portal/session/recorded-gaps.js';
+import { notePageLanguage, refreshIdentity } from '@/portal/session/hello-identity.js';
 import { tokensMatch } from './token-auth.js';
 import { noteWrongPathUpgrades, wrongPathReason } from './wrong-path.js';
 import {
@@ -61,21 +61,6 @@ import {
   protocolSkewReason,
 } from './protocol-skew.js';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
-
-/**
- * Take the mutable half of a session's identity from a repeat HELLO; the caller has established the
- * hello belongs to this session. Capabilities and stores register AFTER connect() by design, so
- * `hasCapabilities` and `channels` come again here. A late project id is taken by `adoptProject`.
- * The page announced itself again, so gaps that earlier verdicts recorded are dropped (#1655).
- */
-function refreshIdentity(session: Session, hello: HelloMessage): void {
-  session.url = hello.url;
-  session.title = hello.title;
-  session.adapters = hello.adapters;
-  session.hasCapabilities = hello.hasCapabilities ?? false;
-  session.channels = hello.channels;
-  forgetRecordedGaps(session.id);
-}
 
 /** Run every handler; one that throws is not a reason to drop the session or skip the rest. */
 function fireEach(handlers: ReadonlyArray<(session: Session) => void>, session: Session): void {
@@ -646,6 +631,7 @@ export class Bridge {
           clearTimeout(helloTimer);
           releasePending();
           session = new Session(parsed, socket, this.#clock);
+          notePageLanguage(session, parsed);
           session.production = admission.production;
           const drive = admission.production;
           if (drive !== undefined) {
