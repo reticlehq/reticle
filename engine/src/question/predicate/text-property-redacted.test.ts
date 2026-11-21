@@ -37,6 +37,20 @@ describe('a text property over hidden text', () => {
     expect(result.inconclusive).toMatch(/redact/i);
   });
 
+  // The marker is text too: a property it satisfies must not pass on it.
+  it.each([{ property: 'matchesPattern', pattern: 'RED' }, { property: 'nonEmpty' }])(
+    'is unknown, not yes, for a property the marker satisfies ($property)',
+    (assertion) => {
+      const result = withTextProperty(
+        passingMatch([{ ref: 'e1', role: 'cell', name: '11', text: REDACTED_VALUE }]),
+        assertion as unknown as PropertyAssertion,
+        SUBJECT,
+      );
+      expect(result.pass).toBe(false);
+      expect(result.inconclusive).toMatch(/redact/i);
+    },
+  );
+
   it('is still yes when the text that was read satisfies the property', () => {
     const result = withTextProperty(
       passingMatch([{ ref: 'e1', role: 'cell', name: '11', text: '11' }]),

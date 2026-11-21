@@ -814,6 +814,14 @@ export function withTextProperty(
   }
   const { text } = whole;
   const described = matched.map(shownBounded);
+  // Text that was never read decides nothing, either way: the redaction marker itself satisfies
+  // `contains "RED"` or `nonEmpty`, which was a false yes. Body checks answer the same way.
+  if (matched.some(textWasHidden)) {
+    const reason =
+      `the text of ${subject} was redacted or hidden before Reticle read it, so ` +
+      `${assertion.property} was not decided. Check a field the app does not redact`;
+    return { pass: false, failureReason: reason, inconclusive: reason, evidence: described };
+  }
   const result = satisfiesProperty(text, assertion, baseline);
   // Nothing was compared — a relative property with no before-reading. See the twin in `evalState`.
   if (true === result.unevaluated) {
@@ -821,13 +829,6 @@ export function withTextProperty(
   }
   if (result.ok) {
     return { pass: true, evidence: { ...{ matched: described }, satisfied: result.because } };
-  }
-  // A "no" about text that was never read is a false verdict. Body checks answer the same way.
-  if (matched.some(textWasHidden)) {
-    const reason =
-      `the text of ${subject} was redacted or hidden before Reticle read it, so ` +
-      `${assertion.property} was not decided. Check a field the app does not redact`;
-    return { pass: false, failureReason: reason, inconclusive: reason, evidence: described };
   }
   return {
     pass: false,
