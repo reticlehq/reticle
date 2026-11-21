@@ -11,6 +11,8 @@ export interface HudPort {
   app(name: string): void;
   /** The pointer goes to this point of the screen: the middle of the element to act on. */
   move(x: number, y: number): void;
+  /** A glow round the window the realm works in: x, y, width, height on the screen. */
+  glow(frame: readonly [number, number, number, number]): void;
   /** What the realm does now, in a few words. */
   act(text: string): void;
   /** What that did. */

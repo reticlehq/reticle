@@ -1214,6 +1214,7 @@ describe('PeerCommands', () => {
         hud: {
           app: (name) => shown.push(['app', name]),
           move: (x, y) => shown.push(['move', x, y]),
+          glow: (frame) => shown.push(['glow', ...frame]),
           act: (text) => shown.push(['act', text]),
           effect: (text, kind) => shown.push(['effect', text, kind]),
           paused: () => isPaused,
@@ -1236,6 +1237,8 @@ describe('PeerCommands', () => {
         ['app', 'Notes'],
         // The middle of the Save button.
         ['move', 50, 25],
+        // The window the button is in.
+        ['glow', 0, 0, 400, 300],
         ['act', 'press button "Save"'],
         ['effect', '2 change(s)', 'ok'],
       ]);

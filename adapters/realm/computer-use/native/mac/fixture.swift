@@ -21,9 +21,12 @@
 import AppKit
 
 final class Cover: NSView {
+  // Its own bounds, and not the rectangle it is given: a view does not cut what it draws to its
+  // bounds on a new macOS, and the rectangle can be much of the window. This view then painted
+  // over the controls beside it, and a person saw half of the window empty.
   override func draw(_ dirtyRect: NSRect) {
     NSColor.windowBackgroundColor.setFill()
-    dirtyRect.fill()
+    bounds.fill()
   }
   override func mouseDown(with event: NSEvent) {}
 }
@@ -34,7 +37,7 @@ final class Pad: NSView {
   var downAt: NSPoint?
   override func draw(_ dirtyRect: NSRect) {
     NSColor.controlAccentColor.withAlphaComponent(0.25).setFill()
-    dirtyRect.fill()
+    bounds.fill()
   }
   override func updateTrackingAreas() {
     trackingAreas.forEach(removeTrackingArea)

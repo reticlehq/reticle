@@ -14,6 +14,7 @@
 //   {"t":"move","x":120,"y":300}          the middle of the element, in points from the top left
 //   {"t":"act","text":"press button \"Save\""}
 //   {"t":"effect","text":"2 changes","kind":"ok"}      kind: ok | none | refused
+//   {"t":"glow","x":80,"y":80,"w":450,"h":320}   a ring round the window the realm works in
 //   {"t":"hide"}                          the pointer goes away
 // One line on standard output when the person presses a button: {"paused":true} or false for
 // the pause, and {"stopped":true} for the stop. After a stop the realm leaves the application.
@@ -58,6 +59,9 @@ enum Token {
   static let ease = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
   static let ripple = 0.45
   static let pointerRest = 4.0
+  static let glowDepth = 22
+  static let glowIn = 0.25
+  static let glowRest = 1.4
   static let pointerBox: CGFloat = 64
   /// The tip of the arrow, from the top left of its box: the ring spreads from here.
   static let tip = NSPoint(x: 20, y: 20)
@@ -105,6 +109,30 @@ final class ArrowView: NSView {
   }
 }
 
+/// The glow round the window the realm works in, as the glow at the edge of a page in a
+/// browser: a thin ring and a soft light inside it, in the colour of the state.
+final class GlowView: NSView {
+  var color = Token.active { didSet { needsDisplay = true } }
+  override func draw(_ dirtyRect: NSRect) {
+    let corner = Token.radiusLarge - 4
+    // The soft light: rings that fade toward the inside.
+    for step in 0..<Token.glowDepth {
+      let inset = CGFloat(step) + 1
+      let part = 1 - CGFloat(step) / CGFloat(Token.glowDepth)
+      color.withAlphaComponent(0.26 * part * part).setStroke()
+      let ring = NSBezierPath(
+        roundedRect: bounds.insetBy(dx: inset, dy: inset), xRadius: corner, yRadius: corner)
+      ring.lineWidth = 1
+      ring.stroke()
+    }
+    color.withAlphaComponent(0.7).setStroke()
+    let edge = NSBezierPath(
+      roundedRect: bounds.insetBy(dx: 1, dy: 1), xRadius: corner, yRadius: corner)
+    edge.lineWidth = 2
+    edge.stroke()
+  }
+}
+
 /// A round button of the toolbar: clear, and lighter under the pointer.
 final class RoundButton: NSButton {
   override func updateTrackingAreas() {
@@ -118,6 +146,9 @@ final class RoundButton: NSButton {
 
 final class Hud: NSObject, NSApplicationDelegate {
   var pointer: NSWindow!
+  var glow: NSWindow!
+  let glowView = GlowView()
+  var glowRest: Timer?
   let arrow = ArrowView(
     frame: NSRect(x: 0, y: 0, width: Token.pointerBox, height: Token.pointerBox))
   var panel: NSPanel!
@@ -159,6 +190,18 @@ final class Hud: NSObject, NSApplicationDelegate {
     pointer.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
     pointer.contentView = arrow
     pointer.alphaValue = 0
+
+    // The glow: a window with nothing in it but the ring, and a click goes through it.
+    glow = NSWindow(
+      contentRect: .zero, styleMask: [.borderless], backing: .buffered, defer: false)
+    glow.isOpaque = false
+    glow.backgroundColor = .clear
+    glow.hasShadow = false
+    glow.ignoresMouseEvents = true
+    glow.level = .floating
+    glow.collectionBehavior = [.canJoinAllSpaces, .stationary, .ignoresCycle, .fullScreenAuxiliary]
+    glow.contentView = glowView
+    glow.alphaValue = 0
 
     // The HUD: the card of the last actions, and the toolbar under it. It floats, it never takes
     // the keyboard, and the person can move it.
@@ -329,6 +372,7 @@ final class Hud: NSObject, NSApplicationDelegate {
     redraw()
     setState(Token.ended)
     pointer.animator().alphaValue = 0
+    glow.animator().alphaValue = 0
     print("{\"stopped\":true}")
     fflush(stdout)
   }
@@ -379,6 +423,19 @@ final class Hud: NSObject, NSApplicationDelegate {
       rest = Timer.scheduledTimer(withTimeInterval: Token.pointerRest, repeats: false) { _ in
         self.pointer.animator().alphaValue = 0
       }
+    case "glow":
+      guard !paused, !stopped, let x = say["x"] as? Double, let y = say["y"] as? Double,
+        let w = say["w"] as? Double, let h = say["h"] as? Double
+      else { return }
+      let top = NSScreen.screens.first?.frame.height ?? 0
+      glow.setFrame(NSRect(x: x, y: top - y - h, width: w, height: h), display: true)
+      glowView.color = Token.active
+      glow.orderFrontRegardless()
+      NSAnimationContext.runAnimationGroup { fade in
+        fade.duration = Token.glowIn
+        glow.animator().alphaValue = 1
+      }
+      glowRest?.invalidate()
     case "act":
       guard !paused, !stopped else { return }
       lines.append((say["text"] as? String ?? "", "…", "none"))
@@ -393,6 +450,16 @@ final class Hud: NSObject, NSApplicationDelegate {
       redraw()
       setState(kind == "refused" ? Token.ended : Token.idle)
       if kind == "refused" { ripple(Token.ended) }
+      // The glow says what the action did, and then goes: it lies over the application of the
+      // person, so it does not stay.
+      glowView.color = kind == "refused" ? Token.ended : Token.active
+      glowRest?.invalidate()
+      glowRest = Timer.scheduledTimer(withTimeInterval: Token.glowRest, repeats: false) { _ in
+        NSAnimationContext.runAnimationGroup { fade in
+          fade.duration = Token.glowIn * 2
+          self.glow.animator().alphaValue = 0
+        }
+      }
     case "hide":
       pointer.animator().alphaValue = 0
     default: break

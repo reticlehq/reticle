@@ -8,7 +8,7 @@ import { z } from 'zod';
 
 import type { HudEffect, HudPort } from '../hud/port.js';
 
-const Say = { APP: 'app', MOVE: 'move', ACT: 'act', EFFECT: 'effect' } as const;
+const Say = { APP: 'app', MOVE: 'move', GLOW: 'glow', ACT: 'act', EFFECT: 'effect' } as const;
 const SaidSchema = z.object({ paused: z.boolean().optional(), stopped: z.boolean().optional() });
 
 export function macHud(program: string, onStop?: () => void): HudPort {
@@ -49,6 +49,9 @@ export function macHud(program: string, onStop?: () => void): HudPort {
     },
     move: (x, y) => {
       send({ t: Say.MOVE, x, y });
+    },
+    glow: ([x, y, w, h]) => {
+      send({ t: Say.GLOW, x, y, w, h });
     },
     act: (text) => {
       send({ t: Say.ACT, text });
