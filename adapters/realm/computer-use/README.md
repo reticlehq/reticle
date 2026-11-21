@@ -102,9 +102,20 @@ For those, give `args.foreground: true` on the action. The realm then brings the
 - `drag` needs `args.to`: `{ ref }` for the middle of another element, or `{ x, y }` on the screen.
 - `focus` brings the application to the front and gives the element the keyboard. After it, the menu bar is on the screen and can be read and pressed.
 
+The realm waits until the person at the machine has not typed or moved the pointer for a moment. When they do not stop in five seconds, it refuses the action and takes nothing.
+
 An action that needs the foreground and did not get it is refused, and the refusal says how to ask. Join with `--background-only` and the realm never does it, whatever a caller asks.
 
 A `scroll` moves the scroll bar of the scroll area that holds the element, and sends no wheel event. `fraction` is the place of the bar, 0 to 1. `dy` moves the bar one step in its direction: the realm does not know the height of the content, so it cannot scroll by pixels.
+
+### An application that gives no elements
+
+A canvas, a game and some custom controls give nothing to read. For those:
+
+1. `reticle_screenshot` takes a picture of the application's own window. It is the window alone, also when another window is over it. The terminal needs the Screen Recording permission for it.
+2. `click`, `dblclick` or `hover` on the window, with `args: { foreground: true, at: { x, y } }`, acts at that point of the picture, in the pixels of the picture.
+
+A picture proves little by itself. Name a file, a setting or the clipboard in `until` where the action has such an effect.
 
 ## Limits
 
@@ -117,7 +128,7 @@ Read these before you rely on a result.
 - **The bridge must have a pairing token.** With a token, the realm dials with no Origin header. A page in a browser cannot do that, so the bridge knows that the signals of this session are things the realm saw. With no token, the session is joined, and a signal with nothing else changing is not proof.
 - **The realm reads one application.** It reads the elements, the settings and the disk count of the application it joined, and the folders you name. Of another application it reports only the name and the role of an element, when that application covers the target. It reports that the clipboard changed, and never what is on it.
 - **The menu bar needs the application in front.** The menu bar of an application that is not in front is not on the screen. It is not read and cannot be pressed. A menu in the window (a pull-down button) works in any case.
-- **An application must give an accessibility tree.** A canvas and a game have no elements to read. A browser can give very little until a switch is set in it, and this realm does not set that switch.
+- **An application that gives no accessibility tree is read as a picture.** A canvas and a game have no elements; see "An application that gives no elements". The realm then acts at a point, with the real pointer, and it cannot say what changed in the picture. A browser can give very little until a switch is set in it, and this realm does not set that switch.
 - **An Electron application needs its switch for a press.** It shows its elements with no switch, answers "done" to a press, and does nothing. The command sets the accessibility switch that Electron documents for such tools, and sets it back when you stop. Give `--no-electron-switch` to leave the application as it is; the command then says that a press will do nothing. The switch is not in effect at once: for two or three seconds the application still loses a press. The command waits until the tree of the application has changed, and joins after that. The switch costs the application some speed. A command that is killed with no warning (`kill -9`) cannot set it back: the switch then stays on until the application is closed. This was measured on Electron 45.
 - **A large window is slow to read.** The cost is for each element. A table is read only for the rows on the screen, and its line says how many rows are not shown.
 - **An action with its proof takes about 350 ms through the tools.** The peer calls an action finished after 150 ms with no change, and it goes on looking: a change that comes later is sent when it comes. A caller of the realm class looks once, so it waits for 500 ms with no change; `RETICLE_AX_QUIET_MS` sets that time.

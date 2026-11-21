@@ -31,7 +31,6 @@ import {
   BOX_ROLES,
   DELETE,
   FOREGROUND_ONLY,
-  KIND_OF,
   PEER_ACTIONS,
   SELECT_ALL,
   SettleReason,
@@ -44,6 +43,8 @@ import {
 } from './form.js';
 import type { ActResult } from './form.js';
 import { READ_STATE, see } from './seen.js';
+import { NO_SCREEN_RECORDING, kindFor, needsForeground, pointOnScreen } from './pointer.js';
+import type { Picture } from './pointer.js';
 import { selectChoice } from './select.js';
 import type { Seen } from './seen.js';
 import { UiRole, isAddressable, place, quoted } from '../ui-node.js';
@@ -130,6 +131,7 @@ export const PEER_COMMANDS = [
   ReticleCommand.ACT_SEQUENCE,
   ReticleCommand.SCROLL,
   ReticleCommand.CAPABILITIES,
+  ReticleCommand.CAPTURE,
 ] as const;
 
 type Args = Record<string, unknown>;
@@ -155,6 +157,8 @@ export class PeerCommands {
   /** Actions in progress. An action says its own changes, so the look between actions waits. */
   #acting = 0;
   #looking = false;
+  /** Where the last picture was taken, and its pixels for each point of the screen. */
+  #picture: Picture | undefined;
   /** Looks since the last action. The first ones can hold a late effect of that action. */
   #looksSinceAct = 0;
   /**
@@ -278,6 +282,8 @@ export class PeerCommands {
         return this.#scroll(args);
       case ReticleCommand.CAPABILITIES:
         return { testids: [], signals: [], stores: [], flows: [] };
+      case ReticleCommand.CAPTURE:
+        return this.#capture();
       default:
         throw new Error(`the computer-use realm does not answer ${name}`);
     }
@@ -437,6 +443,28 @@ export class PeerCommands {
     };
   }
 
+  /**
+   * A picture of the window, for an application that gives few elements. The place and the scale
+   * of the picture are kept: a click at a point of the picture needs them.
+   */
+  async #capture(): Promise<unknown> {
+    const taken = await this.#deps.driver.capture?.();
+    if (taken === undefined) {
+      return { ok: false, reason: 'this realm takes no picture on this system' };
+    }
+    if (!taken.ok) {
+      return {
+        ok: false,
+        reason:
+          NO_SCREEN_RECORDING === taken.reason
+            ? 'The terminal has no Screen Recording permission. Open System Settings, Privacy & Security, Screen Recording, and switch on the terminal that runs reticle-computer-use.'
+            : taken.reason,
+      };
+    }
+    this.#picture = { window: taken.window, scale: taken.scale };
+    return { ok: true, path: taken.path };
+  }
+
   #send(change: Change): void {
     const who = { role: change.role, name: change.name };
     if (change.kind === ChangeKind.NEW) {
@@ -498,6 +526,11 @@ export class PeerCommands {
     if (true === outcome.appGone) {
       throw new Error(
         `${this.#deps.driver.subject().app} ended while the action on ${target.node.role} "${target.node.name}" ran: it quit, or it crashed. The action can be the cause. Do not send it again before you know.`,
+      );
+    }
+    if (outcome.refused === ActRefusal.PERSON_ACTIVE) {
+      throw new Error(
+        `the person at the machine is using the keyboard or the pointer, so the realm did not take the pointer for ${target.node.role} "${target.node.name}". It waited five seconds. Try again when they are not typing, or do the step without the foreground.`,
       );
     }
     if (outcome.refused === ActRefusal.NEEDS_FOREGROUND) {
@@ -732,8 +765,9 @@ export class PeerCommands {
         `this session was joined with --background-only: the realm does not take the pointer or bring ${this.#deps.driver.subject().app} to the front.`,
       );
     }
+    const at = pointOnScreen(this.#picture, more['at'], kind);
     const value =
-      kind === ActKind.DRAG ? await this.#dragPoint(more['to']) : (VALUE_OF[action] ?? given);
+      kind === ActKind.DRAG ? await this.#dragPoint(more['to']) : (at ?? VALUE_OF[action] ?? given);
     const wanted = WANTS_CHECKED[action];
     if (wanted !== undefined) {
       if (!BOX_ROLES.has(target.node.role)) {
@@ -820,27 +854,4 @@ export class PeerCommands {
       ...testidOf(target, outcome.before.root),
     };
   }
-}
-
-/** The mouse button a click asks for. Only the right one changes anything. */
-const RIGHT_BUTTON = 'right';
-
-/**
- * The kind of action of the realm for an action of a tool. A click with the right button is the
- * menu a right-click gives: asked for by name in the background, and the real button in the
- * foreground. A click in the foreground is the real pointer.
- */
-function kindFor(action: string, more: Args, foreground: boolean): ActKind | undefined {
-  if (action === ActionType.CLICK && RIGHT_BUTTON === more['button']) {
-    return foreground ? ActKind.RIGHTCLICK : ActKind.MENU;
-  }
-  if (action === ActionType.CLICK && foreground) {
-    return ActKind.CLICK;
-  }
-  return KIND_OF[action];
-}
-
-/** What to say when an action needs the real pointer and the caller did not ask for it. */
-function needsForeground(action: string, app: string): string {
-  return `${action} needs the real pointer. It brings ${app} to the front and takes the pointer of the person at the machine for a moment, then puts both back. Send it again with args: { foreground: true }.`;
 }

@@ -1,5 +1,6 @@
 // Checks the real pointer against the fixture application, through the peer: a click, a
-// double-click, a right-click, a drag and a hover, each asked for with `foreground: true`.
+// double-click, a right-click, a drag and a hover, each asked for with `foreground: true`. And a
+// picture of the window, with a click at a point of it.
 //
 //   node native/mac/pointercheck.mjs
 //
@@ -7,7 +8,7 @@
 // Build the package first. Do not move the pointer while it runs.
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
@@ -69,7 +70,29 @@ try {
   });
   assert.equal(await gesture(ActionType.HOVER, { foreground: true }), 'Pad: hover');
 
-  process.stdout.write('computer-use pointercheck: 6 of 6 cases held\n');
+  // A picture of the window, and a click at a point of it: the way to act on an application that
+  // gives no elements. The pad is found here by its place in the picture, not by its ref.
+  const window = (await commands.answer(ReticleCommand.QUERY, { role: 'window' })).elements[0];
+  const shot = await commands.answer(ReticleCommand.CAPTURE, {});
+  assert.equal(shot.ok, true, `no picture: ${String(shot.reason)}`);
+  const png = readFileSync(shot.path);
+  assert.equal(png.subarray(1, 4).toString(), 'PNG');
+  const windowBox = (await commands.answer(ReticleCommand.INSPECT, { ref: window.ref })).box;
+  const scale = png.readUInt32BE(16) / windowBox.width;
+  const padBox = (await commands.answer(ReticleCommand.INSPECT, { ref: (await pad()).ref })).box;
+  const at = {
+    x: (padBox.x + padBox.width / 2 - windowBox.x) * scale,
+    y: (padBox.y + padBox.height / 2 - windowBox.y) * scale,
+  };
+  await commands.answer(ReticleCommand.ACT, {
+    ref: window.ref,
+    action: ActionType.DBLCLICK,
+    args: { foreground: true, at, settleMs: 700 },
+  });
+  assert.equal(await status(), 'Pad: double');
+  rmSync(shot.path, { force: true });
+
+  process.stdout.write('computer-use pointercheck: 8 of 8 cases held\n');
 } finally {
   fixture.kill();
 }

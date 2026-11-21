@@ -4,16 +4,19 @@
 import { spawn } from 'node:child_process';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { Socket } from 'node:net';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
+import { RETICLE_CAPTURE_FILE_PREFIX } from '@reticlehq/core';
 import { z } from 'zod';
 
 import { ActRefusal, Reach } from '../driver.js';
-import type { ActOutcome, ActRequest, ReachAnswer, UiDriver, UiRead } from '../driver.js';
+import type { ActOutcome, ActRequest, Captured, ReachAnswer, UiDriver, UiRead } from '../driver.js';
 import { AxNodeSchema, fromAx } from './from-ax.js';
 import type { AxNode } from './from-ax.js';
 import type { Placed } from '../ui-node.js';
 
-const Command = { TREE: 'tree', ACT: 'act', REACH: 'reach' } as const;
+const Command = { TREE: 'tree', ACT: 'act', REACH: 'reach', CAPTURE: 'capture' } as const;
 const HelperError = {
   NOT_TRUSTED: 'not-trusted',
   APP_GONE: 'app-gone',
@@ -25,6 +28,12 @@ const TreeSchema = z.object({
   tree: AxNodeSchema,
   unread: z.number(),
   windowsNotOnScreen: z.number().optional(),
+});
+const CaptureSchema = z.object({
+  ok: z.boolean(),
+  reason: z.string().optional(),
+  window: z.array(z.number()).optional(),
+  scale: z.number().optional(),
 });
 const ReachSchema = z.object({ reach: z.enum(Reach), detail: z.string().optional() });
 const RefusedSchema = z.object({ refused: z.enum(ActRefusal), detail: z.string().optional() });
@@ -156,6 +165,7 @@ const NOTHING: UiRead = { root: fromAx({ role: '', children: [] }).root, unread:
 export class MacDriver implements UiDriver {
   readonly #input: MacDriverInput;
   readonly #run: RunHelper;
+  #captures = 0;
   /** The tree as the helper last gave it. An action names its element from this read. */
   #last: AxNode | undefined;
 
@@ -210,6 +220,26 @@ export class MacDriver implements UiDriver {
       raw = raw?.children.find((child, order) => (child.i ?? order) === index);
     }
     return raw;
+  }
+
+  async capture(): Promise<Captured> {
+    this.#captures += 1;
+    // In the temporary folder and with the prefix the daemon asks for: it reads no other file.
+    const path = join(
+      tmpdir(),
+      `${RETICLE_CAPTURE_FILE_PREFIX}cu-${String(this.#input.pid)}-${String(this.#captures)}.png`,
+    );
+    const answer = CaptureSchema.safeParse(
+      await this.#ask([Command.CAPTURE, String(this.#input.pid), path]),
+    );
+    if (!answer.success) {
+      return { ok: false, reason: 'the helper gave no picture' };
+    }
+    if (!answer.data.ok) {
+      return { ok: false, reason: answer.data.reason ?? 'the capture failed' };
+    }
+    const [x = 0, y = 0, width = 0, height = 0] = answer.data.window ?? [];
+    return { ok: true, path, window: [x, y, width, height], scale: answer.data.scale ?? 1 };
   }
 
   async reach(target: Placed): Promise<ReachAnswer> {
