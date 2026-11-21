@@ -8,10 +8,11 @@ import type {
   Launcher,
   PooledBrowser,
   PooledContext,
-  PooledDialog,
+  AnsweredDialog,
   PooledPage,
   PooledPageError,
 } from './pool-contract.js';
+import type { LeaseDialogs } from './lease-dialogs.js';
 import type { SeedStorage } from '@reticlehq/core';
 import type { LeaseEmulation } from './lease-emulation.js';
 
@@ -113,10 +114,11 @@ export interface BrowserPoolOptions {
    */
   onLeaseClosed?: (leaseId: string) => void;
   /**
-   * Sink for each native dialog the pool dismissed, with the lease id. The dismissal is an answer
-   * of "no" on the app's behalf, so the wiring records it for the verdict (#1350). Optional.
+   * Sink for each native dialog the pool answered, with the lease id. A dismissal is an answer of
+   * "no" on the app's behalf, so the wiring records it for the verdict (#1350). `accepted` marks the
+   * one `confirm` a press with the caller's `confirmDangerous` said yes to (#2167). Optional.
    */
-  onDialog?: (leaseId: string, dialog: Pick<PooledDialog, 'kind' | 'message'>) => void;
+  onDialog?: (leaseId: string, dialog: AnsweredDialog) => void;
   /**
    * Launches a browser with a window, for a lease somebody wants to watch. Launched only when the
    * first headed lease is asked for. Absent: a headed lease is refused.
@@ -179,13 +181,8 @@ export interface ActiveLease {
    * after the first says the same thing.
    */
   dialFailureUrl?: string;
-  /**
-   * The message of the most recent native dialog dismissed on this lease, if any.
-   *
-   * One string, overwritten — not a buffer, same reasoning as `dialFailureUrl`: this is diagnostic
-   * context for "why did the page look frozen for a moment", not a log an agent needs to replay.
-   */
-  lastDialogMessage?: string;
+  /** How this page's native dialogs are answered, and the last one's message (#786, #2167). */
+  dialogs: LeaseDialogs;
   /** Why the last screenshot of this lease failed, if it did. Cleared by the next one that works. */
   captureError?: string;
   /**

@@ -243,6 +243,7 @@ function wrapBrowser(browser: Browser, headless: boolean): PooledBrowser {
                   message: dialog.message(),
                   kind: dialog.type(),
                   dismiss: () => dialog.dismiss(),
+                  accept: () => dialog.accept(),
                 }),
               ),
             addInitScript: async (script, arg) => {
