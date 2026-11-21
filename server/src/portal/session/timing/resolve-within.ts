@@ -44,11 +44,15 @@ export async function resolveSessionWithin<S>(
   } catch (first) {
     // Nothing to wait FOR unless the map is empty, and nothing to wait WITH unless a budget was
     // given. Either way the caller gets the same error it would have got before.
-    if (timeoutMs <= 0 || sessions.count() > 0) throw first;
+    if (timeoutMs <= 0 || sessions.count() > 0) {
+      throw first;
+    }
     const deadline = deps.now() + timeoutMs;
     for (;;) {
       const remaining = deadline - deps.now();
-      if (remaining <= 0) throw first;
+      if (remaining <= 0) {
+        throw first;
+      }
       await deps.sleep(Math.min(POLL_MS, remaining));
       try {
         return sessions.resolve(sessionId);
@@ -59,4 +63,48 @@ export async function resolveSessionWithin<S>(
       }
     }
   }
+}
+
+/**
+ * Resolve a session within `timeoutMs`, and say how much of `timeoutMs` is left.
+ *
+ * A tool that waits for the session and then for a predicate must give the predicate only what is
+ * left. `reticle_assert` gave the full budget to each wait, so one call could run for two times its
+ * `timeout_ms`. The MCP client stopped waiting first, and a verdict the daemon reached was lost
+ * (#2443).
+ */
+export async function resolveSessionSpending<S>(
+  sessions: ResolvableSessions<S>,
+  sessionId: string | undefined,
+  timeoutMs: number,
+  deps: { now: () => number; sleep: (ms: number) => Promise<void> },
+): Promise<{ session: S; remainingMs: number; connectedLate: boolean }> {
+  try {
+    return { session: sessions.resolve(sessionId), remainingMs: timeoutMs, connectedLate: false };
+  } catch {
+    // No session yet: wait for one inside the budget, and report what the wait left.
+  }
+  const started = deps.now();
+  const session = await resolveSessionWithin(sessions, sessionId, timeoutMs, deps);
+  const remainingMs = Math.max(0, timeoutMs - (deps.now() - started));
+  return { session, remainingMs, connectedLate: true };
+}
+
+/**
+ * A failed verdict on a session that connected during the call, made inconclusive (#2443).
+ *
+ * The check then had only what the session wait left, on a page that had just connected. A late
+ * `no` there is not a statement about the app, so it is `unknown`, with the time that was left.
+ */
+export function withLateSession<V extends { pass: boolean; inconclusive?: string }>(
+  verdict: V,
+  resolved: { remainingMs: number; connectedLate: boolean },
+): V & { inconclusive?: string; failureReason?: string } {
+  if (!resolved.connectedLate || verdict.pass || verdict.inconclusive !== undefined) {
+    return verdict;
+  }
+  const reason =
+    `the app connected ${String(resolved.remainingMs)} ms before the deadline, so the check ran on ` +
+    'a page that had only just connected and was not decided. Call again, or give a longer timeout_ms';
+  return { ...verdict, inconclusive: reason, failureReason: reason };
 }

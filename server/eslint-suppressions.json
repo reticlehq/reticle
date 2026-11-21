@@ -2664,16 +2664,6 @@
       "count": 3
     }
   },
-  "src/portal/session/timing/resolve-within.test.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
-  "src/portal/session/timing/resolve-within.ts": {
-    "curly": {
-      "count": 2
-    }
-  },
   "src/portal/session/tools.live-control.test.ts": {
     "curly": {
       "count": 1
