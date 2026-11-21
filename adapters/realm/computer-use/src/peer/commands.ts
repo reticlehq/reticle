@@ -27,6 +27,21 @@ import type { Change } from '../effect.js';
 import { REWRITTEN, rewrittenSince, writeTimeOnDisk, writeTimesOf } from '../files.js';
 import type { WriteTimeOf, WriteTimes } from '../files.js';
 import { RefTable, writeWindows } from '../lines.js';
+import {
+  BOX_ROLES,
+  CHOICES_NAMED,
+  DELETE,
+  ESCAPE,
+  KIND_OF,
+  PEER_ACTIONS,
+  SELECT_ALL,
+  TEXT_ROLES,
+  VALUE_OF,
+  WANTS_CHECKED,
+  heldBy,
+  isChecked,
+  testidOf,
+} from './form.js';
 import { READ_STATE, see } from './seen.js';
 import type { Seen } from './seen.js';
 import { UiRole, isAddressable, place, quoted } from '../ui-node.js';
@@ -67,20 +82,6 @@ const DEFAULT_SETTLE_MS = 1500;
  * because the peer goes on looking: a change that comes after the action is sent when it comes.
  */
 const PEER_QUIET_MS = 150;
-/** The keys that select all the text of a field, and that remove what is selected. */
-const SELECT_ALL = 'Meta+a';
-const DELETE = 'Backspace';
-const ESCAPE = 'Escape';
-/** The choices a refusal names. A long menu is not put in an error. */
-const CHOICES_NAMED = 20;
-/** The roles whose value is the text a fill asks for. A slider's value is a number in another form. */
-const TEXT_ROLES: ReadonlySet<string> = new Set([UiRole.TEXTBOX, UiRole.COMBOBOX]);
-
-/** The value an element holds after an action. */
-function heldBy(outcome: ActOutcome, key: string): string {
-  return place(outcome.after.root).find((p) => p.key === key)?.node.value ?? '';
-}
-
 /** The looks after an action that teach nothing: a late effect of the action can be in them. */
 const LOOKS_AFTER_ACT = 2;
 /** The looks in which a place must change, with no action near, before it "changes by itself". */
@@ -125,35 +126,6 @@ export const PEER_COMMANDS = [
   ReticleCommand.CAPABILITIES,
 ] as const;
 
-const KIND_OF: Readonly<Partial<Record<string, ActKind>>> = {
-  [ActionType.CLICK]: ActKind.PRESS,
-  [ActionType.FILL]: ActKind.SET,
-  [ActionType.TYPE]: ActKind.TYPE,
-  [ActionType.PRESS]: ActKind.KEY,
-  [ActionType.CLEAR]: ActKind.SET,
-  [ActionType.CHECK]: ActKind.PRESS,
-  [ActionType.UNCHECK]: ActKind.PRESS,
-  [ActionType.SUBMIT]: ActKind.KEY,
-};
-/** The actions that carry their own value: a caller gives none. */
-const VALUE_OF: Readonly<Partial<Record<string, string>>> = {
-  [ActionType.CLEAR]: '',
-  [ActionType.SUBMIT]: 'Return',
-};
-/** The state each of these actions asks for. */
-const WANTS_CHECKED: Readonly<Partial<Record<string, boolean>>> = {
-  [ActionType.CHECK]: true,
-  [ActionType.UNCHECK]: false,
-};
-const BOX_ROLES: ReadonlySet<string> = new Set([UiRole.CHECKBOX, UiRole.RADIO]);
-const isChecked = (node: UiNode): boolean => node.states.includes(ElementState.CHECKED);
-/** The actions this realm does. The peer declares exactly these to the bridge. */
-export const PEER_ACTIONS: readonly string[] = [
-  ...Object.keys(KIND_OF),
-  ActionType.SCROLL,
-  ActionType.SELECT,
-];
-
 type Args = Record<string, unknown>;
 
 function text(value: unknown): string | undefined {
@@ -178,6 +150,8 @@ interface ActResult {
   testidOf?: number;
   testidNth?: number;
 }
+
+export { PEER_ACTIONS };
 
 export class PeerCommands {
   readonly #deps: PeerCommandsDeps;
@@ -892,24 +866,4 @@ export class PeerCommands {
       ...testidOf(target, outcome.before.root),
     };
   }
-}
-
-/**
- * The identifier of the target, as the server reads it to anchor a saved step. When several
- * elements on the screen share it, how many, and which of them the target is.
- */
-function testidOf(target: Seen, before: UiNode): Record<string, unknown> {
-  const id = target.node.id;
-  if (id === undefined) {
-    return {};
-  }
-  const sharing = see(before).filter((s) => s.node.id === id);
-  if (sharing.length < 2) {
-    return { testid: id };
-  }
-  return {
-    testid: id,
-    testidOf: sharing.length,
-    testidNth: sharing.findIndex((s) => s.key === target.key),
-  };
 }
