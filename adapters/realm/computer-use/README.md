@@ -129,7 +129,7 @@ The realm waits until the person at the machine has not typed or moved the point
 
 An action that needs the foreground and did not get it is refused, and the refusal says how to ask. Join with `--background-only` and the realm never does it, whatever a caller asks.
 
-A `scroll` moves the scroll bar of the scroll area that holds the element, and sends no wheel event. `fraction` is the place of the bar, 0 to 1. `dy` moves the bar one step in its direction: the realm does not know the height of the content, so it cannot scroll by pixels. A page in a Chromium browser has no scroll bar in its tree. There the realm sends one key to the application (`End`, `Home`, `PageDown` or `PageUp`), and the answer says `by: "key"` and names the key; it gives no `fraction`, because the place of the content is then not known. Both ways work while another application is in front.
+A `scroll` moves the scroll bar of the scroll area that holds the element, and sends no wheel event. `fraction` is the place of the bar, 0 to 1. `dy` moves the bar one step in its direction: the realm does not know the height of the content, so it cannot scroll by pixels. A page in a Chromium browser has no scroll bar in its tree. There the realm sends one key to the application (`End`, `Home`, `PageDown` or `PageUp`), and the answer says `by: "key"` and names the key; it gives no `fraction`, because the place of the content is then not known. Both ways work while another application is in front. To scroll several times in one call, send the scrolls as the `steps` of `reticle_act_sequence`: a feed is then read once after them, and not once for each scroll.
 
 ### An application that gives no elements
 
