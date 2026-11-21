@@ -1400,6 +1400,58 @@ describe('PeerCommands', () => {
       expect(asked).toEqual([]);
     });
 
+    // The window stays, and its content scrolls under the point: the point is then on another row.
+    // A value that changes in its place, as a clock, does not move the content.
+    it('refuses a point of a picture when the content moved under it, and not for a clock', async () => {
+      const rows = (top: number, clock: string): UiRead => ({
+        root: node(UiRole.WINDOW, 'Notes', {
+          frame: [0, 0, 400, 300],
+          children: [
+            node(UiRole.BUTTON, 'Save', { frame: [10, 10, 80, 30] }),
+            node(UiRole.TEXT, clock, { frame: [300, 10, 80, 20] }),
+            node(UiRole.TEXT, 'Row', { frame: [10, top, 200, 20] }),
+          ],
+        }),
+        unread: 0,
+        unmapped: [],
+      });
+      let now = rows(100, '1:00');
+      const asked: ActRequest[] = [];
+      const commands = new PeerCommands({
+        driver: {
+          ...fakeDriver(),
+          read: () => Promise.resolve(now),
+          capture: () => Promise.resolve(shot as never),
+          act: (request) => {
+            asked.push(request);
+            return Promise.resolve({
+              delivered: true,
+              reachable: true,
+              settled: true,
+              before: now,
+              after: now,
+            });
+          },
+        },
+        emit: () => undefined,
+      });
+      const click = async () =>
+        commands.answer(ReticleCommand.ACT, {
+          ref: await refOf(commands, 'Save'),
+          action: ActionType.CLICK,
+          args: { foreground: true, at: { x: 20, y: 220 } },
+        });
+      await commands.answer(ReticleCommand.CAPTURE, {});
+      now = rows(100, '1:01');
+      await click();
+      expect(asked).toHaveLength(1);
+      now = rows(60, '1:01');
+      await expect(click()).rejects.toThrow(
+        /content of the window of Notes moved.*reticle_screenshot/s,
+      );
+      expect(asked).toHaveLength(1);
+    });
+
     it('refuses a point with no picture, and a point with no foreground', async () => {
       const none = picturing(shot);
       await expect(none.clickAt({ foreground: true, at: { x: 1, y: 1 } })).rejects.toThrow(

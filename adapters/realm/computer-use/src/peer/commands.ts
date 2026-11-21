@@ -46,7 +46,14 @@ import {
 } from './form.js';
 import type { ActResult } from './form.js';
 import { READ_STATE, see } from './seen.js';
-import { NO_SCREEN_RECORDING, kindFor, needsForeground, pointOnScreen } from './pointer.js';
+import {
+  NO_SCREEN_RECORDING,
+  contentMoved,
+  kindFor,
+  needsForeground,
+  placesOf,
+  pointOnScreen,
+} from './pointer.js';
 import type { Picture } from './pointer.js';
 import { scrollBy } from './scroll.js';
 import { selectChoice } from './select.js';
@@ -491,7 +498,8 @@ export class PeerCommands {
             : taken.reason,
       };
     }
-    this.#picture = { window: taken.window, scale: taken.scale };
+    const shown = await this.#deps.driver.read();
+    this.#picture = { window: taken.window, scale: taken.scale, places: placesOf(shown.root) };
     return { ok: true, path: taken.path };
   }
 
@@ -777,6 +785,14 @@ export class PeerCommands {
       throw new Error(
         `the window of ${this.#deps.driver.subject().app} moved or changed its size after the picture was taken, so the point of the picture is now on something else. Take a new picture with reticle_screenshot, and give the point of that one.`,
       );
+    }
+    if (at !== undefined) {
+      const now = placesOf((await this.#deps.driver.read()).root);
+      if (contentMoved(this.#picture?.places, now)) {
+        throw new Error(
+          `the content of the window of ${this.#deps.driver.subject().app} moved after the picture was taken (it scrolled, or a part came in above), so the point of the picture is now on something else. Take a new picture with reticle_screenshot, and give the point of that one.`,
+        );
+      }
     }
     const value =
       kind === ActKind.DRAG ? await this.#dragPoint(more['to']) : (at ?? VALUE_OF[action] ?? given);

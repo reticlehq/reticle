@@ -5,12 +5,46 @@
 import { ActionType } from '@reticlehq/core';
 
 import { ActKind } from '../driver.js';
+import { placeShown } from '../ui-node.js';
+import type { UiNode } from '../ui-node.js';
 import { KIND_OF } from './form.js';
 
 /** Where a picture of the window was taken, and its pixels for each point of the screen. */
 export interface Picture {
   window: readonly [number, number, number, number];
   scale: number;
+  /** Where each element on the screen was when the picture was taken, by its key. */
+  places?: ReadonlyMap<string, readonly number[]>;
+}
+
+/** The place of each element on the screen, by its key. */
+export function placesOf(root: UiNode): Map<string, readonly number[]> {
+  const out = new Map<string, readonly number[]>();
+  for (const p of placeShown(root).shown) {
+    if (p.node.frame !== undefined) {
+      out.set(p.key, p.node.frame);
+    }
+  }
+  return out;
+}
+
+/**
+ * True when the content of the window moved after the picture: an element that has the same
+ * size is at another place, as the rows of a list that scrolled. A value that changes in its
+ * place, as a clock, does not move the content.
+ */
+export function contentMoved(
+  then: ReadonlyMap<string, readonly number[]> | undefined,
+  now: ReadonlyMap<string, readonly number[]>,
+): boolean {
+  for (const [key, was] of then ?? []) {
+    const is = now.get(key);
+    const sameSize = is !== undefined && is[2] === was[2] && is[3] === was[3];
+    if (sameSize && (is[0] !== was[0] || is[1] !== was[1])) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
