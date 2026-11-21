@@ -6,7 +6,7 @@ import {
   NEXT_STEP_FIELD,
   nextStepBesideLiveSessions,
 } from './empty-session-list.js';
-import { REALMS_FIELD, REALMS_OUTPUT, realmsOf } from './agent/session-realms.js';
+import { REALMS_FIELD, REALMS_OUTPUT, realmsWithPairs } from './agent/session-realms.js';
 import {
   AttrNamesSchema,
   NearestTargetSchema,
@@ -199,7 +199,9 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
       }
       // Another project's tab is up. This caller's project may still never have been wired.
       const nextStep = nextStepBesideLiveSessions(deps, sessions);
-      const realms = realmsOf(sessions);
+      const realms = await realmsWithPairs(sessions, (id, query) =>
+        commandOrThrow(deps, id, ReticleCommand.QUERY, query),
+      );
       return {
         sessions,
         ...(nextStep === undefined ? {} : { [NEXT_STEP_FIELD]: nextStep }),

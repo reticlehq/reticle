@@ -10,9 +10,14 @@ import { COMPUTER_USE_RUNTIME } from '@reticlehq/core';
 import { z } from 'zod';
 
 export const REALMS_FIELD = 'realms';
+/** The role a desktop session is asked for, to get the names of its windows. */
+const WINDOW_ROLE = 'window';
 
 const REALMS_DESCRIPTION =
   'Present only when a desktop application (computer use) and an app with the Reticle SDK are both connected. Says which session to use for what, and how to pass work from one to the other.';
+
+const SAME_PAGE_DESCRIPTION =
+  'A window of a desktop session whose name holds the title of the page of an insideTheApp session. It is likely the same page, matched by title alone: drive the page with the insideTheApp session, and use the desktop session for what is round it.';
 
 export const REALMS_OUTPUT = {
   [REALMS_FIELD]: z
@@ -20,6 +25,10 @@ export const REALMS_OUTPUT = {
       desktop: z.array(z.string()),
       insideTheApp: z.array(z.string()),
       rule: z.string(),
+      samePage: z
+        .array(z.object({ desktop: z.string(), insideTheApp: z.string(), window: z.string() }))
+        .optional()
+        .describe(SAME_PAGE_DESCRIPTION),
     })
     .optional()
     .describe(REALMS_DESCRIPTION),
@@ -42,4 +51,72 @@ export function realmsOf(
     return undefined;
   }
   return { desktop, insideTheApp, rule: REALMS_RULE };
+}
+
+/** The fewest letters of a title that make a pair. A shorter title is in too many window names. */
+const TITLE_LETTERS = 4;
+
+/**
+ * The pairs of a desktop window and a page with the SDK that are likely the same page: the name
+ * of the window holds the title of the page. A browser names its window after the page.
+ */
+export function samePage(
+  pages: readonly { sessionId: string; title?: string }[],
+  windows: ReadonlyMap<string, readonly string[]>,
+): { desktop: string; insideTheApp: string; window: string }[] {
+  const pairs: { desktop: string; insideTheApp: string; window: string }[] = [];
+  for (const page of pages) {
+    const title = page.title;
+    if (title === undefined || title.length < TITLE_LETTERS) {
+      continue;
+    }
+    for (const [desktop, names] of windows) {
+      const window = names.find((name) => name.includes(title));
+      if (window !== undefined) {
+        pairs.push({ desktop, insideTheApp: page.sessionId, window });
+      }
+    }
+  }
+  return pairs;
+}
+
+const WindowsAnswer = z.object({ elements: z.array(z.object({ name: z.string() })) });
+
+/**
+ * The rule, and the pairs of the same page. It asks each desktop session for the names of its
+ * windows. A session that does not answer gets no pair: the rule is still true without it.
+ */
+export async function realmsWithPairs(
+  sessions: readonly { sessionId: string; runtime?: string; title?: string }[],
+  query: (sessionId: string, args: Record<string, unknown>) => Promise<unknown>,
+): Promise<
+  | {
+      desktop: string[];
+      insideTheApp: string[];
+      rule: string;
+      samePage?: ReturnType<typeof samePage>;
+    }
+  | undefined
+> {
+  const realms = realmsOf(sessions);
+  if (realms === undefined) {
+    return undefined;
+  }
+  const windows = new Map<string, string[]>();
+  for (const id of realms.desktop) {
+    const answer = WindowsAnswer.safeParse(
+      await query(id, { role: WINDOW_ROLE }).catch(() => undefined),
+    );
+    if (answer.success) {
+      windows.set(
+        id,
+        answer.data.elements.map((e) => e.name),
+      );
+    }
+  }
+  const pairs = samePage(
+    sessions.filter((s) => realms.insideTheApp.includes(s.sessionId)),
+    windows,
+  );
+  return 0 === pairs.length ? realms : { ...realms, samePage: pairs };
 }
