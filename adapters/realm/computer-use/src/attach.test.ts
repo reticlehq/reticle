@@ -164,6 +164,13 @@ describe('attachPlan', () => {
     expect(JSON.stringify(alone['next'])).toContain('sessionId: \\"cu-Notes-7\\"');
   });
 
+  // The Harness tells its model not to send, pay or delete unless asked. An agent that drives the
+  // realm itself reads this answer and nothing else, and it got no such rule.
+  it('tells the agent not to send, pay or delete unless the person asked for it', () => {
+    const next = JSON.stringify(joinedAnswer({ app: 'Mail', foreground: true }, 'cu-Mail-7', 7));
+    expect(next).toContain('sends, pays, buys, posts or deletes');
+  });
+
   // An application that was started behind a full-screen Space has its window on another Space.
   // The join said "joined", and the first look gave a tree with nothing to act on.
   it('says that the window cannot be read when it is on another Space, and what brings it', () => {

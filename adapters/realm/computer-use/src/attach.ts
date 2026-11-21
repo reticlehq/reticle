@@ -209,6 +209,7 @@ export function joinedAnswer(
       `reticle_act_and_wait { ref, action, until${session} } acts and proves the consequence in one call.`,
       'Actions: click, fill, type, press, clear, check, uncheck, select, submit, scroll. With args.foreground: true also dblclick, hover, drag, focus and a real click.',
       'Prefer a signal for `until` when the action writes a file or changes a setting: file.written, disk.wrote, settings.changed, clipboard.changed.',
+      `${plan.app} is on the computer of a person, with their real mail, money and files. Do not press a control that sends, pays, buys, posts or deletes unless the person asked for it.`,
     ],
   };
 }
