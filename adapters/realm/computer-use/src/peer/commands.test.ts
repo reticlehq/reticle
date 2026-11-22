@@ -602,9 +602,16 @@ describe('PeerCommands', () => {
     })) as { ok: boolean; effect: { scrolled: boolean; atEnd: boolean; fraction: number } };
     expect(acted.ok).toBe(true);
     expect(acted.effect).toMatchObject({ scrolled: true, atEnd: true, fraction: 0 });
-    await expect(peer().commands.answer(ReticleCommand.SCROLL, {})).rejects.toThrow(
-      /no scroll bar/,
-    );
+    await expect(peer().commands.answer(ReticleCommand.SCROLL, {})).rejects.toThrow(/args\.dy/);
+    // A scroll that says neither how far nor where to: the wheel turned 0 lines, the bar was set
+    // to its own place, and the answer was a scroll. It is refused, and says what to send.
+    asked.length = 0;
+    for (const more of [{}, { foreground: true }, { dy: 0 }, { direction: 'down' }]) {
+      await expect(commands.answer(ReticleCommand.SCROLL, { ref: row, ...more })).rejects.toThrow(
+        /args\.dy.*args\.fraction/,
+      );
+    }
+    expect(asked).toEqual([]);
     // Discord's list of servers moves with no bar and no key, as many lists of a web view do:
     // "Add a Server" stayed under the edge. With the foreground, the real wheel turns over the
     // element, as a person turns it.

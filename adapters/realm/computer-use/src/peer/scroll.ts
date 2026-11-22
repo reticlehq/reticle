@@ -46,6 +46,16 @@ export async function scrollBy(
 ): Promise<Record<string, unknown>> {
   const given = args['ref'];
   const ref = 'string' === typeof given ? given : undefined;
+  // Neither how far nor where to: the wheel turned 0 lines, or the bar was set to its own place,
+  // and the answer said that it scrolled.
+  if (
+    'number' !== typeof args['fraction'] &&
+    !('number' === typeof args['dy'] && 0 !== args['dy'])
+  ) {
+    throw new Error(
+      'a scroll needs args.dy (a number of pixels: more than 0 goes down, less than 0 goes up) or args.fraction (a place from 0, the top, to 1, the end).',
+    );
+  }
   const read = await ctx.driver.read();
   const seen = see(read.root);
   const key = ref === undefined ? undefined : ctx.refs.keyOf(ref);

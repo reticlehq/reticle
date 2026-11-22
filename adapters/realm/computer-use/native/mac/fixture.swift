@@ -57,6 +57,9 @@ final class Pad: NSView {
     if abs(dx) > 5 { say("Pad: dragged \(dx)") }
   }
   override func rightMouseDown(with event: NSEvent) { say("Pad: right") }
+  override func scrollWheel(with event: NSEvent) {
+    say(event.scrollingDeltaY < 0 ? "Pad: wheel down" : "Pad: wheel up")
+  }
   override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 

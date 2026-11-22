@@ -114,9 +114,17 @@ try {
     },
   });
   assert.equal(await status(), 'Pad: dragged 40');
+  // The wheel turned at a point of the picture: a list of a web view that has no scroll bar is
+  // scrolled where the pointer is, and the ref only names the window.
+  await commands.answer(ReticleCommand.ACT, {
+    ref: window.ref,
+    action: ActionType.SCROLL,
+    args: { foreground: true, point: at, dy: 200, settleMs: 700 },
+  });
+  assert.equal(await status(), 'Pad: wheel down');
   rmSync(shot.path, { force: true });
 
-  process.stdout.write('computer-use pointercheck: 10 of 10 cases held\n');
+  process.stdout.write('computer-use pointercheck: 11 of 11 cases held\n');
 } finally {
   fixture.kill();
 }
