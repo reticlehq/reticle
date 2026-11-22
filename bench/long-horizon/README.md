@@ -16,3 +16,21 @@ node bench/long-horizon/live-plan.mjs --fresh
 ```
 
 Needs the Accessibility permission, `pnpm build` in this repository, and `npm run build` in `../reticle-harness`. Calculator comes to the front for a moment.
+
+## Three realms, values both ways
+
+`live-cross-realm.mjs` crosses the browser, a desktop application and the terminal:
+
+| Step | Realm | Proof |
+| --- | --- | --- |
+| Read the price and the units from a sheet page | browser (zero install, from inside the page) | the units are a number |
+| Clear Calculator | desktop | the display reads `0` |
+| Type `{price}*{units}=` into Calculator | desktop | the display holds a number |
+| Write the total into the sheet and press Save | browser | the page says `Saved: {total}`, and did not before |
+| Keep the total in a file | terminal | the file holds it |
+
+The page has no SDK: a headless browser from the pool opens it and the reader is put into it. The runner routes each step by `capabilities`. First run: all 5 steps proved in about 5 s.
+
+```bash
+node bench/long-horizon/live-cross-realm.mjs
+```

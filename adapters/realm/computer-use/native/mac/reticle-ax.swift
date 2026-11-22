@@ -1006,7 +1006,8 @@ func run(_ args: [String]) throws {
   // A key to the application as a whole aims at no point, so the test of a click does not apply:
   // the middle of the Dock is under the menu bar of the application in front. A key to a field
   // keeps the test.
-  let keyToApp = action == "key" && text(now[0]) == "AXApplication"
+  // Typing is keys too: a person types into the application in front, not at a point of it.
+  let keyToApp = (action == "key" || action == "type") && text(now[0]) == "AXApplication"
   let needsReach = !direct && action != "raise" && !atPoint && !keyToApp
   switch frame(now[7], now[8]).map({ reach(target, $0) }) ?? .unknown(code: -1) {
   case .yes: canReach = true
