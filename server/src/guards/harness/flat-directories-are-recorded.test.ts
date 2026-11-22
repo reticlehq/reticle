@@ -157,7 +157,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // split out of `constants.ts` at its 1000-line cap (#1540).
   // 15 with `dialog-consent.ts` (#2167): which `confirmDangerous` answers a `confirm()` yes, read by
   // the SDK and by a leased tab. `constants.ts` is at the 1000-line cap.
-  'core/src/wire/constants': 15,
+  // 16 with `window-arrangement.ts`: the arrangements of the `window` action, split out of
+  // `constants.ts` at the same cap.
+  'core/src/wire/constants': 16,
   // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
   // things on the Node side read back, and its parser was living beside the MCP tool handlers — so
   // every other reader imported from the tool surface to parse a string the tool surface does not

@@ -366,6 +366,11 @@ export const ZOOM_NEEDS_REAL_BROWSER_MSG =
   'viewport, visualViewport or media queries, so a layout that breaks at 200% would be reported as ' +
   'checked and passing. Drive a real browser (reticle drive <url>, or reticle_lease) and zoom there.';
 
+/** Why the page refuses `window`: only a desktop realm can move or resize a window. */
+export const WINDOW_NEEDS_DESKTOP_MSG =
+  'a page cannot move, resize, minimize or zoom its own window. Join the browser application as a ' +
+  'desktop session (the computer-use realm) and arrange its window there.';
+
 /** Radix Select, Headless UI Listbox and the like: a trigger that opens a `role="listbox"` popup. */
 function isAriaCombobox(el: Element): boolean {
   return 'combobox' === getRole(el) || 'listbox' === el.getAttribute('aria-haspopup');
@@ -677,6 +682,8 @@ async function dispatchOther(
        * routes there before this ever runs.
        */
       throw new Error(ZOOM_NEEDS_REAL_BROWSER_MSG);
+    case ActionType.WINDOW:
+      throw new Error(WINDOW_NEEDS_DESKTOP_MSG);
     case ActionType.SCROLL: {
       // Either axis, either direction. `dy: -600` scrolls BACK up, `dx` moves a wide table sideways.
       // Both were unreachable: the only scroll stepped down, so anything that scrolled past was gone.

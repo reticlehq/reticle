@@ -2,7 +2,7 @@
 //
 //   reticle-ax tree <pid>
 //   reticle-ax reach <pid> <path> <role> <name>
-//   reticle-ax act  <pid> <path> <role> <name> press|set|type|key [value] [budgetMs] [user-path|direct][:quietMs] [folder...]
+//   reticle-ax act  <pid> <path> <role> <name> press|set|type|key|window [value] [budgetMs] [user-path|direct][:quietMs] [folder...]
 //
 // <path> is the child index at each level from the application element, joined by ".", "" for the
 // application. <role> and <name> are what the caller last read there. If the element at <path> is
@@ -190,6 +190,87 @@ func child(_ element: AXUIElement, _ index: Int) -> AXUIElement? {
     let children = value as? [AXUIElement], index >= 0, index < children.count
   else { return nil }
   return children[index]
+}
+
+/// The visible part of the screen that holds most of `window`, in the top-left points of the
+/// Accessibility API: the screen without the menu bar and the Dock.
+func visibleArea(of window: AXUIElement) -> CGRect? {
+  var position: AnyObject?
+  var size: AnyObject?
+  AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &position)
+  AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &size)
+  guard let main = NSScreen.screens.first else { return nil }
+  let top = main.frame.height
+  let middle = position.flatMap { p in size.flatMap { frame(p, $0) } }.map {
+    CGPoint(x: $0.midX, y: top - $0.midY)
+  }
+  let screen =
+    middle.flatMap { m in NSScreen.screens.first { $0.frame.contains(m) } } ?? NSScreen.main ?? main
+  let visible = screen.visibleFrame
+  return CGRect(x: visible.minX, y: top - visible.maxY, width: visible.width, height: visible.height)
+}
+
+/// What a person sees of `window`: its frame, and whether it is minimized or in full screen. A
+/// minimized window keeps its frame in the Accessibility API, so the frame alone does not say it.
+func windowState(_ window: AXUIElement, wanted: CGRect?) -> [String: Any] {
+  var position: AnyObject?
+  var size: AnyObject?
+  var minimized: AnyObject?
+  var full: AnyObject?
+  AXUIElementCopyAttributeValue(window, kAXPositionAttribute as CFString, &position)
+  AXUIElementCopyAttributeValue(window, kAXSizeAttribute as CFString, &size)
+  AXUIElementCopyAttributeValue(window, kAXMinimizedAttribute as CFString, &minimized)
+  AXUIElementCopyAttributeValue(window, "AXFullScreen" as CFString, &full)
+  var state: [String: Any] = [
+    "minimized": (minimized as? Bool) ?? false, "fullscreen": (full as? Bool) ?? false,
+  ]
+  if let p = position, let s = size, let rect = frame(p, s) {
+    state["frame"] = [rect.minX, rect.minY, rect.width, rect.height]
+  }
+  if let w = wanted { state["wanted"] = [w.minX, w.minY, w.width, w.height] }
+  return state
+}
+
+/// Gives `window` an arrangement: minimize, zoom, fullscreen, restore, left, right, or
+/// "frame:x,y,width,height". The position is set again after the size: a window that grows
+/// against the edge of the screen is moved by the system. Absent answer: no such arrangement.
+func arrange(_ window: AXUIElement, _ how: String) -> (AXError, CGRect?)? {
+  func set(_ attribute: String, _ value: CFTypeRef) -> AXError {
+    AXUIElementSetAttributeValue(window, attribute as CFString, value)
+  }
+  func place(_ rect: CGRect) -> AXError {
+    var origin = rect.origin
+    var size = rect.size
+    guard let p = AXValueCreate(.cgPoint, &origin), let s = AXValueCreate(.cgSize, &size) else {
+      return .failure
+    }
+    _ = set(kAXPositionAttribute, p)
+    let sized = set(kAXSizeAttribute, s)
+    _ = set(kAXPositionAttribute, p)
+    return sized
+  }
+  let area = visibleArea(of: window)
+  switch how {
+  case "minimize": return (set(kAXMinimizedAttribute, kCFBooleanTrue), nil)
+  case "fullscreen": return (set("AXFullScreen", kCFBooleanTrue), nil)
+  case "restore":
+    _ = set("AXFullScreen", kCFBooleanFalse)
+    return (set(kAXMinimizedAttribute, kCFBooleanFalse), nil)
+  case "zoom":
+    guard let a = area else { return (.failure, nil) }
+    return (place(a), a)
+  case "left", "right":
+    guard let a = area else { return (.failure, nil) }
+    let half = a.width / 2
+    let rect = CGRect(x: how == "left" ? a.minX : a.minX + half, y: a.minY, width: half, height: a.height)
+    return (place(rect), rect)
+  default:
+    let numbers = how.hasPrefix("frame:")
+      ? how.dropFirst(6).split(separator: ",").compactMap { Double($0) } : []
+    guard numbers.count == 4 else { return nil }
+    let rect = CGRect(x: numbers[0], y: numbers[1], width: numbers[2], height: numbers[3])
+    return (place(rect), rect)
+  }
 }
 
 /// The name of the HUD program of the realm. Its windows take no click: the pointer and the glow
@@ -878,6 +959,9 @@ func run(_ args: [String]) throws {
 
   let started = Date()
   let result: AXError
+  /// The window that `window` arranged, and the frame it was given: read again after the wait.
+  var arranged: AXUIElement?
+  var wantedFrame: CGRect?
   switch action {
   case "press":
     let pressed = AXUIElementPerformAction(target, kAXPressAction as CFString)
@@ -965,6 +1049,43 @@ func run(_ args: [String]) throws {
   case "menu":
     // The menu a right-click gives, asked for by name. No pointer is used.
     result = AXUIElementPerformAction(target, kAXShowMenuAction as CFString)
+  case "window":
+    // The window of the element, arranged as a person does it with its buttons and the Window
+    // menu. No pointer: the window is set through the Accessibility API, also in the background.
+    var window = target
+    if text(now[0]) == "AXApplication" {
+      // On the application, as a person uses its tile in the Dock: `restore` brings back a window
+      // that is minimized or in full screen, and the others arrange the main window.
+      var all: AnyObject?
+      AXUIElementCopyAttributeValue(target, kAXWindowsAttribute as CFString, &all)
+      let windows = (all as? [AXUIElement]) ?? []
+      func flag(_ w: AXUIElement, _ name: String) -> Bool {
+        var v: AnyObject?
+        AXUIElementCopyAttributeValue(w, name as CFString, &v)
+        return (v as? Bool) ?? false
+      }
+      var main: AnyObject?
+      AXUIElementCopyAttributeValue(target, kAXMainWindowAttribute as CFString, &main)
+      let hidden = windows.first { flag($0, kAXMinimizedAttribute) || flag($0, "AXFullScreen") }
+      let chosen =
+        value == "restore" ? hidden : (main.map { $0 as! AXUIElement } ?? windows.first)
+      guard let found = chosen else {
+        try emit(["refused": "no-window", "detail": "the application has no such window"])
+      }
+      window = found
+    } else if text(now[0]) != "AXWindow" {
+      var holder: AnyObject?
+      guard AXUIElementCopyAttributeValue(target, kAXWindowAttribute as CFString, &holder) == .success,
+        let found = holder, CFGetTypeID(found) == AXUIElementGetTypeID()
+      else { try emit(["refused": "no-window", "detail": "the element is in no window"]) }
+      window = found as! AXUIElement
+    }
+    arranged = window
+    guard let (done, wanted) = arrange(window, value) else {
+      try emit(["refused": "bad-value", "detail": "no arrangement \(value)"])
+    }
+    wantedFrame = wanted
+    result = done
   case "raise":
     // The application is in front already: that was done above. Give the element the keyboard.
     guard foreground else { try emit(["refused": "needs-foreground"]) }
@@ -1139,7 +1260,8 @@ func run(_ args: [String]) throws {
     "unreadAfter": after.unread,
   ].merging(wrote.map { ["bytesWritten": $0] } ?? [:]) { $1 }
     .merging(changedSettings.map { ["settingsChanged": $0] } ?? [:]) { $1 }
-    .merging(["clipboardChanged": clipboard.changeCount != clipboardBefore]) { $1 })
+    .merging(["clipboardChanged": clipboard.changeCount != clipboardBefore]) { $1 }
+    .merging(arranged.map { ["windowState": windowState($0, wanted: wantedFrame)] } ?? [:]) { $1 })
 }
 
 func write(_ object: [String: Any]) {

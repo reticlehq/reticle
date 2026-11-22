@@ -85,7 +85,11 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     window = NSWindow(
-      contentRect: NSRect(x: 80, y: 80, width: 450, height: 320), styleMask: [.titled],
+      contentRect: NSRect(x: 80, y: 80, width: 450, height: 320),
+      // A window a person can resize and make small, for windowcheck.mjs. The other checks keep
+      // the plain window that they were written for.
+      styleMask: ProcessInfo.processInfo.environment["RETICLE_FIXTURE_RESIZABLE"] == nil
+        ? [.titled] : [.titled, .resizable, .miniaturizable],
       backing: .buffered, defer: false)
     window.title = "Reticle Fixture"
     window.level = .floating

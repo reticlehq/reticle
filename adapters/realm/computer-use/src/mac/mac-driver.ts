@@ -19,6 +19,7 @@ import type {
   ReachAnswer,
   UiDriver,
   UiRead,
+  WindowState,
 } from '../driver.js';
 import { AxNodeSchema, fromAx } from './from-ax.js';
 import type { AxNode } from './from-ax.js';
@@ -60,6 +61,14 @@ const ActedSchema = z.object({
   appGone: z.boolean().optional(),
   bytesWritten: z.number().optional(),
   clipboardChanged: z.boolean().optional(),
+  windowState: z
+    .object({
+      minimized: z.boolean(),
+      fullscreen: z.boolean(),
+      frame: z.array(z.number()).length(4).optional(),
+      wanted: z.array(z.number()).length(4).optional(),
+    })
+    .optional(),
   settingsChanged: z
     .array(
       z.object({
@@ -71,6 +80,31 @@ const ActedSchema = z.object({
     )
     .optional(),
 });
+
+/** The state of an arranged window, with its frame as a tuple when the helper read one. */
+function windowStateOf(state: {
+  minimized: boolean;
+  fullscreen: boolean;
+  frame?: number[] | undefined;
+  wanted?: number[] | undefined;
+}): WindowState {
+  const tuple = (
+    values: number[] | undefined,
+  ): readonly [number, number, number, number] | undefined => {
+    const [x, y, width, height] = values ?? [];
+    return x === undefined || y === undefined || width === undefined || height === undefined
+      ? undefined
+      : [x, y, width, height];
+  };
+  const frame = tuple(state.frame);
+  const wanted = tuple(state.wanted);
+  return {
+    minimized: state.minimized,
+    fullscreen: state.fullscreen,
+    ...(frame === undefined ? {} : { frame }),
+    ...(wanted === undefined ? {} : { wanted }),
+  };
+}
 
 export type RunHelper = (file: string, args: readonly string[]) => Promise<string>;
 
@@ -329,6 +363,7 @@ export class MacDriver implements UiDriver {
       after: toRead(acted.after, acted.unreadAfter),
       ...(acted.bytesWritten === undefined ? {} : { bytesWritten: acted.bytesWritten }),
       ...(acted.clipboardChanged === undefined ? {} : { clipboardChanged: acted.clipboardChanged }),
+      ...(acted.windowState === undefined ? {} : { windowState: windowStateOf(acted.windowState) }),
       ...(acted.settingsChanged === undefined
         ? {}
         : {

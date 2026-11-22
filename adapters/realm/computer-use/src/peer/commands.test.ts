@@ -6,6 +6,7 @@ import {
   PresenterTone,
   ReticleCommand,
   SessionState,
+  WindowArrangement,
   parseInteractive,
 } from '@reticlehq/core';
 import { describe, expect, it } from 'vitest';
@@ -1835,5 +1836,112 @@ describe('PeerCommands', () => {
       ([, data]) => 'recent' === (data['data'] as { key?: string } | undefined)?.key,
     );
     expect(long?.[1]['data']).toMatchObject({ cut: true });
+  });
+});
+
+// A person arranges windows: puts two side by side, makes one small, fills the screen. The realm
+// had no action for it, so two tabs of Dia could not be put next to each other.
+describe('window', () => {
+  const moved = (frame: [number, number, number, number]): UiRead => {
+    const before = read('Ready');
+    return { ...before, root: { ...before.root, frame } };
+  };
+
+  it('arranges the window of the element, and answers with its frame after the change', async () => {
+    const { commands, asked } = peer({
+      after: moved([0, 25, 756, 900]),
+      windowState: {
+        minimized: false,
+        fullscreen: false,
+        frame: [0, 25, 756, 900],
+        wanted: [0, 25, 756, 900],
+      },
+    });
+    const answer = (await commands.answer(ReticleCommand.ACT, {
+      ref: await refOf(commands, 'Save'),
+      action: ActionType.WINDOW,
+      args: { arrange: WindowArrangement.LEFT },
+    })) as { window?: unknown };
+    expect(asked.map((request) => [request.kind, request.value])).toEqual([
+      [ActKind.WINDOW, WindowArrangement.LEFT],
+    ]);
+    expect(answer.window).toEqual({
+      x: 0,
+      y: 25,
+      width: 756,
+      height: 900,
+      minimized: false,
+      fullscreen: false,
+    });
+  });
+
+  // A minimized window keeps its frame in the Accessibility API: the frame alone said nothing.
+  it('says that the window is minimized, from what the helper read of it after', async () => {
+    const { commands } = peer({
+      windowState: { minimized: true, fullscreen: false, frame: [0, 25, 400, 300] },
+    });
+    const answer = (await commands.answer(ReticleCommand.ACT, {
+      ref: await refOf(commands, 'Save'),
+      action: ActionType.WINDOW,
+      args: { arrange: WindowArrangement.MINIMIZE },
+    })) as { window?: { minimized: boolean } };
+    expect(answer.window?.minimized).toBe(true);
+  });
+
+  it('gives the window an exact frame', async () => {
+    const { commands, asked } = peer({
+      windowState: {
+        minimized: false,
+        fullscreen: false,
+        frame: [100, 50, 800, 600],
+        wanted: [100, 50, 800, 600],
+      },
+    });
+    await commands.answer(ReticleCommand.ACT, {
+      ref: await refOf(commands, 'Save'),
+      action: ActionType.WINDOW,
+      args: { frame: { x: 100, y: 50, width: 800, height: 600 } },
+    });
+    expect(asked.at(-1)?.value).toBe('frame:100,50,800,600');
+  });
+
+  // The system says yes to a set that it does not do: an application with no tile in the Dock
+  // keeps its window on the screen, and the realm answered ok.
+  it('fails when the window is not as asked after the change, and says what it is', async () => {
+    const minimize = peer({ windowState: { minimized: false, fullscreen: false } });
+    await expect(
+      minimize.commands.answer(ReticleCommand.ACT, {
+        ref: await refOf(minimize.commands, 'Save'),
+        action: ActionType.WINDOW,
+        args: { arrange: WindowArrangement.MINIMIZE },
+      }),
+    ).rejects.toThrow(/did not go to the Dock/);
+    const half = peer({
+      windowState: {
+        minimized: false,
+        fullscreen: false,
+        frame: [0, 25, 900, 900],
+        wanted: [0, 25, 756, 900],
+      },
+    });
+    await expect(
+      half.commands.answer(ReticleCommand.ACT, {
+        ref: await refOf(half.commands, 'Save'),
+        action: ActionType.WINDOW,
+        args: { arrange: WindowArrangement.LEFT },
+      }),
+    ).rejects.toThrow(/did not take the frame 0,25,756,900: it is 0,25,900,900/);
+  });
+
+  it('refuses an arrangement it does not know, and names the ones it knows', async () => {
+    const { commands, asked } = peer();
+    await expect(
+      commands.answer(ReticleCommand.ACT, {
+        ref: await refOf(commands, 'Save'),
+        action: ActionType.WINDOW,
+        args: { arrange: 'sideways' },
+      }),
+    ).rejects.toThrow(/minimize, zoom, fullscreen, restore, left, right.*frame/);
+    expect(asked).toEqual([]);
   });
 });

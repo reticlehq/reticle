@@ -47,6 +47,7 @@ import {
 } from './form.js';
 import type { ActResult } from './form.js';
 import { READ_STATE, see } from './seen.js';
+import { arrangeWindow } from './window.js';
 import {
   NO_SCREEN_RECORDING,
   POINT_KINDS,
@@ -804,6 +805,14 @@ export class PeerCommands {
         role: target.node.role,
         name: target.node.name,
       };
+    }
+    if (action === ActionType.WINDOW) {
+      return arrangeWindow(
+        { drive: (target, at, kind, value, how) => this.#drive(target, at, kind, value, how) },
+        await this.#resolve(ref),
+        ref,
+        record(args['args']),
+      );
     }
     if (action === ActionType.SELECT) {
       return selectChoice(

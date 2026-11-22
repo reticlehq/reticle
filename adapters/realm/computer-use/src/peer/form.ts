@@ -9,6 +9,7 @@ import type { ActOutcome } from '../driver.js';
 import { UiRole, place } from '../ui-node.js';
 import type { Placed, UiNode } from '../ui-node.js';
 import { see } from './seen.js';
+import type { WindowAnswer } from './window.js';
 import type { Seen } from './seen.js';
 
 /** The keys that select all the text of a field, and that remove what is selected. */
@@ -90,6 +91,7 @@ export const PEER_ACTIONS: readonly string[] = [
   ...Object.keys(KIND_OF),
   ActionType.SCROLL,
   ActionType.SELECT,
+  ActionType.WINDOW,
 ];
 
 /**
@@ -129,4 +131,6 @@ export interface ActResult {
   testid?: string;
   testidOf?: number;
   testidNth?: number;
+  /** For `window`: the window after the change. */
+  window?: WindowAnswer;
 }

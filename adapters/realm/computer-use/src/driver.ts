@@ -27,6 +27,8 @@ export const ActKind = {
   DRAG: 'drag',
   /** The real wheel over the element: `value` is lines, more than 0 down. */
   WHEEL: 'wheel',
+  /** Arranges the window of the element: `value` is a `WindowArrangement`, or "frame:x,y,w,h". */
+  WINDOW: 'window',
 } as const;
 export type ActKind = (typeof ActKind)[keyof typeof ActKind];
 
@@ -104,7 +106,19 @@ export interface SettingChange {
   cut?: boolean;
 }
 
+/** A window after `window`: what a person sees of it. */
+export interface WindowState {
+  minimized: boolean;
+  fullscreen: boolean;
+  /** Absent: the window gave no frame. */
+  frame?: readonly [number, number, number, number];
+  /** The frame the window was given (a half, a zoom, an exact frame). Absent for the others. */
+  wanted?: readonly [number, number, number, number];
+}
+
 export interface ActOutcome {
+  /** For `window`: the window after the change. Absent for every other action. */
+  windowState?: WindowState;
   refused?: ActRefusal;
   /** More about a refusal: for `unreachable`, the element that is on top. */
   detail?: string;

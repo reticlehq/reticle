@@ -27,6 +27,7 @@ export * from './artifacts/flow-unreached.js'; // unreachedRoutes — known rout
 export * from './artifacts/flow-mutation-target.js'; // what a flow says it depends on: mutationTargetsFor + perturbationFor
 export * from './graph/app-graph.js'; // the App Graph: an app as screens, actions, requests; one fold for cloud and daemon
 export * from './wire/constants/constants.js'; // EventType, ActionType, wire constants, TRANSPORT_LIMITS, …
+export * from './wire/constants/window-arrangement.js'; // WindowArrangement — what `window` does with a window
 export * from './wire/constants/animation-command.js'; // reticle_animations argument names
 export * from './wire/constants/response-body-reason.js'; // why a NET_REQUEST carries no response body (#1520)
 export * from './wire/constants/console-event.js'; // console payload fields (CONSOLE_EVENT) and the pre-attach error buffer (#1540)
