@@ -21,8 +21,12 @@ export const HISTORY_DIRECTION_ARG = 'direction';
 export const NavigateHistoryRefusal = {
   /** The direction is not a `NavigateHistory` value. */
   UNKNOWN_DIRECTION: 'history direction must be "back" or "forward"',
-  /** The browser reports no entry in that direction, so the page cannot move. */
-  NO_ENTRY: 'the tab has no history entry in that direction',
+  /**
+   * The browser reports no entry in that direction on this page's origin. The Navigation API counts
+   * only same-origin entries, so the first app page of a tab that came from another site (or from
+   * the `about:blank` a lease opens on) says no entry, and the move off the origin is not made.
+   */
+  NO_ENTRY: 'the tab has no history entry in that direction on this origin',
 } as const;
 export type NavigateHistoryRefusal =
   (typeof NavigateHistoryRefusal)[keyof typeof NavigateHistoryRefusal];

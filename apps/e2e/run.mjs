@@ -137,6 +137,9 @@ const ORDER = [
   // A parallel flow suite whose start page the dev server compiles past the step budget (#2155).
   // Each flow runs on its own lease. Serves its own pages, like the specs above.
   'lease-slow-start-page-replay-test',
+  // reticle_navigate { history } on a lease, a lease with no SDK, and a plain SDK tab, in real
+  // Chromium: a form POST then Back, an SPA pushState, a route guard (#1844). Serves its own page.
+  'navigate-history-test',
   // Bare `reticle` in an unwired app folder: one smoke verdict, a pass and a fail. Writes its own app.
   'first-verdict-test',
   // `reticle verify <candidate> --against <reference>` through the built CLI, on three builds it

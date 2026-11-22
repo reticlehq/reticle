@@ -46,7 +46,7 @@ describe('the history command moves the tab through its history (#1844)', () => 
     expect(h.forward).not.toHaveBeenCalled();
   });
 
-  it('refuses when the browser reports no entry in that direction', () => {
+  it('refuses when the browser reports no entry in that direction on this origin', () => {
     // history.back() on the first entry does nothing and says nothing. Without this refusal the
     // daemon waits the whole budget for a move that never starts, and reports a slow page.
     const h = host({ back: false, forward: true });

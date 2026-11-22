@@ -159,7 +159,7 @@ export const BROWSER_TOOLS: ToolDef[] = [
         .nativeEnum(NavigateHistory)
         .optional()
         .describe(
-          'Move one entry back or forward in the tab history, as the browser Back and Forward buttons do. Give it without url and reload. ok:false with a reason when the tab has no entry in that direction.',
+          'Move one entry back or forward in the tab history, as the browser Back and Forward buttons do. Give it without url and reload. ok:false with a reason when the tab has no entry in that direction on this origin: it does not leave the app this way.',
         ),
       timeout_ms: timeoutMsSchema
         .optional()
