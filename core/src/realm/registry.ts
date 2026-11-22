@@ -239,7 +239,9 @@ const PEER_REALMS: Readonly<Record<string, RealmTraits>> = {
     isDesktopShell: false,
     usesWebKit: false,
     ownsCoverageKinds: false,
-    hasOwnBaselineDirectory: false,
+    // A picture of the screen is not a picture of a page: in the folder of the pages, a desktop
+    // `home` and a page `home` were one file.
+    hasOwnBaselineDirectory: true,
   },
 };
 
