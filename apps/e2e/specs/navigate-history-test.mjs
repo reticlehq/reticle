@@ -114,7 +114,7 @@ const app = createServer((req, res) => {
   if (where === '/login') {
     loginGets += 1;
   }
-  const body = where.startsWith('/spa') ? SPA : PAGES[where] ?? PAGES['/login'];
+  const body = where.startsWith('/spa') ? SPA : (PAGES[where] ?? PAGES['/login']);
   res.setHeader('content-type', 'text/html');
   res.end(withSdk(body).replaceAll('@@TOKEN@@', globalThis.__TOKEN ?? 'undefined'));
 });
@@ -151,7 +151,7 @@ const pathOf = (url) => {
 };
 
 /** Press the control with this test id, through the SDK. */
-async function press(sessionId, testid) {
+async function refOf(sessionId, testid) {
   let ref;
   for (let i = 0; i < 40 && ref === undefined; i += 1) {
     const q = await T('reticle_query', { sessionId, by: 'testid', value: testid }).catch(
@@ -161,7 +161,28 @@ async function press(sessionId, testid) {
     if (ref === undefined) await sleep(150);
   }
   if (ref === undefined) throw new Error(`no control ${testid}`);
-  await T('reticle_act', { sessionId, ref, action: 'click' });
+  return ref;
+}
+
+/** Press a control that stays on this document (an SPA button). */
+async function press(sessionId, testid) {
+  await T('reticle_act', { sessionId, ref: await refOf(sessionId, testid), action: 'click' });
+}
+
+/**
+ * Press a control that unloads the document (a form submit), and wait for the route it reaches.
+ * A plain act can lose its reply to the unload and throw "session disconnected"; act_and_wait is
+ * the tool for an act that navigates, as in lease-instrumented-navigation-test.
+ */
+async function pressAndArrive(sessionId, testid, pathname) {
+  const ref = await refOf(sessionId, testid);
+  await T('reticle_act_and_wait', {
+    sessionId,
+    ref,
+    action: 'click',
+    until: { kind: 'route', pathname },
+    timeout_ms: BUDGET_MS,
+  });
 }
 
 const move = (sessionId, history) =>
@@ -174,15 +195,21 @@ const move = (sessionId, history) =>
 async function shared(kind, sid) {
   // 1. Back after a form submit: POST /signin answers 302 /today, so Back goes to /login.
   const loginsBefore = loginGets;
-  await press(sid(), 'signin-submit');
-  chk(`${kind}: the sign-in lands on /today`, await waitUntil(() => sessionOn('/today'), BUDGET_MS));
+  await pressAndArrive(sid(), 'signin-submit', '/today');
+  chk(
+    `${kind}: the sign-in lands on /today`,
+    await waitUntil(() => sessionOn('/today'), BUDGET_MS),
+  );
   const back = await move(sid(), NavigateHistory.BACK);
   chk(
     `${kind}: Back after the sign-in arrives on /login, confirmed`,
     back.ok === true && back.confirmed === true && pathOf(back.url) === '/login',
     JSON.stringify(back),
   );
-  chk(`${kind}: the result names a session that is connected`, sessionOn('/login')?.id === back.sessionId);
+  chk(
+    `${kind}: the result names a session that is connected`,
+    sessionOn('/login')?.id === back.sessionId,
+  );
   say(
     `   ℹ ${kind}: Back to /login ${loginGets > loginsBefore ? 'fetched the document again' : 'did not fetch the document (bfcache or HTTP cache)'}`,
   );
@@ -203,10 +230,17 @@ async function shared(kind, sid) {
   );
 
   // 3. An SPA: a pushState entry, then Back. The same document moves, so the same session reports.
-  const toSpa = await T('reticle_navigate', { sessionId: sid(), url: `${APP}/spa`, timeout_ms: BUDGET_MS });
+  const toSpa = await T('reticle_navigate', {
+    sessionId: sid(),
+    url: `${APP}/spa`,
+    timeout_ms: BUDGET_MS,
+  });
   chk(`${kind}: the SPA page opens`, toSpa.confirmed === true, JSON.stringify(toSpa));
   await press(sid(), 'push-two');
-  chk(`${kind}: pushState reaches the daemon`, await waitUntil(() => sessionOn('/spa/two'), BUDGET_MS));
+  chk(
+    `${kind}: pushState reaches the daemon`,
+    await waitUntil(() => sessionOn('/spa/two'), BUDGET_MS),
+  );
   const onSpa = sid();
   const spaBack = await move(onSpa, NavigateHistory.BACK);
   chk(
@@ -217,7 +251,10 @@ async function shared(kind, sid) {
 
   // 4. A route guard: Back reaches /spa/guarded, and the guard replaces it with /spa/login.
   await press(sid(), 'push-guarded');
-  chk(`${kind}: two pushState entries reach the daemon`, await waitUntil(() => sessionOn('/spa/after'), BUDGET_MS));
+  chk(
+    `${kind}: two pushState entries reach the daemon`,
+    await waitUntil(() => sessionOn('/spa/after'), BUDGET_MS),
+  );
   const guarded = await move(sid(), NavigateHistory.BACK);
   chk(
     `${kind}: Back reports where the guard sent the tab, not the route it passed`,
@@ -259,7 +296,9 @@ try {
   const fromImage = await move(leaseId, NavigateHistory.BACK);
   chk(
     'lease: Back from the image goes through the browser, and the SDK reattaches on /today',
-    fromImage.confirmed === true && pathOf(fromImage.url) === '/today' && fromImage.sessionId === leaseId,
+    fromImage.confirmed === true &&
+      pathOf(fromImage.url) === '/today' &&
+      fromImage.sessionId === leaseId,
     JSON.stringify(fromImage),
   );
 } catch (err) {
@@ -287,5 +326,7 @@ try {
   app.close();
 }
 
-say(`\n${fail === 0 ? '✅' : '❌'} NAVIGATE HISTORY (${String(pass)} passed, ${String(fail)} failed)`);
+say(
+  `\n${fail === 0 ? '✅' : '❌'} NAVIGATE HISTORY (${String(pass)} passed, ${String(fail)} failed)`,
+);
 process.exit(fail === 0 ? 0 : 1);
