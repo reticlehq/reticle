@@ -5,7 +5,7 @@
 // With those buttons a person switches desktops (a press on one), adds one ("add desktop"), and
 // moves a window to another desktop (a drag of its button onto the desktop, `toRef`). This check
 // opens and reads only: it does not change the desktops of the person at the machine, and it
-// prints no name of a window.
+// prints no name of a window. It opens the Downloads stack too, and prints no name of a file.
 //
 //   node native/mac/spacescheck.mjs
 //
@@ -76,7 +76,31 @@ try {
   assert.ok(!(await tree()).includes('group "Mission Control"'), 'Mission Control did not close');
   assert.equal(heldNow(), '', 'a modifier is still held after the shortcut');
 
-  process.stdout.write('computer-use spacescheck: 6 of 6 cases held\n');
+  // The Downloads stack of the Dock: a click opens it, and each file in it is an element with a
+  // name and a ref, so a file can be opened from there. A second click closes it.
+  let stack = 'no Downloads stack in the Dock';
+  const downloads = refIn(await tree(), '"Downloads"');
+  if (downloads !== undefined) {
+    const click = () =>
+      commands.answer(ReticleCommand.ACT, {
+        ref: downloads,
+        action: ActionType.CLICK,
+        args: { settleMs: 800 },
+      });
+    await click();
+    const lines = (await tree()).split('\n');
+    await click();
+    const at = lines.findIndex((l) => l.includes('"Downloads"'));
+    const indent = (l = '') => l.length - l.trimStart().length;
+    const files = lines.slice(at + 1).filter((l) => indent(l) > indent(lines[at]));
+    assert.ok(
+      files.some((l) => /- img ".+" \(ref=/.test(l)),
+      'the open stack shows no file',
+    );
+    stack = 'the Downloads stack shows its files';
+  }
+
+  process.stdout.write(`computer-use spacescheck: 7 of 7 cases held (${stack})\n`);
 } finally {
   if (open) {
     await missionControl();

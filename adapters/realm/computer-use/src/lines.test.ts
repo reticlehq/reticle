@@ -111,6 +111,36 @@ describe('writeLines', () => {
     expect(written.tree).toContain('button "Finder"');
   });
 
+  // The Downloads stack of the Dock, open: its list gives 0,0,0,0 and its files have real places
+  // above the Dock. The list hid every file, so no file of the stack could be opened.
+  it('shows what is inside a list that gives no place at all, when it has a place of its own', () => {
+    const dock = node(UiRole.APPLICATION, 'Dock', {
+      frame: [0, 0, 0, 0],
+      children: [
+        node(UiRole.LIST, '', {
+          frame: [43, 899, 1426, 73],
+          children: [
+            node(UiRole.GROUP, 'Downloads', {
+              frame: [1354, 901, 54, 70],
+              children: [
+                node(UiRole.LIST, '', {
+                  frame: [0, 0, 0, 0],
+                  children: [
+                    node(UiRole.IMAGE, 'report.pdf', { frame: [1349, 839, 65, 65] }),
+                    node(UiRole.IMAGE, 'gone.zip', { frame: [1349, 839, 0, 0] }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    });
+    const written = writeWindows(dock, new RefTable());
+    expect(written.tree).toContain('img "report.pdf"');
+    expect(written.tree).not.toContain('gone.zip');
+  });
+
   it('says how many rows of a table are not shown, and keeps a ref with its row after a scroll', () => {
     const table = (first: number): UiNode =>
       node(UiRole.LIST, 'Files', {

@@ -192,6 +192,8 @@ const THIN = 1;
 
 export function placeShown(root: UiNode): { shown: Placed[]; omitted: number } {
   const hidden = new Set<string>();
+  // Hidden elements that give no place at all: they hide nothing that they hold.
+  const noPlace = new Set<string>();
   const shown: Placed[] = [];
   // For each element: the frame of its window, and true when it is in a page.
   const windows = new Map<string, Frame | undefined>();
@@ -215,8 +217,15 @@ export function placeShown(root: UiNode): { shown: Placed[]; omitted: number } {
       p.node.role !== UiRole.DOCUMENT &&
       inPage.has(p.key) &&
       outside(frame, windows.get(p.key));
-    if (noSize || scrolledOut || (above !== undefined && hidden.has(above))) {
+    const parentHides = above !== undefined && hidden.has(above) && !noPlace.has(above);
+    if (noSize || scrolledOut || parentHides) {
       hidden.add(p.key);
+      // An element at 0,0,0,0 gives no place at all, not a closed one: the list of an open stack of
+      // the Dock does, and its files are on the screen above the Dock. What it holds is judged by
+      // its own place. A closed menu is at the place of its item, and its items have no size.
+      if (!parentHides && true === frame?.every((n) => 0 === n)) {
+        noPlace.add(p.key);
+      }
     } else {
       shown.push(p);
     }
