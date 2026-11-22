@@ -29,7 +29,9 @@ const TAURI_INTERNALS_GLOBAL = '__TAURI_INTERNALS__';
  * protocol's enum is for.
  */
 export function declaredPlatform(): PlatformProfile {
-  if ('undefined' === typeof window) return PlatformProfile.SERVICE;
+  if ('undefined' === typeof window) {
+    return PlatformProfile.SERVICE;
+  }
   const global = window as unknown as Record<string, unknown>;
   // Electron announces itself through the preload channel Reticle installs; Tauri through its own
   // internals object. Neither is spoofable by ordinary page code in a way that matters here --
