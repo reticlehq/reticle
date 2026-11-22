@@ -11,8 +11,11 @@ import { KIND_OF } from './form.js';
 
 /** Where a picture of the window was taken, and its pixels for each point of the screen. */
 export interface Picture {
+  /** What the picture shows on the screen: the window, or the whole display. */
   window: readonly [number, number, number, number];
   scale: number;
+  /** The application's window when the picture was taken. */
+  appWindow: readonly [number, number, number, number];
   /** Where each element on the screen was when the picture was taken, by its key. */
   places?: ReadonlyMap<string, readonly number[]>;
 }

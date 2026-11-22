@@ -227,6 +227,14 @@ async function capture(
    * under that session's name and answered `saved: true` (#1407). Real input asks the same question
    * before every gesture.
    */
+  // The whole screen: only a desktop realm can take it. A browser has no picture of the screen,
+  // and a picture of the page in place of it would not show what the caller asked to see.
+  if (true === args['screen']) {
+    const whole = await desktopCapture(deps, sessionId, false, true);
+    return whole.png === undefined
+      ? { reason: whole.reason ?? VisualReason.NO_PROVIDER, recommendation: SCREEN_NEEDS_DESKTOP }
+      : { png: whole.png, runtime: runtimeOf(deps, sessionId) };
+  }
   const candidate = screenshotProvider(deps);
   const session = candidate === undefined ? undefined : deps.sessions.resolve(sessionId);
   const provider =
@@ -301,6 +309,10 @@ function rectsFrom(value: unknown): VisualRect[] | undefined {
  * envelope (with a recommendation) instead of throwing when none is attached. Behavioral checks
  * stay the default; this is the complementary "does it look right" surface, never bundled in.
  */
+/** Said when `screen: true` is asked of a session that cannot take the screen. */
+const SCREEN_NEEDS_DESKTOP =
+  'screen: true needs a desktop session (reticle-computer-use). Join the application, or leave out screen.';
+
 export const VISUAL_TOOLS: ToolDef[] = [
   {
     name: ReticleTool.SCREENSHOT,
@@ -326,6 +338,12 @@ export const VISUAL_TOOLS: ToolDef[] = [
       clip: rectShape
         .optional()
         .describe('Explicit { x, y, width, height } clip rectangle in page coordinates.'),
+      screen: z
+        .boolean()
+        .optional()
+        .describe(
+          'A desktop session only: the whole screen, with every application on it, not only the window of the app. Use it to see an overlay or a dialog of another application, or to see where the work is.',
+        ),
       ...sessionIdShape,
     },
     outputSchema: {

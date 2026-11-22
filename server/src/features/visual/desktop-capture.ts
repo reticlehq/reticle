@@ -31,13 +31,18 @@ export async function desktopCapture(
   deps: ToolDeps,
   sessionId: string | undefined,
   fullPage: boolean,
+  /** The whole display, with every application on it. Only a desktop realm takes it. */
+  screen = false,
 ): Promise<{ png?: Uint8Array; reason?: VisualReason; recommendation?: string }> {
   const session = deps.sessions.resolve(sessionId);
   // A session that cannot take commands (no live browser behind it) simply has no pixels to give.
   if (typeof session.command !== 'function') {
     return {};
   }
-  const res = await session.command(ReticleCommand.CAPTURE, { fullPage });
+  const res = await session.command(ReticleCommand.CAPTURE, {
+    fullPage,
+    ...(screen ? { screen } : {}),
+  });
   if (!res.ok) {
     return {};
   }

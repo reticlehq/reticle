@@ -344,7 +344,7 @@ export class PeerCommands {
       case ReticleCommand.CAPABILITIES:
         return { testids: [], signals: [], stores: [], flows: [] };
       case ReticleCommand.CAPTURE:
-        return this.#capture();
+        return this.#capture(args);
       default:
         throw new Error(`the computer-use realm does not answer ${name}`);
     }
@@ -515,8 +515,9 @@ export class PeerCommands {
    * A picture of the window, for an application that gives few elements. The place and the scale
    * of the picture are kept: a click at a point of the picture needs them.
    */
-  async #capture(): Promise<unknown> {
-    const taken = await this.#deps.driver.capture?.();
+  async #capture(args: Args): Promise<unknown> {
+    const screen = true === args['screen'];
+    const taken = await this.#deps.driver.capture?.(screen ? { screen } : undefined);
     if (taken === undefined) {
       return { ok: false, reason: 'this realm takes no picture on this system' };
     }
@@ -530,8 +531,13 @@ export class PeerCommands {
       };
     }
     const shown = await this.#deps.driver.read();
-    this.#picture = { window: taken.window, scale: taken.scale, places: placesOf(shown.root) };
-    return { ok: true, path: taken.path };
+    this.#picture = {
+      window: taken.window,
+      scale: taken.scale,
+      appWindow: taken.appWindow ?? taken.window,
+      places: placesOf(shown.root),
+    };
+    return { ok: true, path: taken.path, ...(screen ? { screen } : {}) };
   }
 
   #send(change: Change): void {
@@ -817,7 +823,7 @@ export class PeerCommands {
       );
     }
     const at = pointOnScreen(this.#picture, more['at'], kind);
-    if (at !== undefined && moved(this.#picture?.window, target.windowFrame)) {
+    if (at !== undefined && moved(this.#picture?.appWindow, target.windowFrame)) {
       throw new Error(
         `the window of ${this.#deps.driver.subject().app} moved or changed its size after the picture was taken, so the point of the picture is now on something else. Take a new picture with reticle_screenshot, and give the point of that one.`,
       );

@@ -166,7 +166,13 @@ export interface UiDriver {
    * A picture of the application's own window, as a PNG file. Absent: this driver takes none.
    * For an application that gives no elements, the picture is what a caller reads.
    */
-  capture?(): Promise<Captured>;
+  capture?(how?: CaptureHow): Promise<Captured>;
+}
+
+/** What a picture shows. Absent `screen`: the window of the application only. */
+export interface CaptureHow {
+  /** The whole display that holds the application, with every application on it. */
+  screen?: boolean;
 }
 
 /** A picture that was taken, or the reason there is none. */
@@ -174,9 +180,11 @@ export type Captured =
   | {
       ok: true;
       path: string;
-      /** The window on the screen, in points: x, y, width, height. */
+      /** What the picture shows on the screen, in points: x, y, width, height. */
       window: readonly [number, number, number, number];
       /** The pixels of the picture for each point of the screen. */
       scale: number;
+      /** The application's window when the picture was taken. Absent: the picture is that window. */
+      appWindow?: readonly [number, number, number, number];
     }
   | { ok: false; reason: string };

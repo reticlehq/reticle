@@ -1442,6 +1442,52 @@ describe('PeerCommands', () => {
       });
     });
 
+    // A whole-screen picture shows every application: an overlay of another one, a dialog of the
+    // system. Its pixels start at the corner of the display, not of the window.
+    it('takes the whole screen when asked, and a point of it is a point of the screen', async () => {
+      const asked: unknown[] = [];
+      const made = picturing(undefined);
+      const commands = new PeerCommands({
+        driver: {
+          ...fakeDriver(),
+          capture: (how) => {
+            asked.push(how);
+            return Promise.resolve({
+              ok: true,
+              path: '/tmp/reticle-capture-2.png',
+              window: [0, 0, 1000, 800],
+              scale: 2,
+              appWindow: [0, 0, 400, 300],
+            } as never);
+          },
+          act: (request) => {
+            made.asked.push(request);
+            return Promise.resolve({
+              delivered: true,
+              reachable: true,
+              settled: true,
+              before: read('Ready'),
+              after: read('Saved'),
+            });
+          },
+        },
+        emit: () => undefined,
+      });
+      expect(await commands.answer(ReticleCommand.CAPTURE, { screen: true })).toEqual({
+        ok: true,
+        path: '/tmp/reticle-capture-2.png',
+        screen: true,
+      });
+      expect(asked).toEqual([{ screen: true }]);
+      // The window did not move: the click is not refused, and the point maps from the display.
+      await commands.answer(ReticleCommand.ACT, {
+        ref: await refOf(commands, 'Save'),
+        action: ActionType.CLICK,
+        args: { foreground: true, at: { x: 600, y: 400 } },
+      });
+      expect(made.asked.at(-1)?.value).toBe('300,200');
+    });
+
     it('says what to do when the terminal may not record the screen', async () => {
       const { commands } = picturing({ ok: false, reason: 'no-screen-recording-permission' });
       const answer = (await commands.answer(ReticleCommand.CAPTURE, {})) as { reason: string };

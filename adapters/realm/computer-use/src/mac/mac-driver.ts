@@ -11,12 +11,22 @@ import { RETICLE_CAPTURE_FILE_PREFIX } from '@reticlehq/core';
 import { z } from 'zod';
 
 import { ActRefusal, Reach } from '../driver.js';
-import type { ActOutcome, ActRequest, Captured, ReachAnswer, UiDriver, UiRead } from '../driver.js';
+import type {
+  ActOutcome,
+  ActRequest,
+  CaptureHow,
+  Captured,
+  ReachAnswer,
+  UiDriver,
+  UiRead,
+} from '../driver.js';
 import { AxNodeSchema, fromAx } from './from-ax.js';
 import type { AxNode } from './from-ax.js';
 import type { Placed } from '../ui-node.js';
 
 const Command = { TREE: 'tree', ACT: 'act', REACH: 'reach', CAPTURE: 'capture' } as const;
+/** The word that asks the helper for the whole display, and not the window only. */
+const SCREEN = 'screen';
 const HelperError = {
   NOT_TRUSTED: 'not-trusted',
   APP_GONE: 'app-gone',
@@ -35,6 +45,7 @@ const CaptureSchema = z.object({
   reason: z.string().optional(),
   window: z.array(z.number()).optional(),
   scale: z.number().optional(),
+  appWindow: z.array(z.number()).optional(),
 });
 const ReachSchema = z.object({ reach: z.enum(Reach), detail: z.string().optional() });
 const RefusedSchema = z.object({ refused: z.enum(ActRefusal), detail: z.string().optional() });
@@ -228,7 +239,7 @@ export class MacDriver implements UiDriver {
     return raw;
   }
 
-  async capture(): Promise<Captured> {
+  async capture(how?: CaptureHow): Promise<Captured> {
     this.#captures += 1;
     // In the temporary folder and with the prefix the daemon asks for: it reads no other file.
     const path = join(
@@ -236,7 +247,12 @@ export class MacDriver implements UiDriver {
       `${RETICLE_CAPTURE_FILE_PREFIX}cu-${String(this.#input.pid)}-${String(this.#captures)}.png`,
     );
     const answer = CaptureSchema.safeParse(
-      await this.#ask([Command.CAPTURE, String(this.#input.pid), path]),
+      await this.#ask([
+        Command.CAPTURE,
+        String(this.#input.pid),
+        path,
+        ...(true === how?.screen ? [SCREEN] : []),
+      ]),
     );
     if (!answer.success) {
       return { ok: false, reason: 'the helper gave no picture' };
@@ -245,7 +261,16 @@ export class MacDriver implements UiDriver {
       return { ok: false, reason: answer.data.reason ?? 'the capture failed' };
     }
     const [x = 0, y = 0, width = 0, height = 0] = answer.data.window ?? [];
-    return { ok: true, path, window: [x, y, width, height], scale: answer.data.scale ?? 1 };
+    const app = answer.data.appWindow;
+    return {
+      ok: true,
+      path,
+      window: [x, y, width, height],
+      scale: answer.data.scale ?? 1,
+      ...(app === undefined
+        ? {}
+        : { appWindow: [app[0] ?? 0, app[1] ?? 0, app[2] ?? 0, app[3] ?? 0] }),
+    };
   }
 
   async reach(target: Placed): Promise<ReachAnswer> {

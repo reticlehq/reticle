@@ -17,7 +17,8 @@
 // Output is one JSON object on stdout. The helper decides nothing. It reports what it read.
 //
 //   reticle-ax web-tree <pid> on|off   (Electron: its accessibility switch)
-//   reticle-ax capture <pid> <file.png>   (a picture of the application's window)
+//   reticle-ax capture <pid> <file.png> [screen]   (a picture of the application's window, or of
+//                                                  the whole display that holds it)
 //   reticle-ax apps                    (the applications that are open: name, process, pid)
 //   reticle-ax serve      (one command for each line on standard input, as a JSON list of words)
 import AppKit
@@ -559,6 +560,39 @@ func run(_ args: [String]) throws {
       if best == nil || rect.width * rect.height > best!.rect.width * best!.rect.height {
         best = (id, rect)
       }
+    }
+    // "screen": the whole display that holds the application's window, with every application
+    // on it. An overlay of another application, or a dialog of the system, is there too.
+    if args.count >= 5, args[4] == "screen" {
+      var displays = [CGDirectDisplayID](repeating: 0, count: 16)
+      var count: UInt32 = 0
+      CGGetActiveDisplayList(16, &displays, &count)
+      let active = Array(displays.prefix(Int(count)))
+      let display =
+        best.flatMap { b in active.first { CGDisplayBounds($0).intersects(b.rect) } }
+        ?? CGMainDisplayID()
+      let bounds = CGDisplayBounds(display)
+      // screencapture numbers the displays from 1, in the order of the active list.
+      let number = (active.firstIndex(of: display) ?? 0) + 1
+      let shot = Process()
+      shot.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+      shot.arguments = ["-x", "-D", String(number), args[3]]
+      try? shot.run()
+      shot.waitUntilExit()
+      guard shot.terminationStatus == 0, FileManager.default.fileExists(atPath: args[3]) else {
+        try emit(["ok": false, "reason": "the capture failed"])
+      }
+      let scale = Double(CGDisplayPixelsWide(display)) / Double(max(bounds.width, 1))
+      let pixels = NSImage(contentsOfFile: args[3])?.representations.first?.pixelsWide ?? 0
+      var answer: [String: Any] = [
+        "ok": true, "path": args[3],
+        "scale": pixels > 0 ? Double(pixels) / Double(bounds.width) : scale,
+        "window": [bounds.origin.x, bounds.origin.y, bounds.width, bounds.height],
+      ]
+      if let b = best {
+        answer["appWindow"] = [b.rect.origin.x, b.rect.origin.y, b.rect.width, b.rect.height]
+      }
+      try emit(answer)
     }
     guard let window = best else { try emit(["ok": false, "reason": "no-window-on-this-screen"]) }
     let shot = Process()
