@@ -204,10 +204,12 @@ export interface ContradictionOptions {
   namedStatePaths?: readonly string[] | undefined;
   namedSignals?: readonly string[] | undefined;
   /**
-   * Endpoints the assertion declared as reads (`net { repeatable: true }`). Repeats on them are not
-   * a double submit, so `duplicate-request` skips them (#1353). A call matches when its URL contains
-   * `urlContains` and, if the clause named a method, its method is that one: a repeatable GET never
-   * excuses a POST. Nothing else reads it: they are still waited for and still counted.
+   * Endpoints the assertion declared repeats on. A read (`net { repeatable: true }`, no `count`):
+   * repeats on it are not a double submit, so `duplicate-request` skips it (#1353). A count
+   * (`net { count: N }`): up to N landed writes there are the declared consequence, and only a
+   * group with more is reported (#2273). A call matches when its URL contains `urlContains` and, if
+   * the clause named a method, its method is that one: a repeatable GET never excuses a POST.
+   * Nothing else reads it: the calls are still waited for and still counted.
    */
   repeatableNetUrls?: readonly DeclaredRead[] | undefined;
 }

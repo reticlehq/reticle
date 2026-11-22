@@ -42,7 +42,7 @@ import { findBodyFailures } from './body-failures.js';
 import { findEchoMismatches } from './echo-mismatch.js';
 import { findUnitMismatches } from './unit-mismatch.js';
 import { asString } from '@reticlehq/core';
-import { isDeclaredRead, matchesDeclaredFailure } from '@/question/declared.js';
+import { declaredCountFor, isDeclaredRead, matchesDeclaredFailure } from '@/question/declared.js';
 import { runRegisteredFolds } from './contradiction-folds.js';
 import { isMeaningfulStateChange } from '../state-bookkeeping.js';
 import type {
@@ -760,6 +760,8 @@ function findWindowContradictions(
       string,
       { t: number; landed: boolean; identity: WriteIdentity | undefined }[]
     >();
+    // How many calls the assertion declared for each endpoint, keyed like `writes`.
+    const declaredCount = new Map<string, number>();
     for (const event of events) {
       if (event.type !== EventType.NET_REQUEST || event.t < actionSince) {
         continue;
@@ -781,6 +783,7 @@ function findWindowContradictions(
       // APPLIED and a group is only formed once the identities are known.
       calls.push({ t: event.t, landed: false !== call.ok, identity: identityOf(event) });
       writes.set(label, calls);
+      declaredCount.set(label, declaredCountFor(call, options.repeatableNetUrls));
     }
     /**
      * Did the assertion name this endpoint?
@@ -816,6 +819,13 @@ function findWindowContradictions(
         // action was performed" is not contradicted by them. A call with no verdict at all still
         // counts, because absence of a status is not evidence the write was rejected.
         if (landed < 2) {
+          continue;
+        }
+        // The assertion said how many calls it expected here (`net { count: N }`): up to N landed
+        // writes are that declared consequence, not one action submitted twice. Two toggles that
+        // each save with the same body shape, asserted with `count: 2`, read as a double submit
+        // (#2273). A write past N is still reported.
+        if (landed <= (declaredCount.get(label) ?? 0)) {
           continue;
         }
         // A steady cadence is a POLL, and a poll is not a double submit. An app that polls could not
