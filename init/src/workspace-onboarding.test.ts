@@ -29,6 +29,7 @@ const WEB = {
     devDependencies: { vite: '^7' },
   }),
   'apps/web/vite.config.ts': 'export default { plugins: [] };\n',
+  'apps/web/index.html': '<main>Web app</main>',
 };
 const ADMIN = {
   'apps/admin/package.json': JSON.stringify({
@@ -107,6 +108,7 @@ describe('init run inside the app directory of a workspace', () => {
       [`${ROOT}/package.json`]: WORKSPACE_ROOT,
       'package.json': WEB['apps/web/package.json'],
       'vite.config.ts': WEB['apps/web/vite.config.ts'],
+      'index.html': WEB['apps/web/index.html'],
     });
 
   it('writes the root pointer the `--app` path writes, so an agent at the root finds the app', () => {

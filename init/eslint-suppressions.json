@@ -51,7 +51,7 @@
   },
   "src/detect/workspace-redirect.ts": {
     "curly": {
-      "count": 10
+      "count": 8
     }
   },
   "src/diagnose/containerised-dev-server.ts": {
