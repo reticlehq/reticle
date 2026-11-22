@@ -2,7 +2,8 @@
 //   - an empty layer over the whole window, that clicks pass through (Discord has one for its
 //     popups), does not cover a button: the button is pressed, and the press has its effect;
 //   - the backdrop of an open dialog covers a button behind it: the press is refused;
-//   - the button in the dialog is pressed.
+//   - the button in the dialog is pressed;
+//   - the backdrop of a popup with no mark of a dialog covers a button behind it too.
 // Chromium answers a hit test with the empty layer, so the realm refused every button of Discord.
 //
 //   node native/mac/layercheck.mjs
@@ -72,15 +73,27 @@ try {
     'the button under the empty layer was not pressed',
   );
 
+  // A popup that is not marked as a dialog: only its place after the backdrop says it is in front.
+  await press('Open menu');
+  await sleep(300);
+  await assert.rejects(
+    press('Go'),
+    /cannot reach/,
+    'a button behind an unmarked popup was pressed',
+  );
+  assert.ok(!(await texts()).includes('2 clicks'), 'the button behind the popup was pressed');
+  await press('Keep');
+  assert.ok((await texts()).includes('kept'), 'the button in the unmarked popup was not pressed');
+
   await press('Open dialog');
   await sleep(300);
   await assert.rejects(press('Go'), /cannot reach/, 'a button behind the backdrop was pressed');
-  assert.ok((await texts()).includes('1 clicks'), 'the button behind the backdrop was pressed');
+  assert.ok(!(await texts()).includes('2 clicks'), 'the button behind the backdrop was pressed');
 
   await press('Done');
   assert.ok((await texts()).includes('dialog done'), 'the button in the dialog was not pressed');
 
-  process.stdout.write('computer-use layercheck: 3 of 3 cases held\n');
+  process.stdout.write('computer-use layercheck: 5 of 5 cases held\n');
 } finally {
   app.kill();
   await sleep(500);

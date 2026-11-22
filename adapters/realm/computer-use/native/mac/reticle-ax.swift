@@ -276,6 +276,21 @@ func passesThrough(_ hit: AXUIElement, to target: AXUIElement) -> Bool {
     }
     return false
   }
+  // A popup is drawn after its backdrop: a later sibling with content that does not hold the
+  // target is in front of it, with a mark of a dialog or not. Discord's empty layer has no such
+  // sibling.
+  var siblings: AnyObject?
+  if let up = parent(hit),
+    AXUIElementCopyAttributeValue(up, kAXChildrenAttribute as CFString, &siblings) == .success,
+    let all = siblings as? [AXUIElement],
+    let index = all.firstIndex(where: { CFEqual($0, hit) })
+  {
+    for later in all[(index + 1)...] {
+      var size: CFIndex = 0
+      AXUIElementGetAttributeValueCount(later, kAXChildrenAttribute as CFString, &size)
+      if size > 0 && !holdsTarget(later) { return false }
+    }
+  }
   // The dialogs near the layer: in the parent of the layer, a few levels down.
   var level = parent(hit).map { [$0] } ?? []
   for _ in 0..<4 {
