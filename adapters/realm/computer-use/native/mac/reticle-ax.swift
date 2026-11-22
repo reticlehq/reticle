@@ -97,7 +97,10 @@ func readElement(_ element: AXUIElement, _ depth: Int, _ unread: inout Int) -> [
   // The menu bar of an application that is not in front is not on the screen: a person cannot
   // see it or press it, and a press on it is refused. It is given no size and its menus are not
   // read. They are most of the elements of an application, and each one costs a call.
-  if role == "AXMenuBar" && !menuBarOnScreen {
+  // The items at the right of the menu bar (Control Centre, Wi-Fi, Focus) are on the screen when
+  // their application is not in front. Control Centre gave them as its menu bar, and they were
+  // dropped, so its toggles (Stage Manager among them) could not be pressed.
+  if role == "AXMenuBar" && !menuBarOnScreen && !isMenuExtras(children) {
     children = []
     if let r = frame(v[7], v[8]) { node["frame"] = [r.origin.x, r.origin.y, 0, 0] }
   }
@@ -158,6 +161,14 @@ func isInFront(_ pid: pid_t) -> Bool {
 
 /// The menu bar of the application being read is on the screen. Set for each read.
 var menuBarOnScreen = true
+
+/// A menu bar of items at the right of the screen, which are on the screen at all times.
+func isMenuExtras(_ items: [AXUIElement]) -> Bool {
+  guard let first = items.first else { return false }
+  var subrole: AnyObject?
+  AXUIElementCopyAttributeValue(first, kAXSubroleAttribute as CFString, &subrole)
+  return (subrole as? String) == "AXMenuExtra"
+}
 
 func snapshot(_ app: AXUIElement) -> (tree: [String: Any], unread: Int, json: Data) {
   var unread = 0
