@@ -101,9 +101,12 @@ const plan = {
   approved: true,
   steps: [
     {
-      id: 'compute',
-      intent: 'Compute 1234 × 56 in Calculator',
+      // Calculator starts with the last result on its display. Cleared first, the result of the
+      // next step is new, and its proof shows that the step made it.
+      id: 'clear',
+      intent: 'Bring Calculator to the front and clear it',
       target: { app: 'Calculator' },
+      writes: ['cleared'],
       calls: [
         {
           tool: 'reticle_query',
@@ -114,8 +117,21 @@ const plan = {
           tool: 'reticle_act',
           args: { ref: '{app}', action: 'focus', args: { foreground: true } },
         },
-        ...['All Clear', '1', '2', '3', '4', 'Multiply', '5', '6', 'Equals'].flatMap(press),
+        ...press('All Clear'),
+        {
+          tool: 'reticle_query',
+          args: { role: 'text' },
+          capture: { key: 'cleared', path: 'elements.-1.name' },
+        },
       ],
+      proof: { kind: 'value', key: 'cleared', pattern: '^0$' },
+    },
+    {
+      id: 'compute',
+      intent: 'Compute 1234 × 56 in Calculator',
+      target: { app: 'Calculator' },
+      needs: ['clear'],
+      calls: ['1', '2', '3', '4', 'Multiply', '5', '6', 'Equals'].flatMap(press),
       proof: { kind: 'consequence', until: { text: '69,104' } },
     },
     {
