@@ -192,8 +192,13 @@ func child(_ element: AXUIElement, _ index: Int) -> AXUIElement? {
   return children[index]
 }
 
+/// The name of the HUD program of the realm. Its windows take no click: the pointer and the glow
+/// let every click through to what is under them.
+let hudProgram = "reticle-hud"
+
 /// The application that owns the frontmost window at a point, from the window server's own list.
-/// It needs no answer from any application.
+/// It needs no answer from any application. The windows of the HUD are not counted: the pointer
+/// rests on the last target, and it was named as the window over the next one.
 func windowOwner(at point: CGPoint) -> (pid: pid_t, name: String, layer: Int)? {
   let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
   guard let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] else {
@@ -203,6 +208,7 @@ func windowOwner(at point: CGPoint) -> (pid: pid_t, name: String, layer: Int)? {
     guard let bounds = window[kCGWindowBounds as String] as? NSDictionary,
       let rect = CGRect(dictionaryRepresentation: bounds), rect.contains(point),
       (window[kCGWindowAlpha as String] as? Double ?? 1) > 0,
+      window[kCGWindowOwnerName as String] as? String != hudProgram,
       let pid = window[kCGWindowOwnerPID as String] as? pid_t
     else { continue }
     return (
@@ -236,6 +242,60 @@ enum Reach {
   case no(by: String)
   /// The operating system did not answer. Nothing is known about the element.
   case unknown(code: Int)
+}
+
+/// Whether `hit`, the answer of a hit test at the middle of `target`, is an empty layer that a
+/// click goes through. Chromium answers a hit test with an empty group over the whole window that
+/// has `pointer-events: none`, as the layer that Discord keeps for its popups, and the realm then
+/// refused every button of Discord. The backdrop of an open dialog is an empty group too, and a
+/// click on it does not go through (it closes the dialog). So the layer passes only when no open
+/// dialog near it is without the target.
+func passesThrough(_ hit: AXUIElement, to target: AXUIElement) -> Bool {
+  var hitPid: pid_t = 0
+  var targetPid: pid_t = 0
+  AXUIElementGetPid(hit, &hitPid)
+  AXUIElementGetPid(target, &targetPid)
+  var count: CFIndex = 0
+  AXUIElementGetAttributeValueCount(hit, kAXChildrenAttribute as CFString, &count)
+  guard hitPid == targetPid, count == 0, let v = values(hit), text(v[0]) == "AXGroup",
+    (text(v[2]) ?? "").isEmpty, (text(v[3]) ?? "").isEmpty
+  else { return false }
+  func parent(_ e: AXUIElement) -> AXUIElement? {
+    var up: AnyObject?
+    guard AXUIElementCopyAttributeValue(e, kAXParentAttribute as CFString, &up) == .success,
+      let found = up, CFGetTypeID(found) == AXUIElementGetTypeID()
+    else { return nil }
+    return (found as! AXUIElement)
+  }
+  func holdsTarget(_ dialog: AXUIElement) -> Bool {
+    var at: AXUIElement? = target
+    for _ in 0..<80 {
+      guard let now = at else { return false }
+      if CFEqual(now, dialog) { return true }
+      at = parent(now)
+    }
+    return false
+  }
+  // The dialogs near the layer: in the parent of the layer, a few levels down.
+  var level = parent(hit).map { [$0] } ?? []
+  for _ in 0..<4 {
+    var next: [AXUIElement] = []
+    for element in level {
+      var role: AnyObject?
+      var subrole: AnyObject?
+      AXUIElementCopyAttributeValue(element, kAXRoleAttribute as CFString, &role)
+      AXUIElementCopyAttributeValue(element, kAXSubroleAttribute as CFString, &subrole)
+      let isDialog =
+        role as? String == "AXSheet" || subrole as? String == "AXApplicationDialog"
+        || subrole as? String == "AXDialog"
+      if isDialog && !holdsTarget(element) { return false }
+      var kids: AnyObject?
+      AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &kids)
+      next += (kids as? [AXUIElement]) ?? []
+    }
+    level = next
+  }
+  return true
 }
 
 /// Whether a person who clicks the middle of `target` reaches `target`: the topmost element on the
@@ -276,6 +336,7 @@ func reach(_ target: AXUIElement, _ rect: CGRect) -> Reach {
         if CFEqual(up, top) { return .yes }
       }
     }
+    if passesThrough(top, to: target) { return .yes }
     let v = values(top)
     let role = v.flatMap { text($0[0]) } ?? "element"
     let name = v.flatMap { text($0[2]) ?? text($0[3]) } ?? ""
@@ -479,7 +540,7 @@ func run(_ args: [String]) throws {
   // check of the window sets this name in the environment, and nothing else does.
   var program = [CChar](repeating: 0, count: 4096)
   if proc_pidpath(pid, &program, UInt32(program.count)) > 0,
-    URL(fileURLWithPath: String(cString: program)).lastPathComponent == "reticle-hud",
+    URL(fileURLWithPath: String(cString: program)).lastPathComponent == hudProgram,
     ProcessInfo.processInfo.environment["RETICLE_AX_CHECKS_ITS_OWN_WINDOW"] == nil
   {
     try emit(["error": "own-window"])

@@ -22,6 +22,28 @@ const page = `<h1>Notes</h1>
   document.querySelector('#slow').onclick = () => setTimeout(() => (count.textContent = 'slow done'), 400);
 </script>`;
 
+// A page for native/mac/layercheck.mjs: an empty layer over the whole window that clicks pass
+// through, as Discord's layer for popups, and a dialog with a backdrop that clicks do not pass.
+const LAYERS = `<h1>Layers</h1>
+<button id="go">Go</button><button id="open">Open dialog</button>
+<p id="count">0 clicks</p>
+<div class="layerContainer" style="position:fixed;inset:0;pointer-events:none;z-index:10"></div>
+<div id="backdrop" hidden style="position:fixed;inset:0;background:rgba(0,0,0,.3);z-index:20"></div>
+<div id="dialog" role="dialog" aria-label="Settings" hidden
+  style="position:fixed;top:30px;left:200px;z-index:30;background:#fff;padding:12px">
+  <button id="ok">Done</button></div>
+<script>
+  let clicks = 0;
+  const count = document.querySelector('#count');
+  document.querySelector('#go').onclick = () => (count.textContent = ++clicks + ' clicks');
+  document.querySelector('#open').onclick = () => {
+    document.querySelector('#backdrop').hidden = false;
+    document.querySelector('#dialog').hidden = false;
+  };
+  document.querySelector('#ok').onclick = () => (count.textContent = 'dialog done');
+</script>`;
+const PAGE = 'layers' === process.env['RETICLE_FIXTURE_PAGE'] ? LAYERS : page;
+
 // Not in the Dock and not in front: the person at the machine keeps the application they use.
 // With RETICLE_FIXTURE_REGULAR it is an ordinary application with a menu bar, for the check of
 // the menu bar. That check brings it to the front.
@@ -37,6 +59,6 @@ void app.whenReady().then(() => {
   window.setAlwaysOnTop(true, 'floating');
   window.setVisibleOnAllWorkspaces(true);
   window.showInactive();
-  void window.loadURL(`data:text/html,${encodeURIComponent(page)}`);
+  void window.loadURL(`data:text/html,${encodeURIComponent(PAGE)}`);
 });
 app.on('window-all-closed', () => app.quit());
