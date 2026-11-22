@@ -204,7 +204,12 @@ export function placeShown(root: UiNode): { shown: Placed[]; omitted: number } {
     if (p.node.role === UiRole.DOCUMENT || (above !== undefined && inPage.has(above))) {
       inPage.add(p.key);
     }
-    const noSize = frame !== undefined && (frame[2] <= THIN || frame[3] <= THIN);
+    // An application is not a thing on the screen: the Dock gives its own 0,0,0,0, and that hid
+    // every item of the Dock.
+    const noSize =
+      p.node.role !== UiRole.APPLICATION &&
+      frame !== undefined &&
+      (frame[2] <= THIN || frame[3] <= THIN);
     const scrolledOut =
       frame !== undefined &&
       p.node.role !== UiRole.DOCUMENT &&

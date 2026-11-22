@@ -71,6 +71,7 @@ export const FOREGROUND_ONLY: ReadonlySet<string> = new Set([
   ActKind.HOVER,
   ActKind.DRAG,
   ActKind.RAISE,
+  ActKind.WHEEL,
 ]);
 /** The actions that carry their own value: a caller gives none. */
 export const VALUE_OF: Readonly<Partial<Record<string, string>>> = {

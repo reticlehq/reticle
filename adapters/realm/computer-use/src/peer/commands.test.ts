@@ -604,6 +604,19 @@ describe('PeerCommands', () => {
     await expect(peer().commands.answer(ReticleCommand.SCROLL, {})).rejects.toThrow(
       /no scroll bar/,
     );
+    // Discord's list of servers moves with no bar and no key, as many lists of a web view do:
+    // "Add a Server" stayed under the edge. With the foreground, the real wheel turns over the
+    // element, as a person turns it.
+    asked.length = 0;
+    const wheeled = (await commands.answer(ReticleCommand.SCROLL, {
+      ref: row,
+      fraction: 1,
+      foreground: true,
+    })) as { by: string };
+    expect(wheeled.by).toBe('wheel');
+    expect(asked.map((a) => [a.kind, a.value, a.target.node.name])).toEqual([
+      ['wheel', '40', 'Row 1'],
+    ]);
   });
 
   it('does not call an element visible when a window is on top of it', async () => {
@@ -1404,6 +1417,7 @@ describe('PeerCommands', () => {
   describe('a picture of the window', () => {
     const picturing = (taken: unknown) => {
       const made = peer();
+      const moves: [number, number][] = [];
       const commands = new PeerCommands({
         driver: {
           ...fakeDriver(),
@@ -1420,6 +1434,16 @@ describe('PeerCommands', () => {
           },
         },
         emit: () => undefined,
+        hud: {
+          app: () => undefined,
+          move: (x, y) => moves.push([x, y]),
+          glow: () => undefined,
+          act: () => undefined,
+          effect: () => undefined,
+          paused: () => false,
+          stopped: () => false,
+          close: () => undefined,
+        },
       });
       const clickAt = async (args: Record<string, unknown>) =>
         commands.answer(ReticleCommand.ACT, {
@@ -1427,7 +1451,7 @@ describe('PeerCommands', () => {
           action: ActionType.CLICK,
           args,
         });
-      return { commands, clickAt, asked: made.asked };
+      return { commands, clickAt, asked: made.asked, moves };
     };
     const shot = {
       ok: true,
@@ -1505,6 +1529,15 @@ describe('PeerCommands', () => {
       expect(asked.map((request) => [request.kind, request.value])).toEqual([
         [ActKind.CLICK, '100,50'],
       ]);
+    });
+
+    // The pointer of the HUD went to the middle of the element, and for a point of a picture the
+    // element is the whole window: the person saw the pointer stay still at each click.
+    it('moves the pointer of the HUD to the point that it clicks, not to the middle of the element', async () => {
+      const { commands, clickAt, moves } = picturing(shot);
+      await commands.answer(ReticleCommand.CAPTURE, {});
+      await clickAt({ foreground: true, at: { x: 200, y: 100 } });
+      expect(moves.at(-1)).toEqual([100, 50]);
     });
 
     // A point of a picture is a place in the window as it was. When the window moved or changed

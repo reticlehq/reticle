@@ -49,6 +49,7 @@ import type { ActResult } from './form.js';
 import { READ_STATE, see } from './seen.js';
 import {
   NO_SCREEN_RECORDING,
+  POINT_KINDS,
   contentMoved,
   kindFor,
   needsForeground,
@@ -607,8 +608,13 @@ export class PeerCommands {
         'the person at the machine paused Reticle in its window. No action is done while it is paused. Tell them what you were about to do, and wait.',
       );
     }
+    // The pointer goes where the action goes: the point of a picture when one is given, or the
+    // middle of the element. For a point, the element is often the whole window.
+    const point = POINT_KINDS.has(kind) ? (value ?? '').split(',').map(Number) : [];
     const frame = target.node.frame;
-    if (frame !== undefined) {
+    if (2 === point.length && point.every(Number.isFinite)) {
+      hud?.move(point[0] ?? 0, point[1] ?? 0);
+    } else if (frame !== undefined) {
       hud?.move(frame[0] + frame[2] / 2, frame[1] + frame[3] / 2);
     }
     if (target.windowFrame !== undefined) {

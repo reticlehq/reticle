@@ -25,6 +25,8 @@ export const ActKind = {
   HOVER: 'hover',
   /** From the element to the point in `value`, as "x,y" on the screen. */
   DRAG: 'drag',
+  /** The real wheel over the element: `value` is lines, more than 0 down. */
+  WHEEL: 'wheel',
 } as const;
 export type ActKind = (typeof ActKind)[keyof typeof ActKind];
 

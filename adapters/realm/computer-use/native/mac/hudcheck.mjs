@@ -7,7 +7,7 @@
 // Needs the Accessibility permission. Build the package first.
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
@@ -35,6 +35,22 @@ for (const [name, to] of [
   });
 }
 
+// Where the pointer of the HUD is: its window is the one at the level of a screen saver (1000).
+writeFileSync(
+  `${build}/hudwins.swift`,
+  `import CoreGraphics
+let all = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] ?? []
+for w in all where (w[kCGWindowOwnerName as String] as? String) == "reticle-hud" && (w[kCGWindowLayer as String] as? Int) == 1000 {
+  let b = w[kCGWindowBounds as String] as? [String: Double] ?? [:]
+  print(Int(b["X"] ?? 0), Int(b["Y"] ?? 0))
+}
+`,
+);
+execFileSync('swiftc', ['-O', `${build}/hudwins.swift`, '-o', `${build}/hudwins`], {
+  stdio: ['ignore', 'ignore', 'ignore'],
+});
+const pointerAt = () => execFileSync(`${build}/hudwins`, { encoding: 'utf8' }).trim();
+
 // Only this check may read the window of Reticle: it presses Pause as a person does.
 process.env.RETICLE_AX_CHECKS_ITS_OWN_WINDOW = '1';
 const helper = `${build}/reticle-ax`;
@@ -60,6 +76,8 @@ async function press(peer, name) {
 try {
   await sleep(1500);
   await press(commands, 'Save');
+  await sleep(300);
+  const atSave = pointerAt();
 
   const hudPid = Number(execFileSync('pgrep', ['-n', '-f', 'build/reticle-hud']).toString().trim());
   const onHud = new PeerCommands({
@@ -87,6 +105,10 @@ try {
   assert.ok(after.effect.domMutatedWithin > 0, 'the realm did not act after Resume');
   const status = (await commands.answer(ReticleCommand.QUERY, { role: 'text' })).elements[0]?.name;
   assert.equal(status, 'Slow done');
+  // The pointer goes to each control the realm presses. An animated setFrameOrigin did nothing,
+  // so a pointer that was already on the screen stayed at its first place for the whole run.
+  await sleep(300);
+  assert.ok(atSave !== '' && pointerAt() !== atSave, `the pointer did not move: ${atSave}`);
 
   // The person's turn: the agent's `yield` with a question. The HUD shows it, and Pause becomes
   // Done. Done goes back to the agent as the person's message, and Done is Pause again.
@@ -113,7 +135,7 @@ try {
   await assert.rejects(press(commands, 'Save'), /stopped Reticle/);
   assert.equal(hud.stopped(), true);
 
-  process.stdout.write('computer-use hudcheck: 8 of 8 cases held\n');
+  process.stdout.write('computer-use hudcheck: 9 of 9 cases held\n');
 } finally {
   hud.close();
   fixture.kill();

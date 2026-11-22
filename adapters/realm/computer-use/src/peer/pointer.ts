@@ -82,7 +82,7 @@ export function pointOnScreen(
 /** What the helper says when the terminal may not record the screen. */
 export const NO_SCREEN_RECORDING = 'no-screen-recording-permission';
 /** The kinds that can go to a point of a picture, and not to the middle of an element. */
-const POINT_KINDS: ReadonlySet<string> = new Set([
+export const POINT_KINDS: ReadonlySet<string> = new Set([
   ActKind.CLICK,
   ActKind.DBLCLICK,
   ActKind.RIGHTCLICK,

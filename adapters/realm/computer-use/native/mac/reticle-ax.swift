@@ -108,6 +108,10 @@ func readElement(_ element: AXUIElement, _ depth: Int, _ unread: inout Int) -> [
     {
       let all = children
       let found = rows.compactMap { row in all.firstIndex { CFEqual($0, row) } }
+      // Chromium gives an ARIA tree (Discord's servers) as an outline whose visible rows are an
+      // empty list, and its items are not rows at all. That read as "no row is on the screen", and
+      // every server was dropped. Visible rows that name none of the children are not believed.
+      if found.isEmpty && !all.isEmpty { return finish(node, all, nil) }
       places = found
       children = found.map { all[$0] }
       // The rows that are not on the screen. The columns are left out too, and they are not
@@ -119,14 +123,20 @@ func readElement(_ element: AXUIElement, _ depth: Int, _ unread: inout Int) -> [
       node["notShown"] = max(0, total - children.count)
     }
   }
-  var kids: [[String: Any]] = []
-  for (order, child) in children.enumerated() {
-    var one = readElement(child, depth + 1, &unread)
-    if let places { one["i"] = places[order] }
-    kids.append(one)
+  return finish(node, children, places)
+
+  /// The node with its children read: each keeps its place in the whole list when only some were.
+  func finish(_ node: [String: Any], _ children: [AXUIElement], _ places: [Int]?) -> [String: Any] {
+    var node = node
+    var kids: [[String: Any]] = []
+    for (order, child) in children.enumerated() {
+      var one = readElement(child, depth + 1, &unread)
+      if let places { one["i"] = places[order] }
+      kids.append(one)
+    }
+    node["children"] = kids
+    return node
   }
-  node["children"] = kids
-  return node
 }
 
 /// True when the menu bar on the screen is the one of this application: the application is the
@@ -884,7 +894,7 @@ func run(_ args: [String]) throws {
     guard foreground else { try emit(["refused": "needs-foreground"]) }
     _ = AXUIElementSetAttributeValue(target, kAXFocusedAttribute as CFString, kCFBooleanTrue)
     result = isInFront(pid) ? .success : .cannotComplete
-  case "click", "dblclick", "rightclick", "hover", "drag":
+  case "click", "dblclick", "rightclick", "hover", "drag", "wheel":
     // The real pointer. Only in the foreground: a pointer event that is sent to one application
     // in the background is not taken by it.
     guard foreground, let rect = frame(now[7], now[8]) else {
@@ -892,7 +902,8 @@ func run(_ args: [String]) throws {
     }
     // The middle of the element, or the point the caller gives as "x,y" on the screen: for an
     // application that gives no elements, a point in its picture is all a caller has.
-    let given = action == "drag" ? [] : value.split(separator: ",").compactMap { Double($0) }
+    let given =
+      action == "drag" || action == "wheel" ? [] : value.split(separator: ",").compactMap { Double($0) }
     let at =
       given.count == 2
       ? CGPoint(x: given[0], y: given[1]) : CGPoint(x: rect.midX, y: rect.midY)
@@ -944,6 +955,21 @@ func run(_ args: [String]) throws {
     case "rightclick":
       send(.rightMouseDown, at, .right)
       send(.rightMouseUp, at, .right)
+    case "wheel":
+      // Lines of the wheel over the element, in small turns as a hand gives them. More than 0 is
+      // down; the system counts a turn up as more than 0, so the sign is turned over.
+      let lines = Int32(value) ?? 0
+      let step: Int32 = lines > 0 ? -3 : 3
+      for _ in 0..<max(1, abs(Int(lines)) / 3) {
+        guard
+          let turn = CGEvent(
+            scrollWheelEvent2Source: source, units: .line, wheelCount: 1, wheel1: step, wheel2: 0,
+            wheel3: 0)
+        else { break }
+        turn.location = at
+        turn.post(tap: .cghidEventTap)
+        Thread.sleep(forTimeInterval: 0.02)
+      }
     case "drag":
       // To the point "x,y" on the screen, in steps: an application that follows a drag reads
       // where the pointer is on the way.

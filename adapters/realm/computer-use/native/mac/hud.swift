@@ -46,6 +46,11 @@ enum Token {
   static let active = hex(0x3b82f6)
   static let idle = hex(0xeab308)
   static let ended = hex(0xef4444)
+  /// The body of the pointer: near black, so the moving edge in the two colours stands out.
+  static let pointerFill = hex(0x0b0b0c)
+  /// The width of the moving edge of the pointer, and the time of one turn of its colours.
+  static let pointerEdge: CGFloat = 2.2
+  static let pointerTurn = 2.0
   static let radiusLarge: CGFloat = 14
   static let space1: CGFloat = 4
   static let space2: CGFloat = 8
@@ -65,10 +70,11 @@ enum Token {
   static let square: CGFloat = 26
   static let radiusSmall: CGFloat = 6
   static let wash = 0.18
-  static let glide = 0.32
+  /// The glide of the pointer to a target. Short: the realm does not wait for it, and a pointer
+  /// that came after the click showed the action late.
+  static let glide = 0.12
   static let ease = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
   static let ripple = 0.45
-  static let pointerRest = 4.0
   static let glowDepth = 22
   static let glowIn = 0.25
   static let glowRest = 1.4
@@ -77,12 +83,29 @@ enum Token {
   static let tip = NSPoint(x: 20, y: 20)
 }
 
-/// The arrow of a mouse, in the colour of Reticle, with a light edge and a soft shadow. A ring
+/// The arrow of a mouse: a black body with an edge that goes from orange to blue, and the colours
+/// move round the edge all the time, so a person sees at once which pointer is Reticle's. A ring
 /// spreads from its tip when the realm acts, as the ripple does in a browser.
 final class ArrowView: NSView {
   var ring: CGFloat = 0 { didSet { needsDisplay = true } }
   var ringColor = Token.text
+  /// Where the colours of the edge are in their turn, 0 to 1.
+  var turn: CGFloat = 0
+  var turning: Timer?
   override var isFlipped: Bool { true }
+
+  override func viewDidMoveToWindow() {
+    super.viewDidMoveToWindow()
+    turning?.invalidate()
+    let started = Date()
+    turning = Timer.scheduledTimer(withTimeInterval: 1.0 / 30, repeats: true) { [weak self] _ in
+      // Drawn again only while the pointer can be seen: a hidden pointer costs nothing.
+      guard let self, (self.window?.alphaValue ?? 0) > 0 else { return }
+      self.turn = CGFloat(Date().timeIntervalSince(started) / Token.pointerTurn)
+        .truncatingRemainder(dividingBy: 1)
+      self.needsDisplay = true
+    }
+  }
   override func draw(_ dirtyRect: NSRect) {
     let tip = Token.tip
     if ring > 0 {
@@ -98,24 +121,40 @@ final class ArrowView: NSView {
       (0, 0), (0, 21), (5.6, 16), (9.4, 24.6), (13, 23), (9.2, 14.6), (16.4, 14.6),
     ]
     let arrow = NSBezierPath()
+    let outline = CGMutablePath()
     for (index, point) in shape.enumerated() {
       let at = NSPoint(x: tip.x + point.0, y: tip.y + point.1)
-      if index == 0 { arrow.move(to: at) } else { arrow.line(to: at) }
+      if index == 0 {
+        arrow.move(to: at)
+        outline.move(to: at)
+      } else {
+        arrow.line(to: at)
+        outline.addLine(to: at)
+      }
     }
     arrow.close()
-    arrow.lineJoinStyle = .round
+    outline.closeSubpath()
     NSGraphicsContext.saveGraphicsState()
     let shadow = NSShadow()
     shadow.shadowColor = NSColor.black.withAlphaComponent(0.45)
     shadow.shadowBlurRadius = 5
     shadow.shadowOffset = NSSize(width: 0, height: -2)
     shadow.set()
-    Token.brand.setFill()
+    Token.pointerFill.setFill()
     arrow.fill()
     NSGraphicsContext.restoreGraphicsState()
-    Token.text.setStroke()
-    arrow.lineWidth = 1.6
-    arrow.stroke()
+    // The edge: the outline as a band, filled with orange to blue to orange at an angle that
+    // turns, so the colours run round the pointer.
+    guard let context = NSGraphicsContext.current?.cgContext,
+      let gradient = NSGradient(colors: [Token.brand, Token.active, Token.brand])
+    else { return }
+    let edge = outline.copy(
+      strokingWithWidth: Token.pointerEdge, lineCap: .round, lineJoin: .round, miterLimit: 10)
+    NSGraphicsContext.saveGraphicsState()
+    context.addPath(edge)
+    context.clip()
+    gradient.draw(in: arrow.bounds.insetBy(dx: -4, dy: -4), angle: turn * 360)
+    NSGraphicsContext.restoreGraphicsState()
   }
 }
 
@@ -209,7 +248,6 @@ final class Hud: NSObject, NSApplicationDelegate {
   var stopped = false
   /// The agent asked the person for something (a 2FA code, a captcha): the Pause button is "Done".
   var asking = false
-  var rest: Timer?
   var rippling: Timer?
 
   /// The colour of the state: the realm acts, the realm waits or is paused, the action was refused.
@@ -602,6 +640,15 @@ final class Hud: NSObject, NSApplicationDelegate {
     switch say["t"] as? String {
     case "app":
       app.stringValue = say["name"] as? String ?? ""
+      // While computer use is live, its pointer is on the desktop: it comes at the join, where
+      // the person's own pointer is, and it stays between actions until Stop or the end.
+      if pointer.alphaValue == 0, !stopped {
+        let at = NSEvent.mouseLocation
+        pointer.setFrameOrigin(
+          NSPoint(x: at.x - Token.tip.x, y: at.y - (Token.pointerBox - Token.tip.y)))
+        pointer.orderFrontRegardless()
+        pointer.animator().alphaValue = 1
+      }
     case "move":
       guard let x = say["x"] as? Double, let y = say["y"] as? Double else { return }
       // The realm gives points from the top left. AppKit counts from the bottom left.
@@ -625,12 +672,10 @@ final class Hud: NSObject, NSApplicationDelegate {
       NSAnimationContext.runAnimationGroup { move in
         move.duration = pointer.alphaValue > 0 ? Token.glide : 0
         move.timingFunction = Token.ease
-        pointer.animator().setFrameOrigin(to)
+        // The frame, not the origin: AppKit animates the frame of a window, and an animated
+        // setFrameOrigin does nothing. A pointer that was on the screen stayed where it was.
+        pointer.animator().setFrame(NSRect(origin: to, size: pointer.frame.size), display: true)
         pointer.animator().alphaValue = 1
-      }
-      rest?.invalidate()
-      rest = Timer.scheduledTimer(withTimeInterval: Token.pointerRest, repeats: false) { _ in
-        self.pointer.animator().alphaValue = 0
       }
     case "glow":
       guard !paused, !stopped, let x = say["x"] as? Double, let y = say["y"] as? Double,

@@ -12,6 +12,11 @@ const SETTLE_MS = 1500;
 const SCROLL_STEP = 0.1;
 /** Said in the answer of a scroll that was done with a key, because there was no scroll bar. */
 const SCROLL_BY_KEY = 'key';
+/** Said in the answer of a scroll that was done with the real wheel. */
+const SCROLL_BY_WHEEL = 'wheel';
+/** Lines of the wheel for a place (the end or the start), and for one move. */
+const WHEEL_TO_END = 40;
+const WHEEL_STEP = 5;
 
 /** The key that does what a scroll asks: the end or the start for a place, a page for a move. */
 function scrollKeyFor(fraction: unknown, dy: unknown): string | undefined {
@@ -59,6 +64,23 @@ export async function scrollBy(
           .at(-1);
   const fraction = args['fraction'];
   const dy = args['dy'];
+  // With the foreground, the real wheel over the element, as a person scrolls. A list of a web
+  // view (Discord's servers) has no bar and takes no key: "Add a Server" stayed under the edge.
+  const over = seen.find((s) => s.key === key);
+  if (true === args['foreground'] && over !== undefined && ref !== undefined) {
+    let lines = 0;
+    if ('number' === typeof fraction) {
+      lines = fraction >= 0.5 ? WHEEL_TO_END : -WHEEL_TO_END;
+    } else if ('number' === typeof dy && dy !== 0) {
+      lines = Math.sign(dy) * WHEEL_STEP;
+    }
+    const wheeled = await ctx.drive(over, ref, ActKind.WHEEL, String(lines), {
+      delivery: Delivery.FOREGROUND,
+      budgetMs: SETTLE_MS,
+    });
+    // Declared: the caller asked for a place or for pixels, and got lines of the wheel.
+    return { scrolled: wheeled.changes.length > 0, by: SCROLL_BY_WHEEL, lines };
+  }
   if (bar === undefined) {
     // A page in a Chromium browser has no scroll bar in its tree. A key scrolls it, also when
     // the browser is not in front. The key goes to the element, or to the page, or to the window.

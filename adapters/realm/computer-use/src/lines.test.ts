@@ -94,6 +94,23 @@ describe('writeLines', () => {
     ]);
   });
 
+  // The Dock gives its application element the frame 0,0,0,0, and has no window. That size hid
+  // every item of the Dock, so the realm could not see the Dock that a person sees.
+  it('shows the items of an application with no window, whatever size the application gives', () => {
+    const dock = node(UiRole.APPLICATION, 'Dock', {
+      frame: [0, 0, 0, 0],
+      children: [
+        node(UiRole.LIST, '', {
+          frame: [43, 899, 1426, 73],
+          children: [node(UiRole.BUTTON, 'Finder', { frame: [51, 899, 57, 73] })],
+        }),
+      ],
+    });
+    const written = writeWindows(dock, new RefTable());
+    expect(written.omitted).toBe(0);
+    expect(written.tree).toContain('button "Finder"');
+  });
+
   it('says how many rows of a table are not shown, and keeps a ref with its row after a scroll', () => {
     const table = (first: number): UiNode =>
       node(UiRole.LIST, 'Files', {
