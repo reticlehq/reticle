@@ -73,6 +73,7 @@ export const SERVED_COMMANDS: readonly string[] = [
   ReticleCommand.RENDER,
   ReticleCommand.NAVIGATE,
   ReticleCommand.REFRESH,
+  ReticleCommand.HISTORY,
   // Bridge -> page pushes. Served like any other command, so they belong in this list; the guard
   // beside this file is what holds that.
   ReticleCommand.FLOWS,

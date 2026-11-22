@@ -946,6 +946,8 @@ export const ReticleCommand = {
   NAVIGATE: 'navigate',
   /** Reload the page. `args: { hard?: boolean }` — hard clears the cache via location replace trick. */
   REFRESH: 'refresh',
+  /** Move through the tab's history. `args: { direction: NavigateHistory }`. See navigate-history.ts. */
+  HISTORY: 'history',
   /** Bridge → browser: replayable flows, `{ flows: [{ name, start? }] }`; `start` = first testid. */
   FLOWS: 'flows',
   /** Bridge → browser: a HUD replay's progress, `{ name, done, total, status }`. */
@@ -982,9 +984,7 @@ export const MessageKind = {
 } as const;
 export type MessageKind = (typeof MessageKind)[keyof typeof MessageKind];
 
-/**
- * Why a lease returned `ready: false`. Names each distinct recovery action rather than a bare false.
- */
+/** Why a lease returned `ready: false`. Each value names a recovery action, not a bare false. */
 export const LeaseNotReadyReason = {
   /** No SDK dialled in within the wait. */
   SDK_NEVER_DIALLED: 'sdk_never_dialled',

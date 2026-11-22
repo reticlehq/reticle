@@ -116,6 +116,11 @@ const PAGE_CAPABILITIES: readonly Capability[] = [
   },
   { name: ReticleCommand.NAVIGATE, meaning: 'go to a different location', mutating: true },
   { name: ReticleCommand.REFRESH, meaning: 'reload the current location', mutating: true },
+  {
+    name: ReticleCommand.HISTORY,
+    meaning: 'move one entry back or forward in the location history',
+    mutating: true,
+  },
   { name: ReticleCommand.SCROLL, meaning: 'move the viewport', mutating: false },
   {
     name: ReticleCommand.SNAPSHOT,
