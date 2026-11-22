@@ -18,8 +18,10 @@
 //   {"t":"effect","text":"2 changes","kind":"ok"}      kind: ok | none | refused
 //   {"t":"glow","x":80,"y":80,"w":450,"h":320}   a ring round the window the realm works in
 //   {"t":"hide"}                          the pointer goes away
+//   {"t":"turn","state":"ended","tone":"ask","text":"Type the 2FA code"}   the person's turn
 // One line on standard output when the person presses a button: {"paused":true} or false for
-// the pause, and {"stopped":true} for the stop. After a stop the realm leaves the application.
+// the pause, {"stopped":true} for the stop, and {"done":true} at the end of their turn. After a
+// stop the realm leaves the application.
 // The program ends when standard input closes.
 import AppKit
 
@@ -205,6 +207,8 @@ final class Hud: NSObject, NSApplicationDelegate {
   var open = false
   var paused = false
   var stopped = false
+  /// The agent asked the person for something (a 2FA code, a captcha): the Pause button is "Done".
+  var asking = false
   var rest: Timer?
   var rippling: Timer?
 
@@ -527,6 +531,38 @@ final class Hud: NSObject, NSApplicationDelegate {
     }
   }
 
+  /// The person's turn, from the agent's `yield`: the question shows, and Pause becomes Done.
+  func ask(_ question: String) {
+    asking = true
+    if !open { toggleOpen() }
+    doing.stringValue = question.isEmpty ? "Your turn" : "Your turn: \(question)"
+    setState(Token.brand)
+    pause.action = #selector(pressDone)
+    pause.image = icon(14) { path in
+      path.move(to: NSPoint(x: 3, y: 7.5))
+      path.line(to: NSPoint(x: 6, y: 4.5))
+      path.line(to: NSPoint(x: 11, y: 10))
+    }
+    pause.setAccessibilityLabel("Done")
+    panel.orderFrontRegardless()
+  }
+
+  /// The end of the person's turn: Done becomes Pause again.
+  func endAsk() {
+    asking = false
+    pause.action = #selector(togglePause)
+    setPauseSign()
+  }
+
+  @objc func pressDone() {
+    guard asking, !stopped else { return }
+    endAsk()
+    doing.stringValue = "Done. The agent goes on."
+    setState(Token.idle)
+    print("{\"done\":true}")
+    fflush(stdout)
+  }
+
   @objc func togglePause() {
     guard !stopped else { return }
     paused.toggle()
@@ -634,6 +670,20 @@ final class Hud: NSObject, NSApplicationDelegate {
           fade.duration = Token.glowIn * 2
           self.glow.animator().alphaValue = 0
         }
+      }
+    case "turn":
+      // The agent's `yield`. "ended" with the tone "ask": the person's turn. "ended" with another
+      // tone: the agent waits for the person's next message. "active": the agent works again.
+      let words = say["text"] as? String ?? ""
+      if say["state"] as? String == "ended", say["tone"] as? String == "ask" {
+        ask(words)
+      } else if say["state"] as? String == "ended" {
+        if asking { endAsk() }
+        doing.stringValue = words.isEmpty ? "The agent waits for you" : words
+        setState(Token.idle)
+      } else if asking {
+        endAsk()
+        setState(Token.active)
       }
     case "open":
       // For a check, and for a person who wants the HUD open from the start.

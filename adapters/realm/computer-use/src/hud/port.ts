@@ -22,4 +22,18 @@ export interface HudPort {
   /** The person pressed "Stop" in the window. The realm does no action after it, and leaves. */
   stopped(): boolean;
   close(): void;
+  /**
+   * Whose turn it is, from the agent's `yield`: tone "ask" is the person's turn, with the question
+   * in `text`. Absent: this HUD shows no turn.
+   */
+  turn?(turn: HudTurn): void;
+  /** Calls `listener` when the person presses "Done" at the end of their turn. */
+  onDone?(listener: () => void): void;
+}
+
+/** The state of the session, as the agent's `yield` set it. */
+export interface HudTurn {
+  state: string;
+  tone?: string;
+  text?: string;
 }

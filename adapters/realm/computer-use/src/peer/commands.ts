@@ -14,6 +14,7 @@ import {
   ActionType,
   ElementState,
   EventType,
+  HumanControlKind,
   QueryBy,
   ReticleCommand,
   outwardActionOf,
@@ -167,6 +168,10 @@ const Field = { VALUE: 'value', STATES: 'states' } as const;
  * again with the same bytes is `file.written` too, with `kind: "rewritten"`. The data is the file name,
  * its path and its size.
  */
+/** What the agent reads when the person presses "Done" on the HUD at the end of their turn. */
+export const HUMAN_DONE =
+  'Done: the person finished what you asked for on the HUD. Read the screen again.';
+
 export const FILE_SIGNAL_PREFIX = 'file.';
 
 /**
@@ -237,6 +242,10 @@ export class PeerCommands {
   constructor(deps: PeerCommandsDeps) {
     this.#deps = deps;
     deps.hud?.app(deps.driver.subject().app);
+    // The person ends their turn on the HUD: the agent gets it as their message.
+    deps.hud?.onDone?.(() => {
+      deps.emit(EventType.HUMAN_CONTROL, { kind: HumanControlKind.MESSAGE, text: HUMAN_DONE });
+    });
     // The first look. A file that is there now is not a change.
     this.sendFileChanges();
   }
@@ -345,6 +354,8 @@ export class PeerCommands {
         return { testids: [], signals: [], stores: [], flows: [] };
       case ReticleCommand.CAPTURE:
         return this.#capture(args);
+      case ReticleCommand.PRESENTER:
+        return this.#presenter(args);
       default:
         throw new Error(`the computer-use realm does not answer ${name}`);
     }
@@ -515,6 +526,21 @@ export class PeerCommands {
    * A picture of the window, for an application that gives few elements. The place and the scale
    * of the picture are kept: a click at a point of the picture needs them.
    */
+  /** The agent's `yield`: the HUD shows whose turn it is, and the question when it asks. */
+  #presenter(args: Args): Promise<unknown> {
+    const state = text(args['state']);
+    if (state !== undefined) {
+      const tone = text(args['tone']);
+      const words = text(args['text']);
+      this.#deps.hud?.turn?.({
+        state,
+        ...(tone === undefined ? {} : { tone }),
+        ...(words === undefined ? {} : { text: words }),
+      });
+    }
+    return Promise.resolve({ ok: true });
+  }
+
   async #capture(args: Args): Promise<unknown> {
     const screen = true === args['screen'];
     const taken = await this.#deps.driver.capture?.(screen ? { screen } : undefined);

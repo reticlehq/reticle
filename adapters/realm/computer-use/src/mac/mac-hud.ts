@@ -1,6 +1,7 @@
 /**
  * The HUD on macOS: the `reticle-hud` program draws it. One line of JSON goes to the program for
- * each thing to show, and the program writes one line when the person presses "Pause".
+ * each thing to show, and the program writes one line when the person presses "Pause", "Stop", or
+ * "Done" at the end of their turn.
  */
 import { spawn } from 'node:child_process';
 
@@ -8,8 +9,19 @@ import { z } from 'zod';
 
 import type { HudEffect, HudPort } from '../hud/port.js';
 
-const Say = { APP: 'app', MOVE: 'move', GLOW: 'glow', ACT: 'act', EFFECT: 'effect' } as const;
-const SaidSchema = z.object({ paused: z.boolean().optional(), stopped: z.boolean().optional() });
+const Say = {
+  APP: 'app',
+  MOVE: 'move',
+  GLOW: 'glow',
+  ACT: 'act',
+  EFFECT: 'effect',
+  TURN: 'turn',
+} as const;
+const SaidSchema = z.object({
+  paused: z.boolean().optional(),
+  stopped: z.boolean().optional(),
+  done: z.boolean().optional(),
+});
 
 export function macHud(program: string, onStop?: () => void): HudPort {
   const child = spawn(program, [], { stdio: ['pipe', 'pipe', 'ignore'] });
@@ -19,6 +31,7 @@ export function macHud(program: string, onStop?: () => void): HudPort {
   child.stdin.on('error', () => undefined);
   let paused = false;
   let stopped = false;
+  const onDone: (() => void)[] = [];
   let rest = '';
   child.stdout.on('data', (chunk: Buffer) => {
     const lines = (rest + chunk.toString('utf8')).split('\n');
@@ -28,6 +41,11 @@ export function macHud(program: string, onStop?: () => void): HudPort {
         const said = SaidSchema.safeParse(JSON.parse(line));
         if (said.success) {
           paused = said.data.paused ?? paused;
+          if (true === said.data.done) {
+            onDone.forEach((listener) => {
+              listener();
+            });
+          }
           if (true === said.data.stopped && !stopped) {
             stopped = true;
             onStop?.();
@@ -58,6 +76,17 @@ export function macHud(program: string, onStop?: () => void): HudPort {
     },
     effect: (text, kind: HudEffect) => {
       send({ t: Say.EFFECT, text, kind });
+    },
+    turn: ({ state, tone, text }) => {
+      send({
+        t: Say.TURN,
+        state,
+        ...(tone === undefined ? {} : { tone }),
+        ...(text === undefined ? {} : { text }),
+      });
+    },
+    onDone: (listener) => {
+      onDone.push(listener);
     },
     paused: () => paused,
     stopped: () => stopped,

@@ -2,7 +2,10 @@ import {
   ActionType,
   ElementState,
   EventType,
+  HumanControlKind,
+  PresenterTone,
   ReticleCommand,
+  SessionState,
   parseInteractive,
 } from '@reticlehq/core';
 import { describe, expect, it } from 'vitest';
@@ -11,7 +14,7 @@ import { ActKind, ActRefusal } from '../driver.js';
 import type { ActOutcome, ActRequest, ReachAnswer, UiDriver, UiRead } from '../driver.js';
 import { UiRole } from '../ui-node.js';
 import type { UiNode } from '../ui-node.js';
-import { PeerCommands } from './commands.js';
+import { HUMAN_DONE, PeerCommands } from './commands.js';
 
 function node(role: UiRole, name: string, more: Partial<UiNode> = {}): UiNode {
   return { role, name, states: [], children: [], ...more };
@@ -1620,6 +1623,50 @@ describe('PeerCommands', () => {
         });
       return { press, shown, asked: made.asked };
     };
+
+    // A long task stops for the person: a 2FA code, a captcha. `yield` with mode "ask" sends the
+    // question as a PRESENTER post, and the realm answered "does not answer presenter": the person
+    // saw nothing. Now the HUD shows it, and "Done" on the HUD goes back as the person's message.
+    it('shows the turn of the person, and their Done goes back to the agent', async () => {
+      const turns: unknown[] = [];
+      const said: unknown[] = [];
+      let done: (() => void) | undefined;
+      const commands = new PeerCommands({
+        driver: fakeDriver(),
+        emit: (type, data) => said.push([type, data]),
+        hud: {
+          app: () => undefined,
+          move: () => undefined,
+          glow: () => undefined,
+          act: () => undefined,
+          effect: () => undefined,
+          paused: () => false,
+          stopped: () => false,
+          close: () => undefined,
+          turn: (turn) => turns.push(turn),
+          onDone: (listener) => {
+            done = listener;
+          },
+        },
+      });
+      await commands.answer(ReticleCommand.PRESENTER, {
+        state: SessionState.ENDED,
+        tone: PresenterTone.ASK,
+        text: 'Type the 2FA code in Discord',
+      });
+      expect(turns).toEqual([
+        {
+          state: SessionState.ENDED,
+          tone: PresenterTone.ASK,
+          text: 'Type the 2FA code in Discord',
+        },
+      ]);
+      done?.();
+      expect(said).toContainEqual([
+        EventType.HUMAN_CONTROL,
+        { kind: HumanControlKind.MESSAGE, text: HUMAN_DONE },
+      ]);
+    });
 
     it('is told the application, where the realm acts, what it does and what that did', async () => {
       const { press, shown } = watched();

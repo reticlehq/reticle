@@ -12,9 +12,15 @@ import { tmpdir } from 'node:os';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
-import { ActionType, ReticleCommand } from '@reticlehq/core';
+import {
+  ActionType,
+  EventType,
+  PresenterTone,
+  ReticleCommand,
+  SessionState,
+} from '@reticlehq/core';
 
-import { MacDriver, PeerCommands, macHud } from '../../dist/index.js';
+import { HUMAN_DONE, MacDriver, PeerCommands, macHud } from '../../dist/index.js';
 
 const here = fileURLToPath(new URL('.', import.meta.url));
 const build = `${here}build`;
@@ -34,9 +40,10 @@ process.env.RETICLE_AX_CHECKS_ITS_OWN_WINDOW = '1';
 const helper = `${build}/reticle-ax`;
 const fixture = spawn(`${build}/fixture`, [tmpdir()], { stdio: 'ignore' });
 const hud = macHud(`${build}/reticle-hud`);
+const said = [];
 const commands = new PeerCommands({
   driver: new MacDriver({ helper, app: 'fixture', pid: fixture.pid }),
-  emit: () => undefined,
+  emit: (type, data) => said.push([type, data]),
   hud,
 });
 
@@ -81,13 +88,32 @@ try {
   const status = (await commands.answer(ReticleCommand.QUERY, { role: 'text' })).elements[0]?.name;
   assert.equal(status, 'Slow done');
 
+  // The person's turn: the agent's `yield` with a question. The HUD shows it, and Pause becomes
+  // Done. Done goes back to the agent as the person's message, and Done is Pause again.
+  await commands.answer(ReticleCommand.PRESENTER, {
+    state: SessionState.ENDED,
+    tone: PresenterTone.ASK,
+    text: 'Type the code',
+  });
+  await sleep(400);
+  const asking = (await onHud.answer(ReticleCommand.SNAPSHOT, {})).tree;
+  assert.ok(asking.includes('Your turn: Type the code'), 'the HUD does not show the question');
+  await press(onHud, 'Done');
+  await sleep(400);
+  assert.ok(
+    said.some(([type, data]) => type === EventType.HUMAN_CONTROL && data.text === HUMAN_DONE),
+    'Done did not go back to the agent',
+  );
+  await press(onHud, 'Pause');
+  await press(onHud, 'Resume');
+
   // Stop ends it: no action after it, also not after a time.
   await press(onHud, 'Stop');
   await sleep(400);
   await assert.rejects(press(commands, 'Save'), /stopped Reticle/);
   assert.equal(hud.stopped(), true);
 
-  process.stdout.write('computer-use hudcheck: 6 of 6 cases held\n');
+  process.stdout.write('computer-use hudcheck: 8 of 8 cases held\n');
 } finally {
   hud.close();
   fixture.kill();
