@@ -18,8 +18,6 @@ import {
   HumanControlKind,
   QueryBy,
   ReticleCommand,
-  outwardActionOf,
-  outwardRefusal,
 } from '@reticlehq/core';
 
 import { ActKind, ActRefusal, Delivery, Reach } from '../driver.js';
@@ -49,6 +47,7 @@ import {
 import type { ActResult } from './form.js';
 import { READ_STATE, see } from './seen.js';
 import { arrangeWindow } from './window.js';
+import { refusalOf } from './link-switch.js';
 import {
   NO_SCREEN_RECORDING,
   POINT_KINDS,
@@ -854,12 +853,9 @@ export class PeerCommands {
       );
     }
     let target = await this.#resolve(ref);
-    if (allowed !== undefined) {
-      // The dialog's name is part of the meaning: "OK" in "Delete the project?" is a delete.
-      const outward = outwardActionOf(`${target.node.name} ${target.dialog}`, target.node.role);
-      if (outward !== undefined && !allowed.includes(outward)) {
-        throw new Error(outwardRefusal(outward));
-      }
+    const refused = refusalOf(target, action, more, allowed);
+    if (refused !== undefined) {
+      throw new Error(refused);
     }
     const modifiers = Array.isArray(more['modifiers']) ? more['modifiers'].map(String) : [];
     const key = text(more['text']);

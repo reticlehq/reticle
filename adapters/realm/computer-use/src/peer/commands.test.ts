@@ -1004,12 +1004,12 @@ describe('PeerCommands', () => {
    * refused each one by name, and a form with a checkbox could not be completed.
    */
   describe('the actions of a form', () => {
-    const form = (value: string, checked: boolean): UiRead => ({
+    const form = (value: string, checked: boolean, box = 'Remember'): UiRead => ({
       root: node(UiRole.WINDOW, 'Sign up', {
         frame: [0, 0, 400, 300],
         children: [
           node(UiRole.TEXTBOX, 'Name', { frame: [10, 10, 200, 30], value }),
-          node(UiRole.CHECKBOX, 'Remember', {
+          node(UiRole.CHECKBOX, box, {
             frame: [10, 50, 200, 30],
             states: checked ? [ElementState.CHECKED] : [],
           }),
@@ -1018,17 +1018,17 @@ describe('PeerCommands', () => {
       unread: 0,
       unmapped: [],
     });
-    const fake = (start: { value: string; checked: boolean }, pressWorks = true) => {
+    const fake = (start: { value: string; checked: boolean }, pressWorks = true, box?: string) => {
       const state = { ...start };
       const asked: [string, string | undefined][] = [];
       const commands = new PeerCommands({
         driver: {
           subject: () => ({ app: 'Sign up', pid: 7 }),
-          read: () => Promise.resolve(form(state.value, state.checked)),
+          read: () => Promise.resolve(form(state.value, state.checked, box)),
           reach: () => Promise.resolve({ reach: 'yes' }),
           act: (request) => {
             asked.push([request.kind, request.value]);
-            const before = form(state.value, state.checked);
+            const before = form(state.value, state.checked, box);
             if (ActKind.SET === request.kind) {
               state.value = request.value ?? '';
             }
@@ -1040,13 +1040,13 @@ describe('PeerCommands', () => {
               reachable: true,
               settled: true,
               before,
-              after: form(state.value, state.checked),
+              after: form(state.value, state.checked, box),
             });
           },
         },
         emit: () => undefined,
       });
-      const act = async (role: UiRole, action: string) => {
+      const act = async (role: UiRole, action: string, more: Record<string, unknown> = {}) => {
         const found = (await commands.answer(ReticleCommand.QUERY, { role })) as {
           elements: { ref: string }[];
         };
@@ -1054,6 +1054,7 @@ describe('PeerCommands', () => {
           (await commands.answer(ReticleCommand.ACT, {
             ref: found.elements[0]?.ref ?? '',
             action,
+            args: more,
           })) as { effect: Record<string, unknown> }
         ).effect;
       };
@@ -1083,6 +1084,23 @@ describe('PeerCommands', () => {
     it('fails when the box did not change', async () => {
       const { act } = fake({ value: '', checked: true }, false);
       await expect(act(UiRole.CHECKBOX, ActionType.UNCHECK)).rejects.toThrow(/is still checked/);
+    });
+
+    // Control Centre is readable, so a check reaches Wi-Fi too. Off, it cuts the link of the agent
+    // in the middle of its task, and Bluetooth can take the keyboard and the mouse of the person.
+    it('does not turn off what links the machine, unless the caller confirms it', async () => {
+      for (const name of ['Wi‑Fi', 'Wi-Fi: Home', 'Bluetooth: On', 'Airplane Mode', 'Ethernet']) {
+        const { act, asked } = fake({ value: '', checked: true }, true, name);
+        await expect(act(UiRole.CHECKBOX, ActionType.UNCHECK)).rejects.toThrow(/confirmDangerous/);
+        await expect(act(UiRole.CHECKBOX, ActionType.CLICK)).rejects.toThrow(/confirmDangerous/);
+        expect(asked).toEqual([]);
+      }
+      const on = fake({ value: '', checked: false }, true, 'Wi‑Fi');
+      await on.act(UiRole.CHECKBOX, ActionType.CHECK);
+      expect(on.state.checked).toBe(true);
+      const off = fake({ value: '', checked: true }, true, 'Wi‑Fi');
+      await off.act(UiRole.CHECKBOX, ActionType.UNCHECK, { confirmDangerous: true });
+      expect(off.state.checked).toBe(false);
     });
 
     it('refuses to check an element that is not a box', async () => {
