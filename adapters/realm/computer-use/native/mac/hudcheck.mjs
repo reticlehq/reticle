@@ -7,7 +7,7 @@
 // Needs the Accessibility permission. Build the package first.
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
@@ -110,6 +110,40 @@ try {
   await sleep(300);
   assert.ok(atSave !== '' && pointerAt() !== atSave, `the pointer did not move: ${atSave}`);
 
+  // A drag from one point of a picture to another: the pointer presses at the middle of the pad
+  // and lets go 30 points to the right, as a hand drags. It stayed at the start after the drag.
+  const pad = (await commands.answer(ReticleCommand.QUERY, { role: 'button', name: 'Pad' }))
+    .elements[0].ref;
+  const win = (await commands.answer(ReticleCommand.QUERY, { role: 'window' })).elements[0].ref;
+  const shot = await commands.answer(ReticleCommand.CAPTURE, {});
+  const windowBox = (await commands.answer(ReticleCommand.INSPECT, { ref: win })).box;
+  const scale = readFileSync(shot.path).readUInt32BE(16) / windowBox.width;
+  rmSync(shot.path, { force: true });
+  const { box } = await commands.answer(ReticleCommand.INSPECT, { ref: pad });
+  const point = {
+    x: (box.x + box.width / 2 - windowBox.x) * scale,
+    y: (box.y + box.height / 2 - windowBox.y) * scale,
+  };
+  await commands.answer(ReticleCommand.ACT, { ref: pad, action: ActionType.CLICK, args: {} });
+  await sleep(300);
+  const [fromX] = pointerAt().split(' ').map(Number);
+  await commands.answer(ReticleCommand.ACT, {
+    ref: win,
+    action: ActionType.DRAG,
+    args: {
+      foreground: true,
+      point,
+      toPoint: { x: point.x + 30 * scale, y: point.y },
+      settleMs: 500,
+    },
+  });
+  await sleep(300);
+  const [toX] = pointerAt().split(' ').map(Number);
+  assert.ok(
+    Math.abs(toX - fromX - 30) <= 3,
+    `the pointer did not follow the drag: ${fromX} to ${toX}`,
+  );
+
   // The person's turn: the agent's `yield` with a question. The HUD shows it, and Pause becomes
   // Done. Done goes back to the agent as the person's message, and Done is Pause again.
   await commands.answer(ReticleCommand.PRESENTER, {
@@ -135,7 +169,7 @@ try {
   await assert.rejects(press(commands, 'Save'), /stopped Reticle/);
   assert.equal(hud.stopped(), true);
 
-  process.stdout.write('computer-use hudcheck: 9 of 9 cases held\n');
+  process.stdout.write('computer-use hudcheck: 10 of 10 cases held\n');
 } finally {
   hud.close();
   fixture.kill();

@@ -50,7 +50,7 @@ import { arrangeWindow } from './window.js';
 import { refusalOf } from './link-switch.js';
 import {
   NO_SCREEN_RECORDING,
-  POINT_KINDS,
+  pointerPath,
   contentMoved,
   kindFor,
   needsForeground,
@@ -620,19 +620,10 @@ export class PeerCommands {
         'the person at the machine paused Reticle in its window. No action is done while it is paused. Tell them what you were about to do, and wait.',
       );
     }
-    // The pointer goes where the action goes: the point of a picture when one is given, or the
-    // middle of the element. For a point, the element is often the whole window.
-    // A drag gives "x,y,x,y" and goes from the first point. A wheel gives "lines,x,y".
-    const numbers = (value ?? '').split(',').map(Number);
-    const point = POINT_KINDS.has(kind) && kind !== ActKind.WHEEL ? numbers.slice(0, 2) : [];
-    if (kind === ActKind.WHEEL && 3 === numbers.length) {
-      point.push(...numbers.slice(1));
-    }
-    const frame = target.node.frame;
-    if (2 === point.length && point.every(Number.isFinite)) {
-      hud?.move(point[0] ?? 0, point[1] ?? 0);
-    } else if (frame !== undefined) {
-      hud?.move(frame[0] + frame[2] / 2, frame[1] + frame[3] / 2);
+    // The pointer goes where the action goes, and for a drag on to where it ends. See pointerPath.
+    const path = pointerPath(kind, value, target.node.frame);
+    if (path.start !== undefined) {
+      hud?.move(...path.start);
     }
     if (target.windowFrame !== undefined) {
       hud?.glow(target.windowFrame);
@@ -657,6 +648,8 @@ export class PeerCommands {
       this.#looksSinceAct = 0;
       if (outcome.refused !== undefined || !outcome.delivered) {
         hud?.effect(`refused: ${outcome.refused ?? 'not taken'}`, HudEffect.REFUSED);
+      } else if (path.end !== undefined) {
+        hud?.move(...path.end);
       }
     } finally {
       this.#acting -= 1;

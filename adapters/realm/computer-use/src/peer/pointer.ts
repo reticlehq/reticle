@@ -206,3 +206,41 @@ export function kindFor(
 export function needsForeground(action: string, app: string): string {
   return `${action} needs the real pointer. It brings ${app} to the front and takes the pointer of the person at the machine for a moment, then puts both back. Send it again with args: { foreground: true }.`;
 }
+
+type Spot = readonly [number, number];
+
+/**
+ * Where the pointer of the HUD goes for an action: the place it starts, and for a drag the place
+ * it ends, as a hand presses at one place and lets go at another. The start is the point of the
+ * action when it has one, or the middle of the element. A drag gives "x,y" (the end) or "x,y,x,y"
+ * (the start and the end), and a wheel gives "lines,x,y".
+ */
+export function pointerPath(
+  kind: ActKind,
+  value: string | undefined,
+  frame: readonly [number, number, number, number] | undefined,
+): { start?: Spot; end?: Spot } {
+  const n = (value ?? '').split(',').map(Number);
+  const pair = (at: number): Spot | undefined => {
+    const [x, y] = [n[at], n[at + 1]];
+    return x !== undefined && y !== undefined && Number.isFinite(x) && Number.isFinite(y)
+      ? [x, y]
+      : undefined;
+  };
+  const middle: Spot | undefined =
+    frame === undefined ? undefined : [frame[0] + frame[2] / 2, frame[1] + frame[3] / 2];
+  if (kind === ActKind.DRAG) {
+    const four = 4 === n.length;
+    const start = four ? pair(0) : middle;
+    const end = four ? pair(2) : pair(0);
+    return { ...(start === undefined ? {} : { start }), ...(end === undefined ? {} : { end }) };
+  }
+  let at: Spot | undefined;
+  if (kind === ActKind.WHEEL) {
+    at = 3 === n.length ? pair(1) : undefined;
+  } else if (POINT_KINDS.has(kind) && 2 === n.length) {
+    at = pair(0);
+  }
+  const start = at ?? middle;
+  return start === undefined ? {} : { start };
+}
