@@ -48,10 +48,11 @@ const peerOf = (pid) =>
 
 try {
   await sleep(1800);
-  // Opened in the background and never in front: the system gives no window of it.
+  // Opened in the background and never in front. With Stage Manager on, the system gives no window
+  // of it, and the focus below must bring one. With Stage Manager off, the window is there already.
   const onRegular = peerOf(regular.pid);
   const closed = await answerOf(onRegular, ReticleCommand.SNAPSHOT, {});
-  assert.equal(closed.windows, 0);
+  assert.ok(closed.windows <= 1, 'the fixture has more than one window');
   await act(onRegular, 'e1', ActionType.FOCUS, { foreground: true });
   await sleep(600);
   const open = await answerOf(onRegular, ReticleCommand.SNAPSHOT, {});
