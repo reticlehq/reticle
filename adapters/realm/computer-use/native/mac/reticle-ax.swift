@@ -124,8 +124,14 @@ func readElement(_ element: AXUIElement, _ depth: Int, _ unread: inout Int) -> [
       let found = rows.compactMap { row in all.firstIndex { CFEqual($0, row) } }
       // Chromium gives an ARIA tree (Discord's servers) as an outline whose visible rows are an
       // empty list, and its items are not rows at all. That read as "no row is on the screen", and
-      // every server was dropped. Visible rows that name none of the children are not believed.
-      if found.isEmpty && !all.isEmpty { return finish(node, all, nil) }
+      // every server was dropped. Visible rows that name none of the children of a short one are
+      // not believed.
+      // A long one is believed: a column of Finder whose window is not on the screen gives no
+      // visible item, and its 48,336 items were read one by one for half an hour, which hung
+      // Finder. A short one is read whole: Finder gives no visible item for the column of a
+      // window it has just opened, and what is out of the window is left out by its place.
+      let believed = all.count > shortList
+      if found.isEmpty && !all.isEmpty && !believed { return finish(node, all, nil) }
       places = found
       children = found.map { all[$0] }
       // The rows that are not on the screen. The columns are left out too, and they are not
@@ -146,6 +152,14 @@ func readElement(_ element: AXUIElement, _ depth: Int, _ unread: inout Int) -> [
   func finish(_ node: [String: Any], _ children: [AXUIElement], _ places: [Int]?) -> [String: Any] {
     var node = node
     var kids: [[String: Any]] = []
+    // The read has a budget: past it, what an element holds is not read, and is counted as not
+    // shown on that element, so the loss is said where it is.
+    if readBudget <= 0 && !children.isEmpty {
+      node["notShown"] = ((node["notShown"] as? Int) ?? 0) + children.count
+      node["children"] = kids
+      return node
+    }
+    readBudget -= children.count
     for (order, child) in children.enumerated() {
       var one = readElement(child, depth + 1, &unread)
       if let places { one["i"] = places[order] }
@@ -184,7 +198,16 @@ func isMenuExtras(_ items: [AXUIElement]) -> Bool {
   return (subrole as? String) == "AXMenuExtra"
 }
 
+/// The most elements one read takes. An application answers an element in about a millisecond, and
+/// Finder in up to twenty: a read with no end ran for half an hour on a folder of 48,336 files.
+let readLimit = 20_000
+/// A list this long or shorter is read whole when it names no visible item.
+let shortList = 200
+/// What is left of the budget of the read that runs now.
+var readBudget = readLimit
+
 func snapshot(_ app: AXUIElement) -> (tree: [String: Any], unread: Int, json: Data) {
+  readBudget = readLimit
   var unread = 0
   var pid: pid_t = 0
   AXUIElementGetPid(app, &pid)
@@ -211,9 +234,18 @@ func emit(_ object: [String: Any]) throws -> Never {
 
 func child(_ element: AXUIElement, _ index: Int) -> AXUIElement? {
   var value: AnyObject?
-  guard AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &value) == .success,
-    let children = value as? [AXUIElement], index >= 0, index < children.count
-  else { return nil }
+  var children: [AXUIElement] = []
+  if AXUIElementCopyAttributeValue(element, kAXChildrenAttribute as CFString, &value) == .success {
+    children = (value as? [AXUIElement]) ?? []
+  }
+  // As the read does: a column of Finder gives its list only as its contents. The way to a file
+  // went through its children, found none, and every click on a file there was "stale".
+  if children.isEmpty,
+    AXUIElementCopyAttributeValue(element, "AXContents" as CFString, &value) == .success
+  {
+    children = (value as? [AXUIElement]) ?? []
+  }
+  guard index >= 0, index < children.count else { return nil }
   return children[index]
 }
 
@@ -901,7 +933,11 @@ func run(_ args: [String]) throws {
     case .unknown(let code): try emit(["reach": "unknown", "detail": "the hit test failed with \(code)"])
     }
   }
-  if let enabled = now[5] as? Bool, !enabled {
+  // An application with no window on the screen (all on another desktop, or in another set of
+  // Stage Manager) says that it is not enabled. That is when a person brings it to the front, and
+  // the realm refused to: Finder could not be brought back. A control that is off is refused.
+  let raisesApp = action == "raise" && text(now[0]) == "AXApplication"
+  if let enabled = now[5] as? Bool, !enabled, !raisesApp {
     try emit(["refused": "disabled"])
   }
 
@@ -994,22 +1030,18 @@ func run(_ args: [String]) throws {
   var wantedFrame: CGRect?
   switch action {
   case "press":
-    let pressed = AXUIElementPerformAction(target, kAXPressAction as CFString)
     var targetRole: AnyObject?
     AXUIElementCopyAttributeValue(target, kAXRoleAttribute as CFString, &targetRole)
-    // The words of a row: a text, a field or a picture inside it. They take no press, and a click
-    // of a person on them chooses the row. Only these: a button or a box inside a row that
-    // refuses its press (it is busy, or it is off) must be reported as refused, and never turned
-    // into a choice of its row that the answer then calls done.
+    // The words of a row: a text, a field or a picture inside it. A click of a person on them
+    // chooses the row, or the item of a list (a file in a column of Finder). Only these: a button
+    // or a box inside a row that refuses its press (it is busy, or it is off) must be reported as
+    // refused, and never turned into a choice of its row that the answer then calls done.
     let isWords = ["AXStaticText", "AXTextField", "AXImage"].contains(targetRole as? String ?? "")
-    // A row of a table has no press. A click on it chooses it, so choose it.
-    var done =
-      pressed == .actionUnsupported
-      ? AXUIElementSetAttributeValue(target, kAXSelectedAttribute as CFString, kCFBooleanTrue)
-      : pressed
-    if done != .success && isWords {
-      // The row that holds the words, when one is near above them. In a list (a column of
-      // Finder's column view) the item that holds them is chosen in its list.
+    // The words are not pressed when a row or an item holds them: the name field of a file in
+    // Finder says yes to a press and to "selected", and nothing is chosen. The choice is read
+    // again after it, because Finder chooses the file and answers with an error.
+    var done: AXError?
+    if isWords {
       var up = target
       for _ in 0..<4 {
         var parent: AnyObject?
@@ -1024,13 +1056,24 @@ func run(_ args: [String]) throws {
           break
         }
         if role == "AXList" {
-          done = AXUIElementSetAttributeValue(
-            up, kAXSelectedChildrenAttribute as CFString, [item] as CFArray)
+          AXUIElementSetAttributeValue(up, kAXSelectedChildrenAttribute as CFString, [item] as CFArray)
+          var chosen: AnyObject?
+          AXUIElementCopyAttributeValue(up, kAXSelectedChildrenAttribute as CFString, &chosen)
+          let picked = ((chosen as? [AXUIElement]) ?? []).contains { CFEqual($0, item) }
+          done = picked ? .success : .failure
           break
         }
       }
     }
-    result = done
+    if done == nil {
+      let pressed = AXUIElementPerformAction(target, kAXPressAction as CFString)
+      // A row of a table has no press. A click on it chooses it, so choose it.
+      done =
+        pressed == .actionUnsupported && !isWords
+        ? AXUIElementSetAttributeValue(target, kAXSelectedAttribute as CFString, kCFBooleanTrue)
+        : pressed
+    }
+    result = done ?? .failure
   case "set":
     // An element whose value is a number (a slider, a scroll bar) takes a number, not its text.
     let number = now[4] is NSNumber ? Double(value).map { NSNumber(value: $0) } : nil

@@ -16,10 +16,12 @@ import { UiRole } from '../ui-node.js';
 import type { UiNode } from '../ui-node.js';
 
 const LINK = /^(?:wi[‑-]?fi|bluetooth|airplane mode|network|ethernet)\b/i;
+/** The identifiers Control Centre gives these switches. They are the same in every language. */
+const LINK_ID = /^controlcenter-(?:wifi|bluetooth|airplane|network|ethernet)\b/;
 
 /** Why the action is refused, or undefined when it may go. */
 export function linkSwitchRefusal(
-  node: Pick<UiNode, 'role' | 'name'>,
+  node: Pick<UiNode, 'role' | 'name' | 'id'>,
   action: string,
   more: Record<string, unknown>,
 ): string | undefined {
@@ -27,7 +29,8 @@ export function linkSwitchRefusal(
     action === ActionType.CHECK ||
     // Only the switch. The item of the menu bar ("Wi-Fi, connected") opens a menu and cuts nothing.
     node.role !== UiRole.CHECKBOX ||
-    !LINK.test(node.name.trim()) ||
+    // The words, and the identifier: macOS names Wi-Fi "WLAN" in German.
+    !(LINK.test(node.name.trim()) || LINK_ID.test(node.id ?? '')) ||
     true === more[DANGEROUS_ACTION_CONFIRM_ARG]
   ) {
     return undefined;
@@ -41,7 +44,7 @@ export function linkSwitchRefusal(
  * part of the meaning: "OK" in "Delete the project?" is a delete.
  */
 export function refusalOf(
-  target: { node: Pick<UiNode, 'role' | 'name'>; dialog: string },
+  target: { node: Pick<UiNode, 'role' | 'name' | 'id'>; dialog: string },
   action: string,
   more: Record<string, unknown>,
   allowed: readonly string[] | undefined,

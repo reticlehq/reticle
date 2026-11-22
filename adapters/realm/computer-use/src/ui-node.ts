@@ -49,6 +49,10 @@ export interface UiNode {
   /** Children the reader left out: the rows of a table that are not on the screen. */
   notShown?: number;
   /**
+   * A scroll area: what it holds is seen only inside its frame. Absent: the element clips nothing.
+   */
+  clips?: true;
+  /**
    * The identifier the maker of the application gave the element. It does not change when the
    * words on the element change, so a saved flow finds the element by it. Absent: none was given.
    */
@@ -204,11 +208,15 @@ export function placeShown(root: UiNode): {
   // For each element: the frame of its window, and true when it is in a page.
   const windows = new Map<string, Frame | undefined>();
   const inPage = new Set<string>();
+  const clipOf = new Map<string, Frame | undefined>();
   for (const p of place(root)) {
     const frame = p.node.frame;
     const above = p.parentKey;
     const fromAbove = above === undefined ? undefined : windows.get(above);
     windows.set(p.key, p.node.role === UiRole.WINDOW ? frame : fromAbove);
+    // The frame that clips this element: of its nearest scroll area, or of its window.
+    const clipAbove = above === undefined ? undefined : clipOf.get(above);
+    clipOf.set(p.key, true === p.node.clips && frame !== undefined ? frame : clipAbove);
     if (p.node.role === UiRole.DOCUMENT || (above !== undefined && inPage.has(above))) {
       inPage.add(p.key);
     }
@@ -221,8 +229,7 @@ export function placeShown(root: UiNode): {
     const scrolledOut =
       frame !== undefined &&
       p.node.role !== UiRole.DOCUMENT &&
-      inPage.has(p.key) &&
-      outside(frame, windows.get(p.key));
+      ((inPage.has(p.key) && outside(frame, windows.get(p.key))) || outside(frame, clipAbove));
     const parentHides = above !== undefined && hidden.has(above) && !noPlace.has(above);
     if (noSize || scrolledOut || parentHides) {
       hidden.add(p.key);

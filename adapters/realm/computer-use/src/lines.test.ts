@@ -165,6 +165,34 @@ describe('writeLines', () => {
   });
 });
 
+// The column view of Finder lays out a column for each folder of the way, and the column of the
+// folder that was opened was right of the window, out of view. The realm gave a ref to a file in
+// it, and a click on it failed with "could not tell if a person can reach" it.
+describe('an element outside the scroll area that holds it', () => {
+  it('is out of view, and the list it is in says so', () => {
+    const files = (x: number) =>
+      node(UiRole.LIST, '', {
+        frame: [x, 50, 240, 300],
+        children: ['a.txt', 'b.txt'].map((name, i) =>
+          node(UiRole.TEXTBOX, '', { frame: [x + 10, 60 + 20 * i, 200, 18], value: name }),
+        ),
+      });
+    const window = node(UiRole.WINDOW, 'Downloads', {
+      frame: [300, 0, 900, 400],
+      children: [
+        node(UiRole.GROUP, '', {
+          frame: [300, 40, 900, 360],
+          clips: true,
+          children: [files(310), files(2500)],
+        }),
+      ],
+    });
+    const written = writeWindows(window, new RefTable());
+    expect(written.tree.match(/a\.txt/g)).toHaveLength(1);
+    expect(written.tree).toContain('group [not shown: 1]');
+  });
+});
+
 // Chrome gives the text of a page that is scrolled out as a strip one pixel high at the edge of
 // the window. The realm said those posts were on the screen.
 describe('an element one pixel thin', () => {

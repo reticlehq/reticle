@@ -49,6 +49,7 @@ export const AxNodeSchema: z.ZodType<AxNode> = z.lazy(() =>
 );
 
 const AxRole = {
+  SCROLL_AREA: 'AXScrollArea',
   STATIC_TEXT: 'AXStaticText',
   TEXT_FIELD: 'AXTextField',
   CHECKBOX: 'AXCheckBox',
@@ -320,6 +321,7 @@ export function fromAx(ax: AxNode): FromAx {
       ...(id === undefined ? {} : { id }),
       ...(node.help === undefined ? {} : { help: node.help }),
       ...(node.notShown === undefined || 0 === node.notShown ? {} : { notShown: node.notShown }),
+      ...(AxRole.SCROLL_AREA === node.role ? { clips: true as const } : {}),
       children: node.children.map(convert),
     };
   };
