@@ -137,7 +137,106 @@ function claimOf(value: unknown): VerdictStatus | undefined {
   return claims.includes(value) ? (value as VerdictStatus) : undefined;
 }
 
+/*
+ * `reticle_board`: named values that every session and every agent on this bridge can read and
+ * write. A desktop session reads a number in Calculator, a browser session puts it in a form, and
+ * a second agent, or a plan of the Harness that runs in another process, reads it here. The board
+ * lives as long as the bridge; it is not saved.
+ */
+/** The most keys on a board, and the longest value. A value past it is refused, never cut. */
+export const BOARD_MAX_KEYS = 200;
+export const BOARD_MAX_VALUE = 4000;
+
+interface Entry {
+  value: string;
+  /** The session that wrote it, when the writer named one. */
+  from?: string;
+  at: number;
+}
+
+/** One board for each bridge: the session manager of the bridge is its key. */
+const boards = new WeakMap<object, Map<string, Entry>>();
+function boardOf(owner: object): Map<string, Entry> {
+  let board = boards.get(owner);
+  if (board === undefined) {
+    board = new Map();
+    boards.set(owner, board);
+  }
+  return board;
+}
+
+const EntrySchema = z.object({
+  key: z.string(),
+  value: z.string(),
+  from: z.string().optional(),
+  at: z.number(),
+});
+
+export const BOARD_TOOL: ToolDef = {
+  name: ReticleTool.BOARD,
+  description:
+    'Named values that every session and agent on this bridge shares. { key, value } writes; { key } reads one; {} reads all. Use it to pass a value from one realm to another: read it in a desktop application, write it here, read it in a browser session or another agent. Give sessionId to say which session wrote it.',
+  inputSchema: {
+    key: z
+      .string()
+      .min(1)
+      .max(200)
+      .optional()
+      .describe('The name of the value. With no value: read it. Absent: read every value.'),
+    value: z
+      .string()
+      .optional()
+      .describe('The value to keep under the key, at most 4000 characters. Absent: read.'),
+    sessionId: z.string().optional().describe('The session that writes the value, kept with it.'),
+  },
+  outputSchema: {
+    ok: z.boolean(),
+    entries: z.array(EntrySchema).optional(),
+    error: z.string().optional(),
+  },
+  handler: (deps, args) => {
+    const board = boardOf(deps.sessions);
+    const key = asString(args['key']);
+    const value = asString(args['value']);
+    const from = asString(args['sessionId']);
+    if (value !== undefined) {
+      if (key === undefined) {
+        return Promise.resolve({ ok: false, error: 'a value needs a key: { key, value }' });
+      }
+      if (value.length > BOARD_MAX_VALUE) {
+        return Promise.resolve({
+          ok: false,
+          error: `the value has ${String(value.length)} characters; the board keeps at most ${String(BOARD_MAX_VALUE)}. Write a shorter value, or a path to a file that holds it.`,
+        });
+      }
+      if (!board.has(key) && board.size >= BOARD_MAX_KEYS) {
+        return Promise.resolve({
+          ok: false,
+          error: `the board has ${String(BOARD_MAX_KEYS)} keys, the most it keeps. Write to a key that is there.`,
+        });
+      }
+      const entry: Entry = { value, at: deps.now(), ...(from === undefined ? {} : { from }) };
+      board.set(key, entry);
+      return Promise.resolve({ ok: true, entries: [{ key, ...entry }] });
+    }
+    const all = [...board].map(([k, e]) => ({ key: k, ...e }));
+    if (key === undefined) {
+      return Promise.resolve({ ok: true, entries: all });
+    }
+    const one = all.filter((e) => e.key === key);
+    return Promise.resolve(
+      0 === one.length
+        ? {
+            ok: false,
+            error: `no value has the key "${key}" yet. Keys on the board: ${all.map((e) => e.key).join(', ') || 'none'}.`,
+          }
+        : { ok: true, entries: one },
+    );
+  },
+};
+
 export const LIVE_CONTROL_TOOLS: ToolDef[] = [
+  BOARD_TOOL,
   {
     name: ReticleTool.END_SESSION,
     description:

@@ -72,8 +72,9 @@ await peer.ready;
 
 const tools = [...TOOLS, ...LIVE_CONTROL_TOOLS];
 const callTool = async (asked, args) => {
-  // The agent's surface folds the session tools into reticle_session; in process they are apart.
-  const name = asked === 'reticle_session' && args.action === 'list' ? 'reticle_sessions' : asked;
+  // The agent's surface folds these into reticle_session; in process they are apart.
+  const folded = { list: 'reticle_sessions', board: 'reticle_board' };
+  const name = asked === 'reticle_session' ? (folded[args.action] ?? asked) : asked;
   const tool = tools.find((one) => one.name === name);
   if (tool === undefined) {
     return { ok: false, error: `no tool ${name}` };

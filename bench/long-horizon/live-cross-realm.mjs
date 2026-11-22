@@ -96,7 +96,9 @@ for (
 
 const tools = [...TOOLS, ...LIVE_CONTROL_TOOLS];
 const callTool = async (asked, args) => {
-  const name = asked === 'reticle_session' && args.action === 'list' ? 'reticle_sessions' : asked;
+  // The agent's surface folds these into reticle_session; in process they are apart.
+  const folded = { list: 'reticle_sessions', board: 'reticle_board' };
+  const name = asked === 'reticle_session' ? (folded[args.action] ?? asked) : asked;
   const tool = tools.find((one) => one.name === name);
   if (tool === undefined) {
     return { ok: false, error: `no tool ${name}` };
@@ -241,6 +243,7 @@ const ports = toolPorts({
 
 const started = Date.now();
 let result;
+let shared = [];
 const routes = [];
 try {
   const catalog = await ports.catalog();
@@ -249,6 +252,11 @@ try {
     new Ledger(fileStore(join(out, 'ledger.jsonl')), () => Date.now()),
     ports,
   ).run(plan);
+  // What the plan found is on the board of the bridge, for any other agent on it.
+  shared =
+    (await callTool('reticle_session', { action: 'board' })).entries?.map(
+      (e) => `${e.key}=${e.value} (from ${e.from ?? '?'})`,
+    ) ?? [];
 } finally {
   peer.close();
   await lease.release().catch(() => undefined);
@@ -263,6 +271,6 @@ const steps = [...result.state.steps].map(
   ([id, s]) => `${id}: ${s.status} (tries ${String(s.tries)})${s.why ? ` — ${s.why}` : ''}`,
 );
 process.stdout.write(
-  `${JSON.stringify({ goalMet: result.goalMet, summary: result.summary, sessions: routes, steps, board: Object.fromEntries(result.state.board), ms: Date.now() - started }, null, 2)}\n`,
+  `${JSON.stringify({ goalMet: result.goalMet, summary: result.summary, sessions: routes, steps, bridgeBoard: shared, board: Object.fromEntries(result.state.board), ms: Date.now() - started }, null, 2)}\n`,
 );
 process.exit(result.goalMet ? 0 : 1);
