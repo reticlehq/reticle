@@ -120,14 +120,14 @@ const HELPER_EXITED = JSON.stringify({ error: 'the helper process ended' });
  *
  * Commands go one at a time. The helper answers in order, and an answer has no name on it.
  */
-function servingHelper(): RunHelper {
+export function servingHelper(prefix: readonly string[] = []): RunHelper {
   let child: ChildProcessWithoutNullStreams | undefined;
   let buffered = '';
   const waiting: ((line: string) => void)[] = [];
   let last: Promise<unknown> = Promise.resolve();
 
   const start = (file: string): ChildProcessWithoutNullStreams => {
-    const started = spawn(file, [SERVE]);
+    const started = spawn(file, [...prefix, SERVE]);
     started.stdout.setEncoding('utf8');
     started.stdout.on('data', (chunk: string) => {
       buffered += chunk;

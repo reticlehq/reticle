@@ -16,7 +16,9 @@ export type { ComputerUseRealmDeps, Described } from './computer-use-realm.js';
 export { CU_SURFACE, CuChannel, CuSummary } from './channels.js';
 export { ActKind, ActRefusal, Delivery } from './driver.js';
 export type { ActOutcome, ActRequest, SettingChange, UiDriver, UiRead } from './driver.js';
-export { MacDriver } from './mac/mac-driver.js';
+export { MacDriver, servingHelper } from './mac/mac-driver.js';
+export { helperLaunch, WINDOWS_HELPER_SCRIPT } from './win/helper-launch.js';
+export type { HelperLaunch } from './win/helper-launch.js';
 export type { MacDriverInput, RunHelper } from './mac/mac-driver.js';
 export {
   CLIPBOARD_CHANGED_SIGNAL,

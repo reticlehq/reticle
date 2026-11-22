@@ -24,10 +24,12 @@ import {
   STOPPED_FILE,
   doctorReport,
   electronWarning,
+  helperLaunch,
   isElectron,
   joinedAnswer,
   macHud,
   pickApp,
+  servingHelper,
   withOwnerLimits,
 } from '../dist/index.js';
 
@@ -53,7 +55,14 @@ if ('error' in plan && !LIST) {
   process.exit(2);
 }
 const native = fileURLToPath(new URL('../native/mac/', import.meta.url));
-const helper = `${native}build/reticle-ax`;
+const windows = 'win32' === process.platform;
+// macOS runs the Swift helper; Windows runs the UI Automation script in PowerShell. Both answer in
+// one shape, so the rest of this command is the same.
+const launch = helperLaunch(
+  process.platform,
+  fileURLToPath(new URL('../native/', import.meta.url)),
+);
+const helper = launch?.file ?? `${native}build/reticle-ax`;
 const source = `${native}reticle-ax.swift`;
 
 const quiet = (file, args) => {
@@ -63,9 +72,11 @@ const quiet = (file, args) => {
     return undefined;
   }
 };
+/** One command to the helper, with the words that start it on this operating system. */
+const ask = (args) => quiet(helper, [...(launch?.prefix ?? []), ...args]);
 /** The application by the name a person sees or the name of its process. Needs the helper. */
 const findApp = (app) => {
-  const listed = JSON.parse(quiet(helper, ['apps']) ?? '{}').apps;
+  const listed = JSON.parse(ask(['apps']) ?? '{}').apps;
   if (!Array.isArray(listed)) {
     // The helper did not answer: fall back to the name of the process.
     const found = Number((quiet('pgrep', ['-x', app]) ?? '').split('\n')[0]);
@@ -92,7 +103,8 @@ const buildOne = (program, from, stdio) => {
     return false;
   }
 };
-const buildHelper = (stdio) => buildOne(helper, source, stdio);
+// Windows has nothing to build: the helper is a script.
+const buildHelper = (stdio) => windows || buildOne(helper, source, stdio);
 const answers = (url) =>
   new Promise((resolve) => {
     const { hostname, port } = new URL(url);
@@ -108,13 +120,13 @@ const answers = (url) =>
 
 if (LIST) {
   // For an agent: the names it can give to --app. Names only.
-  if ('darwin' !== process.platform || !buildHelper('ignore')) {
+  if (launch === undefined || !buildHelper('ignore')) {
     say(
-      'reticle-computer-use runs on macOS only, and needs the Swift compiler: xcode-select --install',
+      'reticle-computer-use runs on macOS (it needs the Swift compiler: xcode-select --install) and on Windows.',
     );
     process.exit(2);
   }
-  const listed = JSON.parse(quiet(helper, ['apps']) ?? '{}').apps ?? [];
+  const listed = JSON.parse(ask(['apps']) ?? '{}').apps ?? [];
   process.stdout.write(
     `${JSON.stringify({ apps: listed.filter((app) => true === app.regular).map(({ name, process: program }) => ({ name, process: program })) })}\n`,
   );
@@ -132,7 +144,7 @@ if (process.argv.includes('--doctor')) {
   let windowsNotOnScreen;
   if (compiler) {
     // Any process will do to learn if the permission is there. The application's own, when open.
-    const read = JSON.parse(quiet(helper, ['tree', String(appPid ?? process.pid)]) ?? '{}');
+    const read = JSON.parse(ask(['tree', String(appPid ?? process.pid)]) ?? '{}');
     trusted = 'not-trusted' !== read.error;
     screenLocked = 'screen-locked' === read.error;
     if (appPid !== undefined && read.tree !== undefined) {
@@ -158,8 +170,8 @@ if (process.argv.includes('--doctor')) {
   process.exit(report.ready ? 0 : 1);
 }
 
-if ('darwin' !== process.platform) {
-  say('reticle-computer-use runs on macOS only for now.');
+if (launch === undefined) {
+  say('reticle-computer-use runs on macOS and on Windows.');
   process.exit(2);
 }
 
@@ -168,6 +180,10 @@ if (!buildHelper('inherit')) {
   process.exit(1);
 }
 let picked = findApp(plan.app);
+if (picked.pid === undefined && plan.open && windows) {
+  say(`--open starts an application on macOS only for now. Start ${plan.app}, and run this again.`);
+  process.exit(1);
+}
 if (picked.pid === undefined && plan.open) {
   // -g leaves the application that is in front where it is. `open` takes the name as an argument
   // of its own, so a name with a space or a dash is a name and nothing else.
@@ -208,7 +224,7 @@ if (!(await answers(plan.url))) {
 }
 // The pointer and the window of the realm. Not having them is no reason to stop.
 const hud =
-  plan.hud && buildOne(hudProgram, `${native}hud.swift`, 'ignore')
+  plan.hud && !windows && buildOne(hudProgram, `${native}hud.swift`, 'ignore')
     ? macHud(hudProgram, () => {
         // Stop in the window: leave the application, as Ctrl-C does.
         // Stop is for good: the file stays until the person removes it, and no join works before.
@@ -227,7 +243,14 @@ const peer = connectPeer({
   ...(plan.token === undefined ? {} : { token: plan.token }),
   sessionId,
   projectId: plan.projectId ?? `cu-${plan.app}`.replace(/[^\w.-]/g, '-'),
-  driver: new MacDriver({ helper, app: plan.app, pid }),
+  driver: new MacDriver({
+    helper,
+    app: plan.app,
+    pid,
+    ...(launch === undefined || 0 === launch.prefix.length
+      ? {}
+      : { run: servingHelper(launch.prefix) }),
+  }),
   ...(warning === undefined ? {} : { noEffectNote: warning }),
   foreground: plan.foreground,
   ...(hud === undefined ? {} : { hud }),
@@ -245,14 +268,14 @@ try {
 const program = quiet('ps', ['-o', 'comm=', '-p', String(pid)]) ?? '';
 const switched = plan.electronSwitch && isElectron(program, existsSync);
 if (switched) {
-  quiet(helper, ['web-tree', String(pid), 'on']);
+  ask(['web-tree', String(pid), 'on']);
 }
 say(`${plan.app} (${String(pid)}) is joined to ${plan.url}.`);
 // What can be read now. An application that was started behind a full-screen Space has its
 // window on another Space, and the answer must say so before the first look gives nothing.
 let seen;
 try {
-  const first = JSON.parse(quiet(helper, ['tree', String(pid)]) ?? '{}');
+  const first = JSON.parse(ask(['tree', String(pid)]) ?? '{}');
   const windows = (first.tree?.children ?? []).filter((c) => 'AXWindow' === c.role).length;
   seen = { windows, windowsNotOnScreen: first.windowsNotOnScreen ?? 0 };
 } catch {
@@ -277,7 +300,7 @@ if (plan.token === undefined) {
 const stop = () => {
   hud?.close();
   if (switched) {
-    quiet(helper, ['web-tree', String(pid), 'off']);
+    ask(['web-tree', String(pid), 'off']);
   }
   peer.close();
   process.exit(0);

@@ -43,6 +43,7 @@
     "bin",
     "dist",
     "native/mac/reticle-ax.swift",
+    "native/win/reticle-uia.ps1",
     "README.md",
     "NOTICE"
   ],

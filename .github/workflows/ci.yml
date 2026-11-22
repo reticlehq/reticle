@@ -276,6 +276,10 @@ jobs:
           node apps/e2e/specs/mcp-survives-test.mjs
         env:
           RETICLE_TELEMETRY: '0'
+      # Computer use on Windows: the UI Automation helper reads and drives Notepad through the same
+      # driver and reader as macOS. No other job runs on Windows, so this is its only proof.
+      - name: Computer use on Windows (UI Automation)
+        run: node adapters/realm/computer-use/native/win/uiacheck.mjs
 
   # macOS runs what LINUX CANNOT SEE, and nothing else.
   #
