@@ -58,7 +58,8 @@ try {
     'Pad: right',
   );
   const { box } = await commands.answer(ReticleCommand.INSPECT, { ref: (await pad()).ref });
-  const to = { x: box.x + box.width / 2 + 30, y: box.y + box.height / 2 };
+  // `to` is a fraction of the element's box, as in a page: 30 points right of the middle.
+  const to = { x: 0.5 + 30 / box.width, y: 0.5 };
   assert.equal(await gesture(ActionType.DRAG, { foreground: true, to }), 'Pad: dragged 30');
   // A hover leaves the pointer where it is. So the pointer is first put on another control: a
   // pointer that is on the pad already does not come in again.
@@ -87,7 +88,7 @@ try {
   await commands.answer(ReticleCommand.ACT, {
     ref: window.ref,
     action: ActionType.DBLCLICK,
-    args: { foreground: true, at, settleMs: 700 },
+    args: { foreground: true, point: at, settleMs: 700 },
   });
   assert.equal(await status(), 'Pad: double');
   // With a point, the point is the target, and the ref only names the window. The middle of the
@@ -97,12 +98,25 @@ try {
   await commands.answer(ReticleCommand.ACT, {
     ref: covered.elements[0]?.ref,
     action: ActionType.CLICK,
-    args: { foreground: true, at, settleMs: 700 },
+    args: { foreground: true, point: at, settleMs: 700 },
   });
   assert.equal(await status(), 'Pad: click');
+  // A drag from one point of the picture to another, with no element at either end named: the
+  // way to move a thing that gives no element, as a window in Mission Control.
+  await commands.answer(ReticleCommand.ACT, {
+    ref: window.ref,
+    action: ActionType.DRAG,
+    args: {
+      foreground: true,
+      point: at,
+      toPoint: { x: at.x + 40 * scale, y: at.y },
+      settleMs: 700,
+    },
+  });
+  assert.equal(await status(), 'Pad: dragged 40');
   rmSync(shot.path, { force: true });
 
-  process.stdout.write('computer-use pointercheck: 9 of 9 cases held\n');
+  process.stdout.write('computer-use pointercheck: 10 of 10 cases held\n');
 } finally {
   fixture.kill();
 }

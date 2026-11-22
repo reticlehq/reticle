@@ -1,5 +1,8 @@
 import {
   ACT_POINT_ARG,
+  desktopArgProblem,
+  DRAG_TO_REF_ARG,
+  WINDOW_NEEDS_DESKTOP_MSG,
   ActionType,
   ActionWarning,
   actPointProblem,
@@ -136,7 +139,7 @@ const CLICK_LIKE = new Set<string>([
  * silently-target-less drags; the description now documents `toRef` as well.
  */
 function dragTargetRef(args: Record<string, unknown>): string {
-  const named = asString(args['toRef']);
+  const named = asString(args[DRAG_TO_REF_ARG]);
   return '' !== named ? named : asString(args['target']);
 }
 
@@ -365,11 +368,6 @@ export const ZOOM_NEEDS_REAL_BROWSER_MSG =
   'cannot zoom from inside the page — CSS zoom changes how it LOOKS without changing the layout ' +
   'viewport, visualViewport or media queries, so a layout that breaks at 200% would be reported as ' +
   'checked and passing. Drive a real browser (reticle drive <url>, or reticle_lease) and zoom there.';
-
-/** Why the page refuses `window`: only a desktop realm can move or resize a window. */
-export const WINDOW_NEEDS_DESKTOP_MSG =
-  'a page cannot move, resize, minimize or zoom its own window. Join the browser application as a ' +
-  'desktop session (the computer-use realm) and arrange its window there.';
 
 /** Radix Select, Headless UI Listbox and the like: a trigger that opens a `role="listbox"` popup. */
 function isAriaCombobox(el: Element): boolean {
@@ -772,7 +770,7 @@ export async function executeAction(
   args: Record<string, unknown> = {},
 ): Promise<ActionResult> {
   const named = 0 < ref.length;
-  const pointProblem = actPointProblem(action, args);
+  const pointProblem = desktopArgProblem(args) ?? actPointProblem(action, args);
   if (pointProblem !== undefined) {
     throw new Error(`cannot ${action}: ${pointProblem}`);
   }

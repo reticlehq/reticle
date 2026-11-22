@@ -2,7 +2,15 @@
  * The real pointer: which action of a tool is which gesture, what to say when a gesture needs
  * the foreground, and where on the screen a point of a picture of the window is.
  */
-import { ActionType } from '@reticlehq/core';
+import {
+  ACT_POINT_ARG,
+  ActionType,
+  DRAG_TO_PICTURE_POINT_ARG,
+  DRAG_TO_POINT_ARG,
+  PICTURE_POINT_ARG,
+  boxFractionFromArgs,
+  pointInBox,
+} from '@reticlehq/core';
 
 import { ActKind } from '../driver.js';
 import { placeShown } from '../ui-node.js';
@@ -51,7 +59,7 @@ export function contentMoved(
 }
 
 /**
- * The point on the screen for `args.at`, which is a point of the last picture, in its pixels.
+ * The point on the screen for a point of the last picture, in its pixels (`args.point`).
  * Only the kinds that use the real pointer take a point. Absent answer: no point was given.
  */
 export function pointOnScreen(
@@ -67,12 +75,12 @@ export function pointOnScreen(
   }
   if (!POINT_KINDS.has(kind)) {
     throw new Error(
-      'args.at is a point for the real pointer. Send it with args: { foreground: true } on click, dblclick or hover.',
+      'args.point is a point for the real pointer. Send it with args: { foreground: true } on click, dblclick, hover or drag.',
     );
   }
   if (picture === undefined) {
     throw new Error(
-      'args.at is a point of a picture of the window, and no picture was taken. Take one first: reticle_screenshot.',
+      'args.point is a point of a picture of the window, and no picture was taken. Take one first: reticle_screenshot.',
     );
   }
   const { window, scale } = picture;
@@ -87,7 +95,70 @@ export const POINT_KINDS: ReadonlySet<string> = new Set([
   ActKind.DBLCLICK,
   ActKind.RIGHTCLICK,
   ActKind.HOVER,
+  ActKind.DRAG,
+  ActKind.WHEEL,
 ]);
+
+type Frame = readonly [number, number, number, number];
+const asPoint = (p: { x: number; y: number }): string => `${String(p.x)},${String(p.y)}`;
+const boxOf = (f: Frame) => ({ x: f[0], y: f[1], width: f[2], height: f[3] });
+
+/** Whether the act names a point of a picture: the picture can be old, so it is checked. */
+export function usesPicture(more: Record<string, unknown>): boolean {
+  return more[PICTURE_POINT_ARG] !== undefined || more[DRAG_TO_PICTURE_POINT_ARG] !== undefined;
+}
+
+/**
+ * Where the pointer goes, as "x,y" on the screen: a point of the last picture (`point`), or a
+ * point of the element's box (`at`, fractions from 0 to 1, as in a page). Absent: the middle.
+ */
+export function pointFor(
+  picture: Picture | undefined,
+  more: Record<string, unknown>,
+  kind: ActKind,
+  frame: Frame | undefined,
+): string | undefined {
+  const fromPicture = pointOnScreen(picture, more[PICTURE_POINT_ARG], kind);
+  if (fromPicture !== undefined) {
+    return fromPicture;
+  }
+  const at = boxFractionFromArgs(more, ACT_POINT_ARG);
+  if (at === undefined || frame === undefined) {
+    return undefined;
+  }
+  if (!POINT_KINDS.has(kind)) {
+    throw new Error(`args.${ACT_POINT_ARG} is a point for the real pointer, not for this action.`);
+  }
+  return asPoint(pointInBox(boxOf(frame), at));
+}
+
+/**
+ * The value of a drag for the helper: "x,y" of the end, or "x,y,x,y" from a start to the end. The
+ * end is a point of the last picture (`toPoint`), the middle of another element (`toRef`), or a
+ * point of the element's own box (`to`), as a slider is dragged.
+ */
+export function dragValue(
+  picture: Picture | undefined,
+  more: Record<string, unknown>,
+  frame: Frame | undefined,
+  ontoFrame: Frame | undefined,
+): string {
+  const start = pointFor(picture, more, ActKind.DRAG, frame);
+  const to = boxFractionFromArgs(more, DRAG_TO_POINT_ARG);
+  let end = pointOnScreen(picture, more[DRAG_TO_PICTURE_POINT_ARG], ActKind.DRAG);
+  if (end === undefined && ontoFrame !== undefined) {
+    end = asPoint({ x: ontoFrame[0] + ontoFrame[2] / 2, y: ontoFrame[1] + ontoFrame[3] / 2 });
+  }
+  if (end === undefined && to !== undefined && frame !== undefined) {
+    end = asPoint(pointInBox(boxOf(frame), to));
+  }
+  if (end === undefined) {
+    throw new Error(
+      `${ActionType.DRAG} needs where to drag to: args: { toRef: "<ref>" }, { toPoint: { x, y } } in the pixels of the last picture, or { to: { x, y } } as fractions of the element's box.`,
+    );
+  }
+  return start === undefined ? end : `${start},${end}`;
+}
 /** The mouse button a click asks for. Only the right one changes anything. */
 const RIGHT_BUTTON = 'right';
 

@@ -938,9 +938,10 @@ func run(_ args: [String]) throws {
   // A pointer action at a given point goes to that point, not to the middle of the element: the
   // point has its own test below. A hover at the edge of a window that a sidebar covers was
   // refused here, because the middle of the window was under that sidebar.
-  let pointActions: Set<String> = ["click", "dblclick", "rightclick", "hover"]
+  // A drag from a point gives four numbers, and the wheel at a point gives three.
+  let pointCount = ["click": 2, "dblclick": 2, "rightclick": 2, "hover": 2, "drag": 4, "wheel": 3]
   let atPoint =
-    pointActions.contains(action) && value.split(separator: ",").compactMap({ Double($0) }).count == 2
+    pointCount[action] == value.split(separator: ",").compactMap({ Double($0) }).count
   let needsReach = !direct && action != "raise" && !atPoint
   switch frame(now[7], now[8]).map({ reach(target, $0) }) ?? .unknown(code: -1) {
   case .yes: canReach = true
@@ -1099,8 +1100,14 @@ func run(_ args: [String]) throws {
     }
     // The middle of the element, or the point the caller gives as "x,y" on the screen: for an
     // application that gives no elements, a point in its picture is all a caller has.
-    let given =
-      action == "drag" || action == "wheel" ? [] : value.split(separator: ",").compactMap { Double($0) }
+    // The start of a drag is its first two numbers, and the point of the wheel its last two.
+    let numbers = value.split(separator: ",").compactMap { Double($0) }
+    let given: [Double]
+    switch action {
+    case "drag": given = numbers.count == 4 ? Array(numbers[0..<2]) : []
+    case "wheel": given = numbers.count == 3 ? Array(numbers[1..<3]) : []
+    default: given = numbers
+    }
     let at =
       given.count == 2
       ? CGPoint(x: given[0], y: given[1]) : CGPoint(x: rect.midX, y: rect.midY)
@@ -1155,7 +1162,7 @@ func run(_ args: [String]) throws {
     case "wheel":
       // Lines of the wheel over the element, in small turns as a hand gives them. More than 0 is
       // down; the system counts a turn up as more than 0, so the sign is turned over.
-      let lines = Int32(value) ?? 0
+      let lines = Int32(numbers.first ?? 0)
       let step: Int32 = lines > 0 ? -3 : 3
       for _ in 0..<max(1, abs(Int(lines)) / 3) {
         guard
@@ -1170,9 +1177,9 @@ func run(_ args: [String]) throws {
     case "drag":
       // To the point "x,y" on the screen, in steps: an application that follows a drag reads
       // where the pointer is on the way.
-      let parts = value.split(separator: ",").compactMap { Double($0) }
-      guard parts.count == 2 else { try emit(["error": "drag-needs-a-point"]) }
-      let to = CGPoint(x: parts[0], y: parts[1])
+      // "x,y" of the end, from the element; or "x,y,x,y" from a start to the end.
+      guard numbers.count == 2 || numbers.count == 4 else { try emit(["error": "drag-needs-a-point"]) }
+      let to = CGPoint(x: numbers[numbers.count - 2], y: numbers[numbers.count - 1])
       send(.leftMouseDown, at, .left)
       for step in 1...8 {
         let part = CGFloat(step) / 8

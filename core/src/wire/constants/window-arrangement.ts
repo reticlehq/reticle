@@ -12,3 +12,8 @@ export const WindowArrangement = {
   RIGHT: 'right',
 } as const;
 export type WindowArrangement = (typeof WindowArrangement)[keyof typeof WindowArrangement];
+
+/** Why the page refuses `window`: only a desktop realm can move or resize a window. */
+export const WINDOW_NEEDS_DESKTOP_MSG =
+  'a page cannot move, resize, minimize or zoom its own window. Join the browser application as a ' +
+  'desktop session (the computer-use realm) and arrange its window there.';

@@ -37,6 +37,9 @@ function scrollKeyFor(fraction: unknown, dy: unknown): string | undefined {
  * `fraction` is the place of the bar, 0 to 1. `dy` moves the bar one step in its direction; the
  * realm does not know the height of the content, so it cannot scroll by pixels, and it says so.
  */
+/** The point on the screen, "x,y", where the wheel turns. Set by the realm, from `args.point`. */
+export const WHEEL_AT = 'wheelAt';
+
 export async function scrollBy(
   ctx: Pick<SelectContext, 'driver' | 'refs' | 'drive'>,
   args: Record<string, unknown>,
@@ -74,7 +77,9 @@ export async function scrollBy(
     } else if ('number' === typeof dy && dy !== 0) {
       lines = Math.sign(dy) * WHEEL_STEP;
     }
-    const wheeled = await ctx.drive(over, ref, ActKind.WHEEL, String(lines), {
+    // At a point of the picture when one is given: "lines,x,y". Else over the element.
+    const at = 'string' === typeof args[WHEEL_AT] ? `,${args[WHEEL_AT]}` : '';
+    const wheeled = await ctx.drive(over, ref, ActKind.WHEEL, `${String(lines)}${at}`, {
       delivery: Delivery.FOREGROUND,
       budgetMs: SETTLE_MS,
     });

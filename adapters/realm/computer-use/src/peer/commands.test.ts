@@ -1392,15 +1392,22 @@ describe('PeerCommands', () => {
       ]);
     });
 
-    it('drags to the middle of another element, or to a point', async () => {
+    it('drags onto the middle of another element, or to a point of its own box', async () => {
       const { act, asked, commands } = acting();
-      await act(ActionType.DRAG, {
-        foreground: true,
-        to: { ref: await refOf(commands, 'Delete note') },
-      });
-      await act(ActionType.DRAG, { foreground: true, to: { x: 5, y: 6 } });
-      expect(asked.map((request) => request.value)).toEqual(['140,25', '5,6']);
+      await act(ActionType.DRAG, { foreground: true, toRef: await refOf(commands, 'Delete note') });
+      // `to` is a fraction of the element's box, as in a page: the right edge, half way down.
+      await act(ActionType.DRAG, { foreground: true, to: { x: 1, y: 0.5 } });
+      expect(asked.map((request) => request.value)).toEqual(['140,25', '90,25']);
       await expect(act(ActionType.DRAG, { foreground: true })).rejects.toThrow(/where to drag to/);
+    });
+
+    // `at` meant a pixel of a picture here and a fraction of the box in a page: one name, two
+    // meanings. It is a fraction in every realm now, and a pixel of a picture is `point`.
+    it('clicks at a fraction of the element box, as a page does', async () => {
+      const { act, asked } = acting();
+      await act(ActionType.CLICK, { foreground: true, at: { x: 0, y: 0 } });
+      await act(ActionType.CLICK, { foreground: true, at: { x: 1, y: 1 } });
+      expect(asked.map((request) => request.value)).toEqual(['10,10', '90,40']);
     });
 
     it('is never used in a session that was joined for the background only', async () => {
@@ -1511,7 +1518,7 @@ describe('PeerCommands', () => {
       await commands.answer(ReticleCommand.ACT, {
         ref: await refOf(commands, 'Save'),
         action: ActionType.CLICK,
-        args: { foreground: true, at: { x: 600, y: 400 } },
+        args: { foreground: true, point: { x: 600, y: 400 } },
       });
       expect(made.asked.at(-1)?.value).toBe('300,200');
     });
@@ -1525,7 +1532,7 @@ describe('PeerCommands', () => {
     it('clicks at a point of the picture: its pixels become a point on the screen', async () => {
       const { commands, clickAt, asked } = picturing(shot);
       await commands.answer(ReticleCommand.CAPTURE, {});
-      await clickAt({ foreground: true, at: { x: 200, y: 100 } });
+      await clickAt({ foreground: true, point: { x: 200, y: 100 } });
       // The window is at 0,0 and the picture has two pixels for each point.
       expect(asked.map((request) => [request.kind, request.value])).toEqual([
         [ActKind.CLICK, '100,50'],
@@ -1537,7 +1544,7 @@ describe('PeerCommands', () => {
     it('moves the pointer of the HUD to the point that it clicks, not to the middle of the element', async () => {
       const { commands, clickAt, moves } = picturing(shot);
       await commands.answer(ReticleCommand.CAPTURE, {});
-      await clickAt({ foreground: true, at: { x: 200, y: 100 } });
+      await clickAt({ foreground: true, point: { x: 200, y: 100 } });
       expect(moves.at(-1)).toEqual([100, 50]);
     });
 
@@ -1546,7 +1553,7 @@ describe('PeerCommands', () => {
     it('refuses a point of a picture of a window that moved after the picture', async () => {
       const { commands, clickAt, asked } = picturing({ ...shot, window: [100, 50, 400, 300] });
       await commands.answer(ReticleCommand.CAPTURE, {});
-      await expect(clickAt({ foreground: true, at: { x: 200, y: 100 } })).rejects.toThrow(
+      await expect(clickAt({ foreground: true, point: { x: 200, y: 100 } })).rejects.toThrow(
         /moved or changed its size.*reticle_screenshot/s,
       );
       expect(asked).toEqual([]);
@@ -1591,7 +1598,7 @@ describe('PeerCommands', () => {
         commands.answer(ReticleCommand.ACT, {
           ref: await refOf(commands, 'Save'),
           action: ActionType.CLICK,
-          args: { foreground: true, at: { x: 20, y: 220 } },
+          args: { foreground: true, point: { x: 20, y: 220 } },
         });
       await commands.answer(ReticleCommand.CAPTURE, {});
       now = rows(100, '1:01');
@@ -1604,13 +1611,40 @@ describe('PeerCommands', () => {
       expect(asked).toHaveLength(1);
     });
 
+    it('drags from a point of the picture to another point of it', async () => {
+      const { commands, asked } = picturing(shot);
+      await commands.answer(ReticleCommand.CAPTURE, {});
+      await commands.answer(ReticleCommand.ACT, {
+        ref: await refOf(commands, 'Save'),
+        action: ActionType.DRAG,
+        args: { foreground: true, point: { x: 200, y: 100 }, toPoint: { x: 400, y: 200 } },
+      });
+      // The picture has two pixels for each point, and the window is at 0,0.
+      expect(asked.at(-1)?.value).toBe('100,50,200,100');
+    });
+
+    // A view with no element and no scroll bar (the strip of Mission Control, a map) scrolls under
+    // the pointer, as a person turns the wheel over it.
+    it('turns the wheel at a point of the picture', async () => {
+      const { commands, asked } = picturing(shot);
+      await commands.answer(ReticleCommand.CAPTURE, {});
+      await commands.answer(ReticleCommand.ACT, {
+        ref: await refOf(commands, 'Save'),
+        action: ActionType.SCROLL,
+        args: { foreground: true, point: { x: 200, y: 100 }, dy: 1 },
+      });
+      expect(asked.map((request) => [request.kind, request.value])).toEqual([
+        [ActKind.WHEEL, '5,100,50'],
+      ]);
+    });
+
     it('refuses a point with no picture, and a point with no foreground', async () => {
       const none = picturing(shot);
-      await expect(none.clickAt({ foreground: true, at: { x: 1, y: 1 } })).rejects.toThrow(
+      await expect(none.clickAt({ foreground: true, point: { x: 1, y: 1 } })).rejects.toThrow(
         /no picture was taken/,
       );
       await none.commands.answer(ReticleCommand.CAPTURE, {});
-      await expect(none.clickAt({ at: { x: 1, y: 1 } })).rejects.toThrow(/foreground: true/);
+      await expect(none.clickAt({ point: { x: 1, y: 1 } })).rejects.toThrow(/foreground: true/);
       expect(none.asked).toEqual([]);
     });
   });

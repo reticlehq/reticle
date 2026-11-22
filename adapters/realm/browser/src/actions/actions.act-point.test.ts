@@ -114,4 +114,16 @@ describe('a pointer action at a point inside the target', () => {
     await executeAction(refs.refFor(canvas), ActionType.CLICK, {});
     expect(seen.find((e) => 'click' === e.type)).toMatchObject({ x: 200, y: 70 });
   });
+
+  // `point` and `toPoint` are for a desktop session. A page that ignored them would act
+  // at the centre and report the action that was asked for.
+  it.each([
+    [ActionType.CLICK, { point: { x: 10, y: 10 } }],
+    [ActionType.DRAG, { toPoint: { x: 10, y: 10 } }],
+  ])('refuses a desktop argument for %s, and does not act', async (action, args) => {
+    await expect(executeAction(refs.refFor(canvas), action, args)).rejects.toThrow(
+      /desktop session/,
+    );
+    expect(seen).toEqual([]);
+  });
 });

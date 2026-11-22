@@ -12,6 +12,7 @@ import { ChangeKind as FileKind, diffSnapshots } from '@reticlehq/cli-realm';
 import type { Snapshot, WorkspacePort } from '@reticlehq/cli-realm';
 import {
   ActionType,
+  DRAG_TO_REF_ARG,
   ElementState,
   EventType,
   HumanControlKind,
@@ -55,10 +56,12 @@ import {
   kindFor,
   needsForeground,
   placesOf,
-  pointOnScreen,
+  dragValue,
+  pointFor,
+  usesPicture,
 } from './pointer.js';
 import type { Picture } from './pointer.js';
-import { scrollBy } from './scroll.js';
+import { WHEEL_AT, scrollBy } from './scroll.js';
 import { selectChoice } from './select.js';
 import type { Seen } from './seen.js';
 import { UiRole, isAddressable, place, quoted } from '../ui-node.js';
@@ -611,7 +614,12 @@ export class PeerCommands {
     }
     // The pointer goes where the action goes: the point of a picture when one is given, or the
     // middle of the element. For a point, the element is often the whole window.
-    const point = POINT_KINDS.has(kind) ? (value ?? '').split(',').map(Number) : [];
+    // A drag gives "x,y,x,y" and goes from the first point. A wheel gives "lines,x,y".
+    const numbers = (value ?? '').split(',').map(Number);
+    const point = POINT_KINDS.has(kind) && kind !== ActKind.WHEEL ? numbers.slice(0, 2) : [];
+    if (kind === ActKind.WHEEL && 3 === numbers.length) {
+      point.push(...numbers.slice(1));
+    }
     const frame = target.node.frame;
     if (2 === point.length && point.every(Number.isFinite)) {
       hud?.move(point[0] ?? 0, point[1] ?? 0);
@@ -769,22 +777,17 @@ export class PeerCommands {
    * The point a drag ends at, as "x,y" on the screen: the middle of the element with the ref
    * `to.ref`, or the point `to.x`, `to.y`.
    */
-  async #dragPoint(to: unknown): Promise<string> {
-    const end = record(to);
-    const ref = text(end['ref']);
-    if (ref !== undefined) {
-      const frame = (await this.#resolve(ref)).node.frame;
-      if (frame === undefined) {
-        throw new Error(`the element ${ref} has no place on the screen to drag to.`);
-      }
-      return `${String(frame[0] + frame[2] / 2)},${String(frame[1] + frame[3] / 2)}`;
+  /** The frame of the element a drag goes onto (`args.toRef`), or absent when none is named. */
+  async #ontoFrame(more: Args): Promise<readonly [number, number, number, number] | undefined> {
+    const onto = text(more[DRAG_TO_REF_ARG]);
+    if (onto === undefined) {
+      return undefined;
     }
-    if ('number' === typeof end['x'] && 'number' === typeof end['y']) {
-      return `${String(end['x'])},${String(end['y'])}`;
+    const frame = (await this.#resolve(onto)).node.frame;
+    if (frame === undefined) {
+      throw new Error(`the element ${onto} has no place on the screen to drag to.`);
     }
-    throw new Error(
-      `${ActionType.DRAG} needs where to drag to: args: { to: { ref: "…" } } or { to: { x, y } } on the screen.`,
-    );
+    return frame;
   }
 
   async #act(args: Args, allowed?: readonly string[]): Promise<ActResult> {
@@ -793,7 +796,13 @@ export class PeerCommands {
     if (action === ActionType.SCROLL) {
       // The same scroll as the `scroll` command, with the answer in the shape of an action.
       const target = await this.#resolve(ref);
-      const moved = await this.#scroll({ ...record(args['args']), ref });
+      const given = record(args['args']);
+      const at = pointFor(this.#picture, given, ActKind.WHEEL, undefined);
+      const moved = await this.#scroll({
+        ...given,
+        ref,
+        ...(at === undefined ? {} : { [WHEEL_AT]: at }),
+      });
       return {
         ok: true,
         ref,
@@ -863,13 +872,15 @@ export class PeerCommands {
         `this session was joined with --background-only: the realm does not take the pointer or bring ${this.#deps.driver.subject().app} to the front.`,
       );
     }
-    const at = pointOnScreen(this.#picture, more['at'], kind);
-    if (at !== undefined && moved(this.#picture?.appWindow, target.windowFrame)) {
+    const at =
+      kind === ActKind.DRAG ? undefined : pointFor(this.#picture, more, kind, target.node.frame);
+    const picture = usesPicture(more);
+    if (picture && moved(this.#picture?.appWindow, target.windowFrame)) {
       throw new Error(
         `the window of ${this.#deps.driver.subject().app} moved or changed its size after the picture was taken, so the point of the picture is now on something else. Take a new picture with reticle_screenshot, and give the point of that one.`,
       );
     }
-    if (at !== undefined) {
+    if (picture) {
       const now = placesOf((await this.#deps.driver.read()).root);
       if (contentMoved(this.#picture?.places, now)) {
         throw new Error(
@@ -878,7 +889,9 @@ export class PeerCommands {
       }
     }
     const value =
-      kind === ActKind.DRAG ? await this.#dragPoint(more['to']) : (at ?? VALUE_OF[action] ?? given);
+      kind === ActKind.DRAG
+        ? dragValue(this.#picture, more, target.node.frame, await this.#ontoFrame(more))
+        : (at ?? VALUE_OF[action] ?? given);
     const wanted = WANTS_CHECKED[action];
     if (wanted !== undefined) {
       if (!BOX_ROLES.has(target.node.role)) {

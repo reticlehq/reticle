@@ -230,15 +230,12 @@ async function runReticleCall(sessionId, name, input) {
 const PIXEL_TOOLS = [
   {
     type: 'computer_toolset_20260801',
-    // ponytail: the helper has no point-to-point drag, no wheel at a point and no zoom yet. The
-    // tasks need none of them; a person does each of them with a key or a click.
+    // ponytail: no zoom, no button held down on its own, no triple click. The tasks need none.
     configs: Object.fromEntries(
       [
         'zoom',
-        'left_click_drag',
         'left_mouse_down',
         'left_mouse_up',
-        'scroll',
         'hold_key',
         'middle_click',
         'triple_click',
@@ -319,13 +316,20 @@ function pixelsArm(sessionId) {
         return { image: readFileSync(small).toString('base64') };
       }
       case 'left_click':
-        return act('click', { at: at(input.coordinate) });
+        return act('click', { point: at(input.coordinate) });
       case 'double_click':
-        return act('dblclick', { at: at(input.coordinate) });
+        return act('dblclick', { point: at(input.coordinate) });
       case 'right_click':
-        return act('click', { at: at(input.coordinate), button: 'right' });
+        return act('click', { point: at(input.coordinate), button: 'right' });
       case 'mouse_move':
-        return act('hover', { at: at(input.coordinate) });
+        return act('hover', { point: at(input.coordinate) });
+      case 'left_click_drag':
+        return act('drag', { point: at(input.start_coordinate), toPoint: at(input.coordinate) });
+      case 'scroll': {
+        const down = input.scroll_direction === 'down' ? 1 : -1;
+        const where = input.coordinate === undefined ? {} : { point: at(input.coordinate) };
+        return act('scroll', { dy: down, ...where });
+      }
       case 'type':
         return act('type', { text: input.text });
       case 'key': {
