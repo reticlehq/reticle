@@ -1535,7 +1535,9 @@ describe('PeerCommands', () => {
         emit: () => undefined,
         hud: {
           app: () => undefined,
-          move: (x, y) => moves.push([x, y]),
+          move: (x, y) => {
+            moves.push([x, y]);
+          },
           glow: () => undefined,
           act: () => undefined,
           effect: () => undefined,
@@ -1787,7 +1789,9 @@ describe('PeerCommands', () => {
         emit: () => undefined,
         hud: {
           app: (name) => shown.push(['app', name]),
-          move: (x, y) => shown.push(['move', x, y]),
+          move: (x, y) => {
+            shown.push(['move', x, y]);
+          },
           glow: (frame) => shown.push(['glow', ...frame]),
           act: (text) => shown.push(['act', text]),
           effect: (text, kind) => shown.push(['effect', text, kind]),
@@ -1803,6 +1807,50 @@ describe('PeerCommands', () => {
         });
       return { press, shown, asked: made.asked, commands };
     };
+
+    // A press came before the pointer of the HUD reached the control: the person saw the change
+    // first and the pointer after it. The act now waits until the pointer is there, as a hand.
+    it('acts when the pointer of the HUD is at the control, not before', async () => {
+      const order: string[] = [];
+      const commands = new PeerCommands({
+        driver: {
+          ...fakeDriver(),
+          act: () => {
+            order.push('act');
+            return Promise.resolve({
+              delivered: true,
+              reachable: true,
+              settled: true,
+              before: read('Ready'),
+              after: read('Saved'),
+            });
+          },
+        },
+        emit: () => undefined,
+        hud: {
+          app: () => undefined,
+          move: () =>
+            new Promise<void>((resolve) => {
+              order.push('move');
+              setTimeout(() => {
+                order.push('there');
+                resolve();
+              }, 5);
+            }),
+          glow: () => undefined,
+          act: () => undefined,
+          effect: () => undefined,
+          paused: () => false,
+          stopped: () => false,
+          close: () => undefined,
+        },
+      });
+      await commands.answer(ReticleCommand.ACT, {
+        ref: await refOf(commands, 'Save'),
+        action: ActionType.CLICK,
+      });
+      expect(order).toEqual(['move', 'there', 'act']);
+    });
 
     // The agent drove a page in the browser while computer use was live, and the HUD of the
     // desktop showed none of it. The server now tells the desktop each act of a page as a row.

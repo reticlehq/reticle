@@ -623,7 +623,7 @@ export class PeerCommands {
     // The pointer goes where the action goes, and for a drag on to where it ends. See pointerPath.
     const path = pointerPath(kind, value, target.node.frame);
     if (path.start !== undefined) {
-      hud?.move(...path.start);
+      await hud?.move(...path.start);
     }
     if (target.windowFrame !== undefined) {
       hud?.glow(target.windowFrame);
@@ -649,7 +649,7 @@ export class PeerCommands {
       if (outcome.refused !== undefined || !outcome.delivered) {
         hud?.effect(`refused: ${outcome.refused ?? 'not taken'}`, HudEffect.REFUSED);
       } else if (path.end !== undefined) {
-        hud?.move(...path.end);
+        await hud?.move(...path.end);
       }
     } finally {
       this.#acting -= 1;

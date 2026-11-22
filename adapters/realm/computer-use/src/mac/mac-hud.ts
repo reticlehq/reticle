@@ -4,6 +4,8 @@
  * "Done" at the end of their turn.
  */
 import { spawn } from 'node:child_process';
+import type { ChildProcessByStdio } from 'node:child_process';
+import type { Readable, Writable } from 'node:stream';
 
 import { z } from 'zod';
 
@@ -23,39 +25,87 @@ const SaidSchema = z.object({
   done: z.boolean().optional(),
 });
 
+/** The glide of the pointer to a near control, and the longest one, across the screen. */
+export const GLIDE_SHORTEST = 80;
+export const GLIDE_LONGEST = 250;
+/** How much longer the glide is for each point of the way. */
+const GLIDE_MS_PER_POINT = 0.12;
+
+/**
+ * How long the pointer takes to go from one place to another, as a hand takes longer for a longer
+ * way. From no place (the pointer is not on the screen yet) it shows at the place at once.
+ */
+export function glideMs(
+  from: readonly [number, number] | undefined,
+  to: readonly [number, number],
+): number {
+  if (from === undefined) {
+    return 0;
+  }
+  const way = Math.hypot(to[0] - from[0], to[1] - from[1]);
+  return Math.round(Math.min(GLIDE_LONGEST, GLIDE_SHORTEST + way * GLIDE_MS_PER_POINT));
+}
+
+/** The most times the program is started again: one that ends at each start is left ended. */
+const RESTARTS = 5;
+
 export function macHud(program: string, onStop?: () => void): HudPort {
-  const child = spawn(program, [], { stdio: ['pipe', 'pipe', 'ignore'] });
-  // The window must not keep the command open, and a window that is gone must not break an action.
-  child.unref();
-  child.on('error', () => undefined);
-  child.stdin.on('error', () => undefined);
   let paused = false;
   let stopped = false;
+  let closed = false;
+  let restarts = 0;
+  /** The application the HUD shows. A program that is started again is told it again. */
+  let app: string | undefined;
+  /** Where the pointer is. Absent: it is not on the screen yet. */
+  let at: [number, number] | undefined;
   const onDone: (() => void)[] = [];
-  let rest = '';
-  child.stdout.on('data', (chunk: Buffer) => {
-    const lines = (rest + chunk.toString('utf8')).split('\n');
-    rest = lines.pop() ?? '';
-    for (const line of lines) {
-      try {
-        const said = SaidSchema.safeParse(JSON.parse(line));
-        if (said.success) {
-          paused = said.data.paused ?? paused;
-          if (true === said.data.done) {
-            onDone.forEach((listener) => {
-              listener();
-            });
-          }
-          if (true === said.data.stopped && !stopped) {
-            stopped = true;
-            onStop?.();
-          }
+  const hear = (line: string): void => {
+    try {
+      const said = SaidSchema.safeParse(JSON.parse(line));
+      if (said.success) {
+        paused = said.data.paused ?? paused;
+        if (true === said.data.done) {
+          onDone.forEach((listener) => {
+            listener();
+          });
         }
-      } catch {
-        // Not a line of the program's protocol: nothing to learn from it.
+        if (true === said.data.stopped && !stopped) {
+          stopped = true;
+          onStop?.();
+        }
       }
+    } catch {
+      // Not a line of the program's protocol: nothing to learn from it.
     }
-  });
+  };
+  const start = (): ChildProcessByStdio<Writable, Readable, null> => {
+    const started = spawn(program, [], { stdio: ['pipe', 'pipe', 'ignore'] });
+    // The window must not keep the command open, and a window that is gone must not break an action.
+    started.unref();
+    started.on('error', () => undefined);
+    started.stdin.on('error', () => undefined);
+    let rest = '';
+    started.stdout.on('data', (chunk: Buffer) => {
+      const lines = (rest + chunk.toString('utf8')).split('\n');
+      rest = lines.pop() ?? '';
+      lines.forEach(hear);
+    });
+    // The pointer is the program's window. A program that ended (it crashed, or it was quit) took
+    // the pointer away for the rest of the session. It is started again, unless the person
+    // stopped Reticle or the session closed it.
+    started.on('exit', () => {
+      if (closed || stopped || restarts >= RESTARTS) {
+        return;
+      }
+      restarts += 1;
+      child = start();
+      if (app !== undefined) {
+        send({ t: Say.APP, name: app });
+      }
+    });
+    return started;
+  };
+  let child = start();
   const send = (message: Record<string, unknown>): void => {
     if (child.stdin.writable) {
       child.stdin.write(`${JSON.stringify(message)}\n`);
@@ -63,10 +113,16 @@ export function macHud(program: string, onStop?: () => void): HudPort {
   };
   return {
     app: (name) => {
+      app = name;
       send({ t: Say.APP, name });
     },
     move: (x, y) => {
-      send({ t: Say.MOVE, x, y });
+      const ms = glideMs(at, [x, y]);
+      at = [x, y];
+      send({ t: Say.MOVE, x, y, ms });
+      return new Promise<void>((resolve) => {
+        setTimeout(resolve, ms).unref();
+      });
     },
     glow: ([x, y, w, h]) => {
       send({ t: Say.GLOW, x, y, w, h });
@@ -91,6 +147,7 @@ export function macHud(program: string, onStop?: () => void): HudPort {
     paused: () => paused,
     stopped: () => stopped,
     close: () => {
+      closed = true;
       child.stdin.end();
     },
   };

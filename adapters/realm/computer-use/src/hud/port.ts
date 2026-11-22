@@ -9,8 +9,11 @@ export type HudEffect = (typeof HudEffect)[keyof typeof HudEffect];
 export interface HudPort {
   /** The application that is joined. */
   app(name: string): void;
-  /** The pointer goes to this point of the screen: the middle of the element to act on. */
-  move(x: number, y: number): void;
+  /**
+   * The pointer goes to this point of the screen: the middle of the element to act on. A promise
+   * ends when the pointer is there, and the realm acts then, as a hand clicks when it arrives.
+   */
+  move(x: number, y: number): void | Promise<void>;
   /** A glow round the window the realm works in: x, y, width, height on the screen. */
   glow(frame: readonly [number, number, number, number]): void;
   /** What the realm does now, in a few words. */

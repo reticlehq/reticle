@@ -70,8 +70,7 @@ enum Token {
   static let square: CGFloat = 26
   static let radiusSmall: CGFloat = 6
   static let wash = 0.18
-  /// The glide of the pointer to a target. Short: the realm does not wait for it, and a pointer
-  /// that came after the click showed the action late.
+  /// The glide of the pointer to a target when the realm gives no time for it.
   static let glide = 0.12
   static let ease = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
   static let ripple = 0.45
@@ -670,7 +669,10 @@ final class Hud: NSObject, NSApplicationDelegate {
       let to = NSPoint(x: target.x - Token.tip.x, y: target.y - (Token.pointerBox - Token.tip.y))
       pointer.orderFrontRegardless()
       NSAnimationContext.runAnimationGroup { move in
-        move.duration = pointer.alphaValue > 0 ? Token.glide : 0
+        // The realm says how long the way takes, and waits for it before it acts: longer for a
+        // longer way, as a hand. An older realm says nothing, and the glide is the short one.
+        let glide = (say["ms"] as? Double).map { $0 / 1000 } ?? Token.glide
+        move.duration = pointer.alphaValue > 0 ? glide : 0
         move.timingFunction = Token.ease
         // The frame, not the origin: AppKit animates the frame of a window, and an animated
         // setFrameOrigin does nothing. A pointer that was on the screen stayed where it was.

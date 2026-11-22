@@ -163,13 +163,28 @@ try {
   await press(onHud, 'Pause');
   await press(onHud, 'Resume');
 
+  // The program of the HUD ends (it crashed, or it was quit): it is started again, and the
+  // pointer is back at the next action. The pointer was gone for the rest of the session.
+  execFileSync('kill', [String(hudPid)]);
+  await sleep(1500);
+  await press(commands, 'Save');
+  await sleep(500);
+  assert.notEqual(pointerAt(), '', 'the pointer did not come back after the HUD ended');
+  const newHud = Number(execFileSync('pgrep', ['-n', '-f', 'build/reticle-hud']).toString().trim());
+  const again = new PeerCommands({
+    driver: new MacDriver({ helper, app: 'reticle-hud', pid: newHud }),
+    emit: () => undefined,
+  });
+
   // Stop ends it: no action after it, also not after a time.
-  await press(onHud, 'Stop');
+  await press(again, 'Open Reticle');
+  await sleep(300);
+  await press(again, 'Stop');
   await sleep(400);
   await assert.rejects(press(commands, 'Save'), /stopped Reticle/);
   assert.equal(hud.stopped(), true);
 
-  process.stdout.write('computer-use hudcheck: 10 of 10 cases held\n');
+  process.stdout.write('computer-use hudcheck: 11 of 11 cases held\n');
 } finally {
   hud.close();
   fixture.kill();
