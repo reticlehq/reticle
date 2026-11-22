@@ -78,7 +78,7 @@ The advertised surface is deliberately small (`default` 10, `all` 30). `RETICLE_
 | Tool | Use it to | Key arguments |
 | --- | --- | --- |
 | `reticle_session` | list tabs, end, hand back, tune the HUD, report feedback | `action`: `list` `yield` `end` `tune` `feedback` `account` |
-| `reticle_navigate` | go to a URL or reload | `url`, `reload`, `hard` |
+| `reticle_navigate` | go to a URL, reload, or press Back or Forward | `url`, `reload`, `hard`, `history` |
 | `reticle_look` | see the page, find refs, inspect one, read a store | `action`: `page` (`mode: "interactive"`) `find` `element` `state` |
 | `reticle_act_and_wait` | act and prove the consequence in one call | `ref`/`target`, `action`, `args`, `until`, `durable`, `intent` |
 | `reticle_act` | act without a verdict, or a whole journey as `steps` | `steps: [{ target, action, args, expect }]` |

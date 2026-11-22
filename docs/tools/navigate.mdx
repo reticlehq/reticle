@@ -71,12 +71,55 @@ with [`reticle_session`](/tools/sessions), and only then look at the page. If no
   slot, so the failure is loud, but it still costs you a turn.
 </Warning>
 
+## Back and Forward
+
+To press the browser Back or Forward button, give `history` instead of a `url`. A synthetic Alt+ArrowLeft does not move a tab, and a URL navigation adds a new entry instead of moving through the entries the tab has. So use this to check a bug such as "Back after a form submit shows the wrong page".
+
+```json
+{ "history": "back" }
+```
+
+The target is not known before the move: it is the entry the browser has. So the result tells you where the tab arrived. This is a real response, Back after a sign-in form posted and the server redirected to `/today`:
+
+```json
+{
+  "ok": true,
+  "history": "back",
+  "confirmed": true,
+  "url": "http://127.0.0.1:58839/login",
+  "sessionId": "s8ff1ba49-9376-436d-adf3-632193bfb07a"
+}
+```
+
+`confirmed: true` means that the tab was seen to stop at `url`. Reticle waits until two looks in a row agree, so a route guard that replaces the route after Back is reported where it sent the tab, not where the tab passed through.
+
+When there is no entry in that direction, the page refuses, and nothing waits:
+
+```json
+{
+  "ok": false,
+  "history": "forward",
+  "reason": "the tab has no history entry in that direction on this origin"
+}
+```
+
+The browser counts only the entries on the page's own origin. So Back from the first app page does not leave the app for the site the tab came from, or for the `about:blank` a leased tab opens on.
+
+`confirmed: false` comes in three forms:
+
+- With `waitedMs` and no `url`: the tab did not leave its page in the wait. Do not send the move again, because a second move goes one more entry. Call [`reticle_session`](/tools/sessions) to see where the tab is.
+- With `url` and a note that the tab was still moving: `url` is where it was last seen, not proof that it stopped there.
+- With `url` and a note that the page has no Reticle SDK: a leased tab went to a page Reticle cannot see into, and `url` is read from the browser.
+
+A leased tab whose page has no SDK (an image, another site) moves through the browser, and its SDK reattaches when the tab is back on the app. A production drive refuses `history`, because the entry it lands on cannot be checked against the activated origin first.
+
 ## Arguments
 
 | Argument | What it does |
 | --- | --- |
 | `url` | Where to go. Relative paths work |
 | `reload` | Reload in place instead of navigating |
+| `history` | `"back"` or `"forward"`: move one entry through the tab history, as the browser buttons do. Give it without `url` and `reload` |
 | `hard` | With `reload`, bypass the cache. On a leased tab the browser reloads with its cache ignored (`hardReload: "cache_ignored"`). On a tab Reticle does not drive, only the document is fetched again, and scripts and modules can come from the cache (`hardReload: "document_only"`) |
 | `timeout_ms` | How long to wait for the page to come back before `confirmed: false`. Default 5000; 0 looks once |
 
