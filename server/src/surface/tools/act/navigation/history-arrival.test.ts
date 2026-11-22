@@ -12,7 +12,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { awaitHistoryArrival, type HistoryScope } from './history-arrival.js';
+import { awaitHistoryArrival, awaitLeaseBack, type HistoryScope } from './history-arrival.js';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 
@@ -230,6 +230,36 @@ describe('awaitHistoryArrival', () => {
       awaitHistoryArrival(sessions, scopeFor(driven), 500, fakeClock(100)),
     ).resolves.toBeNull();
     // One look at the start and one after each of the five sleeps: bounded by the budget.
+    expect(looks()).toBe(6);
+  });
+});
+
+describe('awaitLeaseBack', () => {
+  // A lease with no SDK was moved through the browser. Its SDK reattaches under the lease's id
+  // when the page it reached is the app, and the same settle rule applies.
+  const absent = session({ id: 'gone', url: 'about:blank' });
+
+  it('confirms the lease once its SDK has reattached and stopped', async () => {
+    const { sessions } = registry(absent, [
+      [],
+      [{ id: 'lease-1', url: CHECKOUT, documentId: 'd2' }],
+      [{ id: 'lease-1', url: LOGIN, documentId: 'd2' }],
+    ]);
+    await expect(awaitLeaseBack(sessions, 'lease-1', 5_000, fakeClock(100))).resolves.toEqual({
+      sessionId: 'lease-1',
+      url: LOGIN,
+      settled: true,
+    });
+  });
+
+  it('does not take another session for the lease', async () => {
+    const { sessions } = registry(absent, [[{ id: 'other', url: ORDERS, documentId: 'd9' }]]);
+    await expect(awaitLeaseBack(sessions, 'lease-1', 300, fakeClock(100))).resolves.toBeNull();
+  });
+
+  it('gives up and returns null when the SDK never reattaches', async () => {
+    const { sessions, looks } = registry(absent, [[]]);
+    await expect(awaitLeaseBack(sessions, 'lease-1', 500, fakeClock(100))).resolves.toBeNull();
     expect(looks()).toBe(6);
   });
 });

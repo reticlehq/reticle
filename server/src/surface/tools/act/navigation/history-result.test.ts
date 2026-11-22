@@ -6,7 +6,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { NavigateHistory } from '@reticlehq/core';
-import { HistoryNavigateMessage, historyResult } from './history-result.js';
+import { HistoryNavigateMessage, historyResult, leftAppResult } from './history-result.js';
 
 const ORDERS = 'http://localhost:3000/orders';
 
@@ -44,6 +44,21 @@ describe('historyResult', () => {
       confirmed: false,
       waitedMs: 300,
       note: HistoryNavigateMessage.NOT_SEEN,
+    });
+  });
+});
+
+describe('leftAppResult', () => {
+  it('names where the browser is, and says nothing there can confirm it', () => {
+    // Back to the about:blank a lease was opened on: the SDK is gone, so only the browser can say
+    // where the tab is. That is a fact, not an arrival: no Reticle session can act there.
+    expect(leftAppResult(NavigateHistory.BACK, 'about:blank', 300)).toEqual({
+      ok: true,
+      history: NavigateHistory.BACK,
+      confirmed: false,
+      url: 'about:blank',
+      waitedMs: 300,
+      note: HistoryNavigateMessage.LEFT_APP,
     });
   });
 });

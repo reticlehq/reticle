@@ -160,3 +160,176 @@ describe('reticle_navigate { history }', () => {
     expect(h.sent).toEqual([]);
   });
 });
+
+const LEASE = 'lease-1';
+const LEASED_CART = `http://localhost:3000/cart?__reticle_session=${LEASE}`;
+const LEASED_ORDERS = `http://localhost:3000/orders?__reticle_session=${LEASE}`;
+const PICTURE = 'http://localhost:3000/shots/cart.png';
+
+/** What the browser does when the pool moves the leased page. */
+type BrowserMove = { to: string; sdkBack: boolean } | { fails: true } | { stays: true };
+
+interface LeaseHarness {
+  readonly moves: string[];
+  readonly deps: ToolDeps;
+}
+
+/**
+ * A lease, connected or not, whose browser page is at `startUrl`. `onSdkMove` is what happens when
+ * the SDK takes the `history` command; `onBrowserMove` is what happens when the pool moves the page.
+ */
+function leaseHarness(opts: {
+  connected: boolean;
+  startUrl: string;
+  onSdkMove?: { to: string; sdkGone: boolean };
+  onBrowserMove?: BrowserMove;
+}): LeaseHarness {
+  const moves: string[] = [];
+  let attached = opts.connected;
+  let pageUrl = opts.startUrl;
+  const session = createFakeSession({}, { sessionId: LEASE, url: LEASED_CART });
+  session.command = (name: string) => {
+    if (ReticleCommand.HISTORY === name && opts.onSdkMove !== undefined) {
+      pageUrl = opts.onSdkMove.to;
+      attached = !opts.onSdkMove.sdkGone;
+    }
+    return Promise.resolve({ kind: 'command_result', id: 'c', ok: true, result: { ok: true } });
+  };
+  const sessions = {
+    resolve: () => {
+      if (!attached) {
+        throw new Error(`no connected session with id '${LEASE}'`);
+      }
+      return session;
+    },
+    get: (id: string) => (attached && id === LEASE ? session : undefined),
+    all: () => (attached ? [session] : []),
+    count: () => (attached ? 1 : 0),
+  } as unknown as SessionManager;
+  const pool = {
+    leaseUrl: (id: string) => (id === LEASE ? LEASED_CART : undefined),
+    leasePageUrl: (id: string) => (id === LEASE ? pageUrl : undefined),
+    historyLease: (id: string, direction: string) => {
+      moves.push(`${id}:${direction}`);
+      const move = opts.onBrowserMove;
+      if (move === undefined || 'fails' in move) {
+        return Promise.resolve(false);
+      }
+      if ('to' in move) {
+        pageUrl = move.to;
+        attached = move.sdkBack;
+        session.url = move.to;
+      }
+      return Promise.resolve(true);
+    },
+  };
+  const deps = {
+    sessions,
+    pool,
+    recordings: new RecordingStore(),
+    now: () => 0,
+  } as unknown as ToolDeps;
+  return { moves, deps };
+}
+
+describe('reticle_navigate { history } on a lease whose page has no SDK', () => {
+  it('moves the page through the browser, and confirms when the SDK reattaches', async () => {
+    const h = leaseHarness({
+      connected: false,
+      startUrl: PICTURE,
+      onBrowserMove: { to: LEASED_ORDERS, sdkBack: true },
+    });
+    const result = await navigate(h.deps, {
+      history: NavigateHistory.BACK,
+      sessionId: LEASE,
+      timeout_ms: 1_000,
+    });
+
+    expect(h.moves).toEqual([`${LEASE}:${NavigateHistory.BACK}`]);
+    expect(result).toEqual({
+      ok: true,
+      history: NavigateHistory.BACK,
+      confirmed: true,
+      url: LEASED_ORDERS,
+      sessionId: LEASE,
+    });
+  });
+
+  it('names where the browser went when no SDK came back there', async () => {
+    const h = leaseHarness({
+      connected: false,
+      startUrl: LEASED_ORDERS,
+      onBrowserMove: { to: PICTURE, sdkBack: false },
+    });
+    const result = await navigate(h.deps, {
+      history: NavigateHistory.FORWARD,
+      sessionId: LEASE,
+      timeout_ms: 200,
+    });
+
+    expect(result).toEqual({
+      ok: true,
+      history: NavigateHistory.FORWARD,
+      confirmed: false,
+      url: PICTURE,
+      waitedMs: 200,
+      note: HistoryNavigateMessage.LEFT_APP,
+    });
+  });
+
+  it('says the move was not seen when the browser stayed on the same page', async () => {
+    // Forward with no entry: Playwright returns without moving, and nothing changed.
+    const h = leaseHarness({ connected: false, startUrl: PICTURE, onBrowserMove: { stays: true } });
+    const result = await navigate(h.deps, {
+      history: NavigateHistory.FORWARD,
+      sessionId: LEASE,
+      timeout_ms: 0,
+    });
+
+    expect(result['confirmed']).toBe(false);
+    expect(result['url']).toBeUndefined();
+    expect(result['note']).toBe(HistoryNavigateMessage.NOT_SEEN);
+  });
+
+  it('refuses when the browser does not move the page', async () => {
+    const h = leaseHarness({ connected: false, startUrl: PICTURE, onBrowserMove: { fails: true } });
+    const result = await navigate(h.deps, {
+      history: NavigateHistory.BACK,
+      sessionId: LEASE,
+      timeout_ms: 0,
+    });
+
+    expect(result).toEqual({
+      ok: false,
+      history: NavigateHistory.BACK,
+      reason: HistoryNavigateMessage.LEASE_DID_NOT_MOVE,
+    });
+  });
+});
+
+describe('reticle_navigate { history } on a lease whose SDK is connected', () => {
+  it('moves through the SDK, and reads from the browser where a tab with no SDK went', async () => {
+    // Back from the first app page goes to the about:blank the lease was opened on. The SDK is
+    // gone and no session comes back, so only the browser can say where the tab is.
+    const h = leaseHarness({
+      connected: true,
+      startUrl: LEASED_CART,
+      onSdkMove: { to: 'about:blank', sdkGone: true },
+    });
+    const result = await navigate(h.deps, {
+      history: NavigateHistory.BACK,
+      sessionId: LEASE,
+      timeout_ms: 200,
+    });
+
+    expect(h.moves).toEqual([]);
+    expect(result).toEqual({
+      ok: true,
+      history: NavigateHistory.BACK,
+      confirmed: false,
+      url: 'about:blank',
+      waitedMs: 200,
+      note: HistoryNavigateMessage.LEFT_APP,
+    });
+  });
+});

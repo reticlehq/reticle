@@ -103,16 +103,44 @@ function arrival(at: Seen, settled: boolean): HistoryArrival {
  * an error. A tab still moving when the budget ends is reported where it was last seen, with
  * `settled:false`.
  */
-export async function awaitHistoryArrival(
+export function awaitHistoryArrival(
   sessions: SessionManager,
   scope: HistoryScope,
   timeoutMs: number,
   clock: ArrivalClock = REAL_ARRIVAL_CLOCK,
 ): Promise<HistoryArrival | null> {
+  return awaitSettled(sessions, (snapshot) => lookForMove(snapshot, scope), timeoutMs, clock);
+}
+
+/**
+ * Poll until the SDK of a lease moved through the browser has reattached under the lease's id and
+ * stopped, or the budget runs out. The same settle rule as `awaitHistoryArrival`: a page that
+ * redirects after its SDK connects is reported where it stopped. Null when it never reattached.
+ */
+export function awaitLeaseBack(
+  sessions: SessionManager,
+  sessionId: string,
+  timeoutMs: number,
+  clock: ArrivalClock = REAL_ARRIVAL_CLOCK,
+): Promise<HistoryArrival | null> {
+  const look = (snapshot: readonly Session[]): Seen | null => {
+    const back = snapshot.find((s) => s.id === sessionId);
+    return back === undefined ? null : seen(back);
+  };
+  return awaitSettled(sessions, look, timeoutMs, clock);
+}
+
+/** Look until two looks in a row agree on a place, or the budget runs out. */
+async function awaitSettled(
+  sessions: SessionManager,
+  look: (snapshot: readonly Session[]) => Seen | null,
+  timeoutMs: number,
+  clock: ArrivalClock,
+): Promise<HistoryArrival | null> {
   const deadline = clock.now() + timeoutMs;
   let previous: Seen | null = null;
   for (;;) {
-    const found = lookForMove(sessions.all(), scope);
+    const found = look(sessions.all());
     if (found !== null && previous !== null && samePlace(found, previous)) {
       return arrival(found, true);
     }

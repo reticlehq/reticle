@@ -61,6 +61,14 @@ export interface PooledPage {
    * Cmd+Shift+R does. OPTIONAL: without it a hard reload can only re-fetch the document (#1785).
    */
   reloadIgnoringCache?(): Promise<void>;
+  /**
+   * Move one entry back or forward in the page's history, as the browser buttons do (#1844).
+   * OPTIONAL, like `reloadIgnoringCache`: without them a lease with no SDK cannot move this way.
+   */
+  goBack?(opts?: { timeoutMs?: number }): Promise<unknown>;
+  goForward?(opts?: { timeoutMs?: number }): Promise<unknown>;
+  /** The URL the page is on now, as the browser knows it. OPTIONAL: without it nobody can say. */
+  url?(): string;
   /** Set prefers-color-scheme and prefers-reduced-motion. OPTIONAL: without it the media stay. */
   emulateMedia?(media: LeaseMedia): Promise<void>;
   /**

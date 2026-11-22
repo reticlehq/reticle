@@ -213,6 +213,10 @@ function wrapBrowser(browser: Browser, headless: boolean): PooledBrowser {
                 await page.mouse.move(x, y);
               }),
             reloadIgnoringCache: () => reloadIgnoringCache(page),
+            // The same wait rule as goto: `load` can wait forever on one slow subresource.
+            goBack: (opts) => page.goBack(gotoOptions(opts?.timeoutMs)),
+            goForward: (opts) => page.goForward(gotoOptions(opts?.timeoutMs)),
+            url: () => page.url(),
             // The same driver `reticle drive` presses with, so a held key and a chord read alike.
             emulateMedia: (media) => page.emulateMedia(media),
             press: (args) => performGesture(page, ActionType.PRESS, NO_BOX, args, sleepFor),

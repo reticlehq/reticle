@@ -25,6 +25,13 @@ export const HistoryNavigateMessage = {
     'The tab moved, and it was still moving when the wait ended. url is where it was last seen, ' +
     'not proof that it stopped there. Wait for the page you expect with reticle_wait_for, or give ' +
     'a larger timeout_ms.',
+  /** The tab moved to a page with no Reticle SDK. Only a leased tab's browser can say where. */
+  LEFT_APP:
+    'The tab moved to a page with no Reticle SDK, so no session can act there. url is where the ' +
+    'browser is now, read from the browser. Only browser-level actions apply there (navigate, ' +
+    'screenshot). Navigate to the app again, and the lease reattaches.',
+  /** The browser did not move a leased page that has no SDK. */
+  LEASE_DID_NOT_MOVE: 'The leased page did not move through its history.',
 } as const;
 
 export function isHistoryDirection(value: unknown): value is NavigateHistoryValue {
@@ -51,5 +58,24 @@ export function historyResult(
     sessionId: arrival.sessionId,
     waitedMs,
     note: HistoryNavigateMessage.STILL_MOVING,
+  };
+}
+
+/**
+ * The answer for a tab that the browser saw at `url`, where no SDK came back. Not `confirmed`: no
+ * session can act at that page, and that is what `confirmed` promises.
+ */
+export function leftAppResult(
+  direction: NavigateHistoryValue,
+  url: string,
+  waitedMs: number,
+): Record<string, unknown> {
+  return {
+    ok: true,
+    history: direction,
+    confirmed: false,
+    url,
+    waitedMs,
+    note: HistoryNavigateMessage.LEFT_APP,
   };
 }

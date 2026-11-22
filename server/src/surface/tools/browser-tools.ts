@@ -197,6 +197,7 @@ export const BROWSER_TOOLS: ToolDef[] = [
     handler: async (deps, args) => {
       // Before reload: `history` with `reload` is refused there, not read as a reload.
       if (args['history'] !== undefined) {
+        const pool = deps.pool;
         return navigateHistory(
           {
             sessions: deps.sessions,
@@ -205,6 +206,16 @@ export const BROWSER_TOOLS: ToolDef[] = [
             markRecordingsNavigated: () => {
               deps.recordings.markNavigated();
             },
+            ...(pool === undefined
+              ? {}
+              : {
+                  lease: {
+                    isLease: (sessionId) => pool.leaseUrl(sessionId) !== undefined,
+                    move: (sessionId, direction, timeoutMs) =>
+                      pool.historyLease(sessionId, direction, timeoutMs),
+                    pageUrl: (sessionId) => pool.leasePageUrl(sessionId),
+                  },
+                }),
           },
           args,
         );
