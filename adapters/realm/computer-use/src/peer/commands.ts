@@ -798,6 +798,11 @@ export class PeerCommands {
     }
     const modifiers = Array.isArray(more['modifiers']) ? more['modifiers'].map(String) : [];
     const key = text(more['text']);
+    if (kind === ActKind.KEY && key === undefined && VALUE_OF[action] === undefined) {
+      throw new Error(
+        `${action} needs the key in args.text, as the page realm takes it: { text: "Escape" }, or { text: "r", modifiers: ["Alt", "Shift"] }.`,
+      );
+    }
     // `fill` gives `value`. `type` gives `text`. `press` gives the key in `text`, with modifiers.
     const given =
       kind === ActKind.KEY && key !== undefined

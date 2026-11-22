@@ -242,6 +242,21 @@ describe('PeerCommands', () => {
     ]);
   });
 
+  // `{ key: 'Escape' }` came to the helper as no key at all, and the answer was "unknown-key":
+  // nothing said that the key goes in `args.text`.
+  it('says where the key goes when a press has none', async () => {
+    const { commands, asked } = peer();
+    const ref = await refOf(commands, 'Save');
+    await expect(
+      commands.answer(ReticleCommand.ACT, {
+        ref,
+        action: ActionType.PRESS,
+        args: { key: 'Escape' },
+      }),
+    ).rejects.toThrow(/args\.text/);
+    expect(asked).toEqual([]);
+  });
+
   it('presses no outward control that a Harness command did not ask for', async () => {
     const { commands, asked } = peer();
     const ref = await refOf(commands, 'Delete note');
