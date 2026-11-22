@@ -52,7 +52,13 @@ const LAYERS = `<h1>Layers</h1>
   };
   document.querySelector('#ok').onclick = () => (count.textContent = 'dialog done');
 </script>`;
-const PAGE = 'layers' === process.env['RETICLE_FIXTURE_PAGE'] ? LAYERS : page;
+// A long list, as the channels of Discord: listcheck.mjs reads the items on the screen.
+const LIST = `<!doctype html><title>Notes</title><ul aria-label="Channels" style="height:240px;overflow:auto">${Array.from(
+  { length: 300 },
+  (_, i) => `<li><a href="#c${String(i)}">channel ${String(i)}</a></li>`,
+).join('')}</ul>`;
+const PAGES = { layers: LAYERS, list: LIST };
+const PAGE = PAGES[process.env['RETICLE_FIXTURE_PAGE'] ?? ''] ?? page;
 
 // Not in the Dock and not in front: the person at the machine keeps the application they use.
 // With RETICLE_FIXTURE_REGULAR it is an ordinary application with a menu bar, for the check of

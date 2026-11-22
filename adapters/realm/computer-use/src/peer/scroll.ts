@@ -17,6 +17,8 @@ const SCROLL_BY_WHEEL = 'wheel';
 /** Lines of the wheel for a place (the end or the start), and for one move. */
 const WHEEL_TO_END = 40;
 const WHEEL_STEP = 5;
+/** The most turns of the wheel to an end: 10 turns of 40 lines. */
+const WHEEL_TURNS_TO_END = 10;
 
 /** The key that does what a scroll asks: the end or the start for a place, a page for a move. */
 function scrollKeyFor(fraction: unknown, dy: unknown): string | undefined {
@@ -89,12 +91,30 @@ export async function scrollBy(
     }
     // At a point of the picture when one is given: "lines,x,y". Else over the element.
     const at = 'string' === typeof args[WHEEL_AT] ? `,${args[WHEEL_AT]}` : '';
-    const wheeled = await ctx.drive(over, ref, ActKind.WHEEL, `${String(lines)}${at}`, {
-      delivery: Delivery.FOREGROUND,
-      budgetMs: SETTLE_MS,
-    });
+    const turn = async (): Promise<boolean> =>
+      (
+        await ctx.drive(over, ref, ActKind.WHEEL, `${String(lines)}${at}`, {
+          delivery: Delivery.FOREGROUND,
+          budgetMs: SETTLE_MS,
+        })
+      ).changes.length > 0;
+    // To an end, the wheel turns until nothing moves, as a hand does: one turn did not reach the
+    // end of the 300 channels of Discord. A turn that moves nothing says the end is reached.
+    const toEnd = 'number' === typeof fraction;
+    let turns = 1;
+    const moved = await turn();
+    let atEnd = !moved;
+    for (let last = moved; toEnd && last && turns < WHEEL_TURNS_TO_END; turns += 1) {
+      last = await turn();
+      atEnd = !last;
+    }
     // Declared: the caller asked for a place or for pixels, and got lines of the wheel.
-    return { scrolled: wheeled.changes.length > 0, by: SCROLL_BY_WHEEL, lines };
+    return {
+      scrolled: moved,
+      by: SCROLL_BY_WHEEL,
+      lines: lines * turns,
+      ...(toEnd ? { atEnd } : {}),
+    };
   }
   if (bar === undefined) {
     // A page in a Chromium browser has no scroll bar in its tree. A key scrolls it, also when

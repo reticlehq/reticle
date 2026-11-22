@@ -190,7 +190,13 @@ export function place(root: UiNode): Placed[] {
 /** The most pixels, of a width or a height, that still count as no size. */
 const THIN = 1;
 
-export function placeShown(root: UiNode): { shown: Placed[]; omitted: number } {
+export function placeShown(root: UiNode): {
+  shown: Placed[];
+  omitted: number;
+  /** For an element on the screen: how many of its children are scrolled out of the window. */
+  outOfView: Map<string, number>;
+} {
+  const outOfView = new Map<string, number>();
   const hidden = new Set<string>();
   // Hidden elements that give no place at all: they hide nothing that they hold.
   const noPlace = new Set<string>();
@@ -220,6 +226,12 @@ export function placeShown(root: UiNode): { shown: Placed[]; omitted: number } {
     const parentHides = above !== undefined && hidden.has(above) && !noPlace.has(above);
     if (noSize || scrolledOut || parentHides) {
       hidden.add(p.key);
+      // In a page, no size is out of view too: Chrome gives an item scrolled out as a strip one
+      // pixel high at the edge. A closed menu is not in a page.
+      const outside = scrolledOut || (noSize && inPage.has(p.key));
+      if (outside && !parentHides && above !== undefined && !hidden.has(above)) {
+        outOfView.set(above, (outOfView.get(above) ?? 0) + 1);
+      }
       // An element at 0,0,0,0 gives no place at all, not a closed one: the list of an open stack of
       // the Dock does, and its files are on the screen above the Dock. What it holds is judged by
       // its own place. A closed menu is at the place of its item, and its items have no size.
@@ -230,7 +242,7 @@ export function placeShown(root: UiNode): { shown: Placed[]; omitted: number } {
       shown.push(p);
     }
   }
-  return { shown, omitted: hidden.size };
+  return { shown, omitted: hidden.size, outOfView };
 }
 
 type Frame = readonly [number, number, number, number];

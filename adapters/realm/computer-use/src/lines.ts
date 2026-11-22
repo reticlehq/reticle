@@ -73,22 +73,28 @@ export interface Written {
 
 /** The tree of what is on the screen. See `placeShown`. */
 export function writeWindows(root: UiNode, refs: RefTable): Written {
-  const { shown, omitted } = placeShown(root);
-  return { tree: writePlaced(shown, refs), omitted };
+  const { shown, omitted, outOfView } = placeShown(root);
+  return { tree: writePlaced(shown, refs, outOfView), omitted };
 }
 
 export function writeLines(root: UiNode, refs: RefTable): string {
   return writePlaced(place(root), refs);
 }
 
-function writePlaced(placed: readonly Placed[], refs: RefTable): string {
+function writePlaced(
+  placed: readonly Placed[],
+  refs: RefTable,
+  outOfView: ReadonlyMap<string, number> = new Map(),
+): string {
   return placed
     .map(({ node, depth, key }) => {
       const ref = isAddressable(node) ? ` (ref=${refs.refFor(key, node)})` : '';
       const value =
         node.value !== undefined && node.value.length > 0 ? ` [value=${quoted(node.value)}]` : '';
       // A loss is said on the line that has it: scroll to read the rows that are not here.
-      const left = node.notShown === undefined ? '' : ` [not shown: ${String(node.notShown)}]`;
+      // A list of a page with items scrolled out of the window says so too.
+      const notShown = node.notShown ?? outOfView.get(key);
+      const left = notShown === undefined ? '' : ` [not shown: ${String(notShown)}]`;
       const states = node.states.length > 0 ? ` [${node.states.join(',')}]` : '';
       const guessed = true === node.nameGuessed ? ` [${NAME_FROM_NEIGHBOUR}]` : '';
       return `${INDENT.repeat(depth)}- ${label(node)}${ref}${guessed}${value}${left}${states}`;

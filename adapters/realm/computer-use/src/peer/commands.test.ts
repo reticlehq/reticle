@@ -622,9 +622,62 @@ describe('PeerCommands', () => {
       foreground: true,
     })) as { by: string };
     expect(wheeled.by).toBe('wheel');
-    expect(asked.map((a) => [a.kind, a.value, a.target.node.name])).toEqual([
-      ['wheel', '40', 'Row 1'],
+    expect(asked.map((a) => [a.kind, a.value, a.target.node.name])[0]).toEqual([
+      'wheel',
+      '40',
+      'Row 1',
     ]);
+  });
+
+  // The channels of Discord: one turn of 40 lines did not reach the end of 300 channels, and the
+  // last one stayed out of view. A person who wants the end turns the wheel until nothing moves.
+  it('turns the wheel to an end until the list stops moving', async () => {
+    let moves = 3;
+    const at = (top: number): UiRead => ({
+      root: node(UiRole.WINDOW, 'Discord', {
+        frame: [0, 0, 400, 300],
+        children: [node(UiRole.LIST, 'Channels', { frame: [0, 0, 300, 300], value: String(top) })],
+      }),
+      unread: 0,
+      unmapped: [],
+    });
+    let top = 0;
+    const asked: string[] = [];
+    const commands = new PeerCommands({
+      driver: {
+        subject: () => ({ app: 'Discord', pid: 7 }),
+        read: () => Promise.resolve(at(top)),
+        reach: () => Promise.resolve({ reach: 'yes' }),
+        act: (request) => {
+          asked.push(request.value ?? '');
+          const before = at(top);
+          if (moves > 0) {
+            moves -= 1;
+            top += 40;
+          }
+          return Promise.resolve({
+            delivered: true,
+            reachable: true,
+            settled: true,
+            before,
+            after: at(top),
+          });
+        },
+      },
+      emit: () => undefined,
+    });
+    const found = (await commands.answer(ReticleCommand.QUERY, { role: UiRole.LIST })) as {
+      elements: { ref: string }[];
+    };
+    const list = found.elements[0]?.ref;
+    const answer = (await commands.answer(ReticleCommand.SCROLL, {
+      ref: list,
+      fraction: 1,
+      foreground: true,
+    })) as { scrolled: boolean; atEnd: boolean; lines: number };
+    // Three turns moved it, and the fourth moved nothing: that is the end.
+    expect(asked).toEqual(['40', '40', '40', '40']);
+    expect(answer).toMatchObject({ scrolled: true, atEnd: true, lines: 160 });
   });
 
   it('does not call an element visible when a window is on top of it', async () => {
@@ -1650,7 +1703,7 @@ describe('PeerCommands', () => {
     });
 
     it('drags from a point of the picture to another point of it', async () => {
-      const { commands, asked } = picturing(shot);
+      const { commands, asked, moves } = picturing(shot);
       await commands.answer(ReticleCommand.CAPTURE, {});
       await commands.answer(ReticleCommand.ACT, {
         ref: await refOf(commands, 'Save'),
@@ -1659,6 +1712,27 @@ describe('PeerCommands', () => {
       });
       // The picture has two pixels for each point, and the window is at 0,0.
       expect(asked.at(-1)?.value).toBe('100,50,200,100');
+      // The pointer of the HUD presses at the start and goes to the end, as a hand drags. It
+      // stayed at the start, so the person saw nothing move.
+      expect(moves).toEqual([
+        [100, 50],
+        [200, 100],
+      ]);
+    });
+
+    // A drag to a place of the element gives the helper the end alone. The pointer of the HUD went
+    // to the end before the drag, and the person saw it jump there and stay.
+    it('moves the pointer of the HUD from the element to the end of a drag', async () => {
+      const { commands, asked, moves } = picturing(shot);
+      await commands.answer(ReticleCommand.ACT, {
+        ref: await refOf(commands, 'Save'),
+        action: ActionType.DRAG,
+        args: { foreground: true, to: { x: 1, y: 0.5 } },
+      });
+      const end = (asked.at(-1)?.value ?? '').split(',').map(Number);
+      expect(moves).toHaveLength(2);
+      expect(moves[0]).not.toEqual(end);
+      expect(moves[1]).toEqual(end);
     });
 
     // A view with no element and no scroll bar (the strip of Mission Control, a map) scrolls under

@@ -211,4 +211,30 @@ describe('an element of a page that is outside the window', () => {
     expect(written.tree).toContain('menu "Font"');
     expect(written.omitted).toBe(1);
   });
+
+  // The channels of Discord: the list showed ten of its 300 items and said nothing, so an agent
+  // took the ten for the whole list. The line of the list says how many items are out of view.
+  it('says on the line of a list how many of its items are out of view', () => {
+    // Safari gives an item below the window its true place; Chrome gives a strip one pixel high.
+    const items = [40, 70, 400, 299].map((y, i) =>
+      node(UiRole.LINK, `channel ${String(i)}`, {
+        frame: [10, y, 100, 299 === y ? 1 : 24],
+        children: [
+          node(UiRole.TEXT, `channel ${String(i)}`, { frame: [10, y, 100, 299 === y ? 1 : 24] }),
+        ],
+      }),
+    );
+    const window = node(UiRole.WINDOW, 'Discord', {
+      frame: [0, 0, 400, 300],
+      children: [
+        node(UiRole.DOCUMENT, 'Discord', {
+          frame: [0, 0, 400, 300],
+          children: [node(UiRole.LIST, 'Channels', { frame: [0, 30, 200, 240], children: items })],
+        }),
+      ],
+    });
+    const written = writeWindows(window, new RefTable());
+    expect(written.tree).toContain('list "Channels" (ref=e3) [not shown: 2]');
+    expect(written.tree).not.toContain('channel 2');
+  });
 });
