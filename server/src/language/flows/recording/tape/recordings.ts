@@ -112,6 +112,8 @@ export interface CompiledProgram {
   /** A sentence built from the steps' expects (an auto-saved drive): see FlowFile.intentDerived. */
   intent?: string;
   intentDerived?: true;
+  /** The session (tab) that recorded this program, so save can resolve its project and lease root. */
+  session?: string;
 }
 
 /**

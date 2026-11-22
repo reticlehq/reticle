@@ -80,6 +80,29 @@ export function flowsForSessionId(
   return { ...flowsForSession(deps, target), projectId: target.projectId };
 }
 
+/**
+ * Resolve the project target for `reticle_flow_save`.
+ *
+ * An explicit `sessionId` always wins (and refuses when it names no session). When `sessionId` is
+ * omitted, prefer the session that recorded the program so a leased tab outside the daemon's
+ * project scope still writes to the lease's claimed root (#2293). If that recording session has
+ * already disconnected, fall back to `sessionTarget(deps, undefined)`.
+ */
+export function saveTargetForRecording(
+  deps: ToolDeps,
+  explicitSessionId: string | undefined,
+  recordedSessionId: string | undefined,
+): ProjectTarget {
+  if (explicitSessionId !== undefined || recordedSessionId === undefined) {
+    return sessionTarget(deps, explicitSessionId);
+  }
+  try {
+    return sessionTarget(deps, recordedSessionId);
+  } catch {
+    return sessionTarget(deps, undefined);
+  }
+}
+
 /** The {name, steps} of every flow in `store` that `projectId` can see. Unreadable flows are left out. */
 export async function namedFlowsIn(
   store: FlowStore,

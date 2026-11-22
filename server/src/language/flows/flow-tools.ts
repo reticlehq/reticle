@@ -33,9 +33,13 @@ import { recordingBacktrackWarning } from './recording/recording-backtrack.js';
 import { isValidFlowName, flowPath } from '@/memory/project/dir/reticle-dir.js';
 import { type FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
-import { flowsForListing, flowsForSession, flowsForSessionId } from './flow-store-for-session.js';
+import {
+  flowsForListing,
+  flowsForSession,
+  flowsForSessionId,
+  saveTargetForRecording,
+} from './flow-store-for-session.js';
 import { rootForTarget, sessionTarget, type ProjectTarget } from '@/memory/project/session-root.js';
-import { originOf } from '@/portal/session/session-manager.js';
 import { resolveSuiteSelection } from './suite-selection.js';
 import { flowErrorMessage, latestRecordedFlow } from './flow-replay-run.js';
 import {
@@ -223,7 +227,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         ...(success !== undefined ? { success } : {}),
         ...(intent !== undefined ? { intent } : {}),
       };
-      const target = sessionTarget(deps, asString(args['sessionId']));
+      const target = saveTargetForRecording(deps, asString(args['sessionId']), program.session);
       const { projectId } = target;
       // A zero-step recording is not a flow. Saving it wrote a file the suite reports "unverifiable"
       // forever while telling the agent it had saved a regression test — see empty-flow.
@@ -895,7 +899,7 @@ export const FLOW_TOOLS: ToolDef[] = [
       // Resolved like every other path now. This save used to go to the daemon's root while the
       // recorded-flow save resolved per session, so where a flow landed depended on which tool wrote
       // it — and the pair that disagreed were the two ways to save the same thing.
-      const target: ProjectTarget = { projectId: session.projectId, origin: originOf(session.url) };
+      const target = sessionTarget(deps, session.id);
       const res = await flowsForSession(deps, target).flows.saveFlow(flow, session.projectId);
       if (!res.ok) {
         return { error: flowErrorMessage(res.code, res.detail), code: res.code };

@@ -145,7 +145,9 @@ export const READ_TOOLS: ToolDef[] = [
       // report "no baseline named 'default'", naming something the caller never mentioned.
       const name = asString(args['baseline']) ?? asString(args['name']) ?? 'default';
       const base = deps.baselines.get(name);
-      if (base === undefined) throw new Error(`no baseline named '${name}'`);
+      if (base === undefined) {
+        throw new Error(`no baseline named '${name}'`);
+      }
       const session = deps.sessions.resolve(asString(args['sessionId']));
       const { lines, route } = await snapshotTree(deps, asString(args['sessionId']));
       const { removed, added } = diffLines(base.lines, lines);
@@ -266,6 +268,7 @@ export const READ_TOOLS: ToolDef[] = [
         name,
         version: REPLAY_PROGRAM_VERSION,
         steps: rec.steps,
+        session: rec.session ?? session.id,
         ...(rec.startPath === undefined ? {} : { startPath: rec.startPath }),
         ...(0 === routes.length ? {} : { routes }),
       };
@@ -348,7 +351,9 @@ export const READ_TOOLS: ToolDef[] = [
       const name =
         asString(aliasParam(args, 'recordingName', ['name'])['recordingName']) ?? 'default';
       const program = deps.recordings.getCompiled(name);
-      if (program === undefined) throw new Error(`no compiled recording named '${name}'`);
+      if (program === undefined) {
+        throw new Error(`no compiled recording named '${name}'`);
+      }
       const session = deps.sessions.resolve(asString(args['sessionId']));
       const since = session.elapsed();
       const steps = await replayProgram(session, program, true === args['confirmDangerous']);
@@ -544,11 +549,12 @@ export const READ_TOOLS: ToolDef[] = [
         storeNames?: unknown;
         found?: unknown;
       };
-      const names = Array.isArray(root.storeNames)
-        ? root.storeNames.filter((n): n is string => 'string' === typeof n)
-        : 'string' === typeof root.storeNames && root.storeNames.length > 0
-          ? [root.storeNames]
-          : [];
+      let names: string[] = [];
+      if (Array.isArray(root.storeNames)) {
+        names = root.storeNames.filter((n): n is string => 'string' === typeof n);
+      } else if ('string' === typeof root.storeNames && root.storeNames.length > 0) {
+        names = [root.storeNames];
+      }
 
       // The browser already scoped it in-page (the `found` shape) — pass through, just safe storeNames.
       if ('boolean' === typeof root.found) {
@@ -662,7 +668,9 @@ export const READ_TOOLS: ToolDef[] = [
         mode: SnapshotMode.INTERACTIVE,
         scope: args['scope'],
       });
-      if (!result.ok) throw new Error(result.error ?? 'snapshot failed');
+      if (!result.ok) {
+        throw new Error(result.error ?? 'snapshot failed');
+      }
       const snap = (result.result ?? {}) as { tree?: string; truncated?: boolean };
       const consoleErrors = session
         .eventsSince(0)
@@ -724,7 +732,9 @@ export const READ_TOOLS: ToolDef[] = [
         string,
         unknown
       >;
-      if (key === undefined) return data;
+      if (key === undefined) {
+        return data;
+      }
       // Look up the key in the scoped area, or across all three areas when none was named.
       const areas = area !== undefined ? [data] : [data['local'], data['session'], data['cookies']];
       for (const a of areas) {
