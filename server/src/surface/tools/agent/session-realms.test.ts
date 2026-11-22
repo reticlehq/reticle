@@ -1,7 +1,14 @@
 import { COMPUTER_USE_RUNTIME, ReticleTool } from '@reticlehq/core';
 import { describe, expect, it } from 'vitest';
 
-import { REALMS_FIELD, REALMS_RULE, realmsOf, samePage } from './session-realms.js';
+import {
+  CapabilityRealm,
+  REALMS_FIELD,
+  REALMS_RULE,
+  capabilitiesOf,
+  realmsOf,
+  samePage,
+} from './session-realms.js';
 import type { ToolDeps } from '../tool-kit.js';
 import { TOOLS } from '../tools.js';
 
@@ -20,6 +27,32 @@ describe('realmsOf', () => {
       desktop: ['cu-Finder-7'],
       insideTheApp: ['tab-1'],
       rule: REALMS_RULE,
+    });
+  });
+});
+
+// A plan of many steps routes each one to a session. It needs, for every session, what it is and
+// what it acts on: the list said that only as a rule in words, and only when both kinds were up.
+describe('capabilitiesOf', () => {
+  it('says for each session its realm and what it acts on, with one kind connected too', () => {
+    const sheet = { sessionId: 'tab-2', url: 'https://docs.google.com/spreadsheets/d/1/edit' };
+    const slack = {
+      sessionId: 'cu-Slack-9',
+      url: 'app://Google%20Chrome/',
+      runtime: COMPUTER_USE_RUNTIME,
+    };
+    expect(capabilitiesOf([sheet, slack], 'darwin')).toEqual([
+      { sessionId: 'tab-2', realm: CapabilityRealm.BROWSER, url: sheet.url },
+      {
+        sessionId: 'cu-Slack-9',
+        realm: CapabilityRealm.DESKTOP,
+        app: 'Google Chrome',
+        platform: 'darwin',
+      },
+    ]);
+    expect(capabilitiesOf([desktop], 'win32')[0]).toMatchObject({
+      app: 'Finder',
+      platform: 'win32',
     });
   });
 });

@@ -34,6 +34,75 @@ export const REALMS_OUTPUT = {
     .describe(REALMS_DESCRIPTION),
 };
 
+export const CAPABILITIES_FIELD = 'capabilities';
+
+/** What a session is, for a plan that routes each step to one. */
+export const CapabilityRealm = {
+  /** A page read from the inside, by the SDK or the extension: network, state, source. */
+  BROWSER: 'browser',
+  /** A whole application, read through the operating system (computer use). */
+  DESKTOP: 'desktop',
+} as const;
+export type CapabilityRealm = (typeof CapabilityRealm)[keyof typeof CapabilityRealm];
+
+const APP_SCHEME = 'app:';
+
+export const CAPABILITIES_OUTPUT = {
+  [CAPABILITIES_FIELD]: z
+    .array(
+      z.object({
+        sessionId: z.string(),
+        realm: z.enum([CapabilityRealm.BROWSER, CapabilityRealm.DESKTOP]),
+        url: z.string().optional(),
+        app: z.string().optional(),
+        platform: z.string().optional(),
+      }),
+    )
+    .optional()
+    .describe(
+      'Each connected session, for a plan that routes steps: `browser` reads a page from the inside (give it the steps on its url), `desktop` reads a whole application through the operating system (give it the steps in `app`, a system dialog, or a page that no browser session is on).',
+    ),
+};
+
+/**
+ * Each session as a plan sees it: the realm, and the page or the application it acts on. A desktop
+ * session names its application in its url (`app://Slack/`). `platform` is the operating system of
+ * the machine of the bridge, where every desktop session runs.
+ */
+export function capabilitiesOf(
+  sessions: readonly { sessionId: string; url?: string; runtime?: string }[],
+  platform: string,
+): {
+  sessionId: string;
+  realm: CapabilityRealm;
+  url?: string;
+  app?: string;
+  platform?: string;
+}[] {
+  return sessions.map((s) => {
+    if (COMPUTER_USE_RUNTIME !== s.runtime) {
+      return {
+        sessionId: s.sessionId,
+        realm: CapabilityRealm.BROWSER,
+        ...(s.url === undefined ? {} : { url: s.url }),
+      };
+    }
+    let app: string | undefined;
+    try {
+      const url = new URL(s.url ?? '');
+      app = APP_SCHEME === url.protocol ? decodeURIComponent(url.host) : undefined;
+    } catch {
+      app = undefined;
+    }
+    return {
+      sessionId: s.sessionId,
+      realm: CapabilityRealm.DESKTOP,
+      ...(app === undefined ? {} : { app }),
+      platform,
+    };
+  });
+}
+
 export const REALMS_RULE =
   'Two kinds of session are connected. Use an insideTheApp session first for the page of its app: it sees the network, the state and the source file. Use a desktop session for what is outside that page: another application, a system dialog, a file panel, a window of the operating system. To pass work across, end your step in one session with a consequence you can check in the other, then send the next call with the other sessionId. Give sessionId on every call.';
 
@@ -119,4 +188,18 @@ export async function realmsWithPairs(
     windows,
   );
   return 0 === pairs.length ? realms : { ...realms, samePage: pairs };
+}
+
+/** What the session list adds after its rows: the realms rule and the capabilities. */
+export const SESSION_LIST_EXTRAS_OUTPUT = { ...REALMS_OUTPUT, ...CAPABILITIES_OUTPUT };
+
+export async function sessionListExtras(
+  sessions: readonly { sessionId: string; url?: string; runtime?: string; title?: string }[],
+  query: (sessionId: string, args: Record<string, unknown>) => Promise<unknown>,
+): Promise<Record<string, unknown>> {
+  const realms = await realmsWithPairs(sessions, query);
+  return {
+    ...(realms === undefined ? {} : { [REALMS_FIELD]: realms }),
+    [CAPABILITIES_FIELD]: capabilitiesOf(sessions, process.platform),
+  };
 }

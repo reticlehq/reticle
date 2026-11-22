@@ -6,7 +6,7 @@ import {
   NEXT_STEP_FIELD,
   nextStepBesideLiveSessions,
 } from './empty-session-list.js';
-import { REALMS_FIELD, REALMS_OUTPUT, realmsWithPairs } from './agent/session-realms.js';
+import { SESSION_LIST_EXTRAS_OUTPUT, sessionListExtras } from './agent/session-realms.js';
 import {
   AttrNamesSchema,
   NearestTargetSchema,
@@ -178,7 +178,7 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
           'Connected browser sessions with health state. `projectId` groups sessions by app (stable across port changes); `leased` marks a pool-managed headless context vs a human tab.',
         ),
       ...EMPTY_SESSION_LIST_OUTPUT,
-      ...REALMS_OUTPUT,
+      ...SESSION_LIST_EXTRAS_OUTPUT,
     },
     handler: async (deps) => {
       const provider = deps.realInput;
@@ -199,13 +199,12 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
       }
       // Another project's tab is up. This caller's project may still never have been wired.
       const nextStep = nextStepBesideLiveSessions(deps, sessions);
-      const realms = await realmsWithPairs(sessions, (id, query) =>
-        commandOrThrow(deps, id, ReticleCommand.QUERY, query),
-      );
       return {
         sessions,
         ...(nextStep === undefined ? {} : { [NEXT_STEP_FIELD]: nextStep }),
-        ...(realms === undefined ? {} : { [REALMS_FIELD]: realms }),
+        ...(await sessionListExtras(sessions, (id, query) =>
+          commandOrThrow(deps, id, ReticleCommand.QUERY, query),
+        )),
       };
     },
   },
