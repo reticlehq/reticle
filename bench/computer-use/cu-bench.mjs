@@ -74,6 +74,32 @@ async function finderAt(dir) {
   await sleep(2000);
 }
 
+/** The first window of an application, as System Events gives it. Absent: it has no window. */
+function windowOf(app) {
+  try {
+    const [x, y, width, height, minimized] = sh('osascript', [
+      '-e',
+      `tell application "System Events" to tell window 1 of process "${app}" to return position & size & {value of attribute "AXMinimized"}`,
+    ])
+      .trim()
+      .split(/,\s*/);
+    return { x: +x, y: +y, width: +width, height: +height, minimized: minimized === 'true' };
+  } catch {
+    return undefined;
+  }
+}
+/** The size of the main screen, from the bounds of the desktop. */
+function screenSize() {
+  const [, , width, height] = sh('osascript', [
+    '-e',
+    'tell application "Finder" to get bounds of window of desktop',
+  ])
+    .trim()
+    .split(/,\s*/)
+    .map(Number);
+  return { width, height };
+}
+
 const TASKS = [
   {
     id: 'textedit-type-save',
@@ -142,6 +168,35 @@ const TASKS = [
     },
     task: 'A Finder window shows a folder with the file report.txt. Make a copy of the file in the same folder.',
     check: (dir) => existsSync(join(dir, 'report copy.txt')) && existsSync(join(dir, 'report.txt')),
+  },
+  // Windows: the checker reads the window from System Events, not from either arm.
+  {
+    id: 'textedit-left-half',
+    app: 'TextEdit',
+    async setup() {
+      const f = join(fresh(this.id), 'left.txt');
+      writeFileSync(f, 'Left half.');
+      await openIn('TextEdit', f);
+      return f;
+    },
+    task: 'TextEdit has left.txt open. Put its window on the left half of the screen.',
+    check: () => {
+      const w = windowOf('TextEdit');
+      const screen = screenSize();
+      return w !== undefined && w.x <= 8 && Math.abs(w.width - screen.width / 2) <= 16;
+    },
+  },
+  {
+    id: 'textedit-minimize',
+    app: 'TextEdit',
+    async setup() {
+      const f = join(fresh(this.id), 'small.txt');
+      writeFileSync(f, 'Make me small.');
+      await openIn('TextEdit', f);
+      return f;
+    },
+    task: 'TextEdit has small.txt open. Minimize its window to the Dock.',
+    check: () => windowOf('TextEdit')?.minimized === true,
   },
   // Cannot be done: the file is locked, so the save does not happen. The correct answer is "failed".
   {

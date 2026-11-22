@@ -11,7 +11,7 @@ Reticle's helper carries out the actions of **both** arms. The `cu-toolset` arm 
 
 ## Tasks
 
-Eight tasks in TextEdit, Calculator and Finder. A checker outside both arms reads the result from the disk, or from the answer. It never asks Reticle. Two tasks cannot be done (save a locked file, divide by zero). For them the correct answer is `failed`, so a `done` there is a false done.
+Ten tasks in TextEdit, Calculator and Finder. Two of them arrange a window: put it on the left half of the screen, and minimize it. A checker outside both arms reads the result from the disk, from the answer, or from the window as System Events gives it. It never asks Reticle. Two tasks cannot be done (save a locked file, divide by zero). For them the correct answer is `failed`, so a `done` there is a false done.
 
 Zoom, a button held down on its own, the middle click and the triple click are off in the toolset. No task needs them.
 
