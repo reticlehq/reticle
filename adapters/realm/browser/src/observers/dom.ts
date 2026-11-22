@@ -169,6 +169,31 @@ const named = (el: Element): { testid?: string } => {
   return testid === undefined ? {} : { testid };
 };
 
+/** How far up a change looks for ancestors the agent has already named by ref. */
+const INSIDE_DEPTH = 6;
+
+/**
+ * `{ inside: [...] }` — the refs of `el`'s ancestors that were already minted, nearest first.
+ *
+ * A change ON a descendant of the acted control — a label living in a child span of the clicked
+ * button (#2318) — reports the descendant's ref, and without this field the engine cannot tell
+ * "inside the control the action touched" from ambient churn on an unrelated element. Only
+ * already-minted refs are collected (`existing`, never `refFor`): a control the agent acted on
+ * always has one, and minting ancestors nobody named would spend the ref bookkeeping on elements
+ * that were never surfaced.
+ */
+const insideOf = (el: Element): { inside?: string[] } => {
+  const found: string[] = [];
+  for (let a = el.parentElement, depth = 0; a !== null && depth < INSIDE_DEPTH; depth += 1) {
+    const ref = refs.existing(a);
+    if (ref !== undefined) {
+      found.push(ref);
+    }
+    a = a.parentElement;
+  }
+  return found.length > 0 ? { inside: found } : {};
+};
+
 const ALERT_REGION = '[role="alert"]';
 const LIVE_REGION = `[aria-live],${ALERT_REGION},[role="status"]`;
 
@@ -228,6 +253,7 @@ export function installDom(emit: Emit): Teardown {
               attr: record.attributeName,
               ...(value === undefined ? {} : { value }),
               ...(old === undefined ? {} : { old }),
+              ...insideOf(target),
             },
             refs.refFor(target),
           );
@@ -252,7 +278,13 @@ export function installDom(emit: Emit): Teardown {
           const old = hide ? undefined : capValue(record.oldValue?.trim() ?? null);
           emit(
             EventType.DOM_TEXT,
-            { text, ...(old === undefined ? {} : { old }), ...named(parent), ...liveOf(parent) },
+            {
+              text,
+              ...(old === undefined ? {} : { old }),
+              ...named(parent),
+              ...liveOf(parent),
+              ...insideOf(parent),
+            },
             refs.refFor(parent),
           );
         }
@@ -280,7 +312,13 @@ export function installDom(emit: Emit): Teardown {
             const old = hide ? undefined : capValue(textOf(record.removedNodes) ?? null);
             emit(
               EventType.DOM_TEXT,
-              { text, ...(old === undefined ? {} : { old }), ...named(parent), ...liveOf(parent) },
+              {
+                text,
+                ...(old === undefined ? {} : { old }),
+                ...named(parent),
+                ...liveOf(parent),
+                ...insideOf(parent),
+              },
               refs.refFor(parent),
             );
           }
@@ -315,7 +353,7 @@ export function installDom(emit: Emit): Teardown {
           const shown = isSensitiveField(el) ? REDACTED_VALUE : text.slice(0, 80);
           emit(
             EventType.DOM_TEXT,
-            { text: shown, testid: readTestId(el) ?? '', initial: true },
+            { text: shown, testid: readTestId(el) ?? '', initial: true, ...insideOf(el) },
             refs.refFor(el),
           );
         }

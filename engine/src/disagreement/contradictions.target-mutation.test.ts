@@ -51,6 +51,24 @@ describe('a mutation on the acted control counts as an effect (#2318)', () => {
       false,
     );
   });
+
+  it('a label swap in a child SPAN of the clicked element — the common markup', () => {
+    // <button ref=e7><span ref=e12>Copy code</span></button>: the observer reports the span's
+    // ref and names its minted ancestors in `inside`.
+    expect(
+      noEffect([
+        ev(EventType.DOM_TEXT, { text: 'Copied', old: 'Copy code', inside: ['e7'] }, 'e12'),
+      ]),
+    ).toBe(false);
+  });
+
+  it('an attribute change on a descendant of the clicked element', () => {
+    expect(
+      noEffect([
+        ev(EventType.DOM_ATTR, { attr: 'aria-hidden', value: 'true', inside: ['e7'] }, 'e12'),
+      ]),
+    ).toBe(false);
+  });
 });
 
 describe('churn that is not on the target still leaves a dead click', () => {
@@ -63,6 +81,12 @@ describe('churn that is not on the target still leaves a dead click', () => {
   it('an attribute change on another element', () => {
     expect(
       noEffect([ev(EventType.DOM_ATTR, { attr: 'aria-expanded', value: 'true' }, 'e12')]),
+    ).toBe(true);
+  });
+
+  it('a change inside a DIFFERENT control — inside names an ancestor that was not acted', () => {
+    expect(
+      noEffect([ev(EventType.DOM_TEXT, { text: 'Saved', old: 'Save', inside: ['e9'] }, 'e12')]),
     ).toBe(true);
   });
 });

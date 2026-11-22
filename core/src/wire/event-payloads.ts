@@ -133,7 +133,17 @@ export const EVENT_PAYLOAD_SCHEMAS = {
   [EventType.DOM_ADDED]: elementLabel,
   [EventType.DOM_REMOVED]: elementLabel,
   [EventType.DOM_ATTR]: z
-    .object({ attr: z.string(), value: z.string().optional(), old: z.string().optional() })
+    .object({
+      attr: z.string(),
+      value: z.string().optional(),
+      old: z.string().optional(),
+      /**
+       * The minted refs of the changed element's ancestors, nearest first. A change on a descendant
+       * of the acted control (a label in a child span, #2318) names the control's ref here; without
+       * it the wire carries no way to tell "inside the control" from churn on an unrelated element.
+       */
+      inside: z.array(z.string()).optional(),
+    })
     .passthrough(),
   [EventType.DOM_TEXT]: z.object({
     text: z.string(),
@@ -151,6 +161,12 @@ export const EVENT_PAYLOAD_SCHEMAS = {
      * about a failure, and a mount event does not record that write.
      */
     live: z.nativeEnum(LivePoliteness).optional(),
+    /**
+     * The minted refs of the changed element's ancestors, nearest first. A change on a descendant
+     * of the acted control (a label in a child span, #2318) names the control's ref here; without
+     * it the wire carries no way to tell "inside the control" from churn on an unrelated element.
+     */
+    inside: z.array(z.string()).optional(),
   }),
   [EventType.NET_REQUEST]: netRequestSchema,
   [EventType.NET_PENDING]: z.object({

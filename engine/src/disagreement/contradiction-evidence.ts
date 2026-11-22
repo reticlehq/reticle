@@ -686,12 +686,8 @@ export function appIsSilent(
  * Undefined when this cannot be told: no ref was acted on, or the control did not change before the
  * failure settled. The caller then keeps the old window-wide reading.
  *
- * Only the control's own changes count, so rows the action did not touch (a live feed, a clock)
- * decide nothing.
- *
- * ponytail: the control alone decides. A control rolled back while an unrelated element keeps a
- * change (an item added to a list as its button re-enables) reads as handled. Telling that apart
- * needs the DOM ancestry of each event, which the wire does not carry.
+ * Only changes inside the control's own subtree count: a descendant's change carries the control's
+ * ref in `inside`, while rows the action did not touch (a live feed, a clock) decide nothing.
  */
 export const TargetFate = {
   PERSISTED: 'persisted',
@@ -710,9 +706,10 @@ interface Change {
   now: string;
 }
 
-/** The attribute or text change this event made to `ref`, or undefined. No-op writes are skipped. */
+/** The attribute or text change this event made to `ref` or, via `inside`, inside it (#2318). No-op writes are skipped. */
 function changeOf(event: ReticleEvent, ref: string): Change | undefined {
-  if (event.ref !== ref) {
+  const inside = event.data['inside'];
+  if (event.ref !== ref && !(Array.isArray(inside) && inside.includes(ref))) {
     return undefined;
   }
   let key: string;
@@ -938,7 +935,8 @@ export const RETICLE_SIGNAL_NAMESPACE = 'reticle:';
  * stream, a polling store, a perf sample and a scroll position all move on their own. What counts:
  *
  *  - a mutation inside the target's own subtree (what the target itself did),
- *  - a change to the target's own text or attributes — "Copy code" becoming "Copied" (#2318),
+ *  - a change to the target's own text or attributes — "Copy code" becoming "Copied", possibly
+ *    inside a child element of the target (#2318),
  *  - a request (the action asked the server for something),
  *  - a navigation, or a dialog/live region appearing — the two ways a real reaction legitimately
  *    lands OUTSIDE the target, e.g. a modal portalled to the body,
