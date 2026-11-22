@@ -1403,6 +1403,19 @@ describe('PeerCommands', () => {
 
     // `at` meant a pixel of a picture here and a fraction of the box in a page: one name, two
     // meanings. It is a fraction in every realm now, and a pixel of a picture is `point`.
+    // A computer-use model thinks in pixels of the screenshot. `at: { x: 600, y: 400 }` was moved
+    // to the corner of the element and reported done: a click in the wrong place, in silence.
+    it('refuses an at or a to that is not a fraction, and names point for a pixel', async () => {
+      const { act, asked } = acting();
+      await expect(
+        act(ActionType.CLICK, { foreground: true, at: { x: 600, y: 400 } }),
+      ).rejects.toThrow(/fraction of the element's box.*args.point/);
+      await expect(
+        act(ActionType.DRAG, { foreground: true, to: { x: 2, y: 0.5 } }),
+      ).rejects.toThrow(/fraction of the element's box.*args.toPoint/);
+      expect(asked).toEqual([]);
+    });
+
     it('clicks at a fraction of the element box, as a page does', async () => {
       const { act, asked } = acting();
       await act(ActionType.CLICK, { foreground: true, at: { x: 0, y: 0 } });
@@ -1689,8 +1702,23 @@ describe('PeerCommands', () => {
           ref: await refOf(commands, 'Save'),
           action: ActionType.CLICK,
         });
-      return { press, shown, asked: made.asked };
+      return { press, shown, asked: made.asked, commands };
     };
+
+    // The agent drove a page in the browser while computer use was live, and the HUD of the
+    // desktop showed none of it. The server now tells the desktop each act of a page as a row.
+    it('shows a row of what was done in a page, and takes the reports of a page HUD quietly', async () => {
+      const { commands, shown } = watched();
+      await commands.answer(ReticleCommand.NARRATE, { text: 's1 \u2192 click button "Save"' });
+      expect(shown).toContainEqual(['act', 's1 \u2192 click button "Save"']);
+      for (const name of [
+        ReticleCommand.IMPACT,
+        ReticleCommand.FLOW_PROGRESS,
+        ReticleCommand.PLAN,
+      ]) {
+        await expect(commands.answer(name, {})).resolves.toEqual({ ok: true });
+      }
+    });
 
     // A long task stops for the person: a 2FA code, a captcha. `yield` with mode "ask" sends the
     // question as a PRESENTER post, and the realm answered "does not answer presenter": the person

@@ -103,6 +103,25 @@ type Frame = readonly [number, number, number, number];
 const asPoint = (p: { x: number; y: number }): string => `${String(p.x)},${String(p.y)}`;
 const boxOf = (f: Frame) => ({ x: f[0], y: f[1], width: f[2], height: f[3] });
 
+/**
+ * Refuses `at` or `to` when it is not a fraction from 0 to 1. A page moves such a point to the edge
+ * of the box. Here a model that thinks in pixels of the screenshot sends `at: { x: 600, y: 400 }`,
+ * and the edge was a click in the wrong place that reported done.
+ */
+function fractionOnly(more: Record<string, unknown>, key: string, pixelKey: string): void {
+  const raw = more[key];
+  if ('object' !== typeof raw || null === raw) {
+    return;
+  }
+  const { x, y } = raw as Record<string, unknown>;
+  const outside = [x, y].some((n) => 'number' === typeof n && (n < 0 || n > 1));
+  if (outside) {
+    throw new Error(
+      `args.${key} is a fraction of the element's box, from 0 to 1. For a pixel of the last picture of the screen, use args.${pixelKey}.`,
+    );
+  }
+}
+
 /** Whether the act names a point of a picture: the picture can be old, so it is checked. */
 export function usesPicture(more: Record<string, unknown>): boolean {
   return more[PICTURE_POINT_ARG] !== undefined || more[DRAG_TO_PICTURE_POINT_ARG] !== undefined;
@@ -118,6 +137,7 @@ export function pointFor(
   kind: ActKind,
   frame: Frame | undefined,
 ): string | undefined {
+  fractionOnly(more, ACT_POINT_ARG, PICTURE_POINT_ARG);
   const fromPicture = pointOnScreen(picture, more[PICTURE_POINT_ARG], kind);
   if (fromPicture !== undefined) {
     return fromPicture;
@@ -143,6 +163,7 @@ export function dragValue(
   frame: Frame | undefined,
   ontoFrame: Frame | undefined,
 ): string {
+  fractionOnly(more, DRAG_TO_POINT_ARG, DRAG_TO_PICTURE_POINT_ARG);
   const start = pointFor(picture, more, ActKind.DRAG, frame);
   const to = boxFractionFromArgs(more, DRAG_TO_POINT_ARG);
   let end = pointOnScreen(picture, more[DRAG_TO_PICTURE_POINT_ARG], ActKind.DRAG);

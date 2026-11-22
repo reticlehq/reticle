@@ -10,6 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import type { WebSocket } from 'ws';
 import {
+  COMPUTER_USE_RUNTIME,
   MessageKind,
   RETICLE_PROTOCOL_VERSION,
   ReticleCommand,
@@ -63,6 +64,23 @@ describe('a headless driven session mirrors its HUD feed to the tabs a human can
 
     expect(named(watched, ReticleCommand.NARRATE)).toHaveLength(1);
     expect(named(watched, ReticleCommand.IMPACT)).toHaveLength(1);
+  });
+
+  // The HUD of a desktop session is the log the person reads while computer use is live. It is in
+  // a project of its own, so it saw nothing of the browser tab that the same agent drove.
+  it('mirrors the feed of a page to a desktop session of another project', () => {
+    const manager = new SessionManager();
+    const [page] = open('s1', 'https://github.com/', 'web-tab');
+    const [desktop, told] = open('cu-dia', 'app://Dia/', 'desk');
+    desktop.applyHealth(false, true, COMPUTER_USE_RUNTIME);
+    manager.add(page);
+    manager.add(desktop);
+
+    page.pushNarration('clicked Create repository');
+
+    expect(named(told, ReticleCommand.NARRATE).map((m) => m.args?.['text'])).toEqual([
+      's1 \u2192 clicked Create repository',
+    ]);
   });
 
   /** Two tabs of one app each showed the SDK-behind notice twice, the copy prefixed with an id. */

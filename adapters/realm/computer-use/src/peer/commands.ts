@@ -361,6 +361,15 @@ export class PeerCommands {
         return this.#capture(args);
       case ReticleCommand.PRESENTER:
         return this.#presenter(args);
+      case ReticleCommand.NARRATE:
+        // What the agent did in a page, in the log the person reads while computer use is live.
+        this.#deps.hud?.act(text(args['text']) ?? '');
+        return { ok: true };
+      case ReticleCommand.IMPACT:
+      case ReticleCommand.FLOW_PROGRESS:
+      case ReticleCommand.PLAN:
+        // Reports that a page HUD draws. The desktop HUD has no place for them.
+        return { ok: true };
       default:
         throw new Error(`the computer-use realm does not answer ${name}`);
     }
