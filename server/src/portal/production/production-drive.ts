@@ -295,6 +295,10 @@ export class ProductionDrive {
     if (name === ReticleCommand.NAVIGATE) {
       return this.#refuseNavigation(asString(args['url']));
     }
+    // A URL is checked against the origin. A history move has no target to check, so it is refused.
+    if (name === ReticleCommand.HISTORY) {
+      return productionRefusal(ProductionRule.HISTORY_MOVE);
+    }
     if (READ_COMMANDS.has(name)) {
       return undefined;
     }

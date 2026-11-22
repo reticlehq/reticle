@@ -369,13 +369,14 @@ export class BrowserPool {
     );
   }
 
-  /**
-   * Where a leased page is, read from the browser. The SDK cannot say when the page has none (an
-   * image, another site, the `about:blank` the page was opened on). Undefined when this is not a
-   * lease or the page cannot say.
-   */
+  /** Where a leased page is, read from the browser, for a page with no SDK to say. */
   leasePageUrl(sessionId: string): string | undefined {
     return this.#active.get(this.#leaseIdOf(sessionId))?.page.url?.();
+  }
+
+  /** Whether a production drive guards this lease (see guardLease). Its moves must not skip it. */
+  leaseGuarded(sessionId: string): boolean {
+    return this.#active.get(this.#leaseIdOf(sessionId))?.guard !== undefined;
   }
 
   /**

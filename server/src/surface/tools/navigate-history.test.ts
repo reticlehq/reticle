@@ -13,7 +13,9 @@ import {
   NavigateHistory,
   NavigateHistoryRefusal,
   ReticleCommand,
+  ProductionRule,
   ReticleTool,
+  productionRefusal,
 } from '@reticlehq/core';
 import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 import { createFakeSession } from '@/portal/session/fake-session.js';
@@ -183,6 +185,8 @@ function leaseHarness(opts: {
   startUrl: string;
   onSdkMove?: { to: string; sdkGone: boolean };
   onBrowserMove?: BrowserMove;
+  /** A production drive guards this lease's requests. */
+  guarded?: boolean;
 }): LeaseHarness {
   const moves: string[] = [];
   let attached = opts.connected;
@@ -209,6 +213,7 @@ function leaseHarness(opts: {
   const pool = {
     leaseUrl: (id: string) => (id === LEASE ? LEASED_CART : undefined),
     leasePageUrl: (id: string) => (id === LEASE ? pageUrl : undefined),
+    leaseGuarded: (id: string) => id === LEASE && true === opts.guarded,
     historyLease: (id: string, direction: string) => {
       moves.push(`${id}:${direction}`);
       const move = opts.onBrowserMove;
@@ -330,6 +335,31 @@ describe('reticle_navigate { history } on a lease whose SDK is connected', () =>
       url: 'about:blank',
       waitedMs: 200,
       note: HistoryNavigateMessage.LEFT_APP,
+    });
+  });
+});
+
+describe('reticle_navigate { history } on a production lease whose page has no SDK', () => {
+  it('refuses, and does not move the page through the browser', async () => {
+    // The move through the browser does not pass the daemon's command gate, where a production
+    // drive refuses a history move. So the tool refuses it here, before the browser moves.
+    const h = leaseHarness({
+      connected: false,
+      startUrl: PICTURE,
+      onBrowserMove: { to: LEASED_ORDERS, sdkBack: true },
+      guarded: true,
+    });
+    const result = await navigate(h.deps, {
+      history: NavigateHistory.BACK,
+      sessionId: LEASE,
+      timeout_ms: 0,
+    });
+
+    expect(h.moves).toEqual([]);
+    expect(result).toEqual({
+      ok: false,
+      history: NavigateHistory.BACK,
+      reason: productionRefusal(ProductionRule.HISTORY_MOVE),
     });
   });
 });

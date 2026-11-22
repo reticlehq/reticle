@@ -8,9 +8,11 @@
 import {
   HISTORY_DIRECTION_ARG,
   NavigateHistoryRefusal,
+  ProductionRule,
   ReticleTool,
   asNumber,
   asString,
+  productionRefusal,
   type NavigateHistory,
 } from '@reticlehq/core';
 import type { SessionManager } from '@/portal/session/session-manager.js';
@@ -34,6 +36,8 @@ export interface HistoryLease {
   move: (sessionId: string, direction: NavigateHistory, timeoutMs: number) => Promise<boolean>;
   /** Where the leased page is, read from the browser. */
   pageUrl: (sessionId: string) => string | undefined;
+  /** True when a production drive guards this lease. */
+  isGuarded: (sessionId: string) => boolean;
 }
 
 /** What a history move needs from the tool that runs it. */
@@ -95,6 +99,15 @@ export async function navigateHistory(
     deps.sessions.get(sessionId) === undefined &&
     true === lease?.isLease(sessionId)
   ) {
+    // The move through the browser does not pass the daemon's command gate, where a production
+    // drive refuses a history move. So a guarded lease is refused here, before the page moves.
+    if (lease.isGuarded(sessionId)) {
+      return {
+        ok: false,
+        history: direction,
+        reason: productionRefusal(ProductionRule.HISTORY_MOVE),
+      };
+    }
     return moveLeaseInBrowser(deps, lease, sessionId, direction, timeoutMs);
   }
   const session = deps.sessions.resolve(sessionId);

@@ -214,6 +214,7 @@ export const BROWSER_TOOLS: ToolDef[] = [
                     move: (sessionId, direction, timeoutMs) =>
                       pool.historyLease(sessionId, direction, timeoutMs),
                     pageUrl: (sessionId) => pool.leasePageUrl(sessionId),
+                    isGuarded: (sessionId) => pool.leaseGuarded(sessionId),
                   },
                 }),
           },

@@ -97,3 +97,19 @@ describe('leasePageUrl', () => {
     expect(pool.leasePageUrl('not-a-lease')).toBeUndefined();
   });
 });
+
+describe('leaseGuarded', () => {
+  // A production drive guards its lease's requests. A move through the browser does not pass the
+  // daemon's command gate, so the navigate tool asks this first and refuses a guarded lease.
+  it('is false for a lease no production drive guards', async () => {
+    const { pool, sessionId } = await leased({ guardRequests: () => Promise.resolve() });
+    expect(pool.leaseGuarded(sessionId)).toBe(false);
+    expect(pool.leaseGuarded('not-a-lease')).toBe(false);
+  });
+
+  it('is true once a production drive guards it', async () => {
+    const { pool, sessionId } = await leased({ guardRequests: () => Promise.resolve() });
+    await pool.guardLease(sessionId, () => undefined);
+    expect(pool.leaseGuarded(sessionId)).toBe(true);
+  });
+});

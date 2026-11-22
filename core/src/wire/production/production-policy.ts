@@ -21,12 +21,17 @@ export const ProductionRule = {
   OBSERVE_ONLY: 'the session scope is observe, so it does not act',
   /** The drive stays on the origin it was activated for. */
   OFF_ORIGIN: 'leave the activated origin',
+  /**
+   * Back and Forward land on whatever entry the browser has, which can be another origin. Unlike a
+   * URL, that target cannot be checked against the origin first, so the move is refused (#1844).
+   */
+  HISTORY_MOVE: 'move through the tab history, to a page that cannot be checked first',
   /** The nonce's time is up; the drive is over. */
   EXPIRED: 'the session nonce expired',
 } as const;
 export type ProductionRule = (typeof ProductionRule)[keyof typeof ProductionRule];
 
-/** The rules an intent can allow. The other three are never lifted. */
+/** The rules an intent can allow. The other four are never lifted. */
 export const LIFTABLE_PRODUCTION_RULES = [
   ProductionRule.PAYMENT,
   ProductionRule.DELETE_WORKSPACE,
