@@ -942,7 +942,11 @@ func run(_ args: [String]) throws {
   let pointCount = ["click": 2, "dblclick": 2, "rightclick": 2, "hover": 2, "drag": 4, "wheel": 3]
   let atPoint =
     pointCount[action] == value.split(separator: ",").compactMap({ Double($0) }).count
-  let needsReach = !direct && action != "raise" && !atPoint
+  // A key to the application as a whole aims at no point, so the test of a click does not apply:
+  // the middle of the Dock is under the menu bar of the application in front. A key to a field
+  // keeps the test.
+  let keyToApp = action == "key" && text(now[0]) == "AXApplication"
+  let needsReach = !direct && action != "raise" && !atPoint && !keyToApp
   switch frame(now[7], now[8]).map({ reach(target, $0) }) ?? .unknown(code: -1) {
   case .yes: canReach = true
   case .no(let by):
@@ -1023,7 +1027,13 @@ func run(_ args: [String]) throws {
     }
     result = .success
   case "key":
-    if foreground && !hasKeyboard() {
+    // The shortcuts of Mission Control and the desktops. The system takes them before any
+    // application does, so they need no application with the keyboard: the Dock, which holds
+    // Mission Control, never has it. No other key goes without that check.
+    let systemShortcuts: Set<String> = [
+      "control+arrowup", "control+arrowdown", "control+arrowleft", "control+arrowright",
+    ]
+    if foreground && !hasKeyboard() && !systemShortcuts.contains(value.lowercased()) {
       putBack()
       try emit(["refused": "no-keyboard", "detail": "the application did not take the keyboard"])
     }
@@ -1037,6 +1047,12 @@ func run(_ args: [String]) throws {
       guard let flag = modifierFlags[modifier.lowercased()] else { try emit(["error": "unknown-key"]) }
       flags.insert(flag)
     }
+    // A real arrow key comes with the flags of the number pad and of Fn. The system matches its
+    // shortcuts on the whole set of flags, so Control+Up with no such flags did not open Mission
+    // Control. Only for those shortcuts: an arrow to a list in the background moved nothing with them.
+    if systemShortcuts.contains(value.lowercased()) {
+      flags.formUnion([.maskNumericPad, .maskSecondaryFn])
+    }
     _ = AXUIElementSetAttributeValue(target, kAXFocusedAttribute as CFString, kCFBooleanTrue)
     let source = CGEventSource(stateID: .hidSystemState)
     for down in [true, false] {
@@ -1045,6 +1061,14 @@ func run(_ args: [String]) throws {
       }
       event.flags = flags
       deliver(event)
+    }
+    // A key with flags, posted to the system, leaves those flags held in its state when no key of
+    // a modifier went up: Control, Fn and the number pad stayed held after Control+Up, and every
+    // key typed after it on the machine was a Control key. Let them go, as a hand lets go.
+    if foreground && !flags.isEmpty, let release = CGEvent(source: source) {
+      release.type = .flagsChanged
+      release.flags = []
+      deliver(release)
     }
     result = .success
   case "menu":
