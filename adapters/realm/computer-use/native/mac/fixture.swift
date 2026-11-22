@@ -60,7 +60,9 @@ final class Pad: NSView {
   override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
 
-final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTableViewDelegate {
+final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NSTableViewDelegate,
+  NSBrowserDelegate
+{
   let items = ["Alpha", "Beta", "Gamma"]
   let table = NSTableView()
 
@@ -162,7 +164,34 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
       }
     }
     window.orderFrontRegardless()
+    if ProcessInfo.processInfo.environment["RETICLE_FIXTURE_COLUMNS"] != nil { showColumns() }
   }
+
+  /// A column view of 500 files, as Finder shows a folder, for columncheck.mjs.
+  var columns: NSWindow?
+  func showColumns() {
+    let shown = NSWindow(
+      contentRect: NSRect(x: 560, y: 80, width: 420, height: 260), styleMask: [.titled],
+      backing: .buffered, defer: false)
+    shown.title = "Columns"
+    shown.level = .floating
+    let browser = NSBrowser(frame: NSRect(x: 0, y: 0, width: 420, height: 260))
+    browser.delegate = self
+    browser.target = self
+    browser.action = #selector(picked)
+    shown.contentView!.addSubview(browser)
+    shown.orderFrontRegardless()
+    columns = shown
+  }
+  @objc func picked(_ sender: NSBrowser) {
+    status.stringValue = "Picked: \((sender.selectedCell() as? NSCell)?.stringValue ?? "")"
+  }
+  func browser(_ sender: NSBrowser, numberOfChildrenOfItem item: Any?) -> Int {
+    item == nil ? 500 : 0
+  }
+  func browser(_ sender: NSBrowser, child index: Int, ofItem item: Any?) -> Any { "File \(index)" }
+  func browser(_ sender: NSBrowser, isLeafItem item: Any?) -> Bool { item != nil }
+  func browser(_ sender: NSBrowser, objectValueForItem item: Any?) -> Any? { item }
 
   @objc func saveAs() {
     let panel = NSSavePanel()

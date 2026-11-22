@@ -104,9 +104,20 @@ func readElement(_ element: AXUIElement, _ depth: Int, _ unread: inout Int) -> [
     children = []
     if let r = frame(v[7], v[8]) { node["frame"] = [r.origin.x, r.origin.y, 0, 0] }
   }
-  if role == "AXTable" || role == "AXOutline" {
+  // A column of Finder's column view is a scroll area with no children: its list is given only as
+  // its contents. Every file of the column was missing, so no file could be opened from there.
+  if role == "AXScrollArea" && children.isEmpty && depth < 80 {
+    var contents: AnyObject?
+    if AXUIElementCopyAttributeValue(element, "AXContents" as CFString, &contents) == .success {
+      children = (contents as? [AXUIElement]) ?? []
+    }
+  }
+  // A list (that column, with a thousand files) gives the items on the screen as a table does.
+  let isList = role == "AXList"
+  if role == "AXTable" || role == "AXOutline" || isList {
     var visible: AnyObject?
-    if AXUIElementCopyAttributeValue(element, kAXVisibleRowsAttribute as CFString, &visible)
+    let shown = isList ? kAXVisibleChildrenAttribute : kAXVisibleRowsAttribute
+    if AXUIElementCopyAttributeValue(element, shown as CFString, &visible)
       == .success, let rows = visible as? [AXUIElement]
     {
       let all = children
@@ -120,9 +131,12 @@ func readElement(_ element: AXUIElement, _ depth: Int, _ unread: inout Int) -> [
       // The rows that are not on the screen. The columns are left out too, and they are not
       // counted: they hold the same cells a second time, so nothing in them is hidden.
       var every: AnyObject?
-      let total =
-        AXUIElementCopyAttributeValue(element, kAXRowsAttribute as CFString, &every) == .success
-        ? (every as? [AXUIElement])?.count ?? children.count : children.count
+      var total = all.count
+      if !isList {
+        total =
+          AXUIElementCopyAttributeValue(element, kAXRowsAttribute as CFString, &every) == .success
+          ? (every as? [AXUIElement])?.count ?? children.count : children.count
+      }
       node["notShown"] = max(0, total - children.count)
     }
   }
@@ -994,16 +1008,24 @@ func run(_ args: [String]) throws {
       ? AXUIElementSetAttributeValue(target, kAXSelectedAttribute as CFString, kCFBooleanTrue)
       : pressed
     if done != .success && isWords {
-      // The row that holds the words, when one is near above them.
+      // The row that holds the words, when one is near above them. In a list (a column of
+      // Finder's column view) the item that holds them is chosen in its list.
       var up = target
       for _ in 0..<4 {
         var parent: AnyObject?
         guard AXUIElementCopyAttributeValue(up, kAXParentAttribute as CFString, &parent) == .success,
           let above = parent, CFGetTypeID(above) == AXUIElementGetTypeID()
         else { break }
+        let item = up
         up = above as! AXUIElement
-        if let v = values(up), text(v[0]) == "AXRow" {
+        let role = values(up).flatMap { text($0[0]) }
+        if role == "AXRow" {
           done = AXUIElementSetAttributeValue(up, kAXSelectedAttribute as CFString, kCFBooleanTrue)
+          break
+        }
+        if role == "AXList" {
+          done = AXUIElementSetAttributeValue(
+            up, kAXSelectedChildrenAttribute as CFString, [item] as CFArray)
           break
         }
       }
