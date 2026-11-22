@@ -734,7 +734,13 @@ func run(_ args: [String]) throws {
   var coveredBy = ""
   // To bring an application to the front, nothing has to be reached: an application with no
   // window has no place on the screen at all, and it can still come to the front.
-  let needsReach = !direct && action != "raise"
+  // A pointer action at a given point goes to that point, not to the middle of the element: the
+  // point has its own test below. A hover at the edge of a window that a sidebar covers was
+  // refused here, because the middle of the window was under that sidebar.
+  let pointActions: Set<String> = ["click", "dblclick", "rightclick", "hover"]
+  let atPoint =
+    pointActions.contains(action) && value.split(separator: ",").compactMap({ Double($0) }).count == 2
+  let needsReach = !direct && action != "raise" && !atPoint
   switch frame(now[7], now[8]).map({ reach(target, $0) }) ?? .unknown(code: -1) {
   case .yes: canReach = true
   case .no(let by):
@@ -865,7 +871,10 @@ func run(_ args: [String]) throws {
         AXUIElementCopyElementAtPosition(
           AXUIElementCreateSystemWide(), Float(at.x), Float(at.y), &hit) == .success
       if let top = hit { AXUIElementGetPid(top, &owner) }
-      guard found, owner == pid else {
+      // A part of a window that gives no element (the pinned tabs of Dia's sidebar) fails the hit
+      // test. The window server still knows whose window is in front at that point.
+      let frontIsOwn = !found && windowOwner(at: at)?.pid == pid
+      guard (found && owner == pid) || frontIsOwn else {
         putBack()
         let other = NSRunningApplication(processIdentifier: owner)?.localizedName ?? "another application"
         try emit([

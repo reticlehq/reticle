@@ -52,10 +52,14 @@ const AxRole = {
   STATIC_TEXT: 'AXStaticText',
   TEXT_FIELD: 'AXTextField',
   CHECKBOX: 'AXCheckBox',
+  RADIO: 'AXRadioButton',
+  MENU_ITEM: 'AXMenuItem',
   ROW: 'AXRow',
   DISCLOSURE: 'AXDisclosureTriangle',
 } as const;
 const AX_ON = '1';
+/** The roles whose value 1 says "on": a ticked box, the current tab, the current profile. */
+const ON_ROLES: ReadonlySet<string> = new Set([AxRole.CHECKBOX, AxRole.RADIO, AxRole.MENU_ITEM]);
 const SELECTED = 'selected';
 
 const ROLE_OF: Readonly<Record<string, UiRole>> = {
@@ -114,7 +118,7 @@ function statesOf(ax: AxNode): ElementState[] {
   if (false === ax.enabled) {
     states.push(ElementState.DISABLED);
   }
-  if (ax.role === AxRole.CHECKBOX && ax.value === AX_ON) {
+  if (ON_ROLES.has(ax.role) && ax.value === AX_ON) {
     states.push(ElementState.CHECKED);
   }
   if (ax.role === AxRole.DISCLOSURE && ax.value === AX_ON) {

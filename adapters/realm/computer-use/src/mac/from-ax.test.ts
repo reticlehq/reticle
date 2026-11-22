@@ -182,6 +182,25 @@ describe('fromAx', () => {
     ]);
   });
 
+  // Dia gives each tab of its sidebar as a radio button, and each profile of its switcher as a
+  // menu item. The current one has the value 1. Without a state, no tab and no profile read as
+  // the current one, and the agent lost the tab the person was on.
+  it('says which radio button and which menu item is the current one', () => {
+    const { root } = fromAx({
+      role: 'AXWindow',
+      children: [
+        { role: 'AXRadioButton', title: 'Mail', value: '0', children: [] },
+        { role: 'AXRadioButton', title: 'Docs', value: '1', children: [] },
+        { role: 'AXMenuItem', title: 'Work', value: '1', children: [] },
+      ],
+    });
+    expect(root.children.map((c) => c.states)).toEqual([
+      [],
+      [ElementState.CHECKED],
+      [ElementState.CHECKED],
+    ]);
+  });
+
   // A saved flow finds an element by the identifier its maker gave it. An identifier that AppKit
   // made by itself ("_NS:8") is another one the next time the window is built.
   it('keeps the identifier a person gave, and not one the toolkit made', () => {

@@ -90,9 +90,19 @@ try {
     args: { foreground: true, at, settleMs: 700 },
   });
   assert.equal(await status(), 'Pad: double');
+  // With a point, the point is the target, and the ref only names the window. The middle of the
+  // ref's element can be under a view: a hover at the edge of Dia was refused because the middle
+  // of the window was under its sidebar.
+  const covered = await commands.answer(ReticleCommand.QUERY, { role: 'button', name: 'Covered' });
+  await commands.answer(ReticleCommand.ACT, {
+    ref: covered.elements[0]?.ref,
+    action: ActionType.CLICK,
+    args: { foreground: true, at, settleMs: 700 },
+  });
+  assert.equal(await status(), 'Pad: click');
   rmSync(shot.path, { force: true });
 
-  process.stdout.write('computer-use pointercheck: 8 of 8 cases held\n');
+  process.stdout.write('computer-use pointercheck: 9 of 9 cases held\n');
 } finally {
   fixture.kill();
 }
