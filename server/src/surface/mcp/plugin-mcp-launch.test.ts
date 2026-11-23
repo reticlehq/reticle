@@ -52,6 +52,41 @@ interface Launcher {
     version: string;
     install: (run: NpmRun) => boolean;
   }) => boolean;
+  START_LOG: string;
+  npxExitReason: (input: {
+    code: number | null;
+    signal: string | null;
+    forwarded: boolean;
+  }) => string | undefined;
+  recordStartFailure: (input: {
+    dataDir: string | undefined;
+    version: string;
+    reason: string;
+    command: string;
+    stderr: { write: (line: string) => void };
+    now: () => number;
+  }) => string | undefined;
+}
+
+interface StartRecord {
+  at: string;
+  version: string;
+  node: string;
+  platform: string;
+  reason: string;
+  command: string;
+}
+
+function startRecords(dataDir: string, log: string): StartRecord[] {
+  return readFileSync(join(dataDir, log), 'utf8')
+    .trim()
+    .split('\n')
+    .map((line) => JSON.parse(line) as StartRecord);
+}
+
+function captureStderr(): { lines: string[]; write: (line: string) => void } {
+  const lines: string[] = [];
+  return { lines, write: (line: string) => lines.push(line) };
 }
 
 async function launcher(): Promise<Launcher> {
@@ -201,6 +236,101 @@ describe('the local copy is filled once, within a time limit', () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'reticle-plugin-data-'));
     expect(mod.populate({ dataDir, version: '9.9.9', install: () => true })).toBe(false);
     expect(readdirSync(join(dataDir, PLUGIN_SERVER_DIR))).toEqual([]);
+  });
+});
+
+// #2452: the launcher runs before the server, so a start that failed here left no reason anywhere.
+describe('a start that fails leaves its reason', () => {
+  it('records a local copy that does not load, and prints one line on stderr', async () => {
+    const mod = await launcher();
+    const dataDir = mkdtempSync(join(tmpdir(), 'reticle-plugin-data-'));
+    const version = manifestVersion();
+    const entry = mod.localEntry(dataDir, version);
+    mkdirSync(join(entry, '..'), { recursive: true });
+    writeFileSync(entry, "import './missing-chunk.js';\n");
+    const out = spawnSync(process.execPath, [SCRIPT], {
+      env: { ...process.env, CLAUDE_PLUGIN_DATA: dataDir },
+      encoding: 'utf8',
+    });
+    expect(out.status).toBe(1);
+    const records = startRecords(dataDir, mod.START_LOG);
+    expect(records).toHaveLength(1);
+    const [record] = records;
+    expect(record?.reason).toContain('the local copy did not load');
+    expect(record?.reason).toContain('missing-chunk.js');
+    expect(record?.version).toBe(version);
+    expect(record?.node).toBe(process.version);
+    expect(record?.command).toContain(entry);
+    const stderrLines = out.stderr.split('\n').filter((line) => line.startsWith('reticle:'));
+    expect(stderrLines).toHaveLength(1);
+    expect(stderrLines[0]).toContain('the local copy did not load');
+    expect(stderrLines[0]).toContain(join(dataDir, mod.START_LOG));
+  });
+
+  it('appends one line for each failure, with the time from the injected clock', async () => {
+    const mod = await launcher();
+    const dataDir = mkdtempSync(join(tmpdir(), 'reticle-plugin-data-'));
+    const stderr = captureStderr();
+    const base = {
+      dataDir,
+      version: '9.9.9',
+      command: 'npx -y @reticlehq/server@9.9.9 mcp',
+      stderr,
+    };
+    const path = mod.recordStartFailure({
+      ...base,
+      reason: 'npx exited with code 1',
+      now: () => 0,
+    });
+    mod.recordStartFailure({
+      ...base,
+      reason: 'npx did not start: spawn npx ENOENT',
+      now: () => 1000,
+    });
+    expect(path).toBe(join(dataDir, mod.START_LOG));
+    const records = startRecords(dataDir, mod.START_LOG);
+    expect(records.map((r) => r.reason)).toEqual([
+      'npx exited with code 1',
+      'npx did not start: spawn npx ENOENT',
+    ]);
+    expect(records.map((r) => r.at)).toEqual([
+      '1970-01-01T00:00:00.000Z',
+      '1970-01-01T00:00:01.000Z',
+    ]);
+    expect(stderr.lines).toHaveLength(2);
+    expect(stderr.lines[0]).toContain('npx exited with code 1');
+  });
+
+  it('still prints the reason when there is no data folder, or the log cannot be written', async () => {
+    const mod = await launcher();
+    const base = {
+      version: '9.9.9',
+      reason: 'npx exited with code 1',
+      command: 'npx',
+      now: () => 0,
+    };
+    const none = captureStderr();
+    expect(mod.recordStartFailure({ ...base, dataDir: undefined, stderr: none })).toBeUndefined();
+    expect(none.lines).toHaveLength(1);
+    expect(none.lines[0]).not.toContain('Log:');
+    // A file where the folder should be: the log write fails, and the reason still shows.
+    const blocked = join(mkdtempSync(join(tmpdir(), 'reticle-plugin-data-')), 'not-a-folder');
+    writeFileSync(blocked, '');
+    const refused = captureStderr();
+    expect(mod.recordStartFailure({ ...base, dataDir: blocked, stderr: refused })).toBeUndefined();
+    expect(refused.lines[0]).toContain('npx exited with code 1');
+  });
+
+  it('names an npx exit as a failure, but not a normal stop or a signal from the client', async () => {
+    const mod = await launcher();
+    expect(mod.npxExitReason({ code: 0, signal: null, forwarded: false })).toBeUndefined();
+    expect(mod.npxExitReason({ code: 1, signal: null, forwarded: false })).toBe(
+      'npx exited with code 1',
+    );
+    expect(mod.npxExitReason({ code: null, signal: 'SIGTERM', forwarded: true })).toBeUndefined();
+    expect(mod.npxExitReason({ code: null, signal: 'SIGKILL', forwarded: false })).toBe(
+      'npx stopped on signal SIGKILL',
+    );
   });
 });
 
