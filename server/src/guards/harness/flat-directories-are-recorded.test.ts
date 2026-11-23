@@ -371,7 +371,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 16 with `page-requests.ts` (#2155): the requests that a pool page or the page that `verify`
   // drives still has open. It says a page whose dev server compiles a dynamically imported module
   // is still loading.
-  'server/src/portal/pool': 16,
+  // 17 with `lease-dialogs.ts` (#2167): how a leased page answers its native dialogs, and the yes
+  // a press with `confirmDangerous` gives one `confirm`. Split out of browser-pool.ts at the cap.
+  'server/src/portal/pool': 17,
   // 22 since `session-verdict-facts.ts` was extracted (the count is source files, not tests): both
   // verdict-producing tools were threading the same session facts into `decideVerified` with the
   // same conditional-spread idiom, and a third fact would have been a third copy. Raised on
