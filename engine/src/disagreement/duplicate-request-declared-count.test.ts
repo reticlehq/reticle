@@ -81,6 +81,16 @@ describe('writes the assertion counted', () => {
     ]);
   });
 
+  it('records the known gap: one click the app submits twice, with count: 2, is not reported', () => {
+    // A single click that the app sends twice leaves the same evidence as two clicks that each
+    // save once: two landed writes of one shape. With `count: 2` both are the declared
+    // consequence, so this now gives `yes` where it gave `unknown` before. The rule cannot tell
+    // the two apart until it counts the actions, which is the second half of #2273. When that
+    // lands, this expectation should become `[ContradictionKind.DUPLICATE_REQUEST]`.
+    const oneClickSubmittedTwice = saves(2);
+    expect(duplicatesUnder(oneClickSubmittedTwice, counted(2))).toEqual([]);
+  });
+
   it('do not excuse writes to an endpoint the counted clause did not name', () => {
     expect(
       duplicatesUnder(saves(2), {

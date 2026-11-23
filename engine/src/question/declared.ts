@@ -331,7 +331,7 @@ export function matchesDeclaredFailure(
 }
 
 /**
- * Was this call declared a read? Same matching as `matchesDeclaredFailure`: the URL must contain
+ * Does this clause name this call? Same matching as `matchesDeclaredFailure`: the URL must contain
  * the clause's `urlContains`, and a method the clause named must agree, so a repeatable GET never
  * excuses a POST to the same endpoint (#1353).
  */
@@ -345,6 +345,10 @@ function declares(
   );
 }
 
+/**
+ * Was this call declared a read? A clause with `repeatable: true` (no `count`) that names it,
+ * matched as in `declares` (#1353).
+ */
 export function isDeclaredRead(
   call: { method: string; url: string; matchUrl?: string },
   reads: readonly DeclaredRead[] | undefined,
