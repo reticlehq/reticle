@@ -20,12 +20,18 @@ Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase, Syste
 # The classic controls of Windows (an Edit box, a menu bar, a list view) are described to UI
 # Automation by client-side providers in an assembly of their own. Without it they were plain
 # panes with no value and no children: Notepad's text box had no ref in the first Windows run.
-try {
-  Add-Type -AssemblyName UIAutomationClientSideProviders
-  [System.Windows.Automation.ClientSettings]::RegisterClientSideProviderAssembly(
-    (New-Object System.Reflection.AssemblyName 'UIAutomationClientSideProviders'))
-} catch {
-  # ponytail: a Windows without the assembly still reads the controls that describe themselves.
+$script:Providers = 'not loaded'
+foreach ($name in @('UIAutomationClientsideProviders', 'UIAutomationClientSideProviders')) {
+  try {
+    $loaded = [System.Reflection.Assembly]::Load(
+      "$name, Version=4.0.0.0, Culture=neutral, PublicKeyToken=31bf3856ad364e35")
+    [System.Windows.Automation.ClientSettings]::RegisterClientSideProviderAssembly($loaded.GetName())
+    $script:Providers = "loaded $($loaded.FullName)"
+    break
+  } catch {
+    # ponytail: a Windows without the assembly still reads the controls that describe themselves.
+    $script:Providers = "failed: $($_.Exception.Message)"
+  }
 }
 Add-Type -TypeDefinition @'
 using System;
@@ -110,7 +116,11 @@ function Read-Node($el, [int]$depth, [ref]$unread) {
   if ($null -eq $role) { $role = 'AXUnknown' }
   $node = [ordered]@{ role = $role }
   # What UI Automation said, for a check that has to see why an element is read as it is.
-  if ($env:RETICLE_UIA_DEBUG) { $node.uia = "$($c.ControlType.ProgrammaticName) $($c.ClassName) kids:$((Get-Children $el).Count)" }
+  if ($env:RETICLE_UIA_DEBUG) {
+    $raw = 0; $r = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetFirstChild($el)
+    while ($null -ne $r) { $raw += 1; $r = [System.Windows.Automation.TreeWalker]::RawViewWalker.GetNextSibling($r) }
+    $node.uia = "$($c.ControlType.ProgrammaticName) $($c.ClassName) kids:$((Get-Children $el).Count) raw:$raw"
+  }
   if ($c.Name) { $node.title = $c.Name }
   if ($c.HelpText) { $node.help = $c.HelpText }
   if ($c.AutomationId) { $node.id = $c.AutomationId }
@@ -163,7 +173,7 @@ function Read-App([int]$procId) {
   $children = @()
   foreach ($w in $windows.shown) { $children += , (Read-Node $w 1 ([ref]$unread)) }
   return @{
-    tree = [ordered]@{ role = 'AXApplication'; title = $proc.ProcessName; children = $children }
+    tree = [ordered]@{ role = 'AXApplication'; title = $proc.ProcessName; children = $children; uia = $(if ($env:RETICLE_UIA_DEBUG) { "providers: $script:Providers" } else { $null }) }
     unread = $unread
     windowsNotOnScreen = $windows.away
   }
