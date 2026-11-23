@@ -4,7 +4,7 @@
  * here is a Payment option that is still refused.
  */
 import { describe, expect, it } from 'vitest';
-import { ActionType } from '@reticlehq/core';
+import { ActionType, confirmsDialog } from '@reticlehq/core';
 import {
   assertNotDestructive,
   assertNotPaymentNavigation,
@@ -85,10 +85,21 @@ describe('confirmedByDeclaration', () => {
   const PLACE_ORDER = { role: 'button', name: 'Place order' };
 
   it('confirms a control named by its own dangerous words when the consequence is declared', () => {
-    expect(confirmedByDeclaration({}, PLACE_ORDER, true)).toEqual({ confirmDangerous: true });
-    expect(confirmedByDeclaration({}, { text: 'Approve refund' }, true)).toEqual({
-      confirmDangerous: true,
-    });
+    const BY_DECLARATION = { confirmDangerous: true, confirmedByDeclaration: true };
+    expect(confirmedByDeclaration({}, PLACE_ORDER, true)).toEqual(BY_DECLARATION);
+    expect(confirmedByDeclaration({}, { text: 'Approve refund' }, true)).toEqual(BY_DECLARATION);
+  });
+
+  // #2167 review: the declaration lets the control be pressed. It is not a yes to the app's own
+  // confirm(): only a caller that set the flag itself gives that.
+  it('lets the control be pressed, but does not answer its confirm() yes', () => {
+    expect(confirmsDialog(confirmedByDeclaration({}, PLACE_ORDER, true))).toBe(false);
+  });
+
+  it("keeps the caller's own flag a yes, declaration or not", () => {
+    const own = { confirmDangerous: true };
+    expect(confirmedByDeclaration(own, PLACE_ORDER, true)).toBe(own);
+    expect(confirmsDialog(confirmedByDeclaration(own, PLACE_ORDER, true))).toBe(true);
   });
 
   it('does not confirm without a declared consequence', () => {

@@ -17,44 +17,31 @@
  * a person opens is never answered here.
  */
 
-interface Consent {
-  /** False once a `confirm()` has used this yes. */
-  open: boolean;
-}
-
-/** The actions in flight that carry a yes. */
-const consents = new Set<Consent>();
-/** How many actions without a yes are in flight. */
-let plainInFlight = 0;
+/** How many actions are in flight, with a yes or without one. */
+let inFlight = 0;
+/** The actions in flight whose yes is still unused, one token each. */
+const unused = new Set<object>();
 
 /** Run one action's dispatch, with a yes for its `confirm()` when `given` is true. */
 export async function withDialogConsent<T>(given: boolean, dispatch: () => Promise<T>): Promise<T> {
-  if (!given) {
-    plainInFlight += 1;
-    try {
-      return await dispatch();
-    } finally {
-      plainInFlight -= 1;
-    }
+  const token = {};
+  inFlight += 1;
+  if (given) {
+    unused.add(token);
   }
-  const consent: Consent = { open: true };
-  consents.add(consent);
   try {
     return await dispatch();
   } finally {
-    consents.delete(consent);
+    inFlight -= 1;
+    unused.delete(token);
   }
 }
 
 /** True, once, when the one action in flight carries an unused yes. */
 export function takeDialogConsent(): boolean {
-  if (0 < plainInFlight || 1 !== consents.size) {
+  if (1 !== inFlight || 1 !== unused.size) {
     return false;
   }
-  const [consent] = consents;
-  if (consent === undefined || !consent.open) {
-    return false;
-  }
-  consent.open = false;
+  unused.clear();
   return true;
 }
