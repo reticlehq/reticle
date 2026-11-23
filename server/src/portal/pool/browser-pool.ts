@@ -691,11 +691,8 @@ export class BrowserPool {
       page.onDialog?.((dialog) => {
         const accepted = dialogs.answer(dialog);
         const { kind, message } = dialog;
-        this.#pageErrorHooks?.onDialog?.(sessionId, {
-          message,
-          accepted,
-          ...(kind === undefined ? {} : { kind }),
-        });
+        const kindField = kind === undefined ? {} : { kind };
+        this.#pageErrorHooks?.onDialog?.(sessionId, { message, accepted, ...kindField });
       });
       // Listener on BEFORE goto — an import-time throw lands during it (#1966).
       await listenForPageErrors(page, sessionId, this.#pageErrorHooks);
