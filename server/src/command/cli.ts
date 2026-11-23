@@ -50,6 +50,7 @@ import { startDaemon } from '@/index.js';
 import { cmdLink, connectInstalls, isCloudCommand, runCloudCommand } from './cli/cloud-cli.js';
 import { SERVER_VERSION } from './version/identity/server-version.js';
 import { log } from '@/log.js';
+import { expoPortIn } from '@/portal/session/dev-server/project-ports.js';
 import { isAlive, removePid, discoverDaemonPort, writeDaemonRegistry } from './daemon/daemon.js';
 import { probePresence, presenceIsUsable } from './daemon/binding/port-presence.js';
 import { probeDaemon } from '@/surface/mcp/mcp-proxy.js';
@@ -682,7 +683,7 @@ export function main(): void {
   const projectPort = readProjectPort(process.cwd());
   // Say so rather than letting the daemon fight the dev server for the port and fail with an
   // EADDRINUSE that mentions neither file nor cause.
-  if (projectPort !== undefined && isLikelyDevServerPort(projectPort)) {
+  if (projectPort !== undefined && isLikelyDevServerPort(projectPort, expoPortIn(process.cwd()))) {
     process.stderr.write(`${devServerPortWarning(projectPort)}\n`);
   }
   // A monorepo root whose wired apps disagree on a port: nothing is picked, and without this line the

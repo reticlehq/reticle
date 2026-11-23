@@ -23,8 +23,14 @@ export const RETICLE_CONFIG_FILE = '.reticle.json';
  * probe what is LISTENING right now. `isLikelyDevServerPort` covers the framework defaults, which is
  * where the mistake is actually made.
  */
-export function existingConfigProblem(source: string | null | undefined): string | undefined {
-  if (null === source || source === undefined) return undefined;
+export function existingConfigProblem(
+  source: string | null | undefined,
+  /** The detected framework's own dev port, when it has one. */
+  ownPort?: number,
+): string | undefined {
+  if (null === source || source === undefined) {
+    return undefined;
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(source);
@@ -34,9 +40,13 @@ export function existingConfigProblem(source: string | null | undefined): string
       'daemon nor the SDK. Delete it and re-run `reticle init`.'
     );
   }
-  if ('object' !== typeof parsed || null === parsed) return undefined;
+  if ('object' !== typeof parsed || null === parsed) {
+    return undefined;
+  }
   const port = (parsed as Record<string, unknown>)['port'];
-  if ('number' !== typeof port || !isLikelyDevServerPort(port)) return undefined;
+  if ('number' !== typeof port || !isLikelyDevServerPort(port, ownPort)) {
+    return undefined;
+  }
   return `${devServerPortWarning(port)} Fix it by removing the "port" field from ${RETICLE_CONFIG_FILE}.`;
 }
 
@@ -47,14 +57,18 @@ export function existingConfigProblem(source: string | null | undefined): string
  * app it points at, and refusing on it would block the redirect on any hand-edited config.
  */
 export function projectIdOf(source: string | null | undefined): string | undefined {
-  if (null === source || source === undefined) return undefined;
+  if (null === source || source === undefined) {
+    return undefined;
+  }
   let parsed: unknown;
   try {
     parsed = JSON.parse(source);
   } catch {
     return undefined;
   }
-  if ('object' !== typeof parsed || null === parsed) return undefined;
+  if ('object' !== typeof parsed || null === parsed) {
+    return undefined;
+  }
   const id = (parsed as Record<string, unknown>)['projectId'];
   return 'string' === typeof id && id.length > 0 ? id : undefined;
 }

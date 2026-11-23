@@ -10,7 +10,13 @@
 import { describe, expect, it } from 'vitest';
 import { bridgeWsUrl } from '@reticlehq/core';
 import { detect, Framework, type DetectInput } from './detect/detect.js';
-import { DEV_SERVER_PORTS, frameworkDevPort } from './detect/dev-server-ports.js';
+import {
+  DEV_SERVER_PORTS,
+  expoWebPort,
+  frameworkDevPort,
+  isLikelyDevServerPort,
+} from './detect/dev-server-ports.js';
+import { existingConfigProblem } from './detect/existing-config.js';
 import {
   EXPO_ENV_PATH,
   EXPO_TOKEN_VAR,
@@ -81,6 +87,15 @@ describe('detecting Expo', () => {
     expect(detect(detectInput(pkg)).framework).toBe(Framework.EXPO);
   });
 
+  it.each(['vite.config.js', 'vite.config.ts', 'vite.config.mjs', 'vite.config.mts'])(
+    'leaves an app that lists expo and vite on Vite when %s says Vite serves it',
+    (config) => {
+      const pkg = { ...EXPO_PKG, devDependencies: { ...EXPO_PKG.devDependencies, vite: '^7.0.0' } };
+      const found = detect({ ...detectInput(pkg), configFiles: new Set([config]) });
+      expect(found.framework).toBe(Framework.VITE);
+    },
+  );
+
   it('does not claim a bare React Native app, which has no web build', () => {
     const pkg = { dependencies: { react: '19.1.0', 'react-native': '0.81.0' } };
     expect(detect(detectInput(pkg)).framework).not.toBe(Framework.EXPO);
@@ -88,9 +103,28 @@ describe('detecting Expo', () => {
 });
 
 describe("Expo web's port", () => {
-  it('is in the no-session scan and is the framework default', () => {
-    expect(DEV_SERVER_PORTS.has(8081)).toBe(true);
+  const manifest = JSON.stringify(EXPO_PKG);
+  const none = (): boolean => false;
+
+  it('is the framework default, and not a port every project is scanned on', () => {
     expect(frameworkDevPort(Framework.EXPO)).toBe(8081);
+    expect(DEV_SERVER_PORTS.has(8081)).toBe(false);
+    expect(isLikelyDevServerPort(8081)).toBe(false);
+  });
+
+  it('is added for an Expo app, and for nothing else', () => {
+    expect(expoWebPort(manifest, none)).toBe(8081);
+    expect(expoWebPort(JSON.stringify({ dependencies: { vite: '^7' } }), none)).toBeUndefined();
+    expect(
+      expoWebPort(JSON.stringify({ dependencies: { 'react-native': '0.81.0' } }), none),
+    ).toBeUndefined();
+    expect(expoWebPort(manifest, (name) => 'vite.config.ts' === name)).toBeUndefined();
+    expect(expoWebPort(undefined, none)).toBeUndefined();
+  });
+
+  it('is flagged as a bridge port in an Expo app only', () => {
+    expect(existingConfigProblem('{"port":8081}', 8081)).toContain('DEV-SERVER port');
+    expect(existingConfigProblem('{"port":8081}')).toBeUndefined();
   });
 });
 

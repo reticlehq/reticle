@@ -1,4 +1,4 @@
-import { Framework } from './detect.js';
+import { detect, Framework, VITE_CONFIGS } from './detect.js';
 
 /**
  * Ports that belong to a DEV SERVER, not to Reticle's bridge. Next defaults to 3000, Vite to 5173,
@@ -44,13 +44,12 @@ export const DEV_SERVER_PORTS: ReadonlySet<number> = new Set([
   4000, // the common Node/GraphQL dev default
   4310, // Reticle's own bench-app, the fixture its agents drive
   6006, // Storybook
-  8081, // Expo web on Metro (`expo start --web`)
   19006, // Expo web on the older webpack bundler
 ]);
 
 /**
- * The port each framework's dev server takes when nothing configures another. Every value is in
- * {@link DEV_SERVER_PORTS} as well. `reticle setup` reads it to know which port a dev script will
+ * The port each framework's dev server takes when nothing configures another. Every value but Expo's
+ * is in {@link DEV_SERVER_PORTS} as well: see {@link expoWebPort}. `reticle setup` reads it to know which port a dev script will
  * take before starting one, so a server already on half of that port is found first (#1377).
  */
 const FRAMEWORK_DEV_PORTS: Readonly<Partial<Record<string, number>>> = {
@@ -70,8 +69,36 @@ export function frameworkDevPort(framework: string): number | undefined {
   return FRAMEWORK_DEV_PORTS[framework];
 }
 
-export function isLikelyDevServerPort(port: number): boolean {
-  return DEV_SERVER_PORTS.has(port);
+/**
+ * Expo web's port, for a project that is an Expo app, or undefined.
+ *
+ * Not in {@link DEV_SERVER_PORTS}: 8081 is Metro's port for every React Native app too, and those
+ * serve no web page. Only a project that depends on `expo`, and is not served by Vite, adds it.
+ */
+export function expoWebPort(
+  manifest: string | undefined,
+  hasFile: (name: string) => boolean,
+): number | undefined {
+  let pkg: unknown;
+  try {
+    pkg = JSON.parse(manifest ?? '');
+  } catch {
+    return undefined;
+  }
+  if ('object' !== typeof pkg || null === pkg) {
+    return undefined;
+  }
+  const { framework } = detect({
+    pkg,
+    configFiles: new Set(VITE_CONFIGS.filter(hasFile)),
+    lockfiles: new Set(),
+  });
+  return Framework.EXPO === framework ? frameworkDevPort(framework) : undefined;
+}
+
+/** `ownPort` is a port only this project's framework uses, such as {@link expoWebPort}'s. */
+export function isLikelyDevServerPort(port: number, ownPort?: number): boolean {
+  return DEV_SERVER_PORTS.has(port) || port === ownPort;
 }
 
 /** The warning printed when a project pins the bridge to something that looks like its dev server. */

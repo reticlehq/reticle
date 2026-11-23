@@ -19,16 +19,6 @@
       "count": 14
     }
   },
-  "src/detect/dev-server-ports.test.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
-  "src/detect/existing-config.ts": {
-    "curly": {
-      "count": 5
-    }
-  },
   "src/detect/lockfiles.ts": {
     "curly": {
       "count": 3
@@ -142,11 +132,6 @@
   "src/patch/brace-scan.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/patch/cra.ts": {
-    "curly": {
-      "count": 6
     }
   },
   "src/patch/electron-patch.test.ts": {

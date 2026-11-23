@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { envFilePorts } from './project-ports.js';
+import { envFilePorts, expoPortIn } from './project-ports.js';
 import { removeTempDirSync } from '@/machine/temp-dir.test-helpers.js';
 
 const dirs: string[] = [];
@@ -41,5 +41,16 @@ describe('the ports a project sets in its .env files', () => {
 
   it('returns nothing when the project has no .env file', () => {
     expect(envFilePorts(tempDir())).toEqual([]);
+  });
+});
+
+describe("Expo web's port", () => {
+  it('is named for an Expo app, and not for one Vite serves or for another project', () => {
+    const expo = tempDir();
+    writeFileSync(join(expo, 'package.json'), '{"dependencies":{"expo":"~54.0.0"}}', 'utf8');
+    expect(expoPortIn(expo)).toBe(8081);
+    writeFileSync(join(expo, 'vite.config.ts'), 'export default {};', 'utf8');
+    expect(expoPortIn(expo)).toBeUndefined();
+    expect(expoPortIn(tempDir())).toBeUndefined();
   });
 });

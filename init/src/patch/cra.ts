@@ -82,13 +82,17 @@ export const CRA_TOKEN_PER_MACHINE_NOTICE =
 
 /** Add the import after the last existing one, or null when it is already present. */
 export function craImportPatch(source: string): string | null {
-  if (source.includes(CRA_DEV_MODULE_IMPORT)) return null;
+  if (source.includes(CRA_DEV_MODULE_IMPORT)) {
+    return null;
+  }
   const lines = source.split('\n');
   // After the LAST import: React's own imports must still run first, and a side-effect import placed
   // above them would connect before the app exists.
   let lastImport = -1;
   for (const [index, line] of lines.entries()) {
-    if (/^\s*import\s/.test(line)) lastImport = index;
+    if (/^\s*import\s/.test(line)) {
+      lastImport = index;
+    }
   }
   lines.splice(lastImport + 1, 0, CRA_DEV_MODULE_IMPORT);
   return lines.join('\n');
@@ -111,7 +115,9 @@ export function envTokenPatch(
   urlVar: string,
   url?: string,
 ): string | null {
-  if ('' === token) return null;
+  if ('' === token) {
+    return null;
+  }
   const pairs: readonly (readonly [string, string])[] = [
     [tokenVar, token],
     ...(url !== undefined && url.length > 0 ? [[urlVar, url] as const] : []),
@@ -119,7 +125,9 @@ export function envTokenPatch(
   let next = null === existing || '' === existing.trim() ? '' : existing;
   for (const [name, value] of pairs) {
     const line = `${name}=${value}`;
-    if (next.includes(line)) continue;
+    if (next.includes(line)) {
+      continue;
+    }
     // Replace rather than append: two assignments of one variable is a silent coin flip on which
     // wins, and for the URL that coin decides which daemon the app talks to.
     if (new RegExp(`^${name}=`, 'm').test(next)) {
@@ -154,8 +162,12 @@ export function craDevModuleFile(
   // the host as `127.0.0.1` while every other generator said `localhost` — same endpoint, but a
   // difference with no reason behind it is the kind that becomes a real one after somebody edits half
   // of it.
-  if (port !== undefined) fields.push(`url: '${bridgeWsUrl(port)}'`);
-  if (projectId !== undefined && projectId.length > 0) fields.push(`projectId: '${projectId}'`);
+  if (port !== undefined) {
+    fields.push(`url: '${bridgeWsUrl(port)}'`);
+  }
+  if (projectId !== undefined && projectId.length > 0) {
+    fields.push(`projectId: '${projectId}'`);
+  }
   // Multiline on purpose (#684): a single-line connect + console.error fails CRA boilerplate
   // Prettier (printWidth 80) and the project's own lint blocks a clean install.
   const connectFields = [

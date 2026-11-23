@@ -11,8 +11,9 @@
  * server.
  */
 
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { expoWebPort } from '@reticlehq/init';
 
 /** The `.env` files a Node dev setup reads, in the order dotenv-style loaders read them. */
 export const ENV_PORT_FILES = [
@@ -68,4 +69,11 @@ export function envFilePorts(
     }
   }
   return [...ports];
+}
+
+/** Expo web's port when `directory` is an Expo app: 8081 is not scanned for any other project. */
+export function expoPortIn(directory: string): number | undefined {
+  return expoWebPort(readText(join(directory, 'package.json')), (name) =>
+    existsSync(join(directory, name)),
+  );
 }
