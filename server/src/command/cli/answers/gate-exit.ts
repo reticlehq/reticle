@@ -68,6 +68,15 @@ export const MSG_GATE_NO_FLOWS =
   '`reticle verify <url> --explore`, then run the gate again.';
 
 /**
+ * Said when files changed, saved flows exist, and no saved flow covers the change. The gate exited 0
+ * here, while `reticle_verify change` answered `unknown` for the same change (#2324).
+ */
+export const MSG_GATE_NO_COVERING_FLOW =
+  'Reticle gate: no saved flow covers the changed files, so there was nothing to check; this is ' +
+  'not a pass. Record a flow that drives the changed code with reticle_act_and_wait, then run the ' +
+  'gate again.';
+
+/**
  * Said when the platform knows a regression, outside a hook. Exit 3 printed only the JSON log, whose
  * coverage field still read "no flows recorded — nothing was checked", so nothing a person read
  * said "regression".
