@@ -365,25 +365,25 @@ export async function reconnectHeldLease(
   const budget = Math.max(1, deadline - now());
   const went = await answerWithin(
     Promise.resolve(budget).then(goto),
-    budget + HELD_PAGE_ANSWER_MS,
+    budget + PAGE_ANSWER_MS,
     false,
   );
   if (!went) {
     return (await pageStillOpen(isOpen)) ? HeldLeaseReload.NOT_LOADED : HeldLeaseReload.GONE;
   }
-  const loading = (): Promise<boolean> => answerWithin(isLoading(), HELD_PAGE_ANSWER_MS, false);
+  const loading = (): Promise<boolean> => answerWithin(isLoading(), PAGE_ANSWER_MS, false);
   await connectOrInject({ isLoading: loading }, isRegistered, connectWaitUntil(deadline, now));
   return HeldLeaseReload.RELOADED;
 }
 
 /**
- * How long one question to a held page may take. A page that answers does so in milliseconds; a
- * frozen one (a script in an endless loop) never does, and must not hold the acquire with it.
+ * How long one question to a page may take. A page that answers does so in milliseconds; a frozen
+ * one (a script in an endless loop) never does, and must not hold the acquire, or a replay, with it.
  */
-const HELD_PAGE_ANSWER_MS = 250;
+export const PAGE_ANSWER_MS = 250;
 
 /** `work`'s answer, or `fallback` when it rejects or has not answered within `ms`. */
-async function answerWithin<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {
+export async function answerWithin<T>(work: Promise<T>, ms: number, fallback: T): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const late = new Promise<T>((resolve) => {
     timer = setTimeout(() => {
@@ -411,7 +411,7 @@ const OPEN_PROBE_ATTEMPTS = 3;
 async function pageStillOpen(isOpen: () => Promise<boolean>): Promise<boolean> {
   for (let attempt = 0; attempt < OPEN_PROBE_ATTEMPTS; attempt++) {
     const asked = Promise.resolve().then(isOpen);
-    if (await answerWithin(asked, HELD_PAGE_ANSWER_MS, false)) {
+    if (await answerWithin(asked, PAGE_ANSWER_MS, false)) {
       return true;
     }
     await sleep(LEASE_READY_POLL_MS);

@@ -12,6 +12,7 @@ describe('the page that verify drives', () => {
   it('queues early console errors before it navigates', async () => {
     const calls: string[] = [];
     const page = {
+      on: () => undefined,
       addInitScript: (script: unknown, arg?: { key?: string }) => {
         calls.push(script === queueEarlyConsole ? `early:${arg?.key ?? ''}` : 'other-init');
         return Promise.resolve();
