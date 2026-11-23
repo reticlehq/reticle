@@ -33,4 +33,7 @@ The page has no SDK: a headless browser from the pool opens it and the reader is
 
 ```bash
 node bench/long-horizon/live-cross-realm.mjs
+node --env-file=.env bench/long-horizon/live-cross-realm.mjs --model=gpt-5.4-mini
 ```
+
+With `--model`, the two steps in the page have no calls: an OpenAI model drives them from their intent, with three of Reticle's tools, and gives the values with `plan_value`. Their proofs do not change, so the model's word counts for nothing. First run with `gpt-5.4-mini`: all 5 steps proved in about 15 s.

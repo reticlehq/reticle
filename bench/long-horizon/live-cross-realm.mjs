@@ -22,7 +22,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const repo = fileURLToPath(new URL('../../', import.meta.url));
-const { Ledger, PlanRunner, fileStore, toolPorts } = await import(
+const { Ledger, PlanRunner, driveStepWith, fileStore, openAiDriver, toolPorts } = await import(
   join(repo, '../../../../reticle-harness/dist/index.js')
 );
 const { MacDriver, connectPeer } = await import(`${repo}adapters/realm/computer-use/dist/index.js`);
@@ -114,6 +114,53 @@ const byTestid = (value, key, path) => ({
   args: { by: 'testid', value },
   capture: { key, path },
 });
+
+// With --model=<name>, the two steps in the page have no calls: an OpenAI model drives them with
+// Reticle's tools, from their intent. Their proofs are the same, so its word counts for nothing.
+const MODEL = process.argv.find((arg) => arg.startsWith('--model='))?.slice('--model='.length);
+if (MODEL !== undefined && !process.env.OPENAI_API_KEY) {
+  process.stdout.write('--model needs OPENAI_API_KEY: run with node --env-file=.env\n');
+  process.exit(2);
+}
+const MODEL_TOOLS = [
+  {
+    name: 'reticle_snapshot',
+    description: 'Read the page as lines, each element with its role, its name and its ref.',
+    inputSchema: { type: 'object', properties: {} },
+  },
+  {
+    name: 'reticle_query',
+    description:
+      'Find elements. by: role, text, label or testid; value: what to look for. Gives each with its ref and its text.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        by: { type: 'string', enum: ['role', 'text', 'label', 'testid'] },
+        value: { type: 'string' },
+      },
+      required: ['by', 'value'],
+    },
+  },
+  {
+    name: 'reticle_act',
+    description:
+      'Act on an element by its ref. action: click, fill (args.value is the text), press (args.text is the key).',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        ref: { type: 'string' },
+        action: { type: 'string', enum: ['click', 'fill', 'press'] },
+        args: {
+          type: 'object',
+          properties: { value: { type: 'string' }, text: { type: 'string' } },
+        },
+      },
+      required: ['ref', 'action'],
+    },
+  },
+];
+const MODEL_SYSTEM =
+  'You do one step of a plan in a web page, with Reticle tools. Read the page first, then act. Give each value the step asks for with plan_value, exactly as the page shows it. Call finish with goalMet true when the step is done, or false with the reason when it cannot be done.';
 
 const plan = {
   id: 'sheet-calculator-sheet',
@@ -225,6 +272,13 @@ const plan = {
   ],
 };
 
+if (MODEL !== undefined) {
+  for (const step of plan.steps) {
+    if (step.target.url !== undefined) {
+      delete step.calls;
+    }
+  }
+}
 const ports = toolPorts({
   callTool,
   runCommand: (command) => {
@@ -239,6 +293,17 @@ const ports = toolPorts({
     }
   },
   askPerson: () => Promise.resolve({ approved: false, answer: 'nobody is at the machine' }),
+  ...(MODEL === undefined
+    ? {}
+    : {
+        drive: driveStepWith({
+          driver: openAiDriver({ apiKey: process.env.OPENAI_API_KEY, model: MODEL }),
+          callTool,
+          tools: MODEL_TOOLS,
+          system: MODEL_SYSTEM,
+          maxSteps: 12,
+        }),
+      }),
 });
 
 const started = Date.now();
@@ -271,6 +336,6 @@ const steps = [...result.state.steps].map(
   ([id, s]) => `${id}: ${s.status} (tries ${String(s.tries)})${s.why ? ` — ${s.why}` : ''}`,
 );
 process.stdout.write(
-  `${JSON.stringify({ goalMet: result.goalMet, summary: result.summary, sessions: routes, steps, bridgeBoard: shared, board: Object.fromEntries(result.state.board), ms: Date.now() - started }, null, 2)}\n`,
+  `${JSON.stringify({ goalMet: result.goalMet, summary: result.summary, sessions: routes, steps, bridgeBoard: shared, board: Object.fromEntries(result.state.board), ...(MODEL === undefined ? {} : { model: MODEL }), ms: Date.now() - started }, null, 2)}\n`,
 );
 process.exit(result.goalMet ? 0 : 1);
