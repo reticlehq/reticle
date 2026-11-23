@@ -14,7 +14,12 @@ const files: Record<string, string> = {
   '/code/notes/.reticle.json': '{ "framework": "appkit", "projectId": "notes-1a2b" }',
   '/code/empty/.reticle.json': '{}',
 };
-const read = (path: string): string | undefined => files[path];
+/**
+ * The fakes are keyed by POSIX paths, and the code joins paths with the separator of the machine:
+ * on Windows every lookup missed, and the tests failed in the Windows job.
+ */
+const posix = (path: string): string => path.replaceAll('\\', '/');
+const read = (path: string): string | undefined => files[posix(path)];
 
 describe('attachPlan', () => {
   it('reads the application, the port and the folders, and finds the token of the bridge', () => {
@@ -76,7 +81,7 @@ describe('attachPlan', () => {
   it('warns for an Electron application that is joined with its switch off', () => {
     const program = '/Applications/Notes.app/Contents/MacOS/Notes';
     const electron = (path: string) =>
-      '/Applications/Notes.app/Contents/Frameworks/Electron Framework.framework' === path;
+      '/Applications/Notes.app/Contents/Frameworks/Electron Framework.framework' === posix(path);
     const off = { app: 'Notes', electronSwitch: false };
     expect(electronWarning(program, off, electron)).toMatch(/--no-electron-switch/);
     expect(electronWarning(program, { ...off, electronSwitch: true }, electron)).toBeUndefined();
@@ -90,7 +95,7 @@ describe('attachPlan', () => {
     const chrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
     const frameworks = (path: string) =>
       '/Applications/Google Chrome.app/Contents/Frameworks/Google Chrome Framework.framework' ===
-      path;
+      posix(path);
     expect(isElectron(chrome, frameworks)).toBe(true);
     // As `ps -o comm=` gives it, with its newline. The join read it so, and Chrome got no switch.
     expect(isElectron(`${chrome}\n`, frameworks)).toBe(true);
@@ -99,7 +104,8 @@ describe('attachPlan', () => {
 
   // Dia and Arc carry Chromium in a framework of their own, and Spotify in the embedded one.
   it('knows the other ways an application carries Chromium', () => {
-    const has = (mark: string) => (path: string) => path.endsWith(`/Contents/Frameworks/${mark}`);
+    const has = (mark: string) => (path: string) =>
+      posix(path).endsWith(`/Contents/Frameworks/${mark}`);
     const dia = '/Applications/Dia.app/Contents/MacOS/Dia';
     expect(isElectron(dia, has('ArcCore.framework'))).toBe(true);
     const spotify = '/Applications/Spotify.app/Contents/MacOS/Spotify';

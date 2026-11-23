@@ -48,7 +48,13 @@ const until = async (ok: () => boolean): Promise<void> => {
 
 // The pointer is the program's window. A program that ended took the pointer with it for the rest
 // of the session: nothing started it again, and the person saw the agent act with no pointer.
-describe('the HUD program', () => {
+/**
+ * The stand-in for the HUD program is a shell script, and the HUD is a program of macOS: the
+ * tests that start one run where a shell script can be started, not on Windows.
+ */
+const NO_SHELL = 'win32' === process.platform;
+
+describe.skipIf(NO_SHELL)('the HUD program', () => {
   it(
     'is started again when it ends, and is told the application again',
     async () => {
@@ -92,7 +98,7 @@ describe('the glide of the pointer', () => {
     expect(glideMs(undefined, [500, 500])).toBe(0);
   });
 
-  it(
+  it.skipIf(NO_SHELL)(
     'is sent with each move, and the move ends when the pointer is there',
     async () => {
       const hud = program();
