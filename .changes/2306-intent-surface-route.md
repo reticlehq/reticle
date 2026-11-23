@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — `reticle_intent` asked for `surface.route` after an agent had sent one.** Some routes gave no subject: the home page `/` and a hash route such as `#/settings` were filed as unsorted, and the answer said `noSubject` with a fix that asked for `surface.route` again. A full URL such as `http://localhost:3000/settings` was filed under `http`. Reticle now reads the path of a full URL, reads a hash route when the path names nothing, and files `/` under `home`. The tool text now shows that `surface` is an object `{ route?, flow?, files? }`, with an example, so agents do not send it as a string. Closes [#2306](https://github.com/reticlehq/reticle/issues/2306).

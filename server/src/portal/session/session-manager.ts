@@ -597,8 +597,8 @@ export class SessionManager {
    * piece of positive evidence the no-session diagnosis has, and "a page was refused" without WHICH
    * page leaves the reader unable to tell their app from another project's tab on the same port.
    */
-  noteClosure(reason: string, at: number, page?: RefusedPage): void {
-    this.#recentClosures.push({ at, reason, ...(page === undefined ? {} : { page }) });
+  noteClosure(reason: string, at: number, page?: RefusedPage | null): void {
+    this.#recentClosures.push({ at, reason, ...(page ? { page } : {}) });
     if (this.#recentClosures.length > MAX_REMEMBERED_CLOSURES) {
       this.#recentClosures.shift();
     }

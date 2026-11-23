@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — `reticle open` said the SDK was missing for a window the agent had detached.** A detached window that reloads dials the bridge again, and the bridge refuses it. The bridge did not record that refusal, so `reticle open`, `reticle status` and the no-session diagnosis said the SDK was missing or the tab was closed. The bridge now records the refusal with the page, and `reticle open` reports the daemon's own account of it when the refused page has the origin of the opened url. A refused tab of another app does not change the advice. Closes [#2435](https://github.com/reticlehq/reticle/issues/2435).

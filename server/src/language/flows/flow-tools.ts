@@ -7,7 +7,7 @@ import { confirmDangerousArg } from '@/surface/tools/args/confirm-dangerous-arg.
 import { z } from 'zod';
 import { emptyFlowRefusal } from './empty-flow.js';
 import { aliasParam, aliasUsed } from '@/surface/tools/args/alias-args.js';
-import { stillRecording, stillRecordingMessage } from './flow-result.js';
+import { REPLAY_TRUST_OUTPUT, stillRecording, stillRecordingMessage } from './flow-result.js';
 import { resolveAnnotateTarget } from './annotate-notes/annotate-target.js';
 import {
   type ProjectId,
@@ -33,7 +33,7 @@ import { recordingBacktrackWarning } from './recording/recording-backtrack.js';
 import { isValidFlowName, flowPath } from '@/memory/project/dir/reticle-dir.js';
 import { type FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
-import { flowsForSession, flowsForSessionId } from './flow-store-for-session.js';
+import { flowsForListing, flowsForSession, flowsForSessionId } from './flow-store-for-session.js';
 import { rootForTarget, sessionTarget, type ProjectTarget } from '@/memory/project/session-root.js';
 import { originOf } from '@/portal/session/session-manager.js';
 import { resolveSuiteSelection } from './suite-selection.js';
@@ -291,17 +291,21 @@ export const FLOW_TOOLS: ToolDef[] = [
       flows: z.array(
         z.object({ name: z.string(), path: z.string(), createdAt: z.number().optional() }),
       ),
+      note: z
+        .string()
+        .optional()
+        .describe('Set when the list is for another project than the tab.'),
     },
     // Return {name, path} objects to MATCH the declared outputSchema. Returning bare name strings
     // (the prior bug) made schema-validating MCP clients reject the result ("expected object,
     // received string") — caught driving the live demo.
     handler: (deps: ToolDeps, args) => {
-      const target = sessionTarget(deps, asString(args['sessionId']));
-      const { projectId } = target;
-      // The APP's flows, not the daemon's. Listing where the daemon was launched is what showed a
-      // React dashboard a HUD full of Electron and Tauri flows from an unrelated checkout.
-      const { flows: store, root } = flowsForSession(deps, target);
+      // The APP's flows, not the daemon's: a list of the daemon's folder showed a React dashboard a
+      // HUD of Electron and Tauri flows. The note says when the tab is another project's (#2427).
+      const listing = flowsForListing(deps, asString(args['sessionId']));
+      const { flows: store, root, projectId, note } = listing;
       return store.list(projectId).then((names) => ({
+        ...(note === undefined ? {} : { note }),
         // `list` deliberately returns invalid names so they are reported rather than silently
         // dropped — but the declared outputSchema requires `path` on EVERY entry, and omitting it made
         // a strict MCP client reject the whole listing (the agent then sees no flows at all, which is
@@ -393,7 +397,7 @@ export const FLOW_TOOLS: ToolDef[] = [
       'Status unverifiable means flow could not be graded (missing secrets, unmet preconditions, lost ' +
       'document) — neither pass nor fail, treat as UNKNOWN. ' +
       'An ok replay of a flow asserting no consequence also carries unverifiable:{reason} — do not ' +
-      'treat as proof. ' +
+      'treat as proof. verifiedReason names the clause that decided the status. ' +
       'Early halt carries halted:{atStep, notAttempted}: `steps` is shorter because replay stopped. ' +
       'A start page that kept loading past the step budget carries startPageWait:{waitedMs, budgetMs, stillLoading}.',
     inputSchema: {
@@ -509,12 +513,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         .describe(
           'Guarded defects that came back. This flow proved once that they were gone, so their return is a regression nothing else would have caught.',
         ),
-      unverifiable: z
-        .object({ reason: z.string() })
-        .optional()
-        .describe(
-          'Set on an ok replay that cannot fail: the flow asserts no observable consequence, so it passes even when the feature is broken. Same reason reticle_verify{action:"flows"} reports.',
-        ),
+      ...REPLAY_TRUST_OUTPUT,
       decision: z
         .object({
           verdict: z.string(),

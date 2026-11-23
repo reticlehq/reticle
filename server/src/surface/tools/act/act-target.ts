@@ -14,7 +14,11 @@ import {
   unissuedRefRefusal,
 } from '@reticlehq/core';
 import type { Session } from '@/portal/session/session.js';
-import { emptyQueryRefusal, normalizeQueryArgs } from '@/surface/tools/read/query-shape.js';
+import {
+  emptyQueryRefusal,
+  normalizeQueryArgs,
+  roleTextRefusal,
+} from '@/surface/tools/read/query-shape.js';
 import { resolveTargetRef, type TargetResolution } from './resolve-target.js';
 import { asRecord, asString, asNumber } from '@reticlehq/core';
 import { appearanceDecision } from '@reticlehq/engine/window/appearance-budget.js';
@@ -82,6 +86,11 @@ export async function resolveActTarget(
   // A ref from a look, given as the target. It is the agent's own explicit ref, not a guess.
   if ('string' === typeof target && SESSION_REF.test(target)) {
     return { kind: 'ref', ref: target };
+  }
+  // Checked before normalizing, which turns `{ role, text }` into a text search (#2326).
+  const roleText = roleTextRefusal(asRecord(target));
+  if (roleText !== undefined) {
+    return { kind: 'error', message: roleText.message };
   }
   const q = normalizeQueryArgs(asRecord(target));
   // A target that names nothing (a CSS string, an empty object) is not sent to the page: there it

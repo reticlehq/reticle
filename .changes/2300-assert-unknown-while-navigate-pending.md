@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a check could pass on the old page while a navigation was still loading.** `reticle_navigate` answered `confirmed: false`, and the tab still showed the old page, for example while a client-side route loaded. The next `reticle_assert` read that page, so a text check could pass on text that only the old page showed. Now, while the last navigate on the session has not reached its target, `reticle_assert` answers `verified: unknown` and names the target. The check is judged as before once the page reaches the target, or after the next act or navigate. An open network request does not count as a pending navigation. Closes [#2300](https://github.com/reticlehq/reticle/issues/2300).

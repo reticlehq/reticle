@@ -16,12 +16,14 @@ import { describe, expect, it, vi } from 'vitest';
 import {
   ASSERT_MAX_WAIT_MS,
   acquireLease,
+  assertTimedOutLines,
   exploreToEnd,
   runAdhocVerdict,
   type ToolCaller,
 } from './adhoc-verdict.js';
 import { MAX_BLOCKING_WAIT_MS } from '@/surface/tools/args/numeric-bounds.js';
 import { ReticleTool } from '@reticlehq/core';
+import { ErrorCode, McpError } from '@modelcontextprotocol/sdk/types.js';
 import {
   LEASE_KEPT_SENTENCE,
   LEASE_RELEASED_SENTENCE,
@@ -675,5 +677,43 @@ describe('a one-shot verdict waits for its expectation', () => {
 
   it('names the assert cap the tool layer enforces', () => {
     expect(ASSERT_MAX_WAIT_MS).toBe(MAX_BLOCKING_WAIT_MS);
+  });
+});
+
+/*
+ * #2443. The daemon reached `verified: yes` after the final assert call stopped waiting, and the CLI
+ * printed the raw "Request timed out" error. The agent could not tell why.
+ */
+describe('a final assert that outlives its deadline', () => {
+  const timingOut = (): Promise<ToolCaller> =>
+    Promise.resolve({
+      call: () => Promise.reject(new McpError(ErrorCode.RequestTimeout, 'Request timed out')),
+      close: () => Promise.resolve(),
+    });
+
+  it('prints verified: unknown, names the wait, and gives the next step', async () => {
+    const result = await runAdhocVerdict({
+      port: 4400,
+      predicate: { kind: 'text', contains: 'Dashboard' },
+      connect: timingOut,
+      timeoutMs: 10_000,
+    });
+    expect(result.code).toBe(1);
+    expect(result.lines).toEqual(assertTimedOutLines(15_000));
+    expect(result.lines.join('\n')).not.toMatch(/Request timed out/);
+    expect(result.lines.join('\n')).toMatch(/--timeout/);
+  });
+
+  it('still reports another failure of the call as it came', async () => {
+    const result = await runAdhocVerdict({
+      port: 4400,
+      predicate: { kind: 'text', contains: 'Dashboard' },
+      connect: () =>
+        Promise.resolve({
+          call: () => Promise.reject(new Error('socket hang up')),
+          close: () => Promise.resolve(),
+        }),
+    });
+    expect(result.lines.join('\n')).toMatch(/socket hang up/);
   });
 });

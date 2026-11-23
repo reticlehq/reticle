@@ -134,11 +134,6 @@
       "count": 1
     }
   },
-  "src/patch/astro-patch.test.ts": {
-    "curly": {
-      "count": 14
-    }
-  },
   "src/patch/astro-patch.ts": {
     "curly": {
       "count": 3
@@ -215,11 +210,6 @@
   "src/patch/vite-config.test.ts": {
     "curly": {
       "count": 20
-    }
-  },
-  "src/patch/vite-owning-config.ts": {
-    "curly": {
-      "count": 5
     }
   },
   "src/plan/framework-adapter.test.ts": {

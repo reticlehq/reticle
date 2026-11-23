@@ -1,7 +1,17 @@
-import { FlowErrorCode, NO_SUCH_FLOW, ReplayStatus, ReticleTool, Verified } from '@reticlehq/core';
+import {
+  FlowErrorCode,
+  NO_SUCH_FLOW,
+  ReplayStatus,
+  ReticleTool,
+  Verified,
+  VerifiedReason,
+  type FlowReplayResult,
+} from '@reticlehq/core';
 import { SAFE_SEGMENT_PATTERN, type ProjectId } from '@reticlehq/core';
+import { z } from 'zod';
 import { FlowParseNote } from './flow-expect-grammar.js';
 import { isAmbient } from './recording/tape/recordings.js';
+import { SUCCESS_STEP_TOOL } from './flow-success.js';
 
 /** Discriminated result so callers never branch on free strings. */
 export type FlowResult<T> =
@@ -35,9 +45,13 @@ export const safeProjectId = (projectId?: ProjectId): ProjectId | undefined =>
 
 /** Map a structured FlowErrorCode to a legible one-line message for the agent. */
 export function flowErrorMessage(code: FlowErrorCode, detail?: string): string {
-  if (FlowErrorCode.PARSE_FAILED === code && undefined !== detail) return detail;
+  if (FlowErrorCode.PARSE_FAILED === code && undefined !== detail) {
+    return detail;
+  }
   // The detail names both versions and the remedy, so it beats anything generic this could say.
-  if (FlowErrorCode.WRONG_VERSION === code && undefined !== detail) return detail;
+  if (FlowErrorCode.WRONG_VERSION === code && undefined !== detail) {
+    return detail;
+  }
   switch (code) {
     case FlowErrorCode.INVALID_NAME:
       return 'invalid flow name — use a single safe segment (letters/digits/-/_), no path separators';
@@ -68,12 +82,12 @@ export function replayVerdictEffect(
   status: ReplayStatus,
   assertsNothing: boolean,
 ): { claim: string; verified: Verified; declaredBeforeActing: true; grade: string } {
-  const verified =
-    ReplayStatus.OK === status && !assertsNothing
-      ? Verified.YES
-      : ReplayStatus.ERROR === status
-        ? Verified.NO
-        : Verified.UNKNOWN;
+  let verified: Verified = Verified.UNKNOWN;
+  if (ReplayStatus.OK === status && !assertsNothing) {
+    verified = Verified.YES;
+  } else if (ReplayStatus.ERROR === status) {
+    verified = Verified.NO;
+  }
   return {
     claim: `the flow "${name}" replays and its checks hold`,
     verified,
@@ -84,6 +98,90 @@ export function replayVerdictEffect(
 
 /** The grade a replay's check is recorded with. */
 const REPLAY_GRADE = 'flow';
+
+/** True when a channel disagreed on a step of the replay, or across its steps. */
+function channelsDisagreed(replay: FlowReplayResult): boolean {
+  if (replay.steps.some((step) => 0 < (step.contradictions?.length ?? 0))) {
+    return true;
+  }
+  return 0 < (replay.crossStep?.length ?? 0);
+}
+
+/**
+ * The clause behind an `ok` replay. Only a flow that can fail, with no channel disagreeing, is proved.
+ * A disagreement is decided first, in the order `decideVerified` uses: it is the finding even on a
+ * flow that asserts nothing.
+ */
+function okReplayReason(replay: FlowReplayResult): VerifiedReason {
+  if (channelsDisagreed(replay)) {
+    return VerifiedReason.CONTRADICTED;
+  }
+  if (replay.unverifiable !== undefined) {
+    return VerifiedReason.NOTHING_DECLARED;
+  }
+  return VerifiedReason.PROVED;
+}
+
+/**
+ * The clause behind an `error` replay. Replay adds the flow's `success` condition as a step row. When
+ * that row failed, the condition was evaluated and did not hold. Anything else that errors is a flow
+ * that did not load or an action that did not run, which was never evaluated.
+ */
+function errorReplayReason(replay: FlowReplayResult): VerifiedReason {
+  const successFailed = replay.steps.some(
+    (step) => SUCCESS_STEP_TOOL === step.tool && !step.ok && step.drift === undefined,
+  );
+  return successFailed ? VerifiedReason.ASSERTION_FAILED : VerifiedReason.INCONCLUSIVE;
+}
+
+/**
+ * The clause that decided a replay, from the set every verdict tool uses (#2205).
+ *
+ * A replay answered with a status only, so a caller that reads the reason got nothing. A reason the
+ * replay path already named is kept: that path knows a narrower cause than its status. The `switch`
+ * has no default, so a new `ReplayStatus` does not compile until it has a reason.
+ */
+export function replayVerifiedReason(replay: FlowReplayResult): VerifiedReason {
+  if (replay.verifiedReason !== undefined) {
+    return replay.verifiedReason;
+  }
+  switch (replay.status) {
+    case ReplayStatus.OK:
+      return okReplayReason(replay);
+    // An anchor or a declared consequence that was there when the flow was saved is not there now.
+    case ReplayStatus.DRIFT:
+      return VerifiedReason.ASSERTION_FAILED;
+    case ReplayStatus.ERROR:
+      return errorReplayReason(replay);
+    // The run could not start or could not be graded: nothing was evaluated.
+    case ReplayStatus.UNVERIFIABLE:
+      return VerifiedReason.INCONCLUSIVE;
+  }
+}
+
+/** The replay with its reason set: what `reticle_flow_replay` answers with. */
+export function withReplayReason(replay: FlowReplayResult): FlowReplayResult {
+  return { ...replay, verifiedReason: replayVerifiedReason(replay) };
+}
+
+/**
+ * The output fields that say how far a replay's status can be trusted. A field that the schema
+ * does not declare is removed from a validating profile's response, so both are declared here.
+ */
+export const REPLAY_TRUST_OUTPUT = {
+  unverifiable: z
+    .object({ reason: z.string() })
+    .optional()
+    .describe(
+      'Set on an ok replay that cannot fail: the flow asserts no observable consequence, so it passes even when the feature is broken. Same reason reticle_verify{action:"flows"} reports.',
+    ),
+  verifiedReason: z
+    .nativeEnum(VerifiedReason)
+    .optional()
+    .describe(
+      'The clause that decided this replay, from the set reticle_assert and reticle_act_and_wait use: proved | nothing_declared | contradicted | assertion_failed | inconclusive | observation_lost. Read it to choose the next step.',
+    ),
+};
 
 /** Record a replay as one check of the session that ran it. A session double without a journal is skipped. */
 export function noteReplayCheck(
@@ -112,7 +210,9 @@ export function stillRecording(
   explicitName: string | undefined,
   held: readonly string[],
 ): string | undefined {
-  if (active.includes(name) && !isAmbient(name)) return name;
+  if (active.includes(name) && !isAmbient(name)) {
+    return name;
+  }
   // The ambient tape is the daemon's own, never one the agent started, so it is neither named nor
   // counted: with a named recording beside it, that one is still the only candidate.
   const opened = active.filter((recording) => !isAmbient(recording));

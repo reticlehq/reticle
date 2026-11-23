@@ -825,11 +825,6 @@
       "count": 1
     }
   },
-  "src/features/visual/step-shots.test.ts": {
-    "curly": {
-      "count": 5
-    }
-  },
   "src/features/visual/visual-diff.ts": {
     "curly": {
       "count": 5
@@ -1357,16 +1352,6 @@
       "count": 1
     }
   },
-  "src/language/flows/flow-expect-grammar.test.ts": {
-    "curly": {
-      "count": 6
-    }
-  },
-  "src/language/flows/flow-expect-grammar.ts": {
-    "curly": {
-      "count": 11
-    }
-  },
   "src/language/flows/flow-intent-gap.test.ts": {
     "curly": {
       "count": 1
@@ -1440,14 +1425,6 @@
   "src/language/flows/flow-replayable.ts": {
     "curly": {
       "count": 6
-    },
-    "no-nested-ternary": {
-      "count": 1
-    }
-  },
-  "src/language/flows/flow-result.ts": {
-    "curly": {
-      "count": 3
     },
     "no-nested-ternary": {
       "count": 1
@@ -1880,16 +1857,6 @@
       "count": 5
     }
   },
-  "src/memory/intent/intent-subject.ts": {
-    "curly": {
-      "count": 12
-    }
-  },
-  "src/memory/intent/intent-tools.ts": {
-    "curly": {
-      "count": 10
-    }
-  },
   "src/memory/intent/intent-wrong-project-write.test.ts": {
     "curly": {
       "count": 1
@@ -2131,11 +2098,6 @@
   "src/memory/project/session-root.test.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/memory/project/session-root.ts": {
-    "curly": {
-      "count": 2
     }
   },
   "src/memory/project/sync-status.ts": {
@@ -2491,11 +2453,6 @@
       "count": 1
     }
   },
-  "src/portal/session/last-act.ts": {
-    "curly": {
-      "count": 2
-    }
-  },
   "src/portal/session/lease-expiry-attribution.test.ts": {
     "curly": {
       "count": 1
@@ -2662,16 +2619,6 @@
   "src/portal/session/timing/command-timeout.ts": {
     "curly": {
       "count": 3
-    }
-  },
-  "src/portal/session/timing/resolve-within.test.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
-  "src/portal/session/timing/resolve-within.ts": {
-    "curly": {
-      "count": 2
     }
   },
   "src/portal/session/tools.live-control.test.ts": {
@@ -2965,11 +2912,6 @@
   "src/surface/tools/act/durable.ts": {
     "curly": {
       "count": 12
-    }
-  },
-  "src/surface/tools/act/navigation/navigate-arrival.ts": {
-    "curly": {
-      "count": 8
     }
   },
   "src/surface/tools/act/navigation/navigate-result.ts": {
@@ -3836,11 +3778,6 @@
   "src/telemetry/telemetry-integrity.test.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/telemetry/verification-of.ts": {
-    "curly": {
-      "count": 10
     }
   },
   "src/trace.test.ts": {
