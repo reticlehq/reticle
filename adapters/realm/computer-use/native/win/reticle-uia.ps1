@@ -17,6 +17,16 @@
 $ErrorActionPreference = 'Stop'
 # WindowsBase holds System.Windows.Point, which the hit test of the reach check takes.
 Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, WindowsBase, System.Windows.Forms, System.Drawing
+# The classic controls of Windows (an Edit box, a menu bar, a list view) are described to UI
+# Automation by client-side providers in an assembly of their own. Without it they were plain
+# panes with no value and no children: Notepad's text box had no ref in the first Windows run.
+try {
+  Add-Type -AssemblyName UIAutomationClientSideProviders
+  [System.Windows.Automation.ClientSettings]::RegisterClientSideProviderAssembly(
+    (New-Object System.Reflection.AssemblyName 'UIAutomationClientSideProviders'))
+} catch {
+  # ponytail: a Windows without the assembly still reads the controls that describe themselves.
+}
 Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
