@@ -44,6 +44,7 @@ public static class ReticleWin32 {
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint x, uint y, int data, UIntPtr extra);
   [DllImport("user32.dll")] public static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
+  [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr h, uint msg, IntPtr w, string l);
   [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X; public int Y; }
   [StructLayout(LayoutKind.Sequential)] public struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
   public static uint IdleMs() {
@@ -301,9 +302,22 @@ function Invoke-Act($words) {
       'set' {
         $valuePattern = Get-Pattern $el ([System.Windows.Automation.ValuePattern]::Pattern)
         $range = Get-Pattern $el ([System.Windows.Automation.RangeValuePattern]::Pattern)
-        if ($null -ne $range -and $value -match '^-?[\d.]+$') { $range.SetValue([double]$value) }
-        elseif ($null -ne $valuePattern) { $valuePattern.SetValue($value) }
-        else { $delivered = $false }
+        $set = $false
+        try {
+          if ($null -ne $range -and $value -match '^-?[\d.]+$') { $range.SetValue([double]$value); $set = $true }
+          elseif ($null -ne $valuePattern) { $valuePattern.SetValue($value); $set = $true }
+        } catch {
+          $script:LastError = $_.Exception.Message
+        }
+        # UI Automation refuses a value for a multi-line Edit box (the text of Notepad). The control
+        # of Windows takes its text from WM_SETTEXT, also in the background, as it took it before
+        # UI Automation existed.
+        $handle = $el.Current.NativeWindowHandle
+        if (-not $set -and $handle -ne 0) {
+          [ReticleWin32]::SendMessage([IntPtr]$handle, 0x000C, [IntPtr]::Zero, $value) | Out-Null
+          $set = $true
+        }
+        $delivered = $set
       }
       'raise' {
         $proc = Get-Process -Id $procId
@@ -356,6 +370,7 @@ function Invoke-Act($words) {
       default { return @{ error = "unknown-action $kind" } }
     }
   } catch {
+    $script:LastError = $_.Exception.Message
     $delivered = $false
   }
   $settled = Wait-Quiet $procId $budgetMs $quiet
@@ -363,7 +378,9 @@ function Invoke-Act($words) {
   if ($null -eq $after) {
     return @{ delivered = $delivered; reachable = $true; settled = $settled; appGone = $true; before = $before.tree; after = @{ role = 'AXApplication'; children = @() }; unreadBefore = $before.unread; unreadAfter = 0 }
   }
-  return @{ delivered = $delivered; reachable = ($reach.reach -eq 'yes'); settled = $settled; before = $before.tree; after = $after.tree; unreadBefore = $before.unread; unreadAfter = $after.unread }
+  $answer = @{ delivered = $delivered; reachable = ($reach.reach -eq 'yes'); settled = $settled; before = $before.tree; after = $after.tree; unreadBefore = $before.unread; unreadAfter = $after.unread }
+  if ($env:RETICLE_UIA_DEBUG -and $script:LastError) { $answer.uiaError = $script:LastError }
+  return $answer
 }
 
 function Invoke-Capture($words) {
