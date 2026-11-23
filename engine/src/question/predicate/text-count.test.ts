@@ -189,6 +189,31 @@ describe('a phrase split across child elements', () => {
   });
 });
 
+/** An older page never sends `splitOwner`, so its `count: 1` may stand for several split copies. */
+describe('a text count on a page whose SDK predates splitOwner', () => {
+  const on = (sdkVersion: string, copies: number): PredicateSession => ({
+    ...pageWith(() => copies),
+    sdkVersion,
+  });
+
+  it('is inconclusive and names both versions', async () => {
+    const result = await evaluatePredicate(on('3.10.11', 1), answers(1));
+    expect(result.pass).toBe(false);
+    expect(result.inconclusive).toContain('3.10.11');
+    expect(result.inconclusive).toContain('3.10.12');
+  });
+
+  it('is judged from the first SDK that sends it', async () => {
+    expect((await evaluatePredicate(on('3.10.12', 1), answers(1))).pass).toBe(true);
+  });
+
+  it('leaves a check without a count, and count 0, as they were', async () => {
+    const plain: Predicate = { kind: 'text', contains: 'Answer' };
+    expect((await evaluatePredicate(on('3.10.11', 1), plain)).pass).toBe(true);
+    expect((await evaluatePredicate(on('3.10.11', 0), answers(0))).pass).toBe(true);
+  });
+});
+
 describe('the text count in the schema', () => {
   it('accepts a whole number with contains', () => {
     expect(PredicateSchema.parse(answers(2))).toEqual(answers(2));

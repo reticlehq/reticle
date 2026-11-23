@@ -382,6 +382,13 @@ function countMiss(
   };
 }
 
+/**
+ * The first SDK release whose match says when it is the one owner of a split phrase (`splitOwner`).
+ * An older page answers the same `count: 1` without saying so, and a text count read on it would
+ * pass on a page that shows several copies.
+ */
+const SPLIT_OWNER_SINCE = '3.10.12';
+
 /** The first SDK release whose element query accepts `matchCase`; an older page refuses the query. */
 const MATCH_CASE_SINCE = '3.7.0';
 
@@ -412,6 +419,13 @@ export async function evalElement(
       expected: `SDK ${tooOld.since} or newer, which can answer '${tooOld.state}'`,
       assertion: 'element.state',
     };
+  }
+  if (count !== undefined && sdkPredates(session.sdkVersion, SPLIT_OWNER_SINCE)) {
+    const reason =
+      `the page's SDK is ${String(session.sdkVersion)}, and a text count needs ${SPLIT_OWNER_SINCE} or ` +
+      'newer: an older page reports one match for a phrase split across child elements, however ' +
+      `many copies it shows. Update the page's @reticlehq packages to ${SPLIT_OWNER_SINCE} or newer`;
+    return { pass: false, failureReason: reason, inconclusive: reason };
   }
   // Fields the browser's locator would have DROPPED, enforced back here — see residualQueryChecks.
   // Checked before the round-trip when nothing can enforce them: a predicate that cannot be evaluated

@@ -81,7 +81,7 @@ Add `"absent": true` to assert something is **gone**. The predicate for a remova
 { "kind": "text", "contains": "Answer", "count": 2, "visible": true }
 ```
 
-A copy is an element whose own text contains `contains`: one element that reads "Answer Answer" counts once, and a copy that is hidden counts unless `visible: true` is set. `count: 0` means none, the same as `absent: true`. `count` cannot be combined with `absent` or `satisfies`. A phrase split across child elements (`<span>Total:</span><span> 5</span>`) has no element whose own text holds it, so it cannot be counted: the check answers unknown and says so. Count a part of the phrase that sits whole in one element.
+A copy is an element whose own text contains `contains`: one element that reads "Answer Answer" counts once, and a copy that is hidden counts unless `visible: true` is set. `count: 0` means none, the same as `absent: true`. `count` cannot be combined with `absent` or `satisfies`. A phrase split across child elements (`<span>Total:</span><span> 5</span>`) has no element whose own text holds it, so it cannot be counted: the check answers unknown and says so. Count a part of the phrase that sits whole in one element. A page whose SDK is older than 3.10.12 cannot say that a phrase is split, so a `count` of one or more answers unknown there.
 
 `text` reads the text that the page renders. It does not read what is typed into an `<input>` or a `<textarea>`, because that is the field's value, not text on the page. `value` on a `text` predicate is only an alias for `contains`, so it also reads rendered text. To assert what a field holds, use an `element` predicate with `value`:
 
