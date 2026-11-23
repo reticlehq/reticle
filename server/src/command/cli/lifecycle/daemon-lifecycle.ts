@@ -18,7 +18,12 @@
 import { log } from '@/log.js';
 import { RETICLE_VERIFY_DEFAULT_PORT } from '@/index.js';
 import { strandedClientsNote, verifyEndpointMismatch } from '@/status-payload.js';
-import { probeDaemon, waitForDaemonBind } from '@/surface/mcp/mcp-proxy.js';
+import {
+  DAEMON_BIND_TIMEOUT_MS,
+  probeDaemon,
+  spawnedDaemonAlive,
+  waitForDaemonBind,
+} from '@/surface/mcp/mcp-proxy.js';
 import { stateDirProblem } from '@/command/daemon/state-dir.js';
 import {
   readPid,
@@ -129,9 +134,37 @@ async function serveWithHonestExit(parsed: {
   spawnDaemon(process.execPath, scriptPath, daemonArgs, parsed.port);
   // The child binds asynchronously and, when it cannot, exits 1 long after this process would have
   // reported success. Wait for it to ANSWER — `/status` responding is the only evidence a daemon
-  // exists that does not come from the pid file the child may never have earned.
-  const bound = await waitForDaemonBind(parsed.port);
+  // exists that does not come from the pid file the child may never have earned. The wait tracks
+  // the child (#1541): a live child keeps it waiting up to the bind ceiling, because a slow
+  // Windows start — a `--drive` Chromium launch runs before the bind — is still a start; a dead
+  // child ends it at once, because a dead child will never bind. The probe reads the pid file
+  // on every check and treats an unknown pid as still starting, because the Windows spawn
+  // path can remove the pid file when it gets no pid in time.
+  const bound = await waitForDaemonBind(parsed.port, {
+    childAlive: () => spawnedDaemonAlive(parsed.port),
+  });
   if (!bound) {
+    // The ceiling passed and the child is still alive: it may yet bind, and it stays running
+    // either way. Name it, so a script that trusts this exit code does not tear down or retry
+    // into a port conflict against a daemon it cannot see (#1541).
+    const childPid = readPid(parsed.port);
+    if (childPid !== null && isAlive(childPid)) {
+      log('reticle_daemon_start_failed_parent', {
+        port: parsed.port,
+        pid: childPid,
+        stillStarting: true,
+        reason: `the daemon is still starting after ${String(DAEMON_BIND_TIMEOUT_MS)}ms`,
+        log: logPath(parsed.port),
+      });
+      process.stderr.write(
+        `the daemon is still starting on :${String(parsed.port)} (pid ${String(childPid)}) — ` +
+          `it did not bind within ${String(Math.round(DAEMON_BIND_TIMEOUT_MS / 1000))}s.\n` +
+          `it is still running: run \`reticle status\` to check it, or \`reticle stop\` to stop it.\n` +
+          `see ${logPath(parsed.port)}\n`,
+      );
+      process.exit(1);
+      return;
+    }
     const settled = await probePresence(parsed.port, { tcpOpen: probeDaemon, status: fetchStatus });
     const startupCause = readDaemonStartupCause(logPath(parsed.port), startupStartedAt);
     log('reticle_daemon_start_failed_parent', {
@@ -175,10 +208,14 @@ export function handleStop(port: number, quiet: boolean): void {
     // port, and `kill` finds the listener and confirms it is Reticle's before signalling it.
     void fetchStatus(port).then(async (status) => {
       if (status !== undefined) {
-        if (!(await runKill(port, false))) process.exit(1);
+        if (!(await runKill(port, false))) {
+          process.exit(1);
+        }
         return;
       }
-      if (!quiet) log('reticle_daemon_not_running', { port });
+      if (!quiet) {
+        log('reticle_daemon_not_running', { port });
+      }
     });
     return;
   }
@@ -200,7 +237,9 @@ function waitForStop(port: number, pid: number, quiet: boolean): void {
     if (!isAlive(pid)) {
       clearInterval(poll);
       removePid(port);
-      if (!quiet) log('reticle_daemon_stopped', { port, pid, ...(escalated ? { escalated } : {}) });
+      if (!quiet) {
+        log('reticle_daemon_stopped', { port, pid, ...(escalated ? { escalated } : {}) });
+      }
       return;
     }
     const waited = Date.now() - started;
@@ -220,7 +259,9 @@ function waitForStop(port: number, pid: number, quiet: boolean): void {
       clearInterval(poll);
       // Surviving SIGKILL means the pid is not ours to kill (permissions) or is an unkillable
       // zombie. Neither is retryable, and both need the pid named so a human can act on it.
-      if (!quiet) log('reticle_daemon_stop_timeout', { port, pid, escalated });
+      if (!quiet) {
+        log('reticle_daemon_stop_timeout', { port, pid, escalated });
+      }
       process.exit(1);
     }
   }, 100);
@@ -235,7 +276,9 @@ function waitForStop(port: number, pid: number, quiet: boolean): void {
  */
 export async function handleRestart(port: number, force: boolean): Promise<void> {
   const stranded = strandedClientsNote(await fetchStatus(port));
-  if (stranded !== undefined) process.stderr.write(`${stranded}\n`);
+  if (stranded !== undefined) {
+    process.stderr.write(`${stranded}\n`);
+  }
   const freed = await runKill(port, force);
   if (!freed) {
     log('reticle_restart_aborted', {
