@@ -22,19 +22,22 @@ import { createFakeSession } from '@/portal/session/fake-session.js';
 const QUESTION = 'Delete this item?';
 const DELETED_SIGNAL = 'item:deleted';
 
-const declinedConfirm = (sessionId: string): ReticleEvent => ({
+const answeredConfirm = (sessionId: string, answered: boolean): ReticleEvent => ({
   t: 0,
   type: EventType.DIALOG_OPENED,
   sessionId,
-  data: { kind: 'confirm', message: QUESTION, answered: false },
+  data: { kind: 'confirm', message: QUESTION, answered },
 });
 
-/** Click a button. When `withDialog`, its handler opens a `confirm()` that Reticle declines. */
-const clickDelete = (withDialog: boolean): Promise<Record<string, unknown>> => {
+/**
+ * Click a button. When `withDialog`, its handler opens a `confirm()` that Reticle declines, or, with
+ * `answered: true`, one that the caller's `confirmDangerous` said yes to (#2167).
+ */
+const clickDelete = (withDialog: boolean, answered = false): Promise<Record<string, unknown>> => {
   const session = createFakeSession();
   session.command = (name: string) => {
     if (ReticleCommand.ACT === name && withDialog) {
-      session.pushEvent(declinedConfirm(session.id));
+      session.pushEvent(answeredConfirm(session.id, answered));
     }
     return Promise.resolve({ kind: 'command_result', id: 'c', ok: true, result: {} });
   };
@@ -60,6 +63,12 @@ describe('an act_and_wait whose click opened a confirm() that Reticle declined',
     expect(result.verifiedReason).toBe(VerifiedReason.DIALOG_DECLINED);
     expect(String(result.because)).toContain('confirm');
     expect(String(result.because)).toContain(QUESTION);
+  });
+
+  it('is still no when the confirm was answered yes: no dialog was declined (#2167)', async () => {
+    const result = await clickDelete(true, true);
+    expect(result.verified).toBe(Verified.NO);
+    expect(result.verifiedReason).toBe(VerifiedReason.ASSERTION_FAILED);
   });
 
   it('is still no when the click opened no dialog', async () => {
