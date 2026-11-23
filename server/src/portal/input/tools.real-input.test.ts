@@ -19,7 +19,8 @@ import { ReticleTool } from '@reticlehq/core';
 import { BaselineStore } from '@/memory/project/baselines.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
-import { FlowStore } from '@/language/flows/flows.js';
+import { FlowStore, anchorForStep } from '@/language/flows/flows.js';
+import { compileActStep } from '@/language/flows/replay.js';
 import { ProjectStore } from '@/memory/project/project-store.js';
 import { AnnotationStore } from '@/language/flows/stores/annotation-store.js';
 import { boxCenter, DriveError, type ElementBox, type RealInputProvider } from './real-input.js';
@@ -42,6 +43,8 @@ interface FakeSessionState {
   actCalls: number;
   inspectRefs: string[];
   inspectName?: string;
+  /** The role INSPECT reports, as describe() does. */
+  inspectRole?: string;
   /** When set, INSPECT for this ref returns no box (stale ref). */
   staleRef?: string;
   /** When set, INSPECT returns a zero-area box for this ref. */
@@ -105,6 +108,7 @@ function fakeSession(state: FakeSessionState): Session {
         result: {
           box,
           ...(state.inspectName === undefined ? {} : { name: state.inspectName }),
+          ...(state.inspectRole === undefined ? {} : { role: state.inspectRole }),
           // describe() always sends states, and never `inViewport`. That shape is what hid #1711's
           // first fix from this suite, so the fake keeps it.
           states: ref === state.focused ? ['visible', 'focused'] : ['visible'],
@@ -356,6 +360,46 @@ describe('reticle_act real-input routing', () => {
     expect(res.inputMode).toBe(InputMode.REAL);
     expect(hoverLease).toHaveBeenCalledWith('demo', 100, 50);
     expect(state.actCalls).toBe(0);
+  });
+
+  /*
+   * #2431 (point 1). A real hover reported no element, so the recorder had nothing to anchor the
+   * step on. It saved the step as degraded / unresolved, and the step could not replay. A heading has
+   * a role and a name, as a clicked button does, so the step gets a role anchor.
+   */
+  it('names the hovered element, so the saved step gets a role anchor', async () => {
+    const hoverLease = vi.fn(() => Promise.resolve(true));
+    const state: FakeSessionState = {
+      actCalls: 0,
+      inspectRefs: [],
+      inspectRole: 'heading',
+      inspectName: 'Pricing',
+    };
+    const deps = fakeDeps(undefined, state);
+    deps.pool = { hoverLease } as unknown as BrowserPool;
+    const res = await runAct(deps, { ref: 'e1', action: 'hover' });
+
+    expect(asRecord(res.result)['role']).toBe('heading');
+    expect(asRecord(res.result)['name']).toBe('Pricing');
+    const step = compileActStep({ ref: 'e1', action: 'hover' }, res.result);
+    expect(step.stable).toBe(true);
+    expect(anchorForStep(step.args)).toEqual({
+      anchor: { kind: 'role', role: 'heading', name: 'Pricing' },
+      degraded: false,
+    });
+  });
+
+  it('names the element a provider hovered as well', async () => {
+    const provider = makeProvider(true);
+    const state: FakeSessionState = {
+      actCalls: 0,
+      inspectRefs: [],
+      inspectRole: 'heading',
+      inspectName: 'Pricing',
+    };
+    const res = await runAct(fakeDeps(provider, state), { ref: 'e1', action: 'hover' });
+    expect(asRecord(res.result)['role']).toBe('heading');
+    expect(asRecord(res.result)['name']).toBe('Pricing');
   });
 
   it('prefers a configured real-input provider over the pool for hover', async () => {

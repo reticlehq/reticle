@@ -10,6 +10,7 @@ import {
   ReplayStatus,
   RunKind,
   RunStatus,
+  VerifiedReason,
   type FlowFile,
   type FlowReplayResult,
   type Contradiction,
@@ -319,6 +320,8 @@ export function lostDocumentResult(name: string, lost: DocumentLostDuringReplay)
   return {
     name,
     status: ReplayStatus.UNVERIFIABLE,
+    // Narrower than the status: the observer left, and nothing says the app failed.
+    verifiedReason: VerifiedReason.OBSERVATION_LOST,
     steps: lost.steps,
     unverifiable: {
       reason:

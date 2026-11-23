@@ -50,7 +50,9 @@ function uncleanLossOf(
   result: Record<string, unknown>,
   reason: VerifiedReason | undefined,
 ): CaptureLoss | undefined {
-  if (VerifiedReason.UNCLEAN_CAPTURE !== reason) return undefined;
+  if (VerifiedReason.UNCLEAN_CAPTURE !== reason) {
+    return undefined;
+  }
   const honesty = result['honesty'];
   const integrity =
     null !== honesty && 'object' === typeof honesty
@@ -88,12 +90,33 @@ const REPLAY_VERDICTS: ReadonlyMap<string, { verified: Verified; passed: boolean
   [ReplayStatus.ERROR, { verified: Verified.UNKNOWN, passed: false }],
   [ReplayStatus.UNVERIFIABLE, { verified: Verified.UNKNOWN, passed: false }],
 ]);
+/**
+ * What a replay's reason says about the verdict (#2205). An `ok` replay whose channels disagreed is
+ * `no`, and one whose flow asserts nothing is `unknown`, so the event never sends `verified: yes`
+ * beside a reason that says the opposite. `passed` stays what the status says: the steps held.
+ */
+const VERIFIED_BY_REPLAY_REASON: ReadonlyMap<string, Verified> = new Map([
+  [VerifiedReason.PROVED, Verified.YES],
+  [VerifiedReason.CONTRADICTED, Verified.NO],
+  [VerifiedReason.ASSERTION_FAILED, Verified.NO],
+  [VerifiedReason.NOTHING_DECLARED, Verified.UNKNOWN],
+  [VerifiedReason.INCONCLUSIVE, Verified.UNKNOWN],
+  [VerifiedReason.OBSERVATION_LOST, Verified.UNKNOWN],
+]);
 function replayVerdict(
   toolName: string,
   status: unknown,
+  reason: VerifiedReason | undefined,
 ): { verified: Verified; passed: boolean } | undefined {
-  if (ReticleTool.FLOW_REPLAY !== toolName || 'string' !== typeof status) return undefined;
-  return REPLAY_VERDICTS.get(status);
+  if (ReticleTool.FLOW_REPLAY !== toolName || 'string' !== typeof status) {
+    return undefined;
+  }
+  const byStatus = REPLAY_VERDICTS.get(status);
+  const verified = reason === undefined ? undefined : VERIFIED_BY_REPLAY_REASON.get(reason);
+  if (byStatus === undefined || verified === undefined) {
+    return byStatus;
+  }
+  return { ...byStatus, verified };
 }
 
 /**
@@ -114,14 +137,22 @@ function replayVerdict(
  * nobody could have noticed this from the data. It took reading the emit path.
  */
 function passedOf(result: Record<string, unknown>, status: unknown): boolean | undefined {
-  if ('boolean' === typeof result['pass']) return result['pass'];
+  if ('boolean' === typeof result['pass']) {
+    return result['pass'];
+  }
   const verdict = result['verdict'];
   if (null !== verdict && 'object' === typeof verdict) {
     const nested = (verdict as Record<string, unknown>)['pass'];
-    if ('boolean' === typeof nested) return nested;
+    if ('boolean' === typeof nested) {
+      return nested;
+    }
   }
-  if (status === SuiteStatus.PASS) return true;
-  if (status === SuiteStatus.FAIL) return false;
+  if (status === SuiteStatus.PASS) {
+    return true;
+  }
+  if (status === SuiteStatus.FAIL) {
+    return false;
+  }
   return undefined;
 }
 
@@ -141,16 +172,22 @@ export function verificationOf(
   /** The page SDK version the session announced on HELLO. */
   pageSdkVersion?: string,
 ): Verification | undefined {
-  if (!VERDICT_TOOLS.has(toolName)) return undefined;
+  if (!VERDICT_TOOLS.has(toolName)) {
+    return undefined;
+  }
   // A paused session REFUSES the call — nothing driven, nothing asserted. The refusal carries a
   // verdict field so the agent never reads undefined off it, and that field must not be mistaken
   // here for work that happened.
-  if (true === result['paused']) return undefined;
+  if (true === result['paused']) {
+    return undefined;
+  }
   // A wait that stopped at the per-call limit is "not yet", not a verdict: it answers `pass: false`
   // with `resume_ms`, and read here that became `verified: "no"`, so every paused wait was recorded
   // as a red and advanced the feedback-prompt counter (#1119).
-  if ('number' === typeof result['resume_ms']) return undefined;
-  const replay = replayVerdict(toolName, result['status']);
+  if ('number' === typeof result['resume_ms']) {
+    return undefined;
+  }
+  const replay = replayVerdict(toolName, result['status'], reasonOf(result));
   const verified =
     'string' === typeof result['verified'] ? result['verified'] : (replay?.verified ?? undefined);
   // flow_verify reports `status: pass|fail|unverifiable`; assert reports a boolean `pass`. Accept
@@ -159,7 +196,9 @@ export function verificationOf(
   // suite reports exactly that.
   const status = result['status'];
   const passed = passedOf(result, status) ?? replay?.passed;
-  if (verified === undefined && passed === undefined) return undefined;
+  if (verified === undefined && passed === undefined) {
+    return undefined;
+  }
   const reason = reasonOf(result);
   const uncleanLoss = uncleanLossOf(result, reason);
   const sdkVersion = releaseVersionOf(pageSdkVersion);

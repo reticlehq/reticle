@@ -157,6 +157,32 @@ const NEXT_DIALOG = '[data-nextjs-dialog]';
 /** Vite mounts this element only while it shows an error, and it covers the viewport. */
 const VITE_OVERLAY = 'vite-error-overlay';
 
+const DevOverlayName = {
+  NEXT: 'Next.js dev overlay',
+  AGENTATION: 'Agentation overlay',
+} as const;
+
+/** Names for dev UI that is absent from snapshots but can still block a pointer. */
+const DEV_OVERLAY_NAMES = [
+  [NEXT_DIALOG, FrameworkErrorDialog.NEXT],
+  [`${NEXT_PORTAL},[data-nextjs-toast],#__next-build-watcher`, DevOverlayName.NEXT],
+  ['[data-agentation]', DevOverlayName.AGENTATION],
+] as const;
+
+/** Name a dev overlay even when the hit element lives inside its shadow root. */
+export function devOverlayName(el: Element): string | undefined {
+  for (let node: Element | null = el; node !== null;) {
+    for (const [selector, name] of DEV_OVERLAY_NAMES) {
+      if (node.closest(selector) !== null) {
+        return name;
+      }
+    }
+    const root = node.getRootNode();
+    node = root instanceof ShadowRoot ? root.host : null;
+  }
+  return undefined;
+}
+
 /**
  * The framework error dialog open over the page, and its host element, or undefined.
  *

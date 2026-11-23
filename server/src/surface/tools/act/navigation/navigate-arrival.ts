@@ -42,7 +42,7 @@ const POLL_MS = 100;
  * the whole URL string would report `confirmed:false` for a navigation that plainly succeeded, which
  * is the same lie in the opposite direction.
  */
-function samePage(a: string, b: string): boolean {
+export function samePage(a: string, b: string): boolean {
   try {
     const x = new URL(a);
     const y = new URL(b);
@@ -58,7 +58,9 @@ function samePage(a: string, b: string): boolean {
  * same-page navigation (#1320).
  */
 function sameDocumentFragmentChange(a: string, b: string): boolean {
-  if (!samePage(a, b)) return false;
+  if (!samePage(a, b)) {
+    return false;
+  }
   try {
     return new URL(a).hash !== new URL(b).hash;
   } catch {
@@ -174,7 +176,9 @@ function findArrival(
     // evidence of where this navigation went.
     if (s.id === currentSession.id) {
       if (samePage(s.url, target)) {
-        if (replacesDocument && s.currentDocumentId === scope.navigatedFromDocumentId) continue;
+        if (replacesDocument && s.currentDocumentId === scope.navigatedFromDocumentId) {
+          continue;
+        }
         return { sessionId: s.id };
       }
 
@@ -185,20 +189,28 @@ function findArrival(
 
     // A different session that was connected at dispatch cannot prove this
     // navigation arrived.
-    if (scope.priorIds.has(s.id)) continue;
+    if (scope.priorIds.has(s.id)) {
+      continue;
+    }
 
     // A session that claims another identity (a lease) is another tab, not the new document of
     // the navigated one, even when it reconnects at the target during the wait.
-    if (claimedSessionOf(s.url) !== claimedSessionOf(scope.navigatedFrom)) continue;
+    if (claimedSessionOf(s.url) !== claimedSessionOf(scope.navigatedFrom)) {
+      continue;
+    }
 
     // While the replaced document is still connected, a DIFFERENT session at the target is an
     // unrelated arrival (a second tab, a neighbour app): the replacement this navigation waits
     // for has not reported yet, and letting the newcomer stand in would confirm too early and
     // name the wrong session (#1320).
-    if (replacesDocument && drivenPresent) continue;
+    if (replacesDocument && drivenPresent) {
+      continue;
+    }
 
     if (samePage(s.url, target)) {
-      if (null === arrived) arrived = { sessionId: s.id };
+      if (null === arrived) {
+        arrived = { sessionId: s.id };
+      }
     }
   }
 
@@ -235,9 +247,13 @@ export async function awaitArrival(
     // including on a different origin.
     const found = findArrival(sessions, target, scope, scope.navigatedSession);
 
-    if (found !== null) return found;
+    if (found !== null) {
+      return found;
+    }
 
-    if (clock.now() >= deadline) break;
+    if (clock.now() >= deadline) {
+      break;
+    }
 
     await clock.sleep(POLL_MS);
   }

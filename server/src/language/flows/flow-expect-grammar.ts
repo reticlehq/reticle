@@ -27,6 +27,7 @@ export const FlowParseNote = {
   NOT_JSON: 'flow file is not valid JSON — fix the syntax or regenerate it with reticle_flow_save',
   MALFORMED: 'flow file is malformed — fix or regenerate it with reticle_flow_save',
   UNSUPPORTED_SHAPE: 'valid JSON, unsupported expect shape',
+  UNSUPPORTED_ANCHOR: 'valid JSON, unsupported anchor',
 } as const;
 
 type CoerceExpectResult = { ok: true; value: unknown } | { ok: false; detail: string };
@@ -37,12 +38,20 @@ type CoerceExpectResult = { ok: true; value: unknown } | { ok: false; detail: st
  */
 function flattenSignalObject(raw: Record<string, unknown>): Record<string, unknown> {
   const signal = raw['signal'];
-  if (!isRecord(signal)) return raw;
+  if (!isRecord(signal)) {
+    return raw;
+  }
   const name = signal['name'];
-  if ('string' !== typeof name) return raw;
+  if ('string' !== typeof name) {
+    return raw;
+  }
   const out: Record<string, unknown> = { ...raw, signal: name };
-  if ('number' === typeof signal['count']) out['signalCount'] = signal['count'];
-  if (undefined !== signal['dataMatches']) out['signalData'] = signal['dataMatches'];
+  if ('number' === typeof signal['count']) {
+    out['signalCount'] = signal['count'];
+  }
+  if (undefined !== signal['dataMatches']) {
+    out['signalData'] = signal['dataMatches'];
+  }
   return out;
 }
 
@@ -56,7 +65,9 @@ export function coerceFlowExpect(raw: unknown): CoerceExpectResult {
     // being inexpressible — the shape an agent wrote is the shape the file holds.
     return { ok: true, value: parsed.data };
   }
-  if (!isRecord(raw)) return { ok: true, value: raw };
+  if (!isRecord(raw)) {
+    return { ok: true, value: raw };
+  }
   const flattened = flattenSignalObject(raw);
   /*
    * A v1 expect is validated HERE so a misspelling is named.
@@ -76,7 +87,9 @@ export function coerceFlowExpect(raw: unknown): CoerceExpectResult {
 
 function describePredicateExpectFailure(error: ZodError): string {
   const refused = error.issues.find((one) => 'custom' === one.code);
-  if (refused !== undefined) return `${FlowParseNote.UNSUPPORTED_SHAPE}: ${refused.message}`;
+  if (refused !== undefined) {
+    return `${FlowParseNote.UNSUPPORTED_SHAPE}: ${refused.message}`;
+  }
   // An unrecognized key FIRST: a strict object reports it on the object's own path with the names
   // in `keys`, so reading `path[0]` misses the one thing worth saying. A misspelling is the failure
   // this whole check exists to catch, and naming it is the difference between a fix and a hunt.
@@ -86,7 +99,9 @@ function describePredicateExpectFailure(error: ZodError): string {
     return `${FlowParseNote.UNSUPPORTED_SHAPE} key ${named}`;
   }
   const issue = error.issues[0];
-  if (undefined === issue) return FlowParseNote.UNSUPPORTED_SHAPE;
+  if (undefined === issue) {
+    return FlowParseNote.UNSUPPORTED_SHAPE;
+  }
   const key = issue.path[0];
   if ('string' === typeof key || 'number' === typeof key) {
     return `${FlowParseNote.UNSUPPORTED_SHAPE} key "${String(key)}"`;
@@ -95,7 +110,9 @@ function describePredicateExpectFailure(error: ZodError): string {
 }
 
 export function coerceFlowFileExpects(raw: unknown): CoerceExpectResult {
-  if (!isRecord(raw)) return { ok: true, value: raw };
+  if (!isRecord(raw)) {
+    return { ok: true, value: raw };
+  }
   const next: Record<string, unknown> = { ...raw };
   const stepsIn = next['steps'];
   if (Array.isArray(stepsIn)) {
@@ -180,10 +197,14 @@ export function describeFlowZodFailure(error: ZodError): string {
   if (refused !== undefined && 'steps' === refused.path[0] && 'number' === typeof refused.path[1]) {
     return `${FlowParseNote.UNSUPPORTED_SHAPE} at step ${String(refused.path[1])}: ${refused.message}`;
   }
-  if (refused !== undefined) return `${FlowParseNote.UNSUPPORTED_SHAPE}: ${refused.message}`;
+  if (refused !== undefined) {
+    return `${FlowParseNote.UNSUPPORTED_SHAPE}: ${refused.message}`;
+  }
   const issue =
     all.find((one) => 'unrecognized_keys' === one.code) ?? all.find(named) ?? error.issues[0];
-  if (undefined === issue) return FlowParseNote.MALFORMED;
+  if (undefined === issue) {
+    return FlowParseNote.MALFORMED;
+  }
   const path = issue.path;
   // A strict object reports an unrecognized key as `unrecognized_keys` on the OBJECT's path, with
   // the offending names in `keys` — not as an issue whose path ends in the key. Reading only the
@@ -194,7 +215,9 @@ export function describeFlowZodFailure(error: ZodError): string {
     if ('steps' === path[0] && 'number' === typeof path[1] && 'expect' === path[2]) {
       return `${FlowParseNote.UNSUPPORTED_SHAPE} at step ${String(path[1])} key ${named}`;
     }
-    if ('success' === path[0]) return `${FlowParseNote.UNSUPPORTED_SHAPE} at success key ${named}`;
+    if ('success' === path[0]) {
+      return `${FlowParseNote.UNSUPPORTED_SHAPE} at success key ${named}`;
+    }
     return `${FlowParseNote.UNSUPPORTED_SHAPE} — unrecognized key ${named}`;
   }
   if (
@@ -208,7 +231,27 @@ export function describeFlowZodFailure(error: ZodError): string {
   if ('success' === path[0] && 'string' === typeof path[1]) {
     return `${FlowParseNote.UNSUPPORTED_SHAPE} at success key "${path[1]}"`;
   }
-  return FlowParseNote.MALFORMED;
+  return describeAnchorFailure(all) ?? FlowParseNote.MALFORMED;
+}
+
+/**
+ * The step, the anchor field and the reason, when a step's anchor is what the schema refused.
+ *
+ * A component anchor with `of: 1` came back as a bare "malformed", so an agent removed fields until
+ * the file parsed (#2431). The schema's own message says what the field must be.
+ */
+function describeAnchorFailure(all: readonly ZodIssue[]): string | undefined {
+  const issue = all.find(
+    (one) =>
+      'steps' === one.path[0] &&
+      'number' === typeof one.path[1] &&
+      'anchor' === one.path[2] &&
+      'string' === typeof one.path[3],
+  );
+  if (issue === undefined) {
+    return undefined;
+  }
+  return `${FlowParseNote.UNSUPPORTED_ANCHOR} at step ${String(issue.path[1])} anchor field "${String(issue.path[3])}": ${issue.message}`;
 }
 
 export function parseFlowFileText(text: string): FlowResult<FlowFile> {

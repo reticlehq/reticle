@@ -131,13 +131,64 @@ function outlined(style: CSSStyleDeclaration): boolean {
   return /\dpx/.test(style.textShadow) || stroke > 0;
 }
 
+/** `el` and every ancestor, across shadow boundaries. */
+function* selfAndAncestors(el: Element): Generator<Element> {
+  for (let node: Element | null = el; null !== node; node = parentAcrossShadowBoundary(node)) {
+    yield node;
+  }
+}
+
+/**
+ * The elements painted at the centre of `el`, from `el` down to the page, or undefined.
+ *
+ * Undefined when the page has no hit test (jsdom), `el` has no box, or the hit test does not reach
+ * `el` (another element covers it, `pointer-events: none`, or it is off screen). The caller then
+ * reads the ancestors.
+ */
+function paintedUnder(el: Element): Element[] | undefined {
+  const root = el.getRootNode() as Partial<DocumentOrShadowRoot>;
+  if (typeof root.elementsFromPoint !== 'function') {
+    return undefined;
+  }
+  const box = el.getBoundingClientRect();
+  if (0 === box.width || 0 === box.height) {
+    return undefined;
+  }
+  const stack = root.elementsFromPoint(box.left + box.width / 2, box.top + box.height / 2);
+  const at = stack.indexOf(el);
+  return at < 0 ? undefined : stack.slice(at);
+}
+
+/**
+ * The `background-color` of `layers`, top first, composed until the first opaque one over a white
+ * canvas. Undefined when a layer has a background image or gradient, or a colour that is not rgb.
+ */
+function backgroundOf(layers: Iterable<Element>, view: Window): Rgba | undefined {
+  const fills: Rgba[] = [];
+  for (const node of layers) {
+    const style = view.getComputedStyle(node);
+    if ('' !== style.backgroundImage && 'none' !== style.backgroundImage) {
+      return undefined;
+    }
+    const fill = parseRgb(style.backgroundColor);
+    if (fill === undefined) {
+      return undefined;
+    }
+    if (fill[3] > 0) {
+      fills.push(fill);
+    }
+    if (fill[3] >= 1) {
+      break;
+    }
+  }
+  return fills.reduceRight((under, top) => over(top, under), CANVAS);
+}
+
 /**
  * Why a person cannot read the text on `el`, or undefined when they can or it cannot be judged.
  *
- * The background is the ancestors' `background-color`, composed until the first opaque one, over a
- * white canvas. A background image or gradient on that walk is not judged.
- * ponytail: ancestors only. A positioned element painted behind the text is not seen; a hit-test
- * (`elementsFromPoint`) is the upgrade if that gives a false red.
+ * The background is read from the elements painted under the centre of the text (#2297), so a
+ * positioned panel behind the text counts. Without a hit test it is read from the ancestors.
  */
 export function unreadableText(el: Element): string | undefined {
   const view = el.ownerDocument.defaultView;
@@ -149,33 +200,19 @@ export function unreadableText(el: Element): string | undefined {
   if (ink === undefined || outlined(own)) {
     return undefined;
   }
+  const back = backgroundOf(paintedUnder(el) ?? selfAndAncestors(el), view);
+  if (back === undefined) {
+    return undefined;
+  }
   let opacity = 1;
-  const layers: Rgba[] = [];
-  let opaque = false;
-  for (let node: Element | null = el; null !== node; node = parentAcrossShadowBoundary(node)) {
-    const style = view.getComputedStyle(node);
+  for (const node of selfAndAncestors(el)) {
     // A fade stalled by a hidden tab is not the app's opacity: visibility reads it as shown (#793).
-    const alpha = stalledFade(node) ? 1 : Number.parseFloat(style.opacity);
+    const alpha = stalledFade(node) ? 1 : Number.parseFloat(view.getComputedStyle(node).opacity);
     opacity *= Number.isNaN(alpha) ? 1 : alpha;
-    if (opaque) {
-      continue;
-    }
-    if ('' !== style.backgroundImage && 'none' !== style.backgroundImage) {
-      return undefined;
-    }
-    const fill = parseRgb(style.backgroundColor);
-    if (fill === undefined) {
-      return undefined;
-    }
-    if (fill[3] > 0) {
-      layers.push(fill);
-    }
-    opaque = fill[3] >= 1;
   }
   if (opacity < UNREADABLE_OPACITY) {
     return `the composed opacity is ${opacity.toFixed(2)}`;
   }
-  const back = layers.reduceRight((under, top) => over(top, under), CANVAS);
   const painted = over(ink, back);
   const ratio = contrast(painted, back);
   if (ratio >= UNREADABLE_CONTRAST) {

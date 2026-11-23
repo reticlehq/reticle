@@ -1,4 +1,11 @@
-import { CaptureLoss, channelsReadBy, PredicateKind } from '@reticlehq/core';
+import {
+  CaptureLoss,
+  channelsReadBy,
+  PredicateKind,
+  redactUrl,
+  VerdictAttribution,
+  verdictAttributionOf,
+} from '@reticlehq/core';
 import { sessionVerdictFacts } from '@/portal/session/session-verdict-facts.js';
 import { gapsForAction } from '@reticlehq/engine/evidence/instrumentation-gaps.js';
 import { noteSessionGaps } from '@reticlehq/engine/evidence/gap-ledger.js';
@@ -45,9 +52,47 @@ import {
 } from '@/surface/tools/act/settle-in-flight.js';
 import { gradeOfPredicate } from './assert-grade.js';
 import { assertSource, stampedSourceIn } from './assert-source.js';
-import { VerdictAttribution, verdictAttributionOf } from '@reticlehq/core';
 import { noteSourceSeen } from '@/portal/session/recorded-gaps.js';
 import { diagnoseTimeout } from '@/surface/tools/act/act-observation.js';
+
+/**
+ * Why a check must not read the page now, when a navigate to another page has not arrived (#2300).
+ *
+ * `reticle_navigate` answered `confirmed: false` and the tab is not at its target yet, for example
+ * while a client-side route loads. The old page is still on screen, so a text check passed on text
+ * that only the old page showed. The pending state comes from the navigate result and the URL, never
+ * from a request that is still open: a long-poll or a beacon is open on many correct apps.
+ */
+export function pendingNavigationReason(
+  session: Pick<Session, 'url' | 'lastAct'>,
+): string | undefined {
+  const target = session.lastAct.pendingNavigationAt(session.url);
+  if (target === undefined) {
+    return undefined;
+  }
+  return (
+    `the last reticle_navigate to ${redactUrl(target)} did not arrive (confirmed: false), and the ` +
+    `page is still on ${redactUrl(session.url)}. This check would read the old page, so it was not ` +
+    'decided. Call reticle_navigate again with a longer timeout_ms, then check again'
+  );
+}
+
+/**
+ * The predicate's verdict, made inconclusive while a navigate has not arrived (#2300).
+ *
+ * Applied to the verdict itself, before it is graded, so `pass`, `inconclusive` and `verified` all
+ * say the same thing: a check on the old page decided nothing.
+ */
+export function withPendingNavigation<V extends { pass: boolean; failureReason?: string }>(
+  session: Pick<Session, 'url' | 'lastAct'>,
+  verdict: V,
+): V & { inconclusive?: string } {
+  const reason = pendingNavigationReason(session);
+  if (reason === undefined) {
+    return verdict;
+  }
+  return { ...verdict, pass: false, failureReason: reason, inconclusive: reason };
+}
 
 /**
  * The honesty verdict for a plain `reticle_assert`.

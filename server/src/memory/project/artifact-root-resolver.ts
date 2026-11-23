@@ -18,7 +18,7 @@
  * what lets a test say "these are the projects on this machine" without one.
  */
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
-import { dirname, isAbsolute, join, relative } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import {
   PROJECT_REGISTRY_FILE,
@@ -249,7 +249,7 @@ export function artifactRootResolver(
     const moved = new Set(directories.map((d) => rebaseIntoCheckout(d, checkout(d), to)));
     return 1 === moved.size ? [...moved][0] : undefined;
   };
-  return (projectId, origin) => {
+  const resolveRoot = (projectId: ProjectId | undefined, origin?: string): ArtifactRoot => {
     // Asked at most once for each connection, and again for the next one: it can shell out, and a
     // port that moves to another worktree is a new connection whose work must move with it.
     let served: { directory: string | undefined } | undefined;
@@ -330,5 +330,15 @@ export function artifactRootResolver(
     // never named, only the primary checkout's folders.
     const servedFrom = serving();
     return { ...resolved, root, ...(servedFrom === undefined ? {} : { serving: servedFrom }) };
+  };
+  /*
+   * Absolute, ONCE, at the exit every caller goes through (#2429). A discovered or registered folder
+   * written as a relative path, or a daemon started with a relative root, made every path under it
+   * relative to the daemon's working folder. `screenshot.path` then named a file the agent's viewer,
+   * which runs elsewhere, could not find.
+   */
+  return (projectId, origin) => {
+    const found = resolveRoot(projectId, origin);
+    return isAbsolute(found.root) ? found : { ...found, root: resolve(found.root) };
   };
 }

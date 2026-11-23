@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/init` — `reticle init` duplicated `build.target`, `server.watch` and `optimizeDeps.esbuildOptions` in an existing `vite:` block.** When an Astro or Nuxt config already declared any of those nested blocks, `init` inserted whole new property keys directly after the opening brace, causing duplicate object keys where the latter overwrote the former. `init` now merges into the existing nested blocks, matching a key only at the depth it belongs to, so `server: { port, watch }` on one line and an unrelated `ssr.build` are handled too. Closes [#2334](https://github.com/reticlehq/reticle/issues/2334).

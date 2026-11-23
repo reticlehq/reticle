@@ -6,12 +6,18 @@
 import { describe, expect, it } from 'vitest';
 import { RefusalReason } from '@reticlehq/core';
 import { buildErrorPayload, refusalReasonFor } from './error-recovery.js';
-import { emptyQueryRefusal } from './read/query-shape.js';
+import { emptyQueryRefusal, roleTextRefusal } from './read/query-shape.js';
 import { unknownFlowRefusal } from '@/language/flows/suite-selection.js';
 
 describe('refusals that name their own fix', () => {
   it('a find with nothing to find is the caller’s to fix, not a defect', () => {
     const message = emptyQueryRefusal({})?.message ?? '';
+    expect(buildErrorPayload(message)).toEqual({ error: message });
+    expect(refusalReasonFor(message)).toBe(RefusalReason.BAD_ARGS);
+  });
+
+  it('a role find with `text` is the caller’s to fix, not a defect', () => {
+    const message = roleTextRefusal({ role: 'button', text: 'Save' })?.message ?? '';
     expect(buildErrorPayload(message)).toEqual({ error: message });
     expect(refusalReasonFor(message)).toBe(RefusalReason.BAD_ARGS);
   });

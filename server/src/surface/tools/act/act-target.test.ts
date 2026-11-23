@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { ActionType } from '@reticlehq/core';
 import type { Session } from '@/portal/session/session.js';
 import { resolveActTarget } from './act-target.js';
+import { ROLE_TEXT_FIND_OPENING } from '@/surface/tools/read/query-shape.js';
 
 /**
  * A global press is a document key. Requiring a ref forced an extra snapshot just to name an
@@ -119,6 +120,19 @@ describe('resolveActTarget — a string target', () => {
       ref: 'e7',
     });
     expect(command).not.toHaveBeenCalled();
+  });
+
+  it('refuses `text` on a role target, and does not search the page (#2326)', async () => {
+    for (const target of [
+      { role: 'button', text: 'Save' },
+      { by: 'role', value: 'button', text: 'Save' },
+    ]) {
+      const { session, command } = sessionThatMustNotBeQueried();
+      const r = await resolveActTarget(session, { target, action: ActionType.CLICK });
+      expect(r.kind).toBe('error');
+      expect('error' === r.kind ? r.message : '').toContain(ROLE_TEXT_FIND_OPENING);
+      expect(command).not.toHaveBeenCalled();
+    }
   });
 
   it('refuses a target that names nothing to find, and does not search the page', async () => {

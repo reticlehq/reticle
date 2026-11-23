@@ -10,6 +10,7 @@
 import {
   MatchArg,
   QueryBy,
+  REDACTED_VALUE,
   ReticleCommand,
   TRANSPORT_LIMITS,
   type ElementDescriptor,
@@ -820,6 +821,20 @@ export function wholeTextOf(
   return { text: joinedText(matched) };
 }
 
+/**
+ * Whether a match's text was hidden from Reticle (#2277). The page sent the redaction marker, or it
+ * sent no text for an element that has an accessible name. An element with no name and no text is
+ * empty, so a property over its text is judged.
+ */
+function textWasHidden(element: unknown): boolean {
+  const text = textOf(element);
+  if (REDACTED_VALUE === text) {
+    return true;
+  }
+  const name = (element as { name?: unknown } | null)?.name;
+  return '' === text.trim() && 'string' === typeof name && '' !== name.trim();
+}
+
 export function withTextProperty(
   base: EvalResult,
   assertion: PropertyAssertion,
@@ -836,6 +851,14 @@ export function withTextProperty(
   }
   const { text } = whole;
   const described = matched.map(shownBounded);
+  // Text that was never read decides nothing, either way: the redaction marker itself satisfies
+  // `contains "RED"` or `nonEmpty`, which was a false yes. Body checks answer the same way.
+  if (matched.some(textWasHidden)) {
+    const reason =
+      `the text of ${subject} was redacted or hidden before Reticle read it, so ` +
+      `${assertion.property} was not decided. Check a field the app does not redact`;
+    return { pass: false, failureReason: reason, inconclusive: reason, evidence: described };
+  }
   const result = satisfiesProperty(text, assertion, baseline);
   // Nothing was compared — a relative property with no before-reading. See the twin in `evalState`.
   if (true === result.unevaluated) {
