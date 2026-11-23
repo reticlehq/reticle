@@ -127,7 +127,7 @@ describe('spawnedDaemonAlive', () => {
     try {
       expect(spawnedDaemonAlive(4499, home)).toBe(true);
     } finally {
-      rmSync(home, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true, maxRetries: 5 });
     }
   });
 
@@ -139,7 +139,7 @@ describe('spawnedDaemonAlive', () => {
       writeFileSync(join(home, 'daemon-4499.pid'), '2147483647', 'utf8');
       expect(spawnedDaemonAlive(4499, home)).toBe(false);
     } finally {
-      rmSync(home, { recursive: true, force: true });
+      rmSync(home, { recursive: true, force: true, maxRetries: 5 });
     }
   });
 });
