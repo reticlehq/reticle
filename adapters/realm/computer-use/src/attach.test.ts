@@ -146,7 +146,7 @@ describe('attachPlan', () => {
    */
   it('is in no project unless a folder is named', () => {
     const read = (path: string) =>
-      '/work/app/.reticle.json' === path ? '{"projectId":"app-1"}' : undefined;
+      '/work/app/.reticle.json' === posix(path) ? '{"projectId":"app-1"}' : undefined;
     expect(attachPlan(['--app', 'Notes'], {}, '/home', read)).not.toHaveProperty('projectId');
     expect(
       attachPlan(['--app', 'Notes', '--project', '/work/app'], {}, '/home', read),
