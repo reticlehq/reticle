@@ -88,6 +88,16 @@ const listeners = new Set<(root: ShadowRoot) => void>();
 
 type AttachShadow = (this: Element, init: ShadowRootInit) => ShadowRoot;
 
+/**
+ * Patches torn down while a later patch still wrapped them, each mapped to what it wrapped.
+ *
+ * Install A, install B (B wraps A), tear down A: A cannot restore, because B is on the prototype.
+ * When B is torn down later, B's saved original is A's patch. Measured: restoring that alone left
+ * `attachShadow` patched after the last teardown, with the registry already cleared. Teardown
+ * follows this map past every retired patch to the function they all wrapped.
+ */
+const retired = new WeakMap<AttachShadow, AttachShadow>();
+
 function record(root: ShadowRoot, host: Element): void {
   // Idempotent. A hot reload leaves one patch wrapping another, so a single `attachShadow` travels
   // through both and reports twice; the initial sweep can also meet a root the patch already caught.
@@ -162,7 +172,17 @@ export function installShadowRegistry(): () => void {
 
   return () => {
     // Restore only if nobody patched over us; clobbering a later patch is worse than leaving ours.
-    if (captureMethod(proto, 'attachShadow') === patched) proto.attachShadow = original;
+    if (captureMethod(proto, 'attachShadow') === patched) {
+      let restore = original;
+      for (let next = retired.get(restore); next !== undefined; next = retired.get(restore)) {
+        retired.delete(restore);
+        restore = next;
+      }
+      proto.attachShadow = restore;
+    } else {
+      // Whoever wraps us now restores past us, to what we wrapped.
+      retired.set(patched, original);
+    }
     installs -= 1;
     if (installs > 0) return; // another install is still using this state
     roots.clear();

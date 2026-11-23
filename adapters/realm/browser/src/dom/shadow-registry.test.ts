@@ -125,6 +125,18 @@ describe('HMR: connect() runs again before the old instance is torn down', () =>
     expect(captureMethod(Element.prototype, 'attachShadow') === pristine).toBe(true);
     expect(capturedRoots()).toHaveLength(0);
   });
+
+  it('restores the prototype when the earlier instance is torn down first', () => {
+    const pristine = captureMethod(Element.prototype, 'attachShadow');
+    const stopA = installShadowRegistry();
+    const stopB = installShadowRegistry();
+    stopA();
+    expect(captureMethod(Element.prototype, 'attachShadow') === pristine).toBe(false);
+    stopB();
+    // B wrapped A's patch; restoring B's original alone would put A's retired patch back.
+    expect(captureMethod(Element.prototype, 'attachShadow') === pristine).toBe(true);
+    expect(capturedRoots()).toHaveLength(0);
+  });
 });
 
 /**
