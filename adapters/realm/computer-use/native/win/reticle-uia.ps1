@@ -135,6 +135,12 @@ function Read-Node($el, [int]$depth, [ref]$unread) {
   if ($null -ne $toggle) { $node.value = $(if ($toggle.Current.ToggleState -eq 'On') { '1' } else { '0' }) }
   elseif ($null -ne $value) { $node.value = [string]$value.Current.Value }
   elseif ($null -ne $range) { $node.value = [string]$range.Current.Value }
+  elseif (@('AXTextField', 'AXTextArea') -contains $role) {
+    # A multi-line Edit box (the text of Notepad) has no value pattern: its text is in the text
+    # pattern. Without it the realm read the box as empty after it wrote to it.
+    $text = Get-Pattern $el ([System.Windows.Automation.TextPattern]::Pattern)
+    if ($null -ne $text) { try { $node.value = [string]$text.DocumentRange.GetText(4000) } catch { } }
+  }
   $pick = Get-Pattern $el ([System.Windows.Automation.SelectionItemPattern]::Pattern)
   if ($null -ne $pick -and $pick.Current.IsSelected) { $node.selected = $true }
   $kids = @()
