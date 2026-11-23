@@ -45,7 +45,7 @@ import {
 } from '@/portal/input/real-input.js';
 import { assertDragNotDestructive, assertNotDestructive } from './act/act-danger.js';
 import { assertNativeAllowed } from '@/portal/production/production-drive.js';
-import { confirmsDialog, NATIVE_INPUT_ARG, type CommandResult } from '@reticlehq/core';
+import { DIALOG_CONSENT_ARG, NATIVE_INPUT_ARG, type CommandResult } from '@reticlehq/core';
 import { asNumber, asRecord, asString } from '@reticlehq/core';
 import { type ToolDeps, commandOrThrow } from './tool-kit.js';
 import { asBox } from './act/act-helpers.js';
@@ -448,8 +448,8 @@ async function pressOnLease(
   if (anchor === undefined) {
     return synthetic(InputModeReason.TARGET_NOT_FOCUSABLE);
   }
-  // `confirmDangerous` is also the yes to a `confirm()` this press opens (#2167).
-  const acceptConfirm = confirmsDialog(inner);
+  // The positive yes to a `confirm()` this press opens, set only from the caller's own flag (#2167).
+  const acceptConfirm = true === inner[DIALOG_CONSENT_ARG];
   const performed = await pool.pressLease(session.id, performArgsOf(inner), acceptConfirm);
   if (performed?.performed !== true) {
     return undefined;

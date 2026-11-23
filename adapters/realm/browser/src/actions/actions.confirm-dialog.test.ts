@@ -1,5 +1,7 @@
 /**
- * `confirmDangerous: true` on an action answers that action's own `confirm()` with yes (#2167).
+ * The server's positive consent on an action answers that action's own `confirm()` with yes (#2167).
+ * The server sends it only from a caller's own `confirmDangerous` on `reticle_act`,
+ * `reticle_act_and_wait` or `reticle_act_sequence`.
  *
  * Reticle answers a `confirm()` that a driven click opens with no, so that the tab cannot wedge.
  * Before this change there was no way to answer yes. A destructive flow behind a confirm could not
@@ -9,13 +11,14 @@
  * dispatch. Every other dialog is still declined.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { EventType } from '@reticlehq/core';
+import { DANGEROUS_ACTION_CONFIRM_ARG, DIALOG_CONSENT_ARG, EventType } from '@reticlehq/core';
 import { executeAction } from './actions.js';
 import { installDialogs } from '@/observers/dialogs.js';
 import type { Emit, Teardown } from '@/observers/types.js';
 import { refs } from '@/dom/addressing/refs.js';
 
-const YES = { confirmDangerous: true } as const;
+/** What the server sends for a caller's own `confirmDangerous`: the flag and the positive consent. */
+const YES = { [DANGEROUS_ACTION_CONFIRM_ARG]: true, [DIALOG_CONSENT_ARG]: true } as const;
 
 const refTo = (selector: string): string => {
   const el = document.querySelector(selector);
@@ -66,7 +69,7 @@ describe('confirmDangerous answers the confirm() of its own dispatch', () => {
     slots.prompt = native.prompt;
   });
 
-  it('answers yes with confirmDangerous: true, and the event says so', async () => {
+  it('answers yes with the positive consent, and the event says so', async () => {
     const answers = guarded('b', 'Delete this item?');
     await executeAction(refTo('#b'), 'click', YES);
     expect(answers).toEqual([true]);
@@ -81,11 +84,11 @@ describe('confirmDangerous answers the confirm() of its own dispatch', () => {
     expect(answered).toEqual([false, false]);
   });
 
-  // #2167 review: act_and_wait on a "Delete" button with an `until` gets confirmDangerous from its
-  // declaration, not from the caller. The press goes through, and the confirm is still answered no.
-  it('answers no when the flag came from a declaration, not from the caller', async () => {
+  // #2167 review: confirmDangerous alone only lets the press go. A declaration, a crawl, a replay and
+  // an older daemon all send it without the positive consent, and the confirm is answered no.
+  it('answers no to confirmDangerous without the positive consent', async () => {
     const answers = guarded('b', 'Delete this item?');
-    await executeAction(refTo('#b'), 'click', { ...YES, confirmedByDeclaration: true });
+    await executeAction(refTo('#b'), 'click', { [DANGEROUS_ACTION_CONFIRM_ARG]: true });
     expect(answers, 'the press went through, and the confirm was declined').toEqual([false]);
     expect(answered).toEqual([false]);
   });
@@ -115,14 +118,27 @@ describe('confirmDangerous answers the confirm() of its own dispatch', () => {
 
   it('declines while an action without the flag is in flight beside it', async () => {
     // Two actions can overlap: a held click awaits between pointerdown and pointerup. A confirm
-    // during the overlap cannot be told apart, so the safe answer is no.
+    // during the overlap cannot be told apart, so the safe answer is no. The overlap withdraws the
+    // flagged action's yes for the rest of its dispatch, also after the plain one ended.
     const held = guarded('held', 'Delete this item?');
     const plain = guarded('plain', 'Discard the draft?');
     const flagged = executeAction(refTo('#held'), 'click', { ...YES, holdMs: 60 });
     await executeAction(refTo('#plain'), 'click');
     await flagged;
     expect(plain, 'the plain action never said yes').toEqual([false]);
-    expect(held, 'the flagged click lands after the plain one ended').toEqual([true]);
+    expect(held, 'the overlap withdrew the yes of the flagged click').toEqual([false]);
+  });
+
+  it('declines the held plain click when a flagged action starts beside it', async () => {
+    // The other order: the plain click is still held when the flagged one starts. The plain click's
+    // confirm comes on its pointerup, while the flagged action is in flight, and must stay a no.
+    const held = guarded('held', 'Delete this item?');
+    const flaggedTarget = guarded('plain', 'Discard the draft?');
+    const plain = executeAction(refTo('#held'), 'click', { holdMs: 60 });
+    await executeAction(refTo('#plain'), 'click', YES);
+    await plain;
+    expect(held, 'the held plain click never got the yes').toEqual([false]);
+    expect(flaggedTarget, 'the flagged action was not alone, so it had no yes').toEqual([false]);
   });
 
   it('leaves a confirm the PERSON opens during a flagged action alone', async () => {

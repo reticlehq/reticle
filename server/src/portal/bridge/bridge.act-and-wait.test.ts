@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { EventType, ReticleCommand, confirmsDialog } from '@reticlehq/core';
+import { DIALOG_CONSENT_ARG, EventType, ReticleCommand } from '@reticlehq/core';
 import { Bridge } from './bridge.js';
 import { TOOLS, type ToolDeps } from '@/surface/tools/tools.js';
 import { FakeBrowser, callTool, makeDeps, waitUntil } from './bridge.test-harness.js';
@@ -39,7 +39,7 @@ describe('reticle_act_and_wait (composite)', () => {
 
   // #2167 review: naming "Delete" and an `until` lets the control be pressed (the declaration is the
   // confirmation), but it is not the caller's yes to the app's own confirm(). Only an explicit
-  // confirmDangerous gives that, so the SDK and a leased tab still answer that confirm no.
+  // confirmDangerous sends the positive consent, so the SDK and a leased tab still answer no.
   it('a declaration presses "Delete" but does not answer its confirm() yes; an explicit flag does', async () => {
     browser.matcher = (q) => 'Delete' === q.name;
     const sentArgs = async (args?: Record<string, unknown>): Promise<Record<string, unknown>> => {
@@ -56,10 +56,34 @@ describe('reticle_act_and_wait (composite)', () => {
     };
     const declared = await sentArgs();
     expect(declared['confirmDangerous'], 'the declaration still lets the press through').toBe(true);
-    expect(confirmsDialog(declared), 'but its confirm() is not answered yes').toBe(false);
+    expect(
+      declared[DIALOG_CONSENT_ARG],
+      'but it sends no consent to its confirm()',
+    ).toBeUndefined();
     const explicit = await sentArgs({ confirmDangerous: true });
-    expect(confirmsDialog(explicit), 'the caller said yes itself').toBe(true);
+    expect(explicit[DIALOG_CONSENT_ARG], 'the caller said yes itself').toBe(true);
+    const written = await sentArgs({ [DIALOG_CONSENT_ARG]: true });
+    expect(written[DIALOG_CONSENT_ARG], 'a consent without the flag is dropped').toBeUndefined();
     browser.matcher = () => false;
+  });
+
+  // #2167 review: reticle_act and reticle_act_sequence give the consent the same way, and only then.
+  it("reticle_act and reticle_act_sequence send the consent only for the caller's own flag", async () => {
+    const consentOf = async (tool: string, args: Record<string, unknown>): Promise<unknown> => {
+      browser.received.length = 0;
+      await callTool(deps, tool, args);
+      const act = browser.received.find((c) => ReticleCommand.ACT === c.name);
+      return (act?.args['args'] as Record<string, unknown> | undefined)?.[DIALOG_CONSENT_ARG];
+    };
+    const step = (args: Record<string, unknown>) => ({ ref: 'e7', action: 'click', args });
+    expect(await consentOf('reticle_act', step({ confirmDangerous: true }))).toBe(true);
+    expect(await consentOf('reticle_act', step({}))).toBeUndefined();
+    expect(await consentOf('reticle_act', step({ [DIALOG_CONSENT_ARG]: true }))).toBeUndefined();
+    const sequence = (args: Record<string, unknown>) => ({ steps: [step(args)] });
+    expect(await consentOf('reticle_act_sequence', sequence({ confirmDangerous: true }))).toBe(
+      true,
+    );
+    expect(await consentOf('reticle_act_sequence', sequence({}))).toBeUndefined();
   });
 
   it('acts and returns effect + passing verdict + trace when the predicate holds', async () => {

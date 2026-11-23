@@ -1,23 +1,19 @@
 /**
- * Which `confirmDangerous` answers the app's own `confirm()` with yes (#2167).
+ * The positive yes to the app's own `confirm()` (#2167).
  *
  * Kept apart from `constants.ts`, which is at the 1000-line cap. The SDK reads it for a dispatched
  * action, and the server reads it for a real key press on a leased tab.
  *
- * `reticle_act_and_wait` names "Delete" and an `until`, and the server takes that declaration as the
- * confirmation: it sets `confirmDangerous` so that the control can be pressed. That flag is not the
- * caller's yes to the dialog the press opens, so the server marks it with
- * `DANGER_CONFIRMED_BY_DECLARATION_ARG`.
+ * `confirmDangerous` only lets a destructive control be pressed. Server paths set it for a whole run
+ * (a crawl, a flow replay, a declaration in `reticle_act_and_wait`), so it cannot also be the yes.
+ * The yes is this separate argument, and only `reticle_act`, `reticle_act_and_wait` and
+ * `reticle_act_sequence` set it, when the caller itself passed `confirmDangerous`. Every other path
+ * leaves it out, so a `confirm()` there is answered no. An SDK that meets an older daemon gets no
+ * such argument and answers no too.
  */
-import { DANGEROUS_ACTION_CONFIRM_ARG } from './constants.js';
 
-/** Set by the server beside `confirmDangerous` when a declaration, not the caller, confirmed. */
-export const DANGER_CONFIRMED_BY_DECLARATION_ARG = 'confirmedByDeclaration';
+/** Set by the server on an action whose caller passed `confirmDangerous`: a yes to its `confirm()`. */
+export const DIALOG_CONSENT_ARG = 'acceptConfirm';
 
-/** The caller itself set `confirmDangerous`: only then is the action's `confirm()` answered yes. */
-export function confirmsDialog(args: Readonly<Record<string, unknown>>): boolean {
-  return (
-    true === args[DANGEROUS_ACTION_CONFIRM_ARG] &&
-    true !== args[DANGER_CONFIRMED_BY_DECLARATION_ARG]
-  );
-}
+/** The `kind` of a native `window.confirm` dialog, the only kind the yes applies to. */
+export const CONFIRM_DIALOG_KIND = 'confirm';
