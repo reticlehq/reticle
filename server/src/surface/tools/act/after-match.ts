@@ -16,6 +16,7 @@ import {
   waitForPredicate,
   type EvalResult,
 } from '@reticlehq/engine/question/predicate/predicate.js';
+import { withoutReadError } from '@reticlehq/engine/question/predicate/predicate-eval-kit.js';
 import { waitForInFlight } from './settle-in-flight.js';
 import { waitForReaction } from './react-grace.js';
 import { revertedAfterMatch } from './durable.js';
@@ -23,7 +24,7 @@ import { revertedAfterMatch } from './durable.js';
 type WaitArgs = Parameters<typeof waitForPredicate>;
 
 /** Wait for the predicate inside the budget, or read it once when there is no budget. */
-export function evaluateAfterAct(
+export async function evaluateAfterAct(
   session: WaitArgs[0],
   until: Predicate,
   timeout: number,
@@ -33,7 +34,8 @@ export function evaluateAfterAct(
   if (timeout > 0) {
     return waitForPredicate(session, until, timeout, since, baselines);
   }
-  return evaluatePredicate(session, until, since, true, baselines);
+  // `readError` is for the wait and the pre-check, not for the agent (#1656).
+  return withoutReadError(await evaluatePredicate(session, until, since, true, baselines));
 }
 
 type Waited = Parameters<typeof waitForInFlight>[0] & Parameters<typeof revertedAfterMatch>[0];

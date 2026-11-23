@@ -35,6 +35,7 @@ import {
   waitForPredicate,
   PredicateSchema,
 } from '@reticlehq/engine/question/predicate/predicate.js';
+import { withoutReadError } from '@reticlehq/engine/question/predicate/predicate-eval-kit.js';
 import { resolveSessionSpending, withLateSession } from '@/portal/session/timing/resolve-within.js';
 import { WALL_CLOCK } from '@/portal/session/timing/wall-clock.js';
 import { parsePredicate } from '@reticlehq/engine/question/predicate/predicate-parse.js';
@@ -597,7 +598,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
         verdict:
           predicateBudget > 0
             ? await waitForPredicate(session, predicate, predicateBudget, since)
-            : await evaluatePredicate(session, predicate, since),
+            : withoutReadError(await evaluatePredicate(session, predicate, since)),
         timeout: predicateBudget,
         predicateStarted,
         reevaluate: (next, budget) => waitForPredicate(next, predicate, budget, 0),

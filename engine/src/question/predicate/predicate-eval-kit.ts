@@ -54,6 +54,16 @@ export interface EvalResult {
    */
   observationLost?: boolean;
   /**
+   * The exact message of a page read that threw, when that throw is why this result is
+   * inconclusive.
+   *
+   * A composite reads each clause on its own, so a clause that throws no longer rejects the whole
+   * composite (#1656). This field keeps what the rejection used to say. The wait ends on it, as it
+   * ended on the rejection, and the pre-check before an action throws it again. Absent when a
+   * clause failed or passed, because then the composite has an answer.
+   */
+  readError?: string;
+  /**
    * The failure, structured — what was seen, what was required, and which oracle judged it.
    *
    * `failureReason` says the same thing in prose, and prose is the WRONG shape for this: measured on
@@ -75,6 +85,36 @@ export interface EvalResult {
    */
   caseOnlyMiss?: boolean;
   wouldHold?: string;
+}
+
+/** The start of the `inconclusive` sentence for a read that threw. See `unansweredRead`. */
+const PAGE_DID_NOT_ANSWER = 'the page did not answer: ';
+
+/**
+ * A read that threw never looked at the app: the page did not answer, or went away. That is "could
+ * not tell", not "looked and it was false", so it is inconclusive, which the verdict rule turns into
+ * unknown. As a plain false it was graded assertion_failed: a command timeout on a live, throttled
+ * tab came back verified:no against a page that was never read.
+ */
+export function unansweredRead(error: unknown): EvalResult {
+  const reason = error instanceof Error ? error.message : String(error);
+  return {
+    pass: false,
+    failureReason: reason,
+    inconclusive: `${PAGE_DID_NOT_ANSWER}${reason}`,
+    readError: reason,
+  };
+}
+
+/**
+ * The result without `readError`, for a caller that shows it to an agent.
+ *
+ * `readError` is for the wait and the pre-check only. The tool schemas do not declare it, and the
+ * same message is already in `failureReason` and `inconclusive`.
+ */
+export function withoutReadError(result: EvalResult): EvalResult {
+  const { readError: _readError, ...answer } = result;
+  return answer;
 }
 
 /** Core's `asString` and `asNumber`, under the names the oracles here read them by. */
