@@ -9,7 +9,7 @@
 //
 // Windows only. Build the package first. Notepad is started and closed by the check.
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -50,7 +50,26 @@ try {
     process.exit(1);
   }
   const area = (await commands.answer(ReticleCommand.QUERY, { role: 'textbox' })).elements[0];
-  assert.ok(area?.ref, `Notepad has no text area with a ref:\n${shown}`);
+  if (area?.ref === undefined) {
+    // The tree as UI Automation gave it, with the control type and class of each element: what a
+    // person needs to see why the reader shows what it shows.
+    const raw = execFileSync(launch.file, [...launch.prefix, 'tree', String(notepad.pid)], {
+      encoding: 'utf8',
+      env: { ...process.env, RETICLE_UIA_DEBUG: '1' },
+    });
+    const lines = [];
+    const walk = (node, depth) => {
+      if (depth > 7) return;
+      lines.push(
+        `${'  '.repeat(depth)}${node.role} ${node.uia ?? ''} "${node.title ?? ''}" ${JSON.stringify(node.frame ?? null)}`,
+      );
+      for (const child of node.children ?? []) walk(child, depth + 1);
+    };
+    walk(JSON.parse(raw).tree, 0);
+    assert.fail(
+      `Notepad has no text area with a ref:\n${shown}\nUI Automation gave:\n${lines.join('\n')}`,
+    );
+  }
 
   await commands.answer(ReticleCommand.ACT, {
     ref: area.ref,

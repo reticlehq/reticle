@@ -99,6 +99,8 @@ function Read-Node($el, [int]$depth, [ref]$unread) {
   $role = $RoleOf[$c.ControlType.ProgrammaticName]
   if ($null -eq $role) { $role = 'AXUnknown' }
   $node = [ordered]@{ role = $role }
+  # What UI Automation said, for a check that has to see why an element is read as it is.
+  if ($env:RETICLE_UIA_DEBUG) { $node.uia = "$($c.ControlType.ProgrammaticName) $($c.ClassName) kids:$((Get-Children $el).Count)" }
   if ($c.Name) { $node.title = $c.Name }
   if ($c.HelpText) { $node.help = $c.HelpText }
   if ($c.AutomationId) { $node.id = $c.AutomationId }
