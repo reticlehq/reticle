@@ -12,10 +12,15 @@
  *
  * The version is the `version` in `.claude-plugin/plugin.json`. A release bumps only that field.
  *
+ * This file runs before the server, so the server cannot report a failure here. When the start
+ * fails, this file writes the reason to `mcp-start.log` in `${CLAUDE_PLUGIN_DATA}` and prints one
+ * line on stderr. Claude Code shows that stderr in `/mcp`.
+ *
  * `server/src/surface/mcp/plugin-mcp-launch.test.ts` tests this file.
  */
 import { spawn, spawnSync } from 'node:child_process';
 import {
+  appendFileSync,
   existsSync,
   mkdirSync,
   readFileSync,
@@ -39,6 +44,12 @@ const POPULATE_COMMAND = 'populate';
 const WINDOWS = 'win32';
 const DATA_ENV = 'CLAUDE_PLUGIN_DATA';
 const SELF = fileURLToPath(import.meta.url);
+/** The file in `${CLAUDE_PLUGIN_DATA}` that records each start that failed, one JSON line each. */
+export const START_LOG = 'mcp-start.log';
+const STDERR_PREFIX = 'reticle: the MCP server stopped:';
+const FORWARDED_SIGNALS = ['SIGINT', 'SIGTERM', 'SIGHUP'];
+const SUCCESS_CODE = 0;
+const FAILURE_CODE = 1;
 
 /** The server version that this plugin version pins. */
 export function pinnedVersion() {
@@ -160,24 +171,112 @@ function startPopulate() {
   }
 }
 
+/** The command line of `command`, for the log. */
+export function describeCommand(command) {
+  if ('local' === command.kind) {
+    return [process.execPath, command.entry, MCP_COMMAND].join(' ');
+  }
+  return [command.file, ...command.args].join(' ');
+}
+
+/**
+ * Why the npx server stopped, or undefined when it stopped normally: a 0 exit, or a signal that
+ * this process passed on from the client.
+ */
+export function npxExitReason({ code, signal, forwarded }) {
+  if (null !== signal) {
+    return forwarded ? undefined : `npx stopped on signal ${signal}`;
+  }
+  if (SUCCESS_CODE === code || null === code) {
+    return undefined;
+  }
+  return `npx exited with code ${code}`;
+}
+
+/**
+ * Record a start that failed. It appends one JSON line to `START_LOG` when there is a data folder,
+ * and writes one line to `stderr`. It returns the log path, or undefined when there is none. It
+ * never throws: a log that cannot be written must not hide the first failure.
+ */
+export function recordStartFailure({
+  dataDir,
+  version,
+  reason,
+  command,
+  stderr = process.stderr,
+  now = Date.now,
+}) {
+  let logPath;
+  if (undefined !== dataDir) {
+    const path = join(dataDir, START_LOG);
+    const entry = {
+      at: new Date(now()).toISOString(),
+      version,
+      node: process.version,
+      platform: process.platform,
+      reason,
+      command,
+    };
+    try {
+      mkdirSync(dataDir, { recursive: true });
+      appendFileSync(path, `${JSON.stringify(entry)}\n`);
+      logPath = path;
+    } catch {
+      // The stderr line below still names the reason.
+    }
+  }
+  const where = undefined === logPath ? '' : ` Log: ${logPath}`;
+  try {
+    stderr.write(`${STDERR_PREFIX} ${reason}. Command: ${command}.${where}\n`);
+  } catch {
+    // Nothing else can show the reason.
+  }
+  return logPath;
+}
+
+function errorText(error) {
+  return error instanceof Error ? error.message : String(error);
+}
+
 async function startServer() {
   const dataDir = process.env[DATA_ENV];
-  const command = serverCommand({ dataDir, version: pinnedVersion(), platform: process.platform });
+  const version = pinnedVersion();
+  const command = serverCommand({ dataDir, version, platform: process.platform });
+  const fail = (reason) =>
+    recordStartFailure({ dataDir, version, reason, command: describeCommand(command) });
   if ('local' === command.kind) {
     // The same process runs the server, so its own path is `process.argv[1]`, as with any bin.
     process.argv = [process.execPath, command.entry, MCP_COMMAND];
-    await import(pathToFileURL(command.entry).href);
+    try {
+      await import(pathToFileURL(command.entry).href);
+    } catch (error) {
+      fail(`the local copy did not load: ${errorText(error)}`);
+      process.exit(FAILURE_CODE);
+    }
     return;
   }
   if (undefined !== dataDir) {
     startPopulate();
   }
   const child = spawn(command.file, command.args, { stdio: 'inherit', shell: command.shell });
-  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP']) {
-    process.on(signal, () => child.kill(signal));
+  let forwarded = false;
+  for (const signal of FORWARDED_SIGNALS) {
+    process.on(signal, () => {
+      forwarded = true;
+      child.kill(signal);
+    });
   }
-  child.on('error', () => process.exit(1));
-  child.on('exit', (code) => process.exit(code ?? 1));
+  child.on('error', (error) => {
+    fail(`npx did not start: ${errorText(error)}`);
+    process.exit(FAILURE_CODE);
+  });
+  child.on('exit', (code, signal) => {
+    const reason = npxExitReason({ code, signal, forwarded });
+    if (undefined !== reason) {
+      fail(reason);
+    }
+    process.exit(code ?? FAILURE_CODE);
+  });
 }
 
 function runPopulate() {
