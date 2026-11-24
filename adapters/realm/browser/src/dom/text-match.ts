@@ -1,4 +1,4 @@
-import type { ElementQuery } from '@reticlehq/core';
+import { fadedReason, type ElementQuery } from '@reticlehq/core';
 import { parentAcrossShadowBoundary } from './shadow-registry.js';
 import { FAINT_OPACITY, stalledFade } from './visibility.js';
 
@@ -208,7 +208,7 @@ export function unreadableText(el: Element): string | undefined {
     opacity *= Number.isNaN(alpha) ? 1 : alpha;
   }
   if (opacity < FAINT_OPACITY) {
-    return `the composed opacity is ${opacity.toFixed(2)}`;
+    return fadedReason(opacity);
   }
   const painted = over(ink, back);
   const ratio = contrast(painted, back);

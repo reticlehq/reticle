@@ -8,6 +8,7 @@
  */
 
 import {
+  isFadedReason,
   MatchArg,
   QueryBy,
   REDACTED_VALUE,
@@ -36,9 +37,6 @@ import { describeTestidMiss } from './testid-near-miss.js';
 import { describeCaseMiss, describeSplitTextMiss } from './split-text-miss.js';
 import { satisfiesProperty, type Baseline, type PropertyAssertion } from './property.js';
 import { describeNameNearMiss } from './name-near-miss.js';
-
-/** The words the browser starts an `unreadable` reason with when the opacity hides the text. */
-const FADED_REASON = 'the composed opacity is';
 
 export const ARIA_HIDDEN_NOTE =
   'text is inside an aria-hidden subtree — drawn on screen but excluded from the accessible tree';
@@ -198,7 +196,7 @@ function describeUnreadable(why: string): string {
   const reason =
     `the text is on the page, but a user cannot read it (${why}). ` +
     'Fix the colour or the opacity, then check again';
-  if (!why.includes(FADED_REASON)) {
+  if (!isFadedReason(why)) {
     return reason;
   }
   return (

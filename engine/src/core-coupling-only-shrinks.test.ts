@@ -198,7 +198,12 @@ const MAX_FILES_IMPORTING_CORE = 46;
  * question again. Both join imports that `event-filters.ts`, `contradiction-evidence.ts`,
  * `contradictions.ts` and `predicate-eval.ts` already have, so the file count is unmoved.
  */
-const MAX_DISTINCT_SYMBOLS = 74;
+/*
+ * 74 -> 75 for `isFadedReason`. The browser writes the reason and the engine reads it. The prefix
+ * was copied in both packages, so a reworded reason would break the match with no failing test.
+ * The shared prefix lives in core, the same case as `UNREACHABLE_NOTICE_PREFIX`.
+ */
+const MAX_DISTINCT_SYMBOLS = 75;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.
