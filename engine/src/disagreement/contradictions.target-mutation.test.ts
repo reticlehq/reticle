@@ -62,10 +62,10 @@ describe('a mutation on the acted control counts as an effect (#2318)', () => {
     ).toBe(false);
   });
 
-  it('an attribute change on a descendant of the clicked element', () => {
+  it('a state attribute on a descendant of the clicked element', () => {
     expect(
       noEffect([
-        ev(EventType.DOM_ATTR, { attr: 'aria-hidden', value: 'true', inside: ['e7'] }, 'e12'),
+        ev(EventType.DOM_ATTR, { attr: 'aria-selected', value: 'true', inside: ['e7'] }, 'e12'),
       ]),
     ).toBe(false);
   });
@@ -87,6 +87,36 @@ describe('churn that is not on the target still leaves a dead click', () => {
   it('a change inside a DIFFERENT control — inside names an ancestor that was not acted', () => {
     expect(
       noEffect([ev(EventType.DOM_TEXT, { text: 'Saved', old: 'Save', inside: ['e9'] }, 'e12')]),
+    ).toBe(true);
+  });
+});
+
+describe('press furniture still leaves a dead click (#2387)', () => {
+  it('a data-pressed toggle on the clicked element itself', () => {
+    expect(noEffect([ev(EventType.DOM_ATTR, { attr: 'data-pressed', value: 'true' }, 'e7')])).toBe(
+      true,
+    );
+  });
+
+  it('a class change on the clicked element', () => {
+    expect(noEffect([ev(EventType.DOM_ATTR, { attr: 'class', value: 'btn ripple' }, 'e7')])).toBe(
+      true,
+    );
+  });
+
+  it('a ripple child changing class inside the clicked element', () => {
+    expect(
+      noEffect([
+        ev(EventType.DOM_ATTR, { attr: 'class', value: 'rippling', inside: ['e7'] }, 'e12'),
+      ]),
+    ).toBe(true);
+  });
+
+  it('a data-focused attribute inside the clicked element', () => {
+    expect(
+      noEffect([
+        ev(EventType.DOM_ATTR, { attr: 'data-focused', value: '', inside: ['e7'] }, 'e12'),
+      ]),
     ).toBe(true);
   });
 });

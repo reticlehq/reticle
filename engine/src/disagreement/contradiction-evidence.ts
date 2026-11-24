@@ -686,8 +686,9 @@ export function appIsSilent(
  * Undefined when this cannot be told: no ref was acted on, or the control did not change before the
  * failure settled. The caller then keeps the old window-wide reading.
  *
- * Only changes inside the control's own subtree count: a descendant's change carries the control's
- * ref in `inside`, while rows the action did not touch (a live feed, a clock) decide nothing.
+ * Only the control's own changes count, so rows the action did not touch (a live feed, a clock)
+ * decide nothing — and a descendant's changes stay out: a child's `class` would share the control's
+ * `attr:class` key, and `targetFate` must not read the child's churn as the control's (#2387).
  */
 export const TargetFate = {
   PERSISTED: 'persisted',
@@ -706,10 +707,10 @@ interface Change {
   now: string;
 }
 
-/** The attribute or text change this event made to `ref` or, via `inside`, inside it (#2318). No-op writes are skipped. */
-function changeOf(event: ReticleEvent, ref: string): Change | undefined {
+/** The attribute or text change this event made to `ref` — or, when `deep`, to a descendant of it via `inside` (#2318). No-op writes are skipped. */
+function changeOf(event: ReticleEvent, ref: string, deep = false): Change | undefined {
   const inside = event.data['inside'];
-  if (event.ref !== ref && !(Array.isArray(inside) && inside.includes(ref))) {
+  if (event.ref !== ref && !(deep && Array.isArray(inside) && inside.includes(ref))) {
     return undefined;
   }
   let key: string;
@@ -725,6 +726,17 @@ function changeOf(event: ReticleEvent, ref: string): Change | undefined {
   }
   const old = asString(event.data['old']) ?? ABSENT;
   return old === now ? undefined : { key, t: event.t, old, now };
+}
+
+/** The state attributes a real press flips — `data-pressed`-style furniture moves on every tap and proves nothing (#2387). */
+const EFFECT_ATTR = /^(?:aria-(?:pressed|expanded|checked|selected)|disabled)$/;
+
+/** An effect of the action on `ref` or a descendant: text, or a state-attribute flip — press furniture does not count (#2387). */
+function effectOn(event: ReticleEvent, ref: string): boolean {
+  if (event.type === EventType.DOM_ATTR && !EFFECT_ATTR.test(asString(event.data['attr']) ?? '')) {
+    return false;
+  }
+  return changeOf(event, ref, true) !== undefined;
 }
 
 export function targetFate(
@@ -849,10 +861,8 @@ function writtenValues(value: unknown, old: unknown): readonly unknown[] {
 }
 
 /**
- * Each call that failed in this window, with the event after which the app can react to it: the
- * send, or the answer when the window does not hold the send. The limit is the send and not the
- * answer for the reason `successClaims` gives: the browser observer records the answer after the
- * app's own handler ran.
+ * Each call that failed in this window, with the event after which the app could react to it — the
+ * send, or the answer when the window holds no send (`successClaims` has why).
  */
 function failedCalls(
   events: readonly ReticleEvent[],
@@ -874,13 +884,10 @@ function failedCalls(
 }
 
 /**
- * Did the store record the HTTP status of a call that failed in this window?
- *
- * A structural echo, like the echo of the error text: an app that keeps `status: 429` beside a
- * retry button knows that the call failed. Strict, because a false acknowledgement hides a failed
- * write. The value must be exactly that status (a number or its string), it must change in this
- * write, and the write must come after the call was sent. The status of a call that succeeded is
- * not one.
+ * Did the store record the HTTP status of a call that failed in this window? An app that keeps
+ * `status: 429` beside a retry button knows the call failed — a structural echo, like the error
+ * text's. Strict, because a false acknowledgement hides a failed write: the value must be exactly
+ * that status, changed in this write, and written after the call was sent.
  */
 export function storeEchoesFailedStatus(events: readonly ReticleEvent[]): boolean {
   return failedCalls(events).some(({ call, after }) => {
@@ -903,15 +910,10 @@ export function storeEchoesFailedStatus(events: readonly ReticleEvent[]): boolea
 const LIVE_ASSERTIVE = 'assertive';
 
 /**
- * Did the app write text into an existing ASSERTIVE live region after a failed call was sent?
- *
- * The common way to show "Wrong email or password" is to write it into a `role="alert"` region that
- * is already on the page, which a mount event does not record (#2173). The words do not decide, the
- * level does. ARIA keeps the assertive level for errors and urgent warnings. A polite region
- * (`role="status"`) is where an app writes "Saved", so text there is not an acknowledgement. The
- * ceiling: an app that writes a success word into an alert region over a failed write is read as
- * acknowledging it, as a mounted alert already is. Text written before the send cannot answer the
- * call, and a cleared region says nothing.
+ * Did the app write text into an existing ASSERTIVE live region after a failed call was sent? A
+ * mount event does not record a write into a region already on the page (#2173). The level decides,
+ * not the words: `role="status"` is for "Saved", so text there does not count — and even a success
+ * word in an alert region does, as a mounted alert already does. Text before the send cannot answer.
  */
 export function liveAlertAfterFailedSend(events: readonly ReticleEvent[]): boolean {
   return failedCalls(events).some(({ after }) =>
@@ -935,8 +937,8 @@ export const RETICLE_SIGNAL_NAMESPACE = 'reticle:';
  * stream, a polling store, a perf sample and a scroll position all move on their own. What counts:
  *
  *  - a mutation inside the target's own subtree (what the target itself did),
- *  - a change to the target's own text or attributes — "Copy code" becoming "Copied", possibly
- *    inside a child element of the target (#2318),
+ *  - a change to the target's own text, possibly inside a child element — "Copy code" becoming
+ *    "Copied" (#2318) — or a state-attribute flip; press furniture does not count,
  *  - a request (the action asked the server for something),
  *  - a navigation, or a dialog/live region appearing — the two ways a real reaction legitimately
  *    lands OUTSIDE the target, e.g. a modal portalled to the body,
@@ -964,7 +966,7 @@ export function didNothing(
       e.type === EventType.ROUTE_CHANGE ||
       e.type === EventType.VISIBLE_SHOWN ||
       tied(e) ||
-      (options.ref !== undefined && changeOf(e, options.ref) !== undefined),
+      (options.ref !== undefined && effectOn(e, options.ref)),
   );
 }
 
