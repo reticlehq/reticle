@@ -359,11 +359,6 @@
       "count": 5
     }
   },
-  "src/observers/network.test.ts": {
-    "curly": {
-      "count": 8
-    }
-  },
   "src/observers/network.wrapper-blindspot.test.ts": {
     "curly": {
       "count": 1

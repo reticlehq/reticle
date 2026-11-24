@@ -72,9 +72,11 @@ const OTHER_VALUE = '?';
  * short values: a journal reader who guesses a value cannot confirm the guess without the
  * salt, which never leaves the page.
  *
- * Form and form-urlencoded bodies keep the shape fingerprint (`fingerprintBody`): their
- * values are credentials and uploads as often as commands, and their keys-only rule is a
- * separate, tested decision.
+ * Form and form-urlencoded bodies are fingerprinted by the same rule: a form-urlencoded body
+ * is text and goes through this function, and a `FormData` body goes through
+ * `fingerprintFormBody`, which hashes each text value with the salt and keeps a file field at
+ * its type and size. The shape fingerprint (`fingerprintBody`) still rides on the record as
+ * the coarser discriminator; it no longer decides identity on its own.
  */
 export function fingerprintTextBody(text: string): string {
   let canonical: string;
@@ -84,4 +86,32 @@ export function fingerprintTextBody(text: string): string {
     canonical = `text:${text}`;
   }
   return fnv1a(`${bodySalt()}#${canonical}`);
+}
+
+/**
+ * The fingerprint of a `FormData` body: each text value hashed with the page salt, each file
+ * field kept at its type and size, the fields sorted so field order does not separate two
+ * sends of one form.
+ *
+ * The shape projection this replaces summed the lengths of the text values, which is the
+ * discriminator #1521 was filed against: `accessSets` and `currencies` in one `cmd` field
+ * summed to the same total and collided. A salted hash of each value separates them, and the
+ * salt keeps a short value (a password field is the normal case in a form) as unrecoverable
+ * from the fingerprint as a JSON value is. File contents are never read: a file field
+ * contributes its declared type and size only. Undefined for an empty form, which says
+ * nothing about what was sent.
+ */
+export function fingerprintFormBody(form: FormData): string | undefined {
+  const fields: string[] = [];
+  form.forEach((value, name) => {
+    if ('string' === typeof value) {
+      fields.push(JSON.stringify([name, fingerprintTextBody(JSON.stringify(value))]));
+    } else {
+      fields.push(JSON.stringify([name, [value.type, value.size]]));
+    }
+  });
+  if (0 === fields.length) {
+    return undefined;
+  }
+  return fnv1a(`${bodySalt()}#form:${fields.sort().join(',')}`);
 }

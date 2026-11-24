@@ -18,18 +18,35 @@ describe('fingerprintTextBody', () => {
   });
 
   it('separates two sends that differ only in a timestamp or a request id', async () => {
-    // The accuracy trade the maintainer asked to see stated (review of 2026-11-11):
-    // a double submit whose second send carries a fresh client timestamp, request id
-    // or idempotency key is NOT reported as a duplicate, because every value is part
-    // of the fingerprint. Before this change the shape fingerprint grouped the two
-    // sends as one write fired twice. The rule now reports a duplicate only when the
-    // two bodies are the same payload, which is the case a command bus needs told
-    // apart from two different commands to one endpoint (#1521).
+    // The accuracy trade the maintainer asked to see stated (reviews of 2026-11-11 and
+    // 2026-11-23): a double submit whose second send carries a fresh client timestamp,
+    // request id or idempotency key is NOT reported as a duplicate, because every value
+    // is part of the fingerprint. It is not a pass either: the two sends share a shape
+    // fingerprint, and the engine reports that pair as calls it could not tell apart
+    // (`duplicate-request-indistinguishable`, pinned in the engine tests). Before this
+    // change the shape fingerprint alone grouped the two sends as one write fired twice.
     const { fingerprintTextBody } = await import('./body-fingerprint.js');
     const first = JSON.stringify({ cmd: 'save', ts: 1731415200000, requestId: 'req-1' });
     const second = JSON.stringify({ cmd: 'save', ts: 1731415200500, requestId: 'req-2' });
     expect(fingerprintTextBody(first)).not.toBe(fingerprintTextBody(second));
     expect(fingerprintTextBody(first)).toBe(fingerprintTextBody(first));
+  });
+
+  it('separates FormData text values that share a length, and groups equal forms', async () => {
+    const { fingerprintFormBody } = await import('./body-fingerprint.js');
+    const form = (cmd: string): FormData => {
+      const f = new FormData();
+      f.append('cmd', cmd);
+      return f;
+    };
+    // The issue's own example through the FormData path: accessSets and currencies have
+    // the same length, so the sum-of-lengths shape grouped them as one write.
+    expect(fingerprintFormBody(form('accessSets'))).not.toBe(
+      fingerprintFormBody(form('currencies')),
+    );
+    expect(fingerprintFormBody(form('accessSets'))).toBe(fingerprintFormBody(form('accessSets')));
+    const empty = new FormData();
+    expect(fingerprintFormBody(empty)).toBeUndefined();
   });
 
   it('cannot be reproduced from the payload without the page salt', async () => {

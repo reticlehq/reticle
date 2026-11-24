@@ -3,6 +3,7 @@ import {
   EventType,
   NEXT_ACTION_FIELD,
   NEXT_ACTION_HEADER,
+  REQUEST_BODY_SHAPE_FIELD,
   REQUEST_SHAPE_FIELD,
   REQUEST_SHAPE_NONE,
   ResponseBodyReason,
@@ -10,7 +11,7 @@ import {
   StreamDirection,
   fnv1a,
 } from '@reticlehq/core/page';
-import { fingerprintTextBody } from './body-fingerprint.js';
+import { fingerprintFormBody, fingerprintTextBody } from './body-fingerprint.js';
 import { captureMethod } from '@/patching/capture-method.js';
 import { observeSafely, observeValue, type Emit, type Teardown } from './types.js';
 import {
@@ -119,6 +120,19 @@ function fingerprintBody(shape: string, length: number): string {
   return fnv1a(`${shape}#${String(length)}`);
 }
 
+/**
+ * A text body's SHAPE: the parsed structure with values replaced by types, or the OTHER token
+ * when the text does not parse. Paired with the length by `fingerprintBody` it is the coarse
+ * discriminator that rides beside the salted hash in `REQUEST_BODY_SHAPE_FIELD`.
+ */
+function jsonShape(text: string): string {
+  try {
+    return shapeOf(JSON.parse(text) as unknown);
+  } catch {
+    return ShapeToken.OTHER;
+  }
+}
+
 /** The largest byte body read as text for its fingerprint. */
 const MAX_DECODED_BODY_BYTES = 1 << 20;
 
@@ -167,10 +181,12 @@ function textOfBytes(body: unknown): string | undefined {
 }
 
 /**
- * A FormData body's fingerprint: its field names, each field's kind (text, or a file's type and
- * size), and the total length of its text values, hashed. Same rule as a JSON body: no character of
- * any value reaches the hash, and a text value contributes only to a sum. Order-insensitive, like a
- * JSON body's keys. Undefined for an empty form, which says nothing about what was sent.
+ * A FormData body's SHAPE fingerprint: its field names, each field's kind (text, or a file's type
+ * and size), and the total length of its text values, hashed. No character of any value reaches
+ * this hash, and a text value contributes only to a sum. Order-insensitive, like a JSON body's
+ * keys. Undefined for an empty form, which says nothing about what was sent. The shape is the
+ * coarse discriminator in `REQUEST_BODY_SHAPE_FIELD`; the identity fingerprint is
+ * `fingerprintFormBody`.
  */
 function formShape(form: FormData): string | undefined {
   const fields: string[] = [];
@@ -195,7 +211,8 @@ function formShape(form: FormData): string | undefined {
  * The body itself is captured (redacted, capped) only when asked for. Plain strings and
  * URLSearchParams are text, and so are bytes that decode as UTF-8 text: a client that encodes its
  * JSON before sending it (Flutter web, gRPC-web) is still sending JSON (#1347). FormData is
- * fingerprinted from its field names and kinds but never captured. A Blob, a stream or bytes that
+ * fingerprinted from a salted hash of its text values and its file fields' types and sizes,
+ * but never captured. A Blob, a stream or bytes that
  * are not text carry no fingerprint and, under capture, a `requestBodyType` marker (the agent still
  * learns a body existed) rather than being silently dropped. Shared by the fetch and XHR paths.
  */
@@ -203,6 +220,7 @@ function projectRequestBody(body: unknown, captureBodies: boolean): Record<strin
   let text: string | undefined;
   let contentType = 'application/json';
   let shape: string = REQUEST_SHAPE_NONE;
+  let bodyShape: string | undefined;
   const bytesText = textOfBytes(body);
   const typeOf = (): string =>
     (body as { constructor?: { name?: string } }).constructor?.name ?? typeof body;
@@ -210,27 +228,37 @@ function projectRequestBody(body: unknown, captureBodies: boolean): Record<strin
     text = bytesText ?? (body as string);
     if (text.length > 0) {
       shape = fingerprintTextBody(text);
+      bodyShape = fingerprintBody(jsonShape(text), text.length);
     }
   } else if (typeof FormData !== 'undefined' && body instanceof FormData) {
-    // Read synchronously and never kept: names and kinds only, so it separates distinct uploads to
-    // one endpoint without carrying any value (#1347).
-    const form = formShape(body);
+    // Read synchronously and never kept: the salted hash of each text value is the identity, and
+    // the names-and-kinds shape rides beside it as the coarse discriminator (#1521).
+    const form = fingerprintFormBody(body);
+    const formBodyShape = formShape(body);
     return {
       ...(form === undefined ? {} : { [REQUEST_SHAPE_FIELD]: form }),
+      ...(formBodyShape === undefined ? {} : { [REQUEST_BODY_SHAPE_FIELD]: formBodyShape }),
       ...(captureBodies ? { requestBodyType: typeOf() } : {}),
     };
   } else if (typeof URLSearchParams !== 'undefined' && body instanceof URLSearchParams) {
     text = body.toString();
     contentType = 'application/x-www-form-urlencoded';
     if (text.length > 0) {
+      // A URLSearchParams body is text, so it takes the text rule: the salted hash of its
+      // canonical form is the identity, and the keys-only shape rides beside it. Sending the
+      // same bytes as a string and as URLSearchParams now gives the two sends one identity.
+      shape = fingerprintTextBody(text);
       const fields = Object.fromEntries(new URLSearchParams(text));
-      shape = fingerprintBody(shapeOf(fields), text.length);
+      bodyShape = fingerprintBody(shapeOf(fields), text.length);
     }
   } else if (body !== undefined && body !== null) {
     // No fingerprint at all: the field's absence is what says the identity is unknown.
     return captureBodies ? { requestBodyType: typeOf() } : {};
   }
-  const fields: Record<string, unknown> = { [REQUEST_SHAPE_FIELD]: shape };
+  const fields: Record<string, unknown> = {
+    [REQUEST_SHAPE_FIELD]: shape,
+    ...(bodyShape === undefined ? {} : { [REQUEST_BODY_SHAPE_FIELD]: bodyShape }),
+  };
   if (!captureBodies || text === undefined || 0 === text.length) {
     return fields;
   }

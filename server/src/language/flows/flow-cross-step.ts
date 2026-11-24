@@ -20,6 +20,8 @@ function contradictionId(found: Contradiction): string {
 const ONE_ACTION_ONLY: ReadonlySet<string> = new Set([
   ContradictionKind.DUPLICATE_REQUEST,
   ContradictionKind.DUPLICATE_REQUEST_UNRELATED,
+  ContradictionKind.DUPLICATE_REQUEST_INDISTINGUISHABLE,
+  ContradictionKind.DUPLICATE_REQUEST_INDISTINGUISHABLE_UNRELATED,
 ]);
 
 /** True for a finding that only means something inside one action's window (see ONE_ACTION_ONLY). */

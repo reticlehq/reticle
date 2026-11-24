@@ -107,6 +107,22 @@ export const ContradictionKind = {
    */
   DUPLICATE_REQUEST_UNRELATED: 'duplicate-request-unrelated',
   /**
+   * Two writes to one endpoint carried the same body SHAPE and different bodies, so the record
+   * cannot tell whether they were one write repeated or two different writes.
+   *
+   * The case is a double submit whose second send restamps its body: a fresh client timestamp,
+   * request id or idempotency key makes the salted body fingerprint differ, so the pair is not
+   * `duplicate-request`. It is not a clean pass either: before the salted fingerprint, the shape
+   * alone grouped the pair as one write fired twice. ABSENCE_DERIVED, so it removes the false
+   * green by downgrading to `unknown` and never asserts a fault (#1521).
+   */
+  DUPLICATE_REQUEST_INDISTINGUISHABLE: 'duplicate-request-indistinguishable',
+  /**
+   * The same indistinguishable pair on an endpoint the assertion never named. ADVISORY, like
+   * `DUPLICATE_REQUEST_UNRELATED`: reported, and it decides nothing.
+   */
+  DUPLICATE_REQUEST_INDISTINGUISHABLE_UNRELATED: 'duplicate-request-indistinguishable-unrelated',
+  /**
    * A request carried a value for a field whose control on screen shows a different chosen value
    * (UI "Workspace default", request `projectId: "bench-app"`). ADVISORY and opt-in: a fact worth a
    * look, never a verdict on its own.
@@ -314,6 +330,9 @@ export const ABSENCE_DERIVED_CONTRADICTIONS: ReadonlySet<ContradictionKind> = ne
   ContradictionKind.ROUTE_RENDERED_NOTHING,
   ContradictionKind.ACTION_HAD_NO_EFFECT,
   ContradictionKind.DUPLICATE_REQUEST,
+  // The bodies differ and share a shape, so the record cannot say whether the write repeated.
+  // Nothing here says the app is wrong; the evidence that would decide it is not on the record.
+  ContradictionKind.DUPLICATE_REQUEST_INDISTINGUISHABLE,
   // Absence in the strictest sense: the evidence that would have answered the question was thrown
   // away with the document it belonged to. Nothing here says the app is wrong, so it must downgrade
   // the verdict to UNKNOWN rather than assert NO — the same reasoning `unclean_capture` follows.
@@ -349,6 +368,7 @@ export function isAbsenceDerived(kind: string): boolean {
  */
 export const ADVISORY_CONTRADICTIONS: ReadonlySet<ContradictionKind> = new Set([
   ContradictionKind.DUPLICATE_REQUEST_UNRELATED,
+  ContradictionKind.DUPLICATE_REQUEST_INDISTINGUISHABLE_UNRELATED,
   ContradictionKind.SCREEN_REQUEST_MISMATCH,
 ]);
 
@@ -403,7 +423,9 @@ export type FindingTier = (typeof FindingTier)[keyof typeof FindingTier];
  * end Reticle chose, so downgrading it would invent a caveat on its author's behalf.
  */
 export function tierOfFinding(kind: string): FindingTier {
-  if (isAdvisory(kind)) return FindingTier.ADVISORY;
+  if (isAdvisory(kind)) {
+    return FindingTier.ADVISORY;
+  }
   return isAbsenceDerived(kind) ? FindingTier.ABSENCE_DERIVED : FindingTier.OBSERVED;
 }
 
@@ -436,6 +458,8 @@ export const CONTRADICTION_CHANNELS: Record<ContradictionKind, readonly [Channel
   [ContradictionKind.CONSEQUENCE_ELSEWHERE]: [ChannelId.NET, ChannelId.UI],
   [ContradictionKind.DUPLICATE_REQUEST]: [ChannelId.NET, ChannelId.NET],
   [ContradictionKind.DUPLICATE_REQUEST_UNRELATED]: [ChannelId.NET, ChannelId.NET],
+  [ContradictionKind.DUPLICATE_REQUEST_INDISTINGUISHABLE]: [ChannelId.NET, ChannelId.NET],
+  [ContradictionKind.DUPLICATE_REQUEST_INDISTINGUISHABLE_UNRELATED]: [ChannelId.NET, ChannelId.NET],
   // The value a control shows against the value the request carried for the same field.
   [ContradictionKind.SCREEN_REQUEST_MISMATCH]: [ChannelId.UI, ChannelId.NET],
   // The evidence is the interleaving of two responses, read against what the screen ended up showing.
