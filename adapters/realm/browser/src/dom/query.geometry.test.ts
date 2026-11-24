@@ -178,6 +178,48 @@ describe('matchQuery geometry evidence', () => {
     expect(geometry?.clippedX).toBe(0);
   });
 
+  it('reads text a clipping descendant cuts off, on the control that holds it', () => {
+    // Review case on #1635 (2026-11-23): agents find controls by role, so the check lands on
+    // the <button>, but the button's own box does not clip — the block <span> inside it does.
+    // Reading only the button and its ancestors passed a `textClipped: false` check while
+    // the text was cut off.
+    document.body.innerHTML =
+      '<button data-testid="save"><span data-testid="label" style="display: block; overflow-x: hidden; text-overflow: ellipsis">A very long label</span></button>';
+    const label = byTestid('label');
+    Object.defineProperty(label, 'scrollWidth', { value: 220, configurable: true });
+    Object.defineProperty(label, 'clientWidth', { value: 100, configurable: true });
+    const match = matchQuery(
+      { testid: 'save' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {},
+    );
+    const geometry = match.elements[0]?.geometry;
+    expect(geometry?.textClipped).toBe(true);
+    expect(geometry?.clippedX).toBe(120);
+  });
+
+  it('does not read a clipping descendant with no text, or one whose text fits', () => {
+    document.body.innerHTML =
+      '<button data-testid="save"><span data-testid="icon" style="display: block; overflow-x: hidden"></span>Save</button>';
+    const icon = byTestid('icon');
+    Object.defineProperty(icon, 'scrollWidth', { value: 220, configurable: true });
+    Object.defineProperty(icon, 'clientWidth', { value: 100, configurable: true });
+    const match = matchQuery(
+      { testid: 'save' },
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      false,
+      {},
+    );
+    expect(match.elements[0]?.geometry?.textClipped).toBe(false);
+  });
+
   it('skips an inline box when finding the nearest clipping box', () => {
     // Review case on #1635: a Tailwind `truncate` span carries `overflow: hidden` in its
     // computed style, but overflow does not apply to an inline box, so the span's own widths

@@ -95,7 +95,9 @@ function resolveOverlapTarget(
  *
  * `textClipped` reads the same fact a reader hits: content beyond the client box on an axis
  * whose overflow clips (`hidden` or `clip`), or `text-overflow: ellipsis` beside an overflow
- * that clips on the inline axis. The amounts are pixels of content with nowhere to go.
+ * that clips on the inline axis. The amounts are pixels of content with nowhere to go. A
+ * descendant box that clips and holds text counts as the element's own: a control found by
+ * role holds its text in a child more often than in itself.
  *
  * Lives here rather than in `a11y.ts`: that file is at the 1000-line cap, and this is the
  * geometry feature's own module.
@@ -131,20 +133,14 @@ function measureGeometry(el: Element, memo?: Map<Element, boolean>): ElementGeom
   // is read at its own box only: a short `<li>` inside an `overflow-x: hidden` carousel is
   // not clipped just because the carousel's whole list overflows (#1539).
   const clip = nearestClippingBox(el);
-  // `text-overflow: ellipsis` has no effect without an overflow that clips, so it counts as
-  // a clip only beside `hidden` or `clip` on the axis.
-  const clipsX =
-    null !== clip &&
-    ('hidden' === clip.style.overflowX ||
-      'clip' === clip.style.overflowX ||
-      ('ellipsis' === clip.style.textOverflow &&
-        ('hidden' === clip.style.overflowX || 'clip' === clip.style.overflowX)));
-  const clipsY =
-    null !== clip && ('hidden' === clip.style.overflowY || 'clip' === clip.style.overflowY);
-  const clippedX =
-    null === clip || !clipsX ? 0 : Math.max(0, clip.box.scrollWidth - clip.box.clientWidth);
-  const clippedY =
-    null === clip || !clipsY ? 0 : Math.max(0, clip.box.scrollHeight - clip.box.clientHeight);
+  const own = null === clip ? { x: 0, y: 0 } : clipAmounts(clip.box, clip.style);
+  // Descendants count too. A control found by role (a `<button>`) often holds its text in a
+  // child box that clips it: the button's own box does not clip, so reading only the button
+  // passes a `textClipped: false` check while the text is cut off. Measure every descendant
+  // box that clips and holds text, and take the largest amount on each axis (#1539).
+  const descendant = descendantClipAmounts(el, view);
+  const clippedX = Math.max(own.x, descendant.x);
+  const clippedY = Math.max(own.y, descendant.y);
   return {
     box,
     viewport,
@@ -153,6 +149,56 @@ function measureGeometry(el: Element, memo?: Map<Element, boolean>): ElementGeom
     clippedX,
     clippedY,
   };
+}
+
+/**
+ * The pixels of content a clipping box cuts off on each axis. `text-overflow: ellipsis` has
+ * no effect without an overflow that clips, so it counts as a clip only beside `hidden` or
+ * `clip` on the inline axis.
+ */
+function clipAmounts(box: Element, style: CSSStyleDeclaration): { x: number; y: number } {
+  const clipsX =
+    'hidden' === style.overflowX ||
+    'clip' === style.overflowX ||
+    ('ellipsis' === style.textOverflow &&
+      ('hidden' === style.overflowX || 'clip' === style.overflowX));
+  const clipsY = 'hidden' === style.overflowY || 'clip' === style.overflowY;
+  return {
+    x: clipsX ? Math.max(0, box.scrollWidth - box.clientWidth) : 0,
+    y: clipsY ? Math.max(0, box.scrollHeight - box.clientHeight) : 0,
+  };
+}
+
+/**
+ * The largest clip amounts among the descendant boxes of `el` that clip and hold text.
+ *
+ * A descendant with no text of its own (an icon wrapper, a layout shell) does not make the
+ * element's text clipped, so a box counts only when its text content is not empty. Inline
+ * and `display: contents` descendants have no box of their own and are skipped, as in
+ * `nearestClippingBox`.
+ */
+function descendantClipAmounts(el: Element, view: Window | null): { x: number; y: number } {
+  let x = 0;
+  let y = 0;
+  if (null === view) {
+    return { x, y };
+  }
+  for (const descendant of el.querySelectorAll('*')) {
+    const style = view.getComputedStyle(descendant);
+    if ('inline' === style.display || 'contents' === style.display) {
+      continue;
+    }
+    if (!clipsContent(style)) {
+      continue;
+    }
+    if (0 === (descendant.textContent ?? '').trim().length) {
+      continue;
+    }
+    const amounts = clipAmounts(descendant, style);
+    x = Math.max(x, amounts.x);
+    y = Math.max(y, amounts.y);
+  }
+  return { x, y };
 }
 
 /** Whether a box's own overflow clips its content on either axis (#1539). */
