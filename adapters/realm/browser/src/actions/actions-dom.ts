@@ -533,7 +533,9 @@ export async function dragElement(
     // draggable descendants the choice is ambiguous: leave the source alone rather than guess.
     const draggables = source.querySelectorAll<HTMLElement>('[draggable="true"]');
     const dragSource =
-      source.matches('[draggable="true"]') || draggables.length !== 1 ? source : draggables[0];
+      source.matches('[draggable="true"]') || draggables.length !== 1
+        ? source
+        : (draggables[0] ?? source);
     dragSource.dispatchEvent(new DragEvent('dragstart', init));
     await nativeFrame();
     dest.dispatchEvent(new DragEvent('dragenter', init));
