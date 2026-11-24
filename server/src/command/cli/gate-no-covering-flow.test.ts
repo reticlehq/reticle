@@ -65,15 +65,18 @@ describe('handleGate when no saved flow covers the changed files', () => {
       return true;
     });
     await mkdir(join(dir, 'src'), { recursive: true });
-    // Not an interactive component, so `unflowed` stays empty and nothing else blocks the gate.
+    // A component a flow can cover, but with no control, so `unflowed` stays empty and nothing
+    // else blocks the gate.
     await writeFile(
-      join(dir, 'src', 'format.ts'),
-      'export const format = (n: number) => `${n}`;\n',
+      join(dir, 'src', 'Badge.tsx'),
+      'export const Badge = () => <span>new</span>;\n',
     );
     await writeFile(join(dir, 'src', 'Other.vue'), '<button @click="go">go</button>\n');
-    // Both files predate the passing run, so its result is current for them.
-    for (const file of ['format.ts', 'Other.vue']) {
-      await utimes(join(dir, 'src', file), 0.1, 0.1);
+    await writeFile(join(dir, 'README.md'), '# demo\n');
+    await writeFile(join(dir, 'src', 'Other.test.ts'), 'export {};\n');
+    // Every file predates the passing run, so its result is current for them.
+    for (const file of ['src/Badge.tsx', 'src/Other.vue', 'README.md', 'src/Other.test.ts']) {
+      await utimes(join(dir, file), 0.1, 0.1);
     }
     process.exitCode = undefined;
   });
@@ -107,9 +110,10 @@ describe('handleGate when no saved flow covers the changed files', () => {
     await saveFlow('flow-a', 'src/Other.vue');
     await saveFlow('flow-b', 'src/Other.vue');
     await new RunStore(createNodeFileSystem(), root).write(passingRun(['flow-a', 'flow-b']));
-    await handleGate(['src/format.ts'], undefined);
+    await handleGate(['src/Badge.tsx', 'README.md'], undefined);
     expect(process.exitCode).toBe(GateExit.NOTHING_TO_CHECK);
-    expect(gateJson()).toMatchObject({ pass: false, noCoveringFlow: ['src/format.ts'] });
+    // Only the file a flow can cover is named, so the message does not ask for a flow over docs.
+    expect(gateJson()).toMatchObject({ pass: false, noCoveringFlow: ['src/Badge.tsx'] });
     const out = stderr.join('');
     expect(out).toContain(MSG_GATE_NO_COVERING_FLOW);
     expect(out).not.toContain(MSG_GATE_NO_FLOWS);
@@ -118,9 +122,19 @@ describe('handleGate when no saved flow covers the changed files', () => {
   it('does not block a Stop hook, which treats NOTHING_TO_CHECK as no regression', async () => {
     await saveFlow('flow-a', 'src/Other.vue');
     await new RunStore(createNodeFileSystem(), root).write(passingRun(['flow-a']));
-    await handleGate(['src/format.ts'], undefined, true);
+    await handleGate(['src/Badge.tsx'], undefined, true);
     expect(process.exitCode).toBe(GateExit.NOTHING_TO_CHECK);
     expect(stderr.join('')).not.toContain('this change is not verified');
+  });
+
+  it('still passes when only files no flow can cover changed: docs and tests', async () => {
+    await saveFlow('flow-a', 'src/Other.vue');
+    await new RunStore(createNodeFileSystem(), root).write(passingRun(['flow-a']));
+    await handleGate(['README.md', 'src/Other.test.ts'], undefined);
+    expect(process.exitCode).toBeUndefined();
+    const json = gateJson();
+    expect(json).toMatchObject({ pass: true });
+    expect(json).not.toHaveProperty('noCoveringFlow');
   });
 
   it('still passes when a passing flow covers the changed file', async () => {

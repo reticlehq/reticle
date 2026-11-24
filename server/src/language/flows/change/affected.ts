@@ -90,6 +90,15 @@ const TEST_FILE = /(?:\.(?:test|spec)\.[^./]+$)|(?:^|\/)__tests__\//;
 const INTERACTIVE =
   /\bon[A-Z]\w*=|@[a-z]+[=.]|\bv-on:|\bon:[a-z]+|<(?:button|input|select|textarea|form|a|summary)[\s>/]/;
 
+/**
+ * A changed file that a saved flow can cover: a component a source stamper can name, and not a
+ * test. A docs file, a lockfile, a stylesheet or a test is never asked for a flow.
+ */
+export function isFlowCoverableFile(file: string): boolean {
+  const c = normalize(file);
+  return COMPONENT_FILE.test(c) && !TEST_FILE.test(c);
+}
+
 export function isInteractiveSource(text: string): boolean {
   return INTERACTIVE.test(text);
 }
@@ -108,10 +117,10 @@ export function unflowedFiles(
 ): string[] {
   const sources = flows.flatMap((flow) => (flow.sources ?? []).map(normalize));
   return changedFiles.filter((file) => {
-    const c = normalize(file);
-    if (!COMPONENT_FILE.test(c) || TEST_FILE.test(c)) {
+    if (!isFlowCoverableFile(file)) {
       return false;
     }
+    const c = normalize(file);
     if (sources.some((s) => c === s || c.endsWith(`/${s}`) || s.endsWith(`/${c}`))) {
       return false;
     }

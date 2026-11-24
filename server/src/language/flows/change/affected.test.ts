@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { affectedFlows, isInteractiveSource, unflowedFiles } from './affected.js';
+import {
+  affectedFlows,
+  isFlowCoverableFile,
+  isInteractiveSource,
+  unflowedFiles,
+} from './affected.js';
 
 describe('affectedFlows', () => {
   it('selects flows whose sources include a changed file', () => {
@@ -71,5 +76,29 @@ describe('isInteractiveSource', () => {
     expect(
       isInteractiveSource('export const Badge = ({ n }) => <span className="b">{n}</span>;'),
     ).toBe(false);
+  });
+});
+
+describe('isFlowCoverableFile', () => {
+  it('counts a component a source stamper can name, and not docs, a lockfile, a style or a test', () => {
+    for (const file of [
+      'src/Badge.tsx',
+      'src/App.jsx',
+      'src/Card.vue',
+      'src/Nav.svelte',
+      'src/Page.astro',
+    ]) {
+      expect(isFlowCoverableFile(file)).toBe(true);
+    }
+    for (const file of [
+      'README.md',
+      'pnpm-lock.yaml',
+      'src/app.css',
+      'src/cart.ts',
+      'src/Badge.test.tsx',
+      'src/__tests__/Badge.tsx',
+    ]) {
+      expect(isFlowCoverableFile(file)).toBe(false);
+    }
   });
 });
