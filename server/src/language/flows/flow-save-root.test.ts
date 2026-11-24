@@ -463,7 +463,7 @@ describe('reticle_flow_save and reticle_flow_save_recorded on a leased session (
     expect(paths.some((p) => p.startsWith(`${DAEMON_ROOT}/flows`))).toBe(false);
   });
 
-  it('falls back safely when sessionId is omitted and the recording session has disconnected', async () => {
+  it('falls back with a warning when sessionId is omitted and the recording session has disconnected', async () => {
     claimArtifactRoot(LEASE_ID, PROJECT_ROOT);
     const { deps, written, sessions, leasedSession } = leasedDeps();
 
@@ -490,11 +490,31 @@ describe('reticle_flow_save and reticle_flow_save_recorded on a leased session (
 
     const saved = (await tool(ReticleTool.FLOW_SAVE).handler(deps, {
       flowName: 'checkout',
-    })) as { name?: string; error?: string };
+    })) as { name?: string; warning?: string; error?: string };
 
     expect(saved.error).toBeUndefined();
     expect(saved.name).toBe('checkout');
+    expect(saved.warning).toBeDefined();
+    expect(saved.warning).toContain(LEASE_ID);
+    expect(saved.warning).toMatch(/recording tab.*disconnected/i);
+    expect(norm(saved.warning ?? '')).toContain(DAEMON_ROOT.replace('/.reticle', ''));
     const paths = [...written.keys()].map(norm);
     expect(paths.some((p) => p.startsWith(`${DAEMON_ROOT}/flows`))).toBe(true);
+  });
+
+  it('rethrows a non-session error when resolving the recording session', () => {
+    const { deps } = leasedDeps();
+    deps.recordings.saveCompiled({ ...oneStep('checkout'), session: LEASE_ID });
+    deps.sessions = {
+      resolve: () => {
+        throw new TypeError('session registry corrupted');
+      },
+    } as unknown as SessionManager;
+
+    expect(() =>
+      tool(ReticleTool.FLOW_SAVE).handler(deps, {
+        flowName: 'checkout',
+      }),
+    ).toThrow('session registry corrupted');
   });
 });

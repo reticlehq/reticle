@@ -81,25 +81,35 @@ export function flowsForSessionId(
 }
 
 /**
- * Resolve the project target for `reticle_flow_save`.
+ * Resolve the flow store and project target for `reticle_flow_save`.
  *
  * An explicit `sessionId` always wins (and refuses when it names no session). When `sessionId` is
  * omitted, prefer the session that recorded the program so a leased tab outside the daemon's
  * project scope still writes to the lease's claimed root (#2293). If that recording session has
- * already disconnected, fall back to `sessionTarget(deps, undefined)`.
+ * already disconnected (`no connected session with id`), fall back to `sessionTarget(deps, undefined)`
+ * and return a `warning` that names the disconnected recording tab and the folder used instead.
+ * Any other error is rethrown.
  */
-export function saveTargetForRecording(
+export function flowsForSavedRecording(
   deps: ToolDeps,
   explicitSessionId: string | undefined,
   recordedSessionId: string | undefined,
-): ProjectTarget {
+): { flows: FlowStore; root: string; projectId: ProjectId | undefined; warning?: string } {
   if (explicitSessionId !== undefined || recordedSessionId === undefined) {
-    return sessionTarget(deps, explicitSessionId);
+    return flowsForSessionId(deps, explicitSessionId);
   }
   try {
-    return sessionTarget(deps, recordedSessionId);
-  } catch {
-    return sessionTarget(deps, undefined);
+    return flowsForSessionId(deps, recordedSessionId);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (!message.includes(`no connected session with id '${recordedSessionId}'`)) {
+      throw error;
+    }
+    const fallback = flowsForSessionId(deps, undefined);
+    const warning =
+      `Recording tab '${recordedSessionId}' disconnected before save. ` +
+      `Reticle saved the flow in ${dirname(fallback.root)}.`;
+    return { ...fallback, warning };
   }
 }
 
