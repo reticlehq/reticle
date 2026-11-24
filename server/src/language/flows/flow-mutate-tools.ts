@@ -33,6 +33,8 @@ const NEEDS_A_DRIVEN_PAGE =
   'RETICLE_CDP_URL). An attached tab cannot be perturbed from inside itself, and reporting ' +
   '"survived" without applying anything would demote every flow on every project that has not driven.';
 
+const UNGRADED_REPLAY = 'the replay reported no reason';
+
 export const FLOW_MUTATE_TOOL: ToolDef = {
   name: ReticleTool.FLOW_MUTATE,
   description:
@@ -71,10 +73,16 @@ export const FLOW_MUTATE_TOOL: ToolDef = {
     const port = await sessionMutationPort(deps.realInput, deps.sessions.resolve(sessionId)?.url);
     if (port === undefined) return { flow: name, target, because: NEEDS_A_DRIVEN_PAGE };
 
+    // Why a replay could not be graded, so an inconclusive result can say it.
+    let ungraded: string | undefined;
     const outcome = await mutationTest(
       {
         replay: async () => {
           const result = await replayNamedFlow(deps, { flowName: name, sessionId });
+          if (ReplayStatus.UNVERIFIABLE === result.status) {
+            ungraded = result.unverifiable?.reason ?? UNGRADED_REPLAY;
+            return ReplayStatus.UNVERIFIABLE;
+          }
           return ReplayStatus.OK === result.status ? 'pass' : 'fail';
         },
         mutate: (mutation) => port.mutate(mutation),
@@ -82,7 +90,11 @@ export const FLOW_MUTATE_TOOL: ToolDef = {
       },
       { kind: 'request-fails', target },
     );
-    return { flow: name, target, outcome, because: becauseOf(outcome, target) };
+    const because =
+      MutationOutcome.INCONCLUSIVE === outcome && ungraded !== undefined
+        ? `nothing was established about this flow: a replay could not be graded (${ungraded}). The page was put back`
+        : becauseOf(outcome, target);
+    return { flow: name, target, outcome, because };
   },
 };
 
