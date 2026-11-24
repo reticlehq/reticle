@@ -9,11 +9,18 @@
 import { runDrivenBy } from '@/hooks/driven-by.js';
 import { isValidRunId } from '@/memory/project/dir/reticle-dir.js';
 import { describe, expect, it } from 'vitest';
-import { DisparityKind, PredicateKind, Verified, type JournalAction } from '@reticlehq/core';
+import {
+  DisparityKind,
+  PredicateKind,
+  Verified,
+  VerifiedReason,
+  type JournalAction,
+} from '@reticlehq/core';
 import {
   buildVerificationRun,
   type VerificationRunInput,
 } from './artifact/build-verification-run.js';
+import { renderRunReport } from './artifact/render-report.js';
 import {
   driveRunFrom,
   driveRunId,
@@ -556,5 +563,34 @@ describe('an agent session ending', () => {
     endAgentSession('tab-written', [action(Verified.YES, 'saved', 1)], 10);
     off();
     expect(told).toBe(1);
+  });
+
+  it('ending a session with one inconclusive step counts it under undecided', () => {
+    const tab = 'tab-inconclusive';
+    const ended = endAgentSession(
+      tab,
+      [
+        {
+          ...action(Verified.UNKNOWN, 'button "Submit" is visible'),
+          effect: {
+            claim: 'button "Submit" is visible',
+            verified: Verified.UNKNOWN,
+            reason: VerifiedReason.INCONCLUSIVE,
+          },
+        },
+      ],
+      100,
+    );
+    const runs = driveRunsFrom(ended.actions, {
+      runId: ended.runId,
+    });
+    expect(runs).toHaveLength(1);
+    const run = buildVerificationRun(runs[0] as VerificationRunInput, () => 100);
+    expect(run.verdict.status).toBe(VerdictStatus.UNKNOWN);
+    expect(run.verdict.reasons).toEqual(['1 check(s) undecided']);
+    const report = renderRunReport(run);
+    expect(report).toContain('Undecided:');
+    expect(report).toContain('1 check(s) undecided');
+    expect(report).not.toContain('Why it failed:');
   });
 });

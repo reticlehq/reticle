@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — an inconclusive locator step counted as a failed check in the run report.** When a step with a malformed locator was marked inconclusive (`Verified.UNKNOWN` / `VerifiedReason.INCONCLUSIVE`), the end-of-session run report counted it as a failed check and reported it under `Why it failed:` with "nothing ran, so nothing was proved". Now, the verdict reason correctly records the undecided checks count (`${undecidedChecks} check(s) undecided`), and the run report lists it under `Undecided:` rather than `Why it failed:`. Closes [#2327](https://github.com/reticlehq/reticle/issues/2327).

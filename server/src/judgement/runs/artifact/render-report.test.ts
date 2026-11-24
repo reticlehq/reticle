@@ -105,4 +105,29 @@ describe('renderRunReport', () => {
     expect(report).not.toContain('Why it failed:');
     expect(report).not.toContain('Risks:');
   });
+
+  it('renders an undecided run under Undecided, not Why it failed', () => {
+    const run = buildVerificationRun(
+      {
+        ...base,
+        flows: [],
+        checks: [
+          {
+            predicate: 'button "Save" appears',
+            status: Verified.UNKNOWN,
+          },
+        ],
+        risks: [],
+      },
+      () => 1,
+    );
+    const report = renderRunReport(run);
+    expect(report).toContain('? NOTHING PROVED');
+    expect(report).toContain('Checks: 0/1 proved');
+    expect(report).toContain('? button "Save" appears');
+    expect(report).toContain('Undecided:');
+    expect(report).toContain('1 check(s) undecided');
+    expect(report).not.toContain('Why it failed:');
+    expect(report).not.toContain('nothing ran, so nothing was proved');
+  });
 });

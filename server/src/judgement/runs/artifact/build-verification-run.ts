@@ -99,7 +99,11 @@ export function computeVerdict(raw: VerificationRunInput): RunVerdict {
     // every consumer here reads `status` and none reads `confidence`, so a caveat parked in the
     // confidence field would never reach the person deciding whether to ship.
     status = VerdictStatus.UNKNOWN;
-    reasons.push('nothing ran, so nothing was proved');
+    reasons.push(
+      0 < undecidedChecks
+        ? `${String(undecidedChecks)} check(s) undecided`
+        : 'nothing ran, so nothing was proved',
+    );
   } else status = VerdictStatus.PASS;
 
   const ran = input.flows.length + input.checks.length;
