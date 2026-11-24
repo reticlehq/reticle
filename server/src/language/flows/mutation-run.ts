@@ -17,10 +17,14 @@
  */
 
 import { gradeMutation, MutationOutcome, type Reversal } from 'open-verification';
+import { ReplayStatus } from '@reticlehq/core';
+
+/** A replay's verdict. `unverifiable` is a replay that could not be graded, so it is not red. */
+export type MutationReplay = 'pass' | 'fail' | typeof ReplayStatus.UNVERIFIABLE;
 
 export interface MutationTestDeps {
   /** Replay the flow and report its verdict. */
-  replay(): Promise<'pass' | 'fail'>;
+  replay(): Promise<MutationReplay>;
   /** Break the subject. Rejecting is a refusal, and a refusal is not a result. */
   mutate(mutation: { kind: string; target?: string }): Promise<Reversal>;
   /** Put it back. */
@@ -31,7 +35,7 @@ export async function mutationTest(
   deps: MutationTestDeps,
   mutation: { kind: string; target?: string },
 ): Promise<MutationOutcome> {
-  let before: 'pass' | 'fail';
+  let before: MutationReplay;
   try {
     before = await deps.replay();
   } catch {
@@ -54,6 +58,13 @@ export async function mutationTest(
 
   try {
     const after = await deps.replay();
+    /*
+     * A replay that could not be graded did not go red. For example, a step failed on a page that
+     * had not hydrated (#1654). Counted as red, a slow page would grade the flow KILLED.
+     */
+    if (ReplayStatus.UNVERIFIABLE === after) {
+      return MutationOutcome.INCONCLUSIVE;
+    }
     return gradeMutation({ before, after });
   } catch {
     /*
