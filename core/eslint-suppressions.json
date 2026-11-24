@@ -157,11 +157,6 @@
       "count": 2
     }
   },
-  "src/verdict/findings.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
   "src/verdict/instrumentation-coverage-score.test.ts": {
     "curly": {
       "count": 1

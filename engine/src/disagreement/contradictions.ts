@@ -39,6 +39,7 @@ import {
 import { answersWrites, movesUi } from '../write-answer.js';
 import { findStaleResponses } from './stale-response.js';
 import { findBodyFailures } from './body-failures.js';
+import { findIndistinguishableWrites } from './indistinguishable-writes.js';
 import { findEchoMismatches } from './echo-mismatch.js';
 import { findUnitMismatches } from './unit-mismatch.js';
 import { asString } from '@reticlehq/core';
@@ -727,9 +728,11 @@ function findWindowContradictions(
   // endpoint; under URL alone each of those distinct writes read as a repeat of the first, and clean
   // verdicts degraded to unknown behind doubles that were never doubles.
   //
-  // The discriminator is `REQUEST_SHAPE_FIELD` — a fingerprint of the body's shape that the page can
+  // The discriminator is `REQUEST_SHAPE_FIELD` — a salted hash of the body that the page can
   // compute with body capture OFF, which is the configuration every session runs in. A captured body
   // is used when there is one and no fingerprint (a realm that records bodies but not shapes).
+  // The shape fingerprint (`REQUEST_BODY_SHAPE_FIELD`) rides beside it for the pair the hash
+  // separates but cannot acquit: same shape, different bodies, reported below as indistinguishable.
   //
   // When NEITHER is on the record for any call at a URL, the identity of those writes is not known,
   // and this used to be answered inconsistently and silently: two calls that both lacked a body got
@@ -847,6 +850,10 @@ function findWindowContradictions(
               'so whether they were one write repeated or different writes could not be established',
         });
       }
+      // ── The same SHAPE fired more than once, with different bodies ──────────────────────
+      // A restamped double submit is reported as calls that could not be told apart, never as
+      // a duplicate and never as a pass. The rule itself lives in `indistinguishable-writes.ts`.
+      found.push(...findIndistinguishableWrites(calls, label, wasNamed(label)));
     }
   }
 

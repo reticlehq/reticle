@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   EventType,
   NEXT_ACTION_FIELD,
+  REQUEST_BODY_SHAPE_FIELD,
   REQUEST_SHAPE_FIELD,
   REQUEST_SHAPE_NONE,
   RETICLE_WS_PATH,
@@ -39,8 +40,9 @@ function collect(): { emit: Emit; events: Emitted[] } {
  */
 function eventOf(events: Emitted[], type: EventType): Record<string, unknown> {
   const hit = events.filter((e) => e.type === type).at(-1);
-  if (hit === undefined)
+  if (hit === undefined) {
     throw new Error(`no ${type} event emitted (got: ${events.map((e) => e.type).join(', ')})`);
+  }
   return hit.data;
 }
 
@@ -216,8 +218,11 @@ describe('installNetwork (sendBeacon)', () => {
   afterEach(() => {
     teardown?.();
     teardown = undefined;
-    if (hadBeacon !== undefined) Object.defineProperty(navProto, 'sendBeacon', hadBeacon);
-    else Reflect.deleteProperty(navProto, 'sendBeacon');
+    if (hadBeacon !== undefined) {
+      Object.defineProperty(navProto, 'sendBeacon', hadBeacon);
+    } else {
+      Reflect.deleteProperty(navProto, 'sendBeacon');
+    }
   });
 
   it('emits a completed NET_REQUEST for a beacon and preserves its boolean result', () => {
@@ -738,7 +743,9 @@ class FakeXHR {
   complete(opts: { status?: number; contentType?: string; responseText?: string } = {}): void {
     this.status = opts.status ?? 200;
     this.statusText = 'OK';
-    if (opts.contentType !== undefined) this.#headers['content-type'] = opts.contentType;
+    if (opts.contentType !== undefined) {
+      this.#headers['content-type'] = opts.contentType;
+    }
     this.responseText = opts.responseText ?? '';
     (this.#listeners['loadend'] ?? []).forEach((cb) => cb({}));
   }
@@ -836,9 +843,11 @@ describe('document-initiated subresources (PerformanceObserver)', () => {
   afterEach(() => {
     teardown?.();
     teardown = undefined;
-    if (hadPO)
+    if (hadPO) {
       (globalThis as unknown as { PerformanceObserver: unknown }).PerformanceObserver = originalPO;
-    else Reflect.deleteProperty(globalThis, 'PerformanceObserver');
+    } else {
+      Reflect.deleteProperty(globalThis, 'PerformanceObserver');
+    }
   });
 
   function fakeEntry(
@@ -864,7 +873,9 @@ describe('document-initiated subresources (PerformanceObserver)', () => {
     expect(observedTypes).toContain('resource');
 
     const cb = FakePO.instances.at(0)?.callback;
-    if (cb === undefined) throw new Error('observer callback missing');
+    if (cb === undefined) {
+      throw new Error('observer callback missing');
+    }
     cb({
       getEntries: () => [
         fakeEntry('link', 'https://app.test/favicon.ico'),
@@ -917,7 +928,9 @@ describe('document-initiated subresources (PerformanceObserver)', () => {
 
     const net = events.find((e) => e.type === EventType.NET_REQUEST);
     expect(net).toBeDefined();
-    if (net === undefined) return;
+    if (net === undefined) {
+      return;
+    }
     expect(net.data).not.toHaveProperty('status');
     expect(net.data).not.toHaveProperty('ok');
     expect(net.data['initiator']).toBe('img');
@@ -986,9 +999,11 @@ describe('document-initiated subresources (PerformanceObserver)', () => {
  *
  * Request bodies carry passwords, tokens and customer data, so capture is off by default — which
  * left `duplicate-request` keying on method plus URL and accusing two legitimate sequential saves
- * of being one double submit. The page therefore fingerprints the body's SHAPE: key names, value
- * types and the total length, hashed. No character of any value ever reaches the hash input, so
- * there is nothing in it to recover a secret from.
+ * of being one double submit. The page therefore fingerprints the body two ways: a salted hash
+ * of what it carried (the identity, in `requestShape`) and a hash of its SHAPE alone (key names,
+ * value types and the total length, in `requestBodyShape`). The salt is drawn per page load and
+ * never leaves the page, so a value that reaches the identity hash cannot be recovered from it
+ * or confirmed by a guess; no character of any value reaches the shape hash at all.
  */
 describe('installNetwork (request-body shape fingerprint)', () => {
   let teardown: Teardown | undefined;
@@ -1037,6 +1052,40 @@ describe('installNetwork (request-body shape fingerprint)', () => {
     expect(shape).not.toContain('a@b.com');
     expect(shape).not.toContain('password');
     expect(shape).toMatch(/^[0-9a-f]{8}$/);
+  });
+
+  it('separates same-shape, same-length JSON bodies whose values differ (#1521)', async () => {
+    const accessSets = await shapeOfPost(JSON.stringify({ cmd: 'accessSets' }));
+    const currencies = await shapeOfPost(JSON.stringify({ cmd: 'currencies' }));
+    expect(accessSets).not.toBe(currencies);
+  });
+
+  it('gives a run of Tauri-style invoke calls distinct fingerprints (#1521)', async () => {
+    const names = ['get_balance', 'list_orders', 'fetch_users', 'sync_states'];
+    const shapes = new Set<unknown>();
+    for (const name of names) {
+      shapes.add(await shapeOfPost(JSON.stringify({ name })));
+    }
+    expect(shapes.size).toBe(names.length);
+  });
+
+  it('separates two sends that differ only in a timestamp or a request id (#1521)', async () => {
+    // What the duplicate-request rule reports for these, stated plainly: not a duplicate, and
+    // not a pass. The exact fingerprints differ, so the pair is not the same write; the shape
+    // fingerprint below is the same, so the engine reports the pair as calls it could not tell
+    // apart (`duplicate-request-indistinguishable`). The salt test in body-fingerprint.test.ts
+    // pins why the values must be hashed to separate distinct commands at all.
+    const first = await shapeOfPost(
+      JSON.stringify({ cmd: 'save', ts: 1730000000000, requestId: 'req-1' }),
+    );
+    const second = await shapeOfPost(
+      JSON.stringify({ cmd: 'save', ts: 1730000005000, requestId: 'req-2' }),
+    );
+    expect(first).not.toBe(second);
+    const repeat = await shapeOfPost(
+      JSON.stringify({ cmd: 'save', ts: 1730000000000, requestId: 'req-1' }),
+    );
+    expect(repeat).toBe(first);
   });
 
   it('reports a bodyless write as carrying no body, not as an unknown one', async () => {
@@ -1152,15 +1201,28 @@ describe('installNetwork (request-body shape fingerprint)', () => {
       expect(await shapeOfPost(upload('a.png', 'x'.repeat(10)))).toBe(small);
     });
 
-    it('carries no name or value, and a text value only as part of a length', async () => {
+    it('carries no name or value, and separates text values of the same length', async () => {
       const form = new FormData();
       form.append('password', 'hunter2-secret');
       const shape = String(await shapeOfPost(form));
       expect(shape).toMatch(/^[0-9a-f]{8}$/);
       expect(shape).not.toContain('hunter2');
+      // A text value reaches the fingerprint only as a salted hash, so a different value of
+      // the same length separates — the sum-of-lengths rule this replaces grouped the two.
       const sameLength = new FormData();
       sameLength.append('password', 'abcdefg-zzzzzz');
-      expect(await shapeOfPost(sameLength)).toBe(shape);
+      expect(await shapeOfPost(sameLength)).not.toBe(shape);
+      const identical = new FormData();
+      identical.append('password', 'hunter2-secret');
+      expect(await shapeOfPost(identical)).toBe(shape);
+    });
+
+    it('separates the issue example: one cmd field, accessSets against currencies (#1521)', async () => {
+      const accessSets = new FormData();
+      accessSets.append('cmd', 'accessSets');
+      const currencies = new FormData();
+      currencies.append('cmd', 'currencies');
+      expect(await shapeOfPost(accessSets)).not.toBe(await shapeOfPost(currencies));
     });
 
     it('cannot be imitated by a field name that spells a separator', async () => {
@@ -1187,12 +1249,52 @@ describe('installNetwork (request-body shape fingerprint)', () => {
     });
   });
 
-  it('fingerprints a form-urlencoded body by its keys, not its values', async () => {
+  it('fingerprints a form-urlencoded body as text, values included', async () => {
+    // A URLSearchParams body is text, so it takes the text rule (maintainer review of
+    // 2026-11-23): the salted hash separates two bodies whose values differ, where the
+    // keys-only shape grouped them. Identical params still group.
     const shape = await shapeOfPost(new URLSearchParams({ user: 'alice', pass: 'hunter2' }));
-    const same = await shapeOfPost(new URLSearchParams({ user: 'bobby', pass: 'trust01' }));
-    expect(shape).toBe(same); // identical keys, identical lengths
+    const different = await shapeOfPost(new URLSearchParams({ user: 'bobby', pass: 'trust01' }));
+    expect(shape).not.toBe(different);
+    const same = await shapeOfPost(new URLSearchParams({ user: 'alice', pass: 'hunter2' }));
+    expect(shape).toBe(same);
     const other = await shapeOfPost(new URLSearchParams({ user: 'alice', token: 'hunter2' }));
     expect(shape).not.toBe(other);
+  });
+
+  it('separates the issue example sent as URLSearchParams (#1521)', async () => {
+    const accessSets = await shapeOfPost(new URLSearchParams({ cmd: 'accessSets' }));
+    const currencies = await shapeOfPost(new URLSearchParams({ cmd: 'currencies' }));
+    expect(accessSets).not.toBe(currencies);
+  });
+
+  it('gives the same bytes one fingerprint as a string and as URLSearchParams', async () => {
+    const asParams = await shapeOfPost(new URLSearchParams({ cmd: 'accessSets' }));
+    const asString = await shapeOfPost('cmd=accessSets');
+    expect(asParams).toBe(asString);
+  });
+
+  it('stamps the shape fingerprint beside the identity fingerprint', async () => {
+    // The pair the engine reads for `duplicate-request-indistinguishable`: two sends that
+    // differ only in a timestamp share a shape and differ in identity.
+    async function bothOfPost(body: BodyInit): Promise<{ shape: unknown; bodyShape: unknown }> {
+      const { emit, events } = collect();
+      const stop = installNetwork(emit);
+      await window.fetch('http://localhost:8787/api/setup', { method: 'POST', body });
+      stop();
+      const request = eventOf(events, EventType.NET_REQUEST);
+      return { shape: request[REQUEST_SHAPE_FIELD], bodyShape: request[REQUEST_BODY_SHAPE_FIELD] };
+    }
+    const first = await bothOfPost(
+      JSON.stringify({ cmd: 'save', ts: 1730000000000, requestId: 'req-1' }),
+    );
+    const second = await bothOfPost(
+      JSON.stringify({ cmd: 'save', ts: 1730000005000, requestId: 'req-2' }),
+    );
+    expect(first.shape).not.toBe(second.shape);
+    expect(first.bodyShape).toBe(second.bodyShape);
+    const otherShape = await bothOfPost(JSON.stringify({ cmd: 'save', extra: true }));
+    expect(otherShape.bodyShape).not.toBe(first.bodyShape);
   });
 
   it('still stamps the fingerprint when bodies ARE captured', async () => {

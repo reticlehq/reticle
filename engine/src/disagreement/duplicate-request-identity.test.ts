@@ -17,6 +17,7 @@ import {
   ContradictionKind,
   EventType,
   NEXT_ACTION_FIELD,
+  REQUEST_BODY_SHAPE_FIELD,
   REQUEST_SHAPE_FIELD,
   REQUEST_SHAPE_NONE,
   type ReticleEvent,
@@ -26,7 +27,7 @@ import { findContradictions } from './contradictions.js';
 const URL_UNDER_TEST = '/api/setup';
 
 let seq = 0;
-function write(shape?: string, nextAction?: string): ReticleEvent {
+function write(shape?: string, nextAction?: string, bodyShape?: string): ReticleEvent {
   seq += 1;
   return {
     t: seq * 37,
@@ -41,6 +42,7 @@ function write(shape?: string, nextAction?: string): ReticleEvent {
       ok: true,
       ...(shape === undefined ? {} : { [REQUEST_SHAPE_FIELD]: shape }),
       ...(nextAction === undefined ? {} : { [NEXT_ACTION_FIELD]: nextAction }),
+      ...(bodyShape === undefined ? {} : { [REQUEST_BODY_SHAPE_FIELD]: bodyShape }),
     },
   };
 }
@@ -60,7 +62,9 @@ function duplicates(events: ReticleEvent[]): { kind: string; detail?: string }[]
   return findContradictions(events, { actionSince: 0 }).filter(
     (c) =>
       c.kind === ContradictionKind.DUPLICATE_REQUEST ||
-      c.kind === ContradictionKind.DUPLICATE_REQUEST_UNRELATED,
+      c.kind === ContradictionKind.DUPLICATE_REQUEST_UNRELATED ||
+      c.kind === ContradictionKind.DUPLICATE_REQUEST_INDISTINGUISHABLE ||
+      c.kind === ContradictionKind.DUPLICATE_REQUEST_INDISTINGUISHABLE_UNRELATED,
   );
 }
 
@@ -160,5 +164,65 @@ describe('two different Server Actions posted to one endpoint', () => {
       domChanged(),
     ];
     expect(duplicates(events)).toEqual([]);
+  });
+});
+
+/**
+ * The pair the salted fingerprint cannot decide (#1521, maintainer review of 2026-11-23).
+ *
+ * Two sends that differ only in a timestamp or a request id have different exact fingerprints
+ * and one shape fingerprint. Equal exact fingerprints mean "the same write"; equal shapes with
+ * different exact fingerprints mean "these calls could not be told apart" — a double submit
+ * whose second send restamps its body is indistinguishable from two different writes that
+ * share a shape, so the pair is reported as indistinguishable, never as a duplicate and never
+ * as a pass.
+ */
+const SAVE_ONCE = 'aa11bb22';
+const SAVE_RESTAMPED = 'cc33dd44';
+const SAVE_SHAPE = 'ee55ff66';
+const OTHER_SHAPE = '11778899';
+
+describe('two writes with one shape and different bodies', () => {
+  it('are reported as indistinguishable, not as a duplicate and not as a pass', () => {
+    const events = [
+      write(SAVE_ONCE, undefined, SAVE_SHAPE),
+      write(SAVE_RESTAMPED, undefined, SAVE_SHAPE),
+      domChanged(),
+    ];
+    const found = duplicates(events);
+    expect(found.map((c) => c.kind)).toEqual([
+      ContradictionKind.DUPLICATE_REQUEST_INDISTINGUISHABLE,
+    ]);
+    expect(found[0]?.detail).toContain('could not be established');
+  });
+
+  it('are not reported when their shapes also differ', () => {
+    const events = [
+      write(SAVE_ONCE, undefined, SAVE_SHAPE),
+      write(SAVE_RESTAMPED, undefined, OTHER_SHAPE),
+      domChanged(),
+    ];
+    expect(duplicates(events)).toEqual([]);
+  });
+
+  it('stay a plain duplicate when the exact fingerprints also match', () => {
+    const events = [
+      write(SAVE_ONCE, undefined, SAVE_SHAPE),
+      write(SAVE_ONCE, undefined, SAVE_SHAPE),
+      domChanged(),
+    ];
+    expect(duplicates(events).map((c) => c.kind)).toEqual([ContradictionKind.DUPLICATE_REQUEST]);
+  });
+
+  it('keep the advisory tier for an endpoint the assertion never named', () => {
+    const events = [
+      write(SAVE_ONCE, undefined, SAVE_SHAPE),
+      write(SAVE_RESTAMPED, undefined, SAVE_SHAPE),
+      domChanged(),
+    ];
+    const found = findContradictions(events, { actionSince: 0, namedNetUrls: ['/api/other'] });
+    expect(found.map((c) => c.kind)).toContain(
+      ContradictionKind.DUPLICATE_REQUEST_INDISTINGUISHABLE_UNRELATED,
+    );
   });
 });

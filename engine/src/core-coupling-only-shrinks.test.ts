@@ -85,7 +85,19 @@ import { fileURLToPath } from 'node:url';
  * the symbol ceiling does not move. Importing them through `contradiction-evidence.ts` would keep
  * this number flat, and that is the laundering this guard exists to catch.
  */
-const MAX_FILES_IMPORTING_CORE = 46;
+/*
+ * 46 -> 48 for the two halves of the #1521 write identity, and both are SPLITS like
+ * `write-answer.ts` above.
+ *
+ * `contradiction-evidence.ts` crossed the 1000-line cap again when the body SHAPE fingerprint
+ * joined the write identity, so `WriteIdentity` and `identityOf` moved out whole to
+ * `write-identity.ts`. `contradictions.ts` crossed the same cap when the indistinguishable-pair
+ * rule landed, so that rule moved out whole to `indistinguishable-writes.ts`. Each new file
+ * borrows only names the file it left already borrowed, so the symbol ceiling below moves only
+ * for the one new wire name the change itself added. Routing either through its old home to
+ * keep this number flat is the laundering this guard exists to catch.
+ */
+const MAX_FILES_IMPORTING_CORE = 48;
 /**
  * Raised by one, deliberately, and this is the argument for it.
  *
@@ -198,7 +210,20 @@ const MAX_FILES_IMPORTING_CORE = 46;
  * question again. Both join imports that `event-filters.ts`, `contradiction-evidence.ts`,
  * `contradictions.ts` and `predicate-eval.ts` already have, so the file count is unmoved.
  */
-const MAX_DISTINCT_SYMBOLS = 74;
+/*
+ * 74 -> 75 for the body SHAPE fingerprint (#1521), the same case as `REQUEST_SHAPE_FIELD` and
+ * `NEXT_ACTION_FIELD` above.
+ *
+ * The page now sends two discriminators for a request body: the salted hash that says what the
+ * body WAS, and the shape fingerprint that says what it LOOKED like. The pair is what lets the
+ * engine report two sends it could not tell apart instead of calling them the same write or a
+ * clean pass. The shape field's name crosses the wire, so it lives in core as
+ * `REQUEST_BODY_SHAPE_FIELD` and the engine borrows it; inlining the string in `identityOf`
+ * would keep this number flat by breaking the rule the number exists to protect. It joins
+ * `REQUEST_SHAPE_FIELD` in the same `identityOf`, so the file count above moves only by the
+ * split, not by this name.
+ */
+const MAX_DISTINCT_SYMBOLS = 75;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.

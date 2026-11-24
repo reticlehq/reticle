@@ -20,9 +20,7 @@ import {
   FieldChangeField,
   FieldChangeKind,
   MUTATING_METHODS,
-  NEXT_ACTION_FIELD,
   PredicateKind,
-  REQUEST_SHAPE_FIELD,
   ROUTE_CHANGE_HOW_FIELD,
   RouteChangeHow,
   asNumber,
@@ -33,6 +31,9 @@ import {
   type ReticleEvent,
 } from '@reticlehq/core';
 import { isReticleVoice, tiedReaction } from '../state-bookkeeping.js';
+import type { WriteIdentity } from './write-identity.js';
+
+export { identityOf, type WriteIdentity } from './write-identity.js';
 import type { ContradictionOptions } from './contradiction-types.js';
 import { matchesDeclaredFailure, type DeclaredNetFailure } from '@/question/declared.js';
 
@@ -454,45 +455,6 @@ export function isSteadyCadence(times: readonly number[]): boolean {
     return false;
   }
   return gaps.every((gap) => Math.abs(gap - median) <= median * POLL_JITTER_RATIO);
-}
-
-/**
- * What this request CARRIED, as far as the record knows — `undefined` when it does not know.
- *
- * The page's shape fingerprint first: it is present on every request from an instrumented page,
- * including the overwhelming majority where body capture is off. A captured body is the fallback for
- * a realm that records one without a fingerprint (desktop IPC). Neither means the record does not
- * say what this request carried — a body the page could not read as text, or an SDK too old to
- * compute a fingerprint — and that is an ABSENCE of identity, not an identity shared with every
- * other silent request.
- *
- * A Server Action's action id joins both halves, and it is the half that survives a `FormData`
- * body: several actions POST to the page's own URL, so without it every call is an unknown identity
- * pooled with all the others, and no fingerprint can separate two that share a shape. The id alone
- * SPLITS two different actions; it cannot say that two runs of one action carried the same thing,
- * and `carried` keeps that limit on the record for the finding to say.
- */
-export interface WriteIdentity {
-  /** The value the grouping compares. */
-  readonly key: string;
-  /** Whether the key also describes WHAT the request carried, not only which action ran. */
-  readonly carried: boolean;
-}
-
-const nonEmpty = (text: string | undefined): string | undefined =>
-  text === undefined || 0 === text.length ? undefined : text;
-
-export function identityOf(event: ReticleEvent): WriteIdentity | undefined {
-  const action = asString(event.data[NEXT_ACTION_FIELD]);
-  const shape = asString(event.data[REQUEST_SHAPE_FIELD]);
-  const body = asString(event.data['requestBody']);
-  const carried = nonEmpty(shape) ?? nonEmpty(body);
-  if (action === undefined || 0 === action.length) {
-    return carried === undefined ? undefined : { key: carried, carried: true };
-  }
-  return carried === undefined
-    ? { key: action, carried: false }
-    : { key: `${action}:${carried}`, carried: true };
 }
 
 /** Split calls to one endpoint into the sets that sent the same thing. Callers check first that

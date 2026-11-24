@@ -152,6 +152,7 @@ export {
   NEXT_ACTION_FIELD,
   NEXT_ACTION_HEADER,
   NetInitiator,
+  REQUEST_BODY_SHAPE_FIELD,
   REQUEST_SHAPE_FIELD,
   REQUEST_SHAPE_NONE,
 } from './wire/net.js';

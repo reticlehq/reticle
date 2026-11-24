@@ -283,12 +283,30 @@ export function urlForMatch(data: Record<string, unknown>): string {
  * and the body that could answer it is not on the record: capturing bodies by default would put
  * passwords, tokens and customer data on the wire for every request an app makes.
  *
- * So the page sends a fingerprint of the body's SHAPE instead: key names, value types and the total
- * length, hashed. It is equal for two identical payloads and different for two payloads that differ
- * in structure or size, which is all the rule needs, and it is not a projection of the payload —
- * no character of any value is ever read into it, so there is nothing in it to recover.
+ * So the page sends a fingerprint instead. A text body is fingerprinted by a salted hash of
+ * its canonical form, values included, because a shape cannot tell two commands apart
+ * (#1521). Form bodies are fingerprinted the same way: each text value is hashed with the
+ * salt, and a file field contributes only its type and size. The salt is drawn per page load
+ * and never leaves the page, and the hash is a 32-bit fnv1a: many bodies map to one
+ * fingerprint, and a reader who guesses a short secret value cannot confirm the guess without
+ * the salt, so there is nothing in it to recover. Two identical payloads share a fingerprint;
+ * two payloads that differ in any value do not, not even in a timestamp or a request id field.
  */
 export const REQUEST_SHAPE_FIELD = 'requestShape';
+
+/**
+ * The NET_REQUEST field carrying the SHAPE fingerprint of the request body: key names, value
+ * types and the total length, hashed, with no character of any value read into it.
+ *
+ * The shape is the coarser of the two discriminators the page sends, and it answers the
+ * question the salted hash cannot. Two sends whose bodies differ only in a timestamp or a
+ * request id have different salted hashes, so they are not the same write. They have the same
+ * shape, so the record also cannot prove they were two different writes: a double submit
+ * whose second send restamps its body looks exactly like this. The engine reports that pair
+ * as calls it could not tell apart (`duplicate-request-indistinguishable`), never as the same
+ * write and never as a clean pass (#1521).
+ */
+export const REQUEST_BODY_SHAPE_FIELD = 'requestBodyShape';
 
 /**
  * The fingerprint of a request that carried NO body.
