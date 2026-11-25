@@ -144,7 +144,7 @@ describe('--help under a project that re-runs the command (#1378)', () => {
     const note = helpVersionNote('2.14.0', '3.3.0');
     expect(note).toContain('@reticlehq/server 3.3.0');
     expect(note).toContain('runs at @reticlehq/server@2.14.0');
-    expect(note).toContain('npx @reticlehq/server@2.14.0 <command> --help');
+    expect(note).toContain('npx @reticlehq/server@2.14.0 --help');
     expect(note).toContain(`${VersionMatchEnv.OPT_OUT}=1`);
   });
 
@@ -156,6 +156,32 @@ describe('--help under a project that re-runs the command (#1378)', () => {
 
   it('says nothing when help was not asked for', () => {
     expect(helpFor(['verify'])).toBeUndefined();
+  });
+});
+
+// Before 3.1.0, `--help` was only accepted in first position (#2470). The old form exited 1 with
+// `unknown argument '--help'`, so the agent had to try again to find that version's help.
+describe('helpVersionNote for an SDK older than 3.1.0 (#2470)', () => {
+  it('names global help for a 2.x SDK', () => {
+    const note = helpVersionNote('2.14.0', '3.10.11');
+    expect(note).toContain('npx @reticlehq/server@2.14.0 --help');
+    expect(note).not.toContain('<command> --help');
+  });
+
+  it('names global help for the releases just before 3.1.0', () => {
+    for (const sdk of ['2.9.0', '3.0.9']) {
+      const note = helpVersionNote(sdk, '3.10.11');
+      expect(note, sdk).toContain(`npx @reticlehq/server@${sdk} --help`);
+      expect(note, sdk).not.toContain('<command> --help');
+    }
+  });
+
+  it('keeps command help from 3.1.0 on', () => {
+    for (const sdk of ['3.1.0', '3.2.0', '3.10.11', '4.0.0']) {
+      expect(helpVersionNote(sdk, '3.10.11'), sdk).toContain(
+        `npx @reticlehq/server@${sdk} <command> --help`,
+      );
+    }
   });
 });
 
