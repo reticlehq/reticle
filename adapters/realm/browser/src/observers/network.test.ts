@@ -908,6 +908,26 @@ describe('document-initiated subresources (PerformanceObserver)', () => {
     ]);
   });
 
+  // #2474: resource timing has no method. A start-up PATCH was recorded as GET, so a check with
+  // `method: "PATCH"` answered no and a check with `method: "GET"` answered yes. Both were false.
+  it('writes no method for a fetch or XHR that started before the patch', () => {
+    const { emit, events } = collect();
+    teardown = installNetwork(emit);
+    FakePO.instances.at(0)?.callback({
+      getEntries: () => [
+        fakeEntry('fetch', 'https://app.test/api/settings', 12, 0),
+        fakeEntry('xmlhttprequest', 'https://app.test/api/profile', 12, 0),
+        fakeEntry('img', 'https://app.test/hero.png', 12, 0),
+      ],
+    });
+    const net = events.filter((e) => e.type === EventType.NET_REQUEST);
+    expect(net.map((e) => [e.data['url'], e.data['method']])).toEqual([
+      ['https://app.test/api/settings', undefined],
+      ['https://app.test/api/profile', undefined],
+      ['https://app.test/hero.png', 'GET'],
+    ]);
+  });
+
   it('omits the status fields entirely when responseStatus is unreadable', () => {
     const { emit, events } = collect();
     teardown = installNetwork(emit);

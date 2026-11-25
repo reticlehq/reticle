@@ -51,8 +51,9 @@ export interface ResourceTimingInput {
  * over a favicon reads `assertion_failed` when the truthful answer is "not observable". Status is
  * emitted ONLY when readable; entries carry one only on newer Chromium.
  *
- * A fetch or XHR entry from before the patch has no other record, so it is reported as a GET
- * `net.request`. A fetch or XHR entry from after the patch that no patched transport saw went
+ * A fetch or XHR entry from before the patch has no other record, so it is reported as a
+ * `net.request` with no `method`: resource timing does not carry one, and a guessed GET made a
+ * start-up PATCH fail a `method: "PATCH"` check and pass a `method: "GET"` one (#2474). A fetch or XHR entry from after the patch that no patched transport saw went
  * through a `fetch` the app saved before connect(). It is reported as `net.unpatched`, not as a
  * request: it has no method, and a second record for a call would raise a false duplicate.
  *
@@ -95,7 +96,8 @@ export function observeResourceTiming(input: ResourceTimingInput): PerformanceOb
     subresourceEvents += 1;
     emit(EventType.NET_REQUEST, {
       id: nextId(),
-      method: 'GET',
+      // A document subresource is always a GET. A fetch or XHR has no method in resource timing.
+      ...(patched ? {} : { method: 'GET' }),
       ...netUrlFields(rawUrl),
       durationMs: Math.round(entry.duration),
       initiator: type,

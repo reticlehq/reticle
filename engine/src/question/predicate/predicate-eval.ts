@@ -48,6 +48,7 @@ import {
   targetsNativeDownload,
   targetsUnobservedChannel,
   unobservedChannelReason,
+  unobservableMethodMiss,
   unrecordedCallMiss,
 } from './net-blind-spots.js';
 export {
@@ -293,6 +294,8 @@ export function evalNet(
   let unrecordedReason: unknown;
   /** A call matched url/method but carried NO readable status (document-initiated subresource). */
   let unobservableStatus = false;
+  /** A call matched the url, but its record has no method (sent before connect(), #2474). */
+  let unobservableMethod = false;
   /**
    * The response body of a call that matched everything EXCEPT the body assertion, and HAD one.
    *
@@ -325,10 +328,15 @@ export function evalNet(
       return false;
     }
     const d = e.data;
-    if (p.method !== undefined && str(d['method'])?.toUpperCase() !== p.method.toUpperCase()) {
+    if (p.urlContains !== undefined && !urlForMatch(d).includes(p.urlContains)) {
       return false;
     }
-    if (p.urlContains !== undefined && !urlForMatch(d).includes(p.urlContains)) {
+    const method = str(d['method']);
+    if (p.method !== undefined && method === undefined) {
+      unobservableMethod = true;
+      return false;
+    }
+    if (p.method !== undefined && method?.toUpperCase() !== p.method.toUpperCase()) {
       return false;
     }
     if (p.status !== undefined) {
@@ -410,6 +418,9 @@ export function evalNet(
       expected: `a status of ${String(p.status)} on ${JSON.stringify(p.urlContains ?? '*')}`,
       assertion: 'net.unobservable-status',
     };
+  }
+  if (unobservableMethod && 0 === matches.length) {
+    return unobservableMethodMiss(describeNetFilter(p), p.method);
   }
   if (matchedButUnrecorded && 0 === matches.length) {
     // Inconclusive, never a plain failure: nothing says the body lacked the text, only that nobody
