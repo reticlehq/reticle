@@ -26,6 +26,8 @@ const REJECTION_EVENT = 'unhandledrejection';
 const CONTROL_FLOW_DIGEST = /^NEXT_(REDIRECT|NOT_FOUND|HTTP_ERROR)/;
 /** `disposition` of a report-only policy: the browser reported the resource and did not block it. */
 const REPORT_ONLY = 'report';
+/** The prefix DevTools puts on a failed `console.assert`. */
+const ASSERTION_FAILED = 'Assertion failed';
 
 const METHOD_EVENT: Record<ConsoleMethod, EventType> = {
   log: EventType.CONSOLE_LOG,
@@ -133,12 +135,12 @@ export function installConsole(emit: Emit): Teardown {
       callOriginal(...args);
       if ('assert' === method) {
         // Only a FALSY first argument fails the assertion; the rest is the message, which DevTools
-        // prefixes with 'Assertion failed'. `console.assert(true, ...)` prints nothing, so it emits nothing.
+        // prefixes with ASSERTION_FAILED. `console.assert(true, ...)` prints nothing, so it emits nothing.
         if (false === Boolean(args[0])) {
           const [, ...detail] = args;
           report(
             method,
-            0 === detail.length ? ['Assertion failed'] : ['Assertion failed:', ...detail],
+            0 === detail.length ? [ASSERTION_FAILED] : [`${ASSERTION_FAILED}:`, ...detail],
           );
         }
         return;
