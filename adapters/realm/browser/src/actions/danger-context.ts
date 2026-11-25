@@ -27,9 +27,8 @@ import {
   withoutFilenameTokens,
 } from '@reticlehq/core/page';
 import { getAccessibleName, getRole } from '@/dom/a11y.js';
-import { visibleTextOf } from '@/dom/query.js';
-import { type ActionTarget, isHtmlElement } from '@/dom/realm.js';
-import { isVisible } from '@/dom/visibility.js';
+import { type ActionTarget, isElement, isHtmlElement } from '@/dom/realm.js';
+import { isHiddenByAriaOnly, isHiddenSubtree, isPainted } from '@/dom/visibility.js';
 
 /**
  * Input types whose `value` IS the visible label rather than data the user put there.
@@ -94,14 +93,36 @@ export const DangerSource = {
 } as const;
 export type DangerSource = (typeof DangerSource)[keyof typeof DangerSource];
 
+/** The text nodes under `el` that are painted on the screen, in document order. */
+function paintedText(el: Element, memo: Map<Element, boolean>): readonly string[] {
+  const painted = isPainted(el, memo);
+  const parts: string[] = [];
+  for (const node of el.childNodes) {
+    if (Node.TEXT_NODE === node.nodeType && painted) {
+      parts.push(node.textContent ?? '');
+    } else if (isElement(node) && (!isHiddenSubtree(node, memo) || isHiddenByAriaOnly(node))) {
+      parts.push(...paintedText(node, memo));
+    }
+  }
+  return parts;
+}
+
 /**
- * The words a person reads on this control. `textContent` also holds its hidden descendants: a chat
- * button with a hidden "Drop files here" hint was refused as destructive. A control that is not
- * visible itself shows no words, so all of its text counts and the guard does not become weaker.
+ * The words a person sees on this control. `textContent` also holds its hidden descendants: a chat
+ * button with a hidden "Drop files here" hint was refused as destructive. `aria-hidden` text is on
+ * the screen, so it counts. A control that is not painted itself shows no words, so all of its text
+ * counts and the guard does not become weaker.
+ *
+ * The parts are joined both ways: with a space, so a word does not stick to its neighbour, and
+ * without, so a word that is split over elements is still one word.
  */
 function shownText(el: ActionTarget): string {
   const memo = new Map<Element, boolean>();
-  return isVisible(el, memo) ? visibleTextOf(el, memo) : (el.textContent ?? '');
+  if (!isPainted(el, memo)) {
+    return el.textContent ?? '';
+  }
+  const parts = paintedText(el, memo);
+  return `${parts.join(' ')} ${parts.join('')}`;
 }
 
 /** Every surface the guard reads, each with where it came from. */

@@ -440,7 +440,8 @@ describe('a button is classified by the text a person can see', () => {
     ['hidden', '<span hidden>Drop files here</span>'],
     ['display:none', '<span style="display:none">Drop files here</span>'],
     ['visibility:hidden', '<span style="visibility:hidden">Drop files here</span>'],
-    ['aria-hidden', '<span aria-hidden="true">Drop files here</span>'],
+    ['opacity:0', '<span style="opacity:0">Drop files here</span>'],
+    ['aria-hidden and hidden', '<span aria-hidden="true" hidden>Drop files here</span>'],
     ['nested', '<span hidden><b>Drop</b> files here</span>'],
   ])('does not block a button for the %s text inside it', async (_how, hint) => {
     document.body.innerHTML = `<button id="b" aria-label="Ask the agent">Ask ${hint}</button>`;
@@ -452,6 +453,14 @@ describe('a button is classified by the text a person can see', () => {
     [
       'a visible word beside a hidden one',
       '<button id="b" aria-label="Table action"><span hidden>Ask</span><span>Drop table</span></button>',
+    ],
+    [
+      'a painted word that is aria-hidden',
+      '<button id="b" aria-label="Table action"><span aria-hidden="true">Drop table</span></button>',
+    ],
+    [
+      'a word split over elements',
+      '<button id="b" aria-label="Table action"><i>De</i><i>lete</i> table</button>',
     ],
     ['the accessible name', '<button id="b" aria-label="Drop table">Go</button>'],
     [
