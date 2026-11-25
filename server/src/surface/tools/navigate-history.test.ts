@@ -9,12 +9,15 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import {
+  EventType,
   HISTORY_DIRECTION_ARG,
   NavigateHistory,
   NavigateHistoryRefusal,
+  ROUTE_CHANGE_HOW_FIELD,
   ReticleCommand,
   ProductionRule,
   ReticleTool,
+  RouteChangeHow,
   productionRefusal,
 } from '@reticlehq/core';
 import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
@@ -50,7 +53,13 @@ function harness(answer: PageAnswer): Harness {
       });
     }
     if ('moveTo' in answer) {
-      session.url = answer.moveTo;
+      // What the SDK reports when the tab pops to another entry of the same document.
+      session.pushEvent({
+        t: 0,
+        sessionId: session.id,
+        type: EventType.ROUTE_CHANGE,
+        data: { from: CART, to: answer.moveTo, [ROUTE_CHANGE_HOW_FIELD]: RouteChangeHow.POP },
+      });
     }
     return Promise.resolve({ kind: 'command_result', id: 'c', ok: true, result: { ok: true } });
   };

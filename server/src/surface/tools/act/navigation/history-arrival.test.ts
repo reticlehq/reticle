@@ -4,7 +4,8 @@
  * A URL navigation knows its target, so `awaitArrival` matches sessions against it. A history move
  * does not: the entry it lands on is the browser's, not the caller's. So arrival here is "the
  * navigated tab is now somewhere else", and these tests hold the two ways that can show:
- *   - the same document moved (an SPA's popstate updates `session.url` through `route.change`);
+ *   - the same document moved (an SPA's popstate updates `session.url` through a `route.change`
+ *     with `how: "pop"`; an app's `replaceState` during the wait is not the move);
  *   - a new document connected for the same tab (same id with a new document id, or a new id).
  *
  * The clock is injected, so nothing here asserts a duration: only what was found and how often the
@@ -12,6 +13,12 @@
  */
 
 import { describe, expect, it } from 'vitest';
+import {
+  EventType,
+  ROUTE_CHANGE_HOW_FIELD,
+  RouteChangeHow,
+  type ReticleEvent,
+} from '@reticlehq/core';
 import { awaitHistoryArrival, awaitLeaseBack, type HistoryScope } from './history-arrival.js';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
@@ -21,6 +28,7 @@ const CART = 'http://localhost:3000/cart';
 const LEASED_ORDERS = 'http://localhost:3000/orders?__reticle_session=lease-1';
 const CHECKOUT = 'http://localhost:3000/checkout';
 const LOGIN = 'http://localhost:3000/login';
+const CART_TAB = 'http://localhost:3000/cart?tab=saved';
 
 interface Row {
   id: string;
@@ -28,10 +36,35 @@ interface Row {
   documentId?: string;
   /** A new Session object under the same id: the SDK reopened its socket or a new document said HELLO. */
   replaced?: boolean;
+  /** The page reported a `route.change` of this kind on this look, to `url`. */
+  how?: RouteChangeHow;
 }
 
-function session(row: Row): Session {
-  return { id: row.id, url: row.url, currentDocumentId: row.documentId } as unknown as Session;
+/** Where look N's events sit on the session's buffer clock: at `LOOK_T + N`. */
+const LOOK_T = 10;
+
+/** The navigated session's buffer clock when the move was sent: before every look. */
+const SENT_AT = LOOK_T;
+
+function routeChange(t: number, to: string, how: RouteChangeHow): ReticleEvent {
+  return {
+    t,
+    type: EventType.ROUTE_CHANGE,
+    sessionId: 'fake',
+    data: { to, [ROUTE_CHANGE_HOW_FIELD]: how },
+  };
+}
+
+/** A Session with the fields the wait reads, and a buffer that holds the events given to it. */
+function session(row: Row, events: ReticleEvent[] = []): Session {
+  const buffer = [...events];
+  return {
+    id: row.id,
+    url: row.url,
+    currentDocumentId: row.documentId,
+    eventsSince: (cursor: number) => buffer.filter((e) => e.t >= cursor),
+    pushEvent: (e: ReticleEvent) => buffer.push(e),
+  } as unknown as Session;
 }
 
 /**
@@ -46,14 +79,22 @@ function registry(
   let look = 0;
   const sessions = {
     all: () => {
-      const rows = later[Math.min(look, later.length - 1)] ?? [];
+      const index = Math.min(look, later.length - 1);
+      const rows = later[index] ?? [];
+      // The last row set repeats when the looks run past it. A repeat is the same report, not a new one.
+      const repeat = index < look;
       look++;
       return rows.map((row) => {
+        const reported =
+          row.how === undefined || repeat ? [] : [routeChange(LOOK_T + index, row.url, row.how)];
         const existing = live.get(row.id);
         if (existing === undefined || true === row.replaced) {
-          const fresh = session(row);
+          const fresh = session(row, reported);
           live.set(row.id, fresh);
           return fresh;
+        }
+        for (const e of reported) {
+          existing.pushEvent(e);
         }
         const moving = existing as unknown as {
           url: string;
@@ -83,6 +124,7 @@ function scopeFor(driven: Session, priorIds: string[] = [driven.id]): HistorySco
   return {
     navigatedSession: driven,
     navigatedFrom: driven.url,
+    sentAt: SENT_AT,
     ...(driven.currentDocumentId === undefined
       ? {}
       : { navigatedFromDocumentId: driven.currentDocumentId }),
@@ -95,11 +137,47 @@ describe('awaitHistoryArrival', () => {
     const driven = session({ id: 's1', url: CART, documentId: 'd1' });
     const { sessions } = registry(driven, [
       [{ id: 's1', url: CART, documentId: 'd1' }],
-      [{ id: 's1', url: ORDERS, documentId: 'd1' }],
+      [{ id: 's1', url: ORDERS, documentId: 'd1', how: RouteChangeHow.POP }],
     ]);
     await expect(
       awaitHistoryArrival(sessions, scopeFor(driven), 5_000, fakeClock(100)),
     ).resolves.toEqual({ sessionId: 's1', url: ORDERS, settled: true });
+  });
+
+  it('does not read a replaceState that the app makes during the wait as the move', async () => {
+    // Back was sent, and the tab has not moved yet. The app writes UI state into the URL with
+    // replaceState. The URL changed, but the tab is still on the same entry: not an arrival.
+    const driven = session({ id: 's1', url: CART, documentId: 'd1' });
+    const { sessions } = registry(driven, [
+      [{ id: 's1', url: CART, documentId: 'd1' }],
+      [{ id: 's1', url: CART_TAB, documentId: 'd1', how: RouteChangeHow.REPLACE }],
+    ]);
+    await expect(
+      awaitHistoryArrival(sessions, scopeFor(driven), 500, fakeClock(100)),
+    ).resolves.toBeNull();
+  });
+
+  it('confirms the popped entry when an app replaceState came before the pop', async () => {
+    const driven = session({ id: 's1', url: CART, documentId: 'd1' });
+    const { sessions } = registry(driven, [
+      [{ id: 's1', url: CART_TAB, documentId: 'd1', how: RouteChangeHow.REPLACE }],
+      [{ id: 's1', url: ORDERS, documentId: 'd1', how: RouteChangeHow.POP }],
+    ]);
+    await expect(
+      awaitHistoryArrival(sessions, scopeFor(driven), 5_000, fakeClock(100)),
+    ).resolves.toEqual({ sessionId: 's1', url: ORDERS, settled: true });
+  });
+
+  it('does not count a pop that the tab reported before the move was sent', async () => {
+    // An earlier Back is still in the buffer. Only a pop at or after the send belongs to this move.
+    const earlier = routeChange(SENT_AT - 1, CART, RouteChangeHow.POP);
+    const driven = session({ id: 's1', url: CART, documentId: 'd1' }, [earlier]);
+    const { sessions } = registry(driven, [
+      [{ id: 's1', url: CART_TAB, documentId: 'd1', how: RouteChangeHow.REPLACE }],
+    ]);
+    await expect(
+      awaitHistoryArrival(sessions, scopeFor(driven), 300, fakeClock(100)),
+    ).resolves.toBeNull();
   });
 
   it('confirms a move to another document that reconnects under the same id', async () => {
@@ -140,8 +218,8 @@ describe('awaitHistoryArrival', () => {
     const driven = session({ id: 's1', url: CART, documentId: 'd1' });
     const { sessions } = registry(driven, [
       [{ id: 's1', url: CART, documentId: 'd1' }],
-      [{ id: 's1', url: CHECKOUT, documentId: 'd1' }],
-      [{ id: 's1', url: LOGIN, documentId: 'd1' }],
+      [{ id: 's1', url: CHECKOUT, documentId: 'd1', how: RouteChangeHow.POP }],
+      [{ id: 's1', url: LOGIN, documentId: 'd1', how: RouteChangeHow.REPLACE }],
     ]);
     await expect(
       awaitHistoryArrival(sessions, scopeFor(driven), 5_000, fakeClock(100)),
@@ -165,8 +243,8 @@ describe('awaitHistoryArrival', () => {
     // and `settled:false` says it was still moving, so the caller does not read it as the end.
     const driven = session({ id: 's1', url: CART, documentId: 'd1' });
     const { sessions } = registry(driven, [
-      [{ id: 's1', url: CHECKOUT, documentId: 'd1' }],
-      [{ id: 's1', url: LOGIN, documentId: 'd1' }],
+      [{ id: 's1', url: CHECKOUT, documentId: 'd1', how: RouteChangeHow.POP }],
+      [{ id: 's1', url: LOGIN, documentId: 'd1', how: RouteChangeHow.REPLACE }],
     ]);
     await expect(
       awaitHistoryArrival(sessions, scopeFor(driven), 100, fakeClock(100)),

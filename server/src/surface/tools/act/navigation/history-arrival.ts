@@ -5,8 +5,9 @@
  * can name: the entry it lands on belongs to the browser. So this waits for the navigated tab to be
  * SOMEWHERE ELSE, and reports where that is. There are two ways a tab shows it moved:
  *
- * - The same document moved. An SPA's popstate fires `route.change`, and the session updates its
- *   `url` from it. The session is the same object and its document id does not change.
+ * - The same document moved. An SPA's popstate fires `route.change` with `how: "pop"`, and the
+ *   session updates its `url` from it. The session is the same object and its document id does
+ *   not change. A URL change without a pop is the app's own `replaceState`, not this move.
  * - A new document connected for the same tab: under the same id with a different document id, or
  *   under a new id after the old document left the registry.
  *
@@ -15,6 +16,12 @@
  * target is that tie; here there is none, so the old document leaving is the tie instead.
  */
 
+import {
+  EventType,
+  ROUTE_CHANGE_HOW_FIELD,
+  RouteChangeHow,
+  type ReticleEvent,
+} from '@reticlehq/core';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import { claimedSessionOf } from '../../../../portal/session/session-successor.js';
@@ -25,8 +32,14 @@ import {
   type ArrivalScope,
 } from './navigate-arrival.js';
 
-/** What a history move knew at dispatch. The same facts a URL navigation samples. */
-export type HistoryScope = ArrivalScope;
+/** What a history move knew at dispatch: the facts a URL navigation samples, and when it sent. */
+export interface HistoryScope extends ArrivalScope {
+  /**
+   * The navigated session's buffer clock (`elapsed()`) just before the move was sent. A pop at or
+   * after it belongs to this move. A pop before it belongs to an earlier one.
+   */
+  sentAt: number;
+}
 
 /** The tab after the move: the session that reports for it now, and the URL it is on. */
 export interface HistoryArrival {
@@ -64,13 +77,36 @@ function documentChanged(scope: HistoryScope, current: Session): boolean {
   return before !== undefined && after !== undefined && before !== after;
 }
 
+function isPop(event: ReticleEvent): boolean {
+  return (
+    event.type === EventType.ROUTE_CHANGE &&
+    event.data[ROUTE_CHANGE_HOW_FIELD] === RouteChangeHow.POP
+  );
+}
+
+/**
+ * Whether the same document moved through its history after the move was sent. A URL change is
+ * not enough: the app can call `replaceState` during the wait, and that changes the URL on the same
+ * entry. Only a `route.change` with `how: "pop"` shows that the entry changed.
+ *
+ * A new Session object under the same id has a new buffer clock, and every event in its buffer came
+ * after it connected, which was after the send. So it is read from the start.
+ */
+function poppedSinceSent(scope: HistoryScope, current: Session): boolean {
+  const cursor = current === scope.navigatedSession ? scope.sentAt : 0;
+  return current.eventsSince(cursor).some(isPop);
+}
+
 function lookForMove(snapshot: readonly Session[], scope: HistoryScope): Seen | null {
   const navigated = snapshot.find((s) => s.id === scope.navigatedSession.id);
   if (navigated !== undefined) {
-    if (documentChanged(scope, navigated) || navigated.url !== scope.navigatedFrom) {
+    if (documentChanged(scope, navigated)) {
       return seen(navigated);
     }
-    // Still connected and still where it was: the move has not shown yet.
+    if (navigated.url !== scope.navigatedFrom && poppedSinceSent(scope, navigated)) {
+      return seen(navigated);
+    }
+    // Still connected, and not moved through its history yet.
     return null;
   }
   const identity = claimedSessionOf(scope.navigatedFrom);

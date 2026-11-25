@@ -116,6 +116,7 @@ export async function navigateHistory(
   const scope = {
     navigatedSession: session,
     navigatedFrom: session.url,
+    sentAt: session.elapsed(),
     ...(session.currentDocumentId === undefined
       ? {}
       : { navigatedFromDocumentId: session.currentDocumentId }),
