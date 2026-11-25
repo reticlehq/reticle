@@ -13,8 +13,6 @@ import {
   describe,
   didNothing,
   RETICLE_SIGNAL_NAMESPACE,
-  groupByIdentity,
-  identityOf,
   isMutating,
   isSameDocumentHashAnchor,
   isSamePathnameReplace,
@@ -34,8 +32,8 @@ import {
   storeEchoesFailedStatus,
   successClaims,
   UNNAMED_SIGNAL,
-  type WriteIdentity,
 } from './contradiction-evidence.js';
+import { groupByIdentity, identityOf, type WriteIdentity } from '../write-identity.js';
 import { answersWrites, movesUi } from '../write-answer.js';
 import { findStaleResponses } from './stale-response.js';
 import { findBodyFailures } from './body-failures.js';

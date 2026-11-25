@@ -20,9 +20,7 @@ import {
   FieldChangeField,
   FieldChangeKind,
   MUTATING_METHODS,
-  NEXT_ACTION_FIELD,
   PredicateKind,
-  REQUEST_SHAPE_FIELD,
   ROUTE_CHANGE_HOW_FIELD,
   RouteChangeHow,
   asNumber,
@@ -456,57 +454,8 @@ export function isSteadyCadence(times: readonly number[]): boolean {
   return gaps.every((gap) => Math.abs(gap - median) <= median * POLL_JITTER_RATIO);
 }
 
-/**
- * What this request CARRIED, as far as the record knows — `undefined` when it does not know.
- *
- * The page's shape fingerprint first: it is present on every request from an instrumented page,
- * including the overwhelming majority where body capture is off. A captured body is the fallback for
- * a realm that records one without a fingerprint (desktop IPC). Neither means the record does not
- * say what this request carried — a body the page could not read as text, or an SDK too old to
- * compute a fingerprint — and that is an ABSENCE of identity, not an identity shared with every
- * other silent request.
- *
- * A Server Action's action id joins both halves, and it is the half that survives a `FormData`
- * body: several actions POST to the page's own URL, so without it every call is an unknown identity
- * pooled with all the others, and no fingerprint can separate two that share a shape. The id alone
- * SPLITS two different actions; it cannot say that two runs of one action carried the same thing,
- * and `carried` keeps that limit on the record for the finding to say.
- */
-export interface WriteIdentity {
-  /** The value the grouping compares. */
-  readonly key: string;
-  /** Whether the key also describes WHAT the request carried, not only which action ran. */
-  readonly carried: boolean;
-}
-
-const nonEmpty = (text: string | undefined): string | undefined =>
-  text === undefined || 0 === text.length ? undefined : text;
-
-export function identityOf(event: ReticleEvent): WriteIdentity | undefined {
-  const action = asString(event.data[NEXT_ACTION_FIELD]);
-  const shape = asString(event.data[REQUEST_SHAPE_FIELD]);
-  const body = asString(event.data['requestBody']);
-  const carried = nonEmpty(shape) ?? nonEmpty(body);
-  if (action === undefined || 0 === action.length) {
-    return carried === undefined ? undefined : { key: carried, carried: true };
-  }
-  return carried === undefined
-    ? { key: action, carried: false }
-    : { key: `${action}:${carried}`, carried: true };
-}
-
-/** Split calls to one endpoint into the sets that sent the same thing. Callers check first that
- * every identity is known; an unknown one would otherwise pool with every other unknown. */
-export function groupByIdentity<T extends { identity: WriteIdentity | undefined }>(
-  calls: readonly T[],
-): T[][] {
-  const byIdentity = new Map<string, T[]>();
-  for (const call of calls) {
-    const key = call.identity?.key ?? '';
-    byIdentity.set(key, [...(byIdentity.get(key) ?? []), call]);
-  }
-  return [...byIdentity.values()];
-}
+// Split out to `../write-identity.ts` at the line cap; re-exported so the published path does not move.
+export { groupByIdentity, identityOf, type WriteIdentity } from '../write-identity.js';
 
 /**
  * The `net` clause that declares each of these failures, worded as a condition.
@@ -687,8 +636,11 @@ export function appIsSilent(
  * failure settled. The caller then keeps the old window-wide reading.
  *
  * Only the control's own changes count, so rows the action did not touch (a live feed, a clock)
- * decide nothing — and a descendant's changes stay out: a child's `class` would share the control's
- * `attr:class` key, and `targetFate` must not read the child's churn as the control's (#2387).
+ * decide nothing.
+ *
+ * ponytail: the control alone decides. A control rolled back while an unrelated element keeps a
+ * change (an item added to a list as its button re-enables) reads as handled. Telling that apart
+ * needs the DOM ancestry of each event, which the wire does not carry.
  */
 export const TargetFate = {
   PERSISTED: 'persisted',
@@ -861,8 +813,10 @@ function writtenValues(value: unknown, old: unknown): readonly unknown[] {
 }
 
 /**
- * Each call that failed in this window, with the event after which the app could react to it — the
- * send, or the answer when the window holds no send (`successClaims` has why).
+ * Each call that failed in this window, with the event after which the app can react to it: the
+ * send, or the answer when the window does not hold the send. The limit is the send and not the
+ * answer for the reason `successClaims` gives: the browser observer records the answer after the
+ * app's own handler ran.
  */
 function failedCalls(
   events: readonly ReticleEvent[],
@@ -884,10 +838,13 @@ function failedCalls(
 }
 
 /**
- * Did the store record the HTTP status of a call that failed in this window? An app that keeps
- * `status: 429` beside a retry button knows the call failed — a structural echo, like the error
- * text's. Strict, because a false acknowledgement hides a failed write: the value must be exactly
- * that status, changed in this write, and written after the call was sent.
+ * Did the store record the HTTP status of a call that failed in this window?
+ *
+ * A structural echo, like the echo of the error text: an app that keeps `status: 429` beside a
+ * retry button knows that the call failed. Strict, because a false acknowledgement hides a failed
+ * write. The value must be exactly that status (a number or its string), it must change in this
+ * write, and the write must come after the call was sent. The status of a call that succeeded is
+ * not one.
  */
 export function storeEchoesFailedStatus(events: readonly ReticleEvent[]): boolean {
   return failedCalls(events).some(({ call, after }) => {
@@ -910,10 +867,15 @@ export function storeEchoesFailedStatus(events: readonly ReticleEvent[]): boolea
 const LIVE_ASSERTIVE = 'assertive';
 
 /**
- * Did the app write text into an existing ASSERTIVE live region after a failed call was sent? A
- * mount event does not record a write into a region already on the page (#2173). The level decides,
- * not the words: `role="status"` is for "Saved", so text there does not count — and even a success
- * word in an alert region does, as a mounted alert already does. Text before the send cannot answer.
+ * Did the app write text into an existing ASSERTIVE live region after a failed call was sent?
+ *
+ * The common way to show "Wrong email or password" is to write it into a `role="alert"` region that
+ * is already on the page, which a mount event does not record (#2173). The words do not decide, the
+ * level does. ARIA keeps the assertive level for errors and urgent warnings. A polite region
+ * (`role="status"`) is where an app writes "Saved", so text there is not an acknowledgement. The
+ * ceiling: an app that writes a success word into an alert region over a failed write is read as
+ * acknowledging it, as a mounted alert already is. Text written before the send cannot answer the
+ * call, and a cleared region says nothing.
  */
 export function liveAlertAfterFailedSend(events: readonly ReticleEvent[]): boolean {
   return failedCalls(events).some(({ after }) =>
