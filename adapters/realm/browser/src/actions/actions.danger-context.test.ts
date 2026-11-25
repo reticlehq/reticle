@@ -425,3 +425,41 @@ describe('a filename-like token never reads as an action verb', () => {
     await expect(executeAction(refTo('#d'), 'click')).rejects.toThrow(/confirmDangerous/);
   });
 });
+
+/**
+ * A hidden file-drop hint inside a chat button made the guard refuse the button: `textContent` holds
+ * the text of hidden descendants, and `drop` is a destructive word. An agent that must pass
+ * `confirmDangerous: true` for a harmless button turns the guard off for that click.
+ */
+describe('a button is classified by the text a person can see', () => {
+  beforeEach(() => {
+    document.body.innerHTML = '';
+  });
+
+  it.each([
+    ['hidden', '<span hidden>Drop files here</span>'],
+    ['display:none', '<span style="display:none">Drop files here</span>'],
+    ['visibility:hidden', '<span style="visibility:hidden">Drop files here</span>'],
+    ['aria-hidden', '<span aria-hidden="true">Drop files here</span>'],
+    ['nested', '<span hidden><b>Drop</b> files here</span>'],
+  ])('does not block a button for the %s text inside it', async (_how, hint) => {
+    document.body.innerHTML = `<button id="b" aria-label="Ask the agent">Ask ${hint}</button>`;
+    await expect(executeAction(refTo('#b'), 'click')).resolves.toBeDefined();
+  });
+
+  it.each([
+    ['a visible word', '<button id="b" aria-label="Table action">Drop table</button>'],
+    [
+      'a visible word beside a hidden one',
+      '<button id="b" aria-label="Table action"><span hidden>Ask</span><span>Drop table</span></button>',
+    ],
+    ['the accessible name', '<button id="b" aria-label="Drop table">Go</button>'],
+    [
+      'the text of a control that is not visible',
+      '<button id="b" aria-label="Table action" style="visibility:hidden">Drop table</button>',
+    ],
+  ])('still blocks %s', async (_what, html) => {
+    document.body.innerHTML = html;
+    await expect(executeAction(refTo('#b'), 'click')).rejects.toThrow(/confirmDangerous/);
+  });
+});

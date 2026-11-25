@@ -27,7 +27,9 @@ import {
   withoutFilenameTokens,
 } from '@reticlehq/core/page';
 import { getAccessibleName, getRole } from '@/dom/a11y.js';
+import { visibleTextOf } from '@/dom/query.js';
 import { type ActionTarget, isHtmlElement } from '@/dom/realm.js';
+import { isVisible } from '@/dom/visibility.js';
 
 /**
  * Input types whose `value` IS the visible label rather than data the user put there.
@@ -92,15 +94,23 @@ export const DangerSource = {
 } as const;
 export type DangerSource = (typeof DangerSource)[keyof typeof DangerSource];
 
+/**
+ * The words a person reads on this control. `textContent` also holds its hidden descendants: a chat
+ * button with a hidden "Drop files here" hint was refused as destructive. A control that is not
+ * visible itself shows no words, so all of its text counts and the guard does not become weaker.
+ */
+function shownText(el: ActionTarget): string {
+  const memo = new Map<Element, boolean>();
+  return isVisible(el, memo) ? visibleTextOf(el, memo) : (el.textContent ?? '');
+}
+
 /** Every surface the guard reads, each with where it came from. */
 function labelledSurfaces(el: ActionTarget): readonly (readonly [DangerSource, string])[] {
   const form = el.closest('form');
   // The label surfaces only, when the content is the user's own. The accessible NAME still counts:
   // that is the prompt beside the field, and "Type DELETE to remove this account" is exactly the
   // control this guard exists for.
-  const ownText = holdsUserText(el)
-    ? ['', '']
-    : [el.textContent ?? '', el.getAttribute('value') ?? ''];
+  const ownText = holdsUserText(el) ? ['', ''] : [shownText(el), el.getAttribute('value') ?? ''];
   return [
     [DangerSource.NAME, withoutFilenameTokens(getAccessibleName(el))],
     [DangerSource.OWN_TEXT, withoutFilenameTokens(ownText.join(' '))],

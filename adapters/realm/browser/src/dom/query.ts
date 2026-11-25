@@ -66,7 +66,7 @@ const MAX_PRESENT_TESTIDS = 12;
  * labels. Walking down and dropping the HUD's nodes where they live keeps the app's text and
  * leaves ours out, which pointing an agent at "Pause" or "Export" did not.
  */
-function visibleTextOf(el: Element, memo: Map<Element, boolean>): string {
+export function visibleTextOf(el: Element, memo: Map<Element, boolean>): string {
   // A hidden root hides its whole subtree: nothing under it is visible, so none of it is read.
   if (isHiddenSubtree(el, memo) || isNonRendered(el) || isWordsIgnored(el)) {
     return '';
