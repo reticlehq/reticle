@@ -42,6 +42,32 @@ describe('cspConnectSrcProblem', () => {
     expect(cspConnectSrcProblem(source, PORT)).toBeUndefined();
   });
 
+  it('accepts development bridge origins in a double-quoted branch of a template expression', () => {
+    // #2335: the double quote inside `${...}` ended the source list, so doctor reported a bridge
+    // that the development branch admits.
+    const source = `
+      const csp = \`default-src 'self'; connect-src 'self'\${dev ? " ws://localhost:4400 ws://127.0.0.1:4400" : ""}; img-src 'self'\`;
+    `;
+
+    expect(cspConnectSrcProblem(source, PORT)).toBeUndefined();
+  });
+
+  it('accepts a template expression whose condition holds a double-quoted string', () => {
+    const source = `
+      const csp = \`connect-src 'self'\${process.env.NODE_ENV === "development" ? ' ws://localhost:4400 ws://127.0.0.1:4400' : ''}\`;
+    `;
+
+    expect(cspConnectSrcProblem(source, PORT)).toBeUndefined();
+  });
+
+  it('flags a template expression when neither double-quoted branch admits the bridge', () => {
+    const source = `
+      const csp = \`connect-src 'self'\${dev ? " ws://localhost:4400 https://api.example.com" : ""}\`;
+    `;
+
+    expect(cspConnectSrcProblem(source, PORT)).toContain('bridge: ws://127.0.0.1:4400 is missing');
+  });
+
   it('accepts development bridge origins before a template-expression closing brace', () => {
     const source = `
       const csp = \`connect-src 'self' \${dev && 'ws://localhost:4400 ws://127.0.0.1:4400'}\`;
