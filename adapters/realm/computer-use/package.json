@@ -19,7 +19,8 @@
     "lint": "eslint src",
     "test:unit": "vitest run src --passWithNoTests",
     "check:live": "node native/mac/selfcheck.mjs && node native/mac/ambientcheck.mjs && node native/mac/electroncheck.mjs && node native/mac/hudcheck.mjs && node native/mac/savepanelcheck.mjs",
-    "check:pointer": "node native/mac/pointercheck.mjs && node native/mac/keyscheck.mjs",
+    "check:pointer": "node native/mac/pointercheck.mjs && node native/mac/keyscheck.mjs && node native/mac/pixelcheck.mjs",
+    "check:photo": "node native/mac/photocheck.mjs",
     "check:thirdparty": "node native/mac/thirdpartycheck.mjs --front && node native/mac/dictionarycheck.mjs && node native/mac/clockcheck.mjs && node native/mac/sysinfocheck.mjs && node native/mac/browsercheck.mjs",
     "prepack": "node ../../../scripts/prepare-dist.mjs --clean dist && tsc -b --force && node ../../../scripts/alias-dist.mjs && node ../../../scripts/prepare-dist.mjs dist"
   },

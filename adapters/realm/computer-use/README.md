@@ -184,7 +184,9 @@ A press after which the realm saw nothing (no change on the screen, on disk, in 
 
 `native/mac/hudcheck.mjs` checks the window of the realm: it shows the action and its effect, and Pause stops the realm. The check presses Pause as a person does: a second realm reads the window and presses its button.
 
-`native/mac/pointercheck.mjs` (`pnpm --filter @reticlehq/computer-use check:pointer`) checks the real pointer: a click, a double-click, a right-click, a drag and a hover. It takes the pointer for a few seconds. The same command then runs `native/mac/keyscheck.mjs`: an application that was opened in the background comes to the front, and real keys go to it. It takes the keyboard for a few seconds.
+`native/mac/pointercheck.mjs` (`pnpm --filter @reticlehq/computer-use check:pointer`) checks the real pointer: a click, a double-click, a right-click, a drag and a hover. It takes the pointer for a few seconds. The same command then runs `native/mac/keyscheck.mjs`: an application that was opened in the background comes to the front, and real keys go to it. It takes the keyboard for a few seconds. Last, `native/mac/pixelcheck.mjs` draws a stroke on a canvas of the fixture: no element changes, and the realm must report the pixels that changed and their box.
+
+`native/mac/photocheck.mjs` (`check:photo`) edits a photo in Preview: it rotates it from the Tools menu, draws a stroke with the markup tool, and saves it. The saved file must be turned and must hold the stroke. It does not run when Preview is open already.
 
 The first three, the check of the window and the check of the save panel, one after the other, on a Mac with the Accessibility permission:
 
