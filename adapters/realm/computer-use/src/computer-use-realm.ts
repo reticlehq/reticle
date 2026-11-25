@@ -482,6 +482,9 @@ export class ComputerUseRealm extends Realm {
       if (true === outcome.clipboardChanged) {
         add(CuChannel.CLIPBOARD, CuSummary.CLIPBOARD_CHANGED, {});
       }
+      if ((outcome.pixels?.changed ?? 0) > 0) {
+        add(CuChannel.PIXELS, CuSummary.PIXELS_CHANGED, { ...outcome.pixels });
+      }
       const effect = effectOf(outcome.before.root, outcome.after.root);
       if (effect.focusMovedTo !== undefined) {
         add(CuChannel.UI, CuSummary.UI_FOCUS_MOVED, { element: effect.focusMovedTo });

@@ -15,6 +15,8 @@ export const CuChannel = {
   SETTINGS: 'x-settings',
   /** That something was put on the clipboard. Never what. */
   CLIPBOARD: 'x-clipboard',
+  /** The pixels of the window: the window server drew them. */
+  PIXELS: 'x-pixels',
 } as const;
 
 /** Stable labels. A claim matches on them exactly. */
@@ -40,6 +42,8 @@ export const CuSummary = {
   SETTINGS_CHANGED: 'cu.settings.changed',
   /** Something was put on the clipboard in the action. */
   CLIPBOARD_CHANGED: 'cu.clipboard.changed',
+  /** No element changed, and the pixels of the window did: a canvas, a photo, a video frame. */
+  PIXELS_CHANGED: 'cu.pixels.changed',
 } as const;
 
 export const CU_SURFACE = 'x-computer-use';

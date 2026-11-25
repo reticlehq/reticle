@@ -17,6 +17,7 @@
 //   SaveAs   opens the save panel of the system, in the folder given as the first argument, and
 //            writes the title to the file the person names there.
 //   Pad      says which gesture of the real pointer it got: click, double, right, hover, dragged.
+//   Ink      a canvas. A drag on it draws a line, and nothing but its pixels changes.
 //   Clock    a count that goes up every 400 ms with no action. Only with a second argument `clock`.
 // The window floats and the application never takes the keyboard, so a run does not disturb the
 // person at the machine.
@@ -59,6 +60,24 @@ final class Pad: NSView {
   override func rightMouseDown(with event: NSEvent) { say("Pad: right") }
   override func scrollWheel(with event: NSEvent) {
     say(event.scrollingDeltaY < 0 ? "Pad: wheel down" : "Pad: wheel up")
+  }
+  override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+}
+
+/// A canvas, as a photo editor has one: a drag draws, and no element says so.
+final class Ink: NSView {
+  var line = NSBezierPath()
+  override func draw(_ dirtyRect: NSRect) {
+    NSColor.white.setFill()
+    bounds.fill()
+    NSColor.black.setStroke()
+    line.lineWidth = 4
+    line.stroke()
+  }
+  override func mouseDown(with event: NSEvent) { line.move(to: convert(event.locationInWindow, from: nil)) }
+  override func mouseDragged(with event: NSEvent) {
+    line.line(to: convert(event.locationInWindow, from: nil))
+    needsDisplay = true
   }
   override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
@@ -149,6 +168,11 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
     pad.setAccessibilityLabel("Pad")
     pad.say = { [weak self] words in self?.status.stringValue = words }
     window.contentView!.addSubview(pad)
+    let ink = Ink(frame: NSRect(x: 350, y: 215, width: 90, height: 90))
+    ink.setAccessibilityElement(true)
+    ink.setAccessibilityRole(.image)
+    ink.setAccessibilityLabel("Ink")
+    window.contentView!.addSubview(ink)
     if CommandLine.arguments.count > 2 && CommandLine.arguments[2] == "clock" {
       // In a group of its own: the realm learns the PLACE that changes, and the place of a
       // label that lies in the window is the whole window.

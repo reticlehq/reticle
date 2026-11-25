@@ -20,7 +20,7 @@ import {
   ReticleCommand,
 } from '@reticlehq/core';
 
-import { ActKind, ActRefusal, Delivery, Reach } from '../driver.js';
+import { ActKind, ActRefusal, Delivery, PIXELS_CHANGED_SIGNAL, Reach } from '../driver.js';
 import type { ActOutcome, UiDriver } from '../driver.js';
 import { ChangeKind, effectOf } from '../effect.js';
 import type { Change } from '../effect.js';
@@ -159,6 +159,7 @@ function sawNothing(outcome: ActOutcome, changesOnScreen: number): boolean {
     0 === changesOnScreen &&
     0 === (outcome.settingsChanged ?? []).length &&
     true !== outcome.clipboardChanged &&
+    !((outcome.pixels?.changed ?? 0) > 0) &&
     0 === (outcome.bytesWritten ?? 0)
   );
 }
@@ -730,6 +731,9 @@ export class PeerCommands {
     if (true === outcome.clipboardChanged) {
       this.#deps.emit(EventType.SIGNAL, { name: CLIPBOARD_CHANGED_SIGNAL, data: {} });
     }
+    if ((outcome.pixels?.changed ?? 0) > 0) {
+      this.#deps.emit(EventType.SIGNAL, { name: PIXELS_CHANGED_SIGNAL, data: outcome.pixels });
+    }
     if (outcome.bytesWritten !== undefined && outcome.bytesWritten > 0) {
       this.#deps.emit(EventType.SIGNAL, {
         name: DISK_WROTE_SIGNAL,
@@ -980,6 +984,7 @@ export class PeerCommands {
         ...(byItself > 0 ? { changedByItself: byItself } : {}),
         // Changes to elements that are not on the screen. They are not in the count above.
         ...(offScreen > 0 ? { changedOffScreen: offScreen } : {}),
+        ...(outcome.pixels === undefined ? {} : { pixelsChanged: outcome.pixels.changed }),
         ...(kind === ActKind.PRESS && sawNothing(outcome, changes.length + byItself + offScreen)
           ? { note: this.#deps.noEffectNote ?? NOTHING_SEEN_NOTE }
           : {}),

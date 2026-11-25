@@ -2067,6 +2067,29 @@ describe('PeerCommands', () => {
     expect(not.events.filter(([type]) => EventType.SIGNAL === type)).toEqual([]);
   });
 
+  // A canvas (a photo, a video frame) has no elements: a stroke on it changes only pixels. The
+  // realm said "nothing changed" and a model drew the stroke again.
+  it('reports changed pixels when no element changed, and keeps the no-effect note away', async () => {
+    const drawn = peer({ pixels: { changed: 0.04, box: [10, 20, 30, 40] } });
+    const answer = (await drawn.commands.answer(ReticleCommand.ACT, {
+      ref: await refOf(drawn.commands, 'Save'),
+      action: ActionType.CLICK,
+    })) as Record<string, unknown>;
+    expect(answer['effect']).toMatchObject({ pixelsChanged: 0.04 });
+    expect(answer['effect']).not.toHaveProperty('note');
+    expect(drawn.events).toContainEqual([
+      EventType.SIGNAL,
+      { name: 'pixels.changed', data: { changed: 0.04, box: [10, 20, 30, 40] } },
+    ]);
+
+    const still = peer({ pixels: { changed: 0 } });
+    await still.commands.answer(ReticleCommand.ACT, {
+      ref: await refOf(still.commands, 'Save'),
+      action: ActionType.CLICK,
+    });
+    expect(still.events.filter(([type]) => EventType.SIGNAL === type)).toEqual([]);
+  });
+
   it('sends a signal for a setting that the action changed', async () => {
     const changed = peer({
       settingsChanged: [

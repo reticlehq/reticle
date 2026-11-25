@@ -61,6 +61,9 @@ const ActedSchema = z.object({
   appGone: z.boolean().optional(),
   bytesWritten: z.number().optional(),
   clipboardChanged: z.boolean().optional(),
+  pixels: z
+    .object({ changed: z.number(), box: z.array(z.number()).length(4).optional() })
+    .optional(),
   windowState: z
     .object({
       minimized: z.boolean(),
@@ -354,6 +357,8 @@ export class MacDriver implements UiDriver {
       return refused(no.data.refused, NOTHING, no.data.detail);
     }
     const acted = ActedSchema.parse(answer);
+    const pixelsOf = ({ changed, box }: { changed: number; box?: number[] | undefined }) =>
+      box === undefined ? { changed } : { changed, box };
     return {
       delivered: acted.delivered,
       reachable: acted.reachable,
@@ -363,6 +368,7 @@ export class MacDriver implements UiDriver {
       after: toRead(acted.after, acted.unreadAfter),
       ...(acted.bytesWritten === undefined ? {} : { bytesWritten: acted.bytesWritten }),
       ...(acted.clipboardChanged === undefined ? {} : { clipboardChanged: acted.clipboardChanged }),
+      ...(acted.pixels === undefined ? {} : { pixels: pixelsOf(acted.pixels) }),
       ...(acted.windowState === undefined ? {} : { windowState: windowStateOf(acted.windowState) }),
       ...(acted.settingsChanged === undefined
         ? {}

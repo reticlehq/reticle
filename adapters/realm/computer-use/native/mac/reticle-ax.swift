@@ -206,6 +206,98 @@ let shortList = 200
 /// What is left of the budget of the read that runs now.
 var readBudget = readLimit
 
+/// The largest visible window of the application on screen: its number and its rect in points.
+func mainWindow(_ pid: pid_t) -> (id: Int, rect: CGRect)? {
+  let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
+  let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
+  var best: (id: Int, rect: CGRect)?
+  for window in list where (window[kCGWindowOwnerPID as String] as? pid_t) == pid {
+    guard let bounds = window[kCGWindowBounds as String] as? NSDictionary,
+      let rect = CGRect(dictionaryRepresentation: bounds),
+      let id = window[kCGWindowNumber as String] as? Int,
+      (window[kCGWindowAlpha as String] as? Double ?? 1) > 0, rect.width > 40, rect.height > 40
+    else { continue }
+    if let b = best, b.rect.width * b.rect.height >= rect.width * rect.height { continue }
+    best = (id, rect)
+  }
+  return best
+}
+
+/// A picture of one window, made small: `pictureWidth` pixels wide, 4 bytes for each pixel.
+/// A canvas (a photo, a video frame, a drawing) has no elements, so its pixels are its effect.
+let pictureWidth = 240
+func windowPixels(_ id: Int) -> (bytes: [UInt8], width: Int, height: Int)? {
+  let path = NSTemporaryDirectory() + "reticle-pixels-\(getpid())-\(id).png"
+  defer { try? FileManager.default.removeItem(atPath: path) }
+  let shot = Process()
+  shot.executableURL = URL(fileURLWithPath: "/usr/sbin/screencapture")
+  shot.arguments = ["-x", "-o", "-l", String(id), "-t", "png", path]
+  try? shot.run()
+  shot.waitUntilExit()
+  guard shot.terminationStatus == 0,
+    let image = NSImage(contentsOfFile: path)?.cgImage(forProposedRect: nil, context: nil, hints: nil),
+    image.width > 0
+  else { return nil }
+  let width = min(pictureWidth, image.width)
+  let height = max(1, image.height * width / image.width)
+  var bytes = [UInt8](repeating: 0, count: width * height * 4)
+  let drawn = bytes.withUnsafeMutableBytes { raw -> Bool in
+    guard
+      let context = CGContext(
+        data: raw.baseAddress, width: width, height: height, bitsPerComponent: 8,
+        bytesPerRow: width * 4, space: CGColorSpaceCreateDeviceRGB(),
+        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)
+    else { return false }
+    context.interpolationQuality = .medium
+    context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+    return true
+  }
+  return drawn ? (bytes, width, height) : nil
+}
+
+/// What part of the window changed between two pictures, and the box around the change in screen
+/// points. A pixel counts when one channel moved more than `pixelStep`: less is the noise of the
+/// scaling and of a blinking caret's edge.
+let pixelStep = 24
+func pixelChange(
+  _ a: (bytes: [UInt8], width: Int, height: Int), _ b: (bytes: [UInt8], width: Int, height: Int),
+  window: CGRect
+) -> [String: Any]? {
+  guard a.width == b.width, a.height == b.height else {
+    // The window changed its size: all of it is new.
+    return ["changed": 1.0, "box": [window.origin.x, window.origin.y, window.width, window.height]]
+  }
+  var count = 0
+  var minX = a.width, minY = a.height, maxX = -1, maxY = -1
+  for y in 0..<a.height {
+    for x in 0..<a.width {
+      let i = (y * a.width + x) * 4
+      var moved = false
+      for c in 0..<3 where abs(Int(a.bytes[i + c]) - Int(b.bytes[i + c])) > pixelStep {
+        moved = true
+      }
+      guard moved else { continue }
+      count += 1
+      minX = min(minX, x)
+      maxX = max(maxX, x)
+      minY = min(minY, y)
+      maxY = max(maxY, y)
+    }
+  }
+  guard count > 0 else { return ["changed": 0.0] }
+  // The first row in the memory of a bitmap context is the top of the picture.
+  let sx = window.width / Double(a.width)
+  let sy = window.height / Double(a.height)
+  let top = minY
+  return [
+    "changed": (Double(count) / Double(a.width * a.height) * 10_000).rounded() / 10_000,
+    "box": [
+      (window.origin.x + Double(minX) * sx).rounded(), (window.origin.y + Double(top) * sy).rounded(),
+      (Double(maxX - minX + 1) * sx).rounded(), (Double(maxY - minY + 1) * sy).rounded(),
+    ],
+  ]
+}
+
 func snapshot(_ app: AXUIElement) -> (tree: [String: Any], unread: Int, json: Data) {
   readBudget = readLimit
   var unread = 0
@@ -772,19 +864,7 @@ func run(_ args: [String]) throws {
     guard CGPreflightScreenCaptureAccess() else {
       try emit(["ok": false, "reason": "no-screen-recording-permission"])
     }
-    let options: CGWindowListOption = [.optionOnScreenOnly, .excludeDesktopElements]
-    let list = CGWindowListCopyWindowInfo(options, kCGNullWindowID) as? [[String: Any]] ?? []
-    var best: (id: Int, rect: CGRect)?
-    for window in list where (window[kCGWindowOwnerPID as String] as? pid_t) == pid {
-      guard let bounds = window[kCGWindowBounds as String] as? NSDictionary,
-        let rect = CGRect(dictionaryRepresentation: bounds),
-        let id = window[kCGWindowNumber as String] as? Int,
-        (window[kCGWindowAlpha as String] as? Double ?? 1) > 0, rect.width > 40, rect.height > 40
-      else { continue }
-      if best == nil || rect.width * rect.height > best!.rect.width * best!.rect.height {
-        best = (id, rect)
-      }
-    }
+    let best = mainWindow(pid)
     // "screen": the whole display that holds the application's window, with every application
     // on it. An overlay of another application, or a dialog of the system, is there too.
     if args.count >= 5, args[4] == "screen" {
@@ -1011,6 +1091,16 @@ func run(_ args: [String]) throws {
     let pair = part.split(separator: "=", maxSplits: 1).map(String.init)
     if pair.count == 2 { hand[pair[0]] = pair[1] }
   }
+  // A canvas shows its effect only in pixels: take the window's picture before the hand moves.
+  // Only for a pointer in the foreground, where the window is on the screen to be drawn.
+  let pictureWindow = foreground && pointerActions.contains(action) && action != "hover"
+    ? mainWindow(pid) : nil
+  // A window that just came to the front draws itself again (a selection turns from grey to
+  // blue). That redraw is not the action's effect: wait for it before the first picture.
+  if pictureWindow != nil, let was = appBefore, was.processIdentifier != pid {
+    Thread.sleep(forTimeInterval: 0.2)
+  }
+  let pixelsBefore = pictureWindow.flatMap { windowPixels($0.id) }
   let pointNumbers = pointValue.split(separator: ",").compactMap({ Double($0) })
   let pointCount = ["click": 2, "dblclick": 2, "rightclick": 2, "hover": 2, "wheel": 3]
   // A drag from a point is four numbers or more: a start, then each point of its path.
@@ -1398,6 +1488,16 @@ func run(_ args: [String]) throws {
     }
   }
   let settled = quietMs() >= quietWanted
+  // Before the app in front is put back: the window then draws itself as one in the back.
+  // The tree shows no change: the pixels can. Taken only then, so an action with elements pays
+  // nothing more. A window that moved or is gone is not compared.
+  var pixels: [String: Any]?
+  if after.json == before.json, let window = pictureWindow, let was = pixelsBefore,
+    let now = mainWindow(pid), now.id == window.id, now.rect.origin == window.rect.origin,
+    let seen = windowPixels(now.id)
+  {
+    pixels = pixelChange(was, seen, window: now.rect)
+  }
   putBack()
   var changedSettings: [[String: Any]]?
   if let was = settingsBefore, let now = settings(pid) { changedSettings = settingsChanged(was, now) }
@@ -1415,6 +1515,7 @@ func run(_ args: [String]) throws {
   ].merging(wrote.map { ["bytesWritten": $0] } ?? [:]) { $1 }
     .merging(changedSettings.map { ["settingsChanged": $0] } ?? [:]) { $1 }
     .merging(["clipboardChanged": clipboard.changeCount != clipboardBefore]) { $1 }
+    .merging(pixels.map { ["pixels": $0] } ?? [:]) { $1 }
     .merging(arranged.map { ["windowState": windowState($0, wanted: wantedFrame)] } ?? [:]) { $1 })
 }
 

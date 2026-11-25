@@ -17,6 +17,7 @@ export { CU_SURFACE, CuChannel, CuSummary } from './channels.js';
 export { ActKind, ActRefusal, Delivery } from './driver.js';
 export type { ActOutcome, ActRequest, SettingChange, UiDriver, UiRead } from './driver.js';
 export { MacDriver, servingHelper } from './mac/mac-driver.js';
+export { PIXELS_CHANGED_SIGNAL } from './driver.js';
 export { helperLaunch, WINDOWS_HELPER_SCRIPT } from './win/helper-launch.js';
 export type { HelperLaunch } from './win/helper-launch.js';
 export type { MacDriverInput, RunHelper } from './mac/mac-driver.js';

@@ -153,7 +153,16 @@ export interface ActOutcome {
    * what is on it. Absent: the driver cannot tell.
    */
   clipboardChanged?: boolean;
+  /**
+   * The part of the window whose pixels changed (0 to 1), and the box around the change in screen
+   * points. Read only when no element changed: a canvas shows its effect only in pixels. Absent:
+   * the pixels were not compared (not a pointer in the foreground, no picture, or elements changed).
+   */
+  pixels?: { changed: number; box?: readonly number[] };
 }
+
+/** The signal for an action whose effect is only in the pixels: the part changed, and its box. */
+export const PIXELS_CHANGED_SIGNAL = 'pixels.changed';
 
 /** Whether a person can see and click an element now. */
 export const Reach = {
