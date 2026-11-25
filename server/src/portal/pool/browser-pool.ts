@@ -487,22 +487,16 @@ export class BrowserPool {
   }
 
   async setMocksLease(sessionId: string, rules: readonly PooledMockRule[]): Promise<boolean> {
-    const lease = this.#active.get(this.#leaseIdOf(sessionId));
-    if (lease === undefined || lease.page.installMocks === undefined) {
-      return false;
-    }
-    this.touch(sessionId);
-    try {
-      await lease.page.installMocks(rules);
-      // Mocks registered later are asked first, and one that lets a request through would skip
-      // the production guard. Re-asserting the guard puts it back in front.
-      if (lease.guard !== undefined) {
-        await lease.page.guardRequests?.(lease.guard);
-      }
-      return true;
-    } catch {
-      return false;
-    }
+    const guard = this.#active.get(this.#leaseIdOf(sessionId))?.guard;
+    return this.#onLeasePage(sessionId, (page) =>
+      page.installMocks?.(rules).then(async () => {
+        // Mocks registered later are asked first, and one that lets a request through would skip
+        // the production guard. Re-asserting the guard puts it back in front.
+        if (guard !== undefined) {
+          await page.guardRequests?.(guard);
+        }
+      }),
+    );
   }
 
   /** Step a deterministic lease's clock by `frames` frames; undefined when it is not one. */
