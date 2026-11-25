@@ -30,7 +30,8 @@ import { TOOLS, type ToolDef, type ToolDeps } from './tools.js';
 const CART = 'http://localhost:3000/cart';
 const ORDERS = 'http://localhost:3000/orders';
 
-type PageAnswer = { moveTo: string } | { stay: true } | { refuse: NavigateHistoryRefusal };
+type PageAnswer =
+  { moveTo: string } | { stay: true } | { refuse: NavigateHistoryRefusal } | { reply: unknown };
 
 interface Harness {
   readonly session: Session;
@@ -51,6 +52,9 @@ function harness(answer: PageAnswer): Harness {
         ok: true,
         result: { ok: false, reason: answer.refuse },
       });
+    }
+    if ('reply' in answer) {
+      return Promise.resolve({ kind: 'command_result', id: 'c', ok: true, result: answer.reply });
     }
     if ('moveTo' in answer) {
       // What the SDK reports when the tab pops to another entry of the same document.
@@ -133,6 +137,23 @@ describe('reticle_navigate { history }', () => {
       ok: false,
       history: NavigateHistory.BACK,
       reason: NavigateHistoryRefusal.NO_ENTRY,
+    });
+  });
+
+  it.each([
+    ['no result', undefined],
+    ['a result that is not an object', 'moved'],
+    ['an ok that is not a boolean', { ok: 'true' }],
+  ])('says it cannot read the page reply when the page sends %s', async (_name, reply) => {
+    // Another SDK version can answer the command in a shape this daemon does not know. Nothing
+    // in that reply says the move was sent, so the tool does not wait for an arrival.
+    const h = harness({ reply });
+    const result = await navigate(h.deps, { history: NavigateHistory.BACK, timeout_ms: 60_000 });
+
+    expect(result).toEqual({
+      ok: false,
+      history: NavigateHistory.BACK,
+      reason: HistoryNavigateMessage.UNREADABLE_REPLY,
     });
   });
 

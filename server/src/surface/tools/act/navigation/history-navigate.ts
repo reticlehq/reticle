@@ -7,6 +7,7 @@
  */
 import {
   HISTORY_DIRECTION_ARG,
+  HistoryReplySchema,
   NavigateHistoryRefusal,
   ProductionRule,
   ReticleTool,
@@ -128,16 +129,20 @@ export async function navigateHistory(
   session.lastAct.markNavigated(session.elapsed());
   deps.markRecordingsNavigated();
   try {
-    const sent = (await deps.sendHistory(sessionId, { [HISTORY_DIRECTION_ARG]: direction })) as {
-      ok?: unknown;
-      reason?: unknown;
-    };
+    const reply = HistoryReplySchema.safeParse(
+      await deps.sendHistory(sessionId, { [HISTORY_DIRECTION_ARG]: direction }),
+    );
+    // A reply in a shape this daemon does not know does not say the move was sent.
+    if (!reply.success) {
+      return { ok: false, history: direction, reason: HistoryNavigateMessage.UNREADABLE_REPLY };
+    }
+    const sent = reply.data;
     // A refusal is conclusive: the tab did not move, so there is nothing to wait for.
-    if (true !== sent.ok) {
+    if (!sent.ok) {
       return {
         ok: false,
         history: direction,
-        ...('string' === typeof sent.reason ? { reason: sent.reason } : {}),
+        ...(sent.reason === undefined ? {} : { reason: sent.reason }),
       };
     }
     const arrival = await awaitHistoryArrival(deps.sessions, scope, timeoutMs);

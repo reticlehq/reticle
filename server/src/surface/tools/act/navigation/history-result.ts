@@ -32,6 +32,11 @@ export const HistoryNavigateMessage = {
     'screenshot). Navigate to the app again, and the lease reattaches.',
   /** The browser did not move a leased page that has no SDK. */
   LEASE_DID_NOT_MOVE: 'The leased page did not move through its history.',
+  /** The page answered the `history` command in a shape that the daemon cannot read. */
+  UNREADABLE_REPLY:
+    'The page answered the history command in a shape that Reticle cannot read, so Reticle ' +
+    'cannot tell if the move was sent. The page SDK and the daemon can be different versions. ' +
+    'Call reticle_sessions to see where the tab is before you send the move again.',
 } as const;
 
 export function isHistoryDirection(value: unknown): value is NavigateHistoryValue {
