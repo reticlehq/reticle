@@ -30,8 +30,10 @@ export { SseFrameParser, buildSessionUrl, type SseFrame } from './sse-frame-pars
 export {
   daemonProcessAlive,
   probeDaemon,
+  spawnedDaemonAlive,
   waitForDaemon,
   waitForDaemonBind,
+  DAEMON_BIND_TIMEOUT_MS,
 } from './proxy/proxy-daemon-probe.js';
 import { probeDaemon } from './proxy/proxy-daemon-probe.js';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';

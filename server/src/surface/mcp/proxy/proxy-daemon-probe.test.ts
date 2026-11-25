@@ -14,7 +14,10 @@
  * shared function was.
  */
 import { describe, expect, it } from 'vitest';
-import { waitForDaemon } from './proxy-daemon-probe.js';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { spawnedDaemonAlive, waitForDaemon, waitForDaemonBind } from './proxy-daemon-probe.js';
 
 const PORT = 4400;
 
@@ -63,5 +66,80 @@ describe('waitForDaemon', () => {
       }),
     ).rejects.toThrow(/exited before it was ready/);
     expect(probes, 'no poll after the process is gone').toBe(1);
+  });
+});
+
+/**
+ * #1541: on Windows under load the daemon can need longer than the old fixed 15 s bind
+ * deadline — a `--drive` Chromium launch runs before the daemon binds — so `serve` reported
+ * "the daemon did not come up" and exited 1 over a child that bound seconds later and kept
+ * running, unnamed. The wait must track the CHILD: keep waiting while it is alive up to a
+ * longer ceiling, and stop at once when it died, because a dead child will never bind.
+ */
+describe('waitForDaemonBind', () => {
+  it('reports a live child that binds after repeated probes as started', async () => {
+    let probes = 0;
+    const bound = await waitForDaemonBind(PORT, {
+      timeoutMs: 60_000,
+      pollMs: 1,
+      childAlive: () => true,
+      probes: {
+        tcpOpen: () => Promise.resolve(++probes > 30),
+        status: () => Promise.resolve({ ok: true }),
+      },
+    });
+    expect(bound).toBe(true);
+    expect(probes).toBeGreaterThan(30);
+  });
+
+  it('stops waiting at once when the child died, without riding out the ceiling', async () => {
+    let aliveChecks = 0;
+    const bound = await waitForDaemonBind(PORT, {
+      timeoutMs: 60_000,
+      pollMs: 1,
+      childAlive: () => ++aliveChecks < 3,
+      probes: {
+        tcpOpen: () => Promise.resolve(false),
+        status: () => Promise.resolve(undefined),
+      },
+    });
+    expect(bound).toBe(false);
+    expect(aliveChecks).toBe(3);
+  });
+
+  it('gives up at the ceiling while the child is still alive', async () => {
+    const bound = await waitForDaemonBind(PORT, {
+      timeoutMs: 40,
+      pollMs: 1,
+      childAlive: () => true,
+      probes: {
+        tcpOpen: () => Promise.resolve(false),
+        status: () => Promise.resolve(undefined),
+      },
+    });
+    expect(bound).toBe(false);
+  });
+});
+
+describe('spawnedDaemonAlive', () => {
+  it('treats a missing pid file as still starting, not as a dead child', () => {
+    const home = mkdtempSync(join(tmpdir(), 'reticle-spawned-alive-'));
+    try {
+      expect(spawnedDaemonAlive(4499, home)).toBe(true);
+    } finally {
+      rmSync(home, { recursive: true, force: true, maxRetries: 5 });
+    }
+  });
+
+  it('follows the pid file: a live pid reads alive and a dead pid reads dead', () => {
+    const home = mkdtempSync(join(tmpdir(), 'reticle-spawned-alive-'));
+    try {
+      writeFileSync(join(home, 'daemon-4499.pid'), String(process.pid), 'utf8');
+      expect(spawnedDaemonAlive(4499, home)).toBe(true);
+      writeFileSync(join(home, 'daemon-4499.pid'), '2147483647', 'utf8');
+      expect(spawnedDaemonAlive(4499, home)).toBe(false);
+    } finally {
+      rmSync(home, { recursive: true, force: true, maxRetries: 5 });
+    }
   });
 });
