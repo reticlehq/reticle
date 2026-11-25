@@ -38,6 +38,7 @@ import { attachNetworkDetail, type NetworkDetail } from './network-detail.js';
 import { attachDownloadCapture, type CdpLike } from './download-capture.js';
 import { injectedConnectArgs } from '@/portal/pool/zero-install.js';
 import { EARLY_CAPTURE_ARG, queueEarlyConsole } from '@/portal/pool/lease-page-error.js';
+import { DrivenPageLoading, type DrivenLoadingProbe } from './driven-page-loading.js';
 
 /** Viewport CSS-px box as returned by the INSPECT command (getBoundingClientRect). */
 export interface ElementBox {
@@ -113,7 +114,7 @@ export { capturePage, type ScreenshotOpts } from './page-capture.js';
 import { capturePage, type ScreenshotOpts } from './page-capture.js';
 
 /** The capability surface reticle_act depends on. A FAKE implementing this is injected in tests. */
-export interface RealInputProvider {
+export interface RealInputProvider extends DrivenLoadingProbe {
   /** Whether a Playwright Page currently matches this SDK session URL. */
   isAvailableFor(sessionUrl: string): Promise<boolean>;
   /** Drive a native gesture for `action` at the element `box`. */
@@ -676,6 +677,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
   #page: Page | undefined;
   /** Pages collecting V8 coverage — see js-coverage.ts. */
   readonly #covering = new WeakSet<Page>();
+  readonly #loading = new DrivenPageLoading(() => this.#now());
 
   constructor(options: LaunchedProviderOptions) {
     this.#driveUrl = options.driveUrl;
@@ -696,6 +698,7 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
       ...(this.#storageState !== undefined ? { storageState: this.#storageState } : {}),
     });
     this.#page = page;
+    this.#loading.watch(page);
     // Before goto: a console error the page logs while it loads comes before its SDK connects.
     await page.addInitScript(queueEarlyConsole, EARLY_CAPTURE_ARG);
     // Capture CDP-authoritative response detail into the driven session's journal (best-effort).
@@ -789,6 +792,10 @@ export class LaunchedRealInputProvider implements OwnedRealInputProvider {
       return undefined;
     }
     return page;
+  }
+
+  drivenPageLoading(): ReturnType<DrivenPageLoading['loading']> {
+    return this.#loading.loading(this.#livePage());
   }
 
   isAvailableFor(sessionUrl: string): Promise<boolean> {

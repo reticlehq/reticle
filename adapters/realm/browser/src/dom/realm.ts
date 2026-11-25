@@ -117,6 +117,13 @@ export const isForm = (n: unknown): n is HTMLFormElement =>
     'undefined' === typeof HTMLFormElement ? undefined : HTMLFormElement,
   );
 
+export const isLabel = (n: unknown): n is HTMLLabelElement =>
+  isIn<HTMLLabelElement>(
+    n,
+    'HTMLLabelElement',
+    'undefined' === typeof HTMLLabelElement ? undefined : HTMLLabelElement,
+  );
+
 export const isFrame = (n: unknown): n is HTMLIFrameElement =>
   isIn<HTMLIFrameElement>(
     n,

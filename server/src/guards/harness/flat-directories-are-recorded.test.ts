@@ -69,7 +69,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // started to resolve to every element it matches (#1663).
   // +1: insert-text.ts, the `insertText` action's whole path behind a dynamic import. The rich-text
   // edit is most of that action's code, and a page that never inserts text should not download it.
-  'adapters/realm/browser/src/actions': 12,
+  // +1: upload-input.ts, the upload resolution split out of actions.ts at the max-lines cap (#1633).
+  'adapters/realm/browser/src/actions': 13,
   'adapters/realm/browser/src/dom': 20,
   // +1: error-repeats.ts, the limiter every uncaught-error path in console.ts goes through (#986).
   'adapters/realm/browser/src/observers': 27,
@@ -357,7 +358,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // +1: page-capture.ts, the screenshot capture split out of real-input.ts at its 1,000-line cap.
   // +1: driven-page.ts, what `verify` reads from the driven page between flows (#2060). Split out
   // of real-input.ts at its 1,000-line cap.
-  'server/src/portal/input': 17,
+  // +1: driven-page-loading.ts, whether the page the provider drives is still loading (#2155). Its
+  // own file so that real-input.ts stays under its 1,000-line cap.
+  'server/src/portal/input': 18,
   // 11 with `pool-lease.ts`: the lease types and the pool's limits, split out of browser-pool.ts at
   // the 1000-line cap (#1705).
   // 12 with `page-error-journal.ts` (#1966): the uncaught page errors the SDK is never installed in
@@ -365,7 +368,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 13 with `lease-page-error.ts` (#1966): the lease's listener install + release report, split out
   // of browser-pool.ts at the 1000-line cap, beside its test.
   // 15 with `determinism.ts`: the page script and step of a deterministic lease, set on its context.
-  'server/src/portal/pool': 15,
+  // 16 with `page-requests.ts` (#2155): the requests that a pool page or the page that `verify`
+  // drives still has open. It says a page whose dev server compiles a dynamically imported module
+  // is still loading.
+  'server/src/portal/pool': 16,
   // 22 since `session-verdict-facts.ts` was extracted (the count is source files, not tests): both
   // verdict-producing tools were threading the same session facts into `decideVerified` with the
   // same conditional-spread idiom, and a third fact would have been a third copy. Raised on
@@ -401,7 +407,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // +1: flow-start-path.ts, replay's start-page arrival split out of flow-replay-run.ts at the 1000-line cap (#1705).
   // +1: flow-lease.ts, the leased-context helpers split out of flow-tools.ts at the 1000-line cap (#1705).
   // +1: flow-undecided.ts, the replay answers that decide nothing, split out of flow-replay.ts at the cap.
-  'server/src/language/flows': 40,
+  // +1: start-page-loading.ts, which page tells replay that the page it opens is still loading:
+  // the lease, or the tab that `verify` drives (#2155).
+  'server/src/language/flows': 41,
   // 12 since `drive-flow.ts`: the rule that turns a session's ambient tape into a flow per journey,
   // and the gate that refuses to save one asserting nothing. It sits beside `session-end.ts` because
   // teardown is the only caller and the tape is data by then — the reach guard already refused the

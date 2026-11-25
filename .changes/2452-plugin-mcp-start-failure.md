@@ -1,0 +1,3 @@
+### Fixed
+
+- **Claude Code plugin — a plugin MCP server that failed to start left no reason.** The launcher `plugins/reticle/scripts/mcp-server.mjs` runs before the server, so a failure there sent no telemetry and wrote no log. Claude Code showed only its cached-failure message. Now the launcher records each failure: a local copy that does not load, an `npx` that does not start, or an `npx` that exits with an error. It writes the reason, the command, the server version and the `node` version as one JSON line to `mcp-start.log` in `${CLAUDE_PLUGIN_DATA}`. It also prints one line on stderr, which Claude Code shows in `/mcp`. Part of [#2452](https://github.com/reticlehq/reticle/issues/2452).

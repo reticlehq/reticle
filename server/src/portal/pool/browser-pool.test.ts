@@ -255,11 +255,11 @@ describe('BrowserPool', () => {
       throw new Error('no page');
     }
     page.evaluateResult = 'loading';
-    expect(await pool.leaseLoading(lease.sessionId)).toBe(true);
-    expect(await pool.leaseLoading('app-named')).toBe(true);
+    expect((await pool.leaseLoading(lease.sessionId)).loading).toBe(true);
+    expect((await pool.leaseLoading('app-named')).loading).toBe(true);
     page.evaluateResult = 'complete';
-    expect(await pool.leaseLoading('app-named')).toBe(false);
-    expect(await pool.leaseLoading('not-a-lease')).toBe(false);
+    expect((await pool.leaseLoading('app-named')).loading).toBe(false);
+    expect((await pool.leaseLoading('not-a-lease')).loading).toBe(false);
   });
 
   it('reuses one browser across many leases; each context is isolated', async () => {
@@ -448,8 +448,8 @@ describe('BrowserPool', () => {
       b.newContext = async (): Promise<PooledContext> => {
         const c = await realNewContext();
         const realNewPage = c.newPage.bind(c);
-        c.newPage = async (): Promise<PooledPage> => {
-          const p = await realNewPage();
+        c.newPage = async (opts): Promise<PooledPage> => {
+          const p = await realNewPage(opts);
           const realGoto = p.goto.bind(p);
           p.goto = (url: string): Promise<unknown> => {
             if (crashDuringGoto) {

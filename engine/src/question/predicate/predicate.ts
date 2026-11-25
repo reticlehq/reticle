@@ -36,6 +36,7 @@ import { evalAnimationPredicate } from './predicate-animation.js';
 export { PredicateSchema, PredicateKind };
 export type { Predicate, EvalResult };
 import { withinBudget, type PredicateSession } from './predicate-session.js';
+import { unansweredRead, withoutReadError } from './predicate-eval-kit.js';
 export type { PredicateSession } from './predicate-session.js';
 
 const ANIMATION_RUNTIME = {
@@ -53,9 +54,16 @@ const ANIMATION_RUNTIME = {
  * nothing was proven; what changes is that the verdict reads UNKNOWN rather than blaming the app for
  * a clause the CALL under-specified.
  */
-function unreadableComposite(child: EvalResult, evidence: unknown): EvalResult {
+function unreadableComposite(
+  child: EvalResult,
+  evidence: unknown,
+  clauses: readonly EvalResult[],
+): EvalResult {
   const reason = child.inconclusive ?? 'a sub-predicate could not be evaluated';
-  return { pass: false, failureReason: reason, inconclusive: reason, evidence };
+  // Kept so the wait and the pre-check can act on a read that threw. See `EvalResult.readError`.
+  const readError = clauses.find((r) => r.readError !== undefined)?.readError;
+  const thrown = readError === undefined ? {} : { readError };
+  return { pass: false, failureReason: reason, inconclusive: reason, evidence, ...thrown };
 }
 
 /**
@@ -334,6 +342,28 @@ function failureRestsOnSeeing(predicate: Predicate): boolean {
   return 'count' in predicate && 0 === predicate.count;
 }
 
+/**
+ * Each clause of an `allOf` or `anyOf`, read on its own.
+ *
+ * A clause whose read throws gives the same result that the wait gives a lone predicate that
+ * throws: inconclusive, with the reason kept. With `Promise.all`, one throw rejected the whole
+ * composite. The other clauses' answers were lost, and the wait graded all of it unknown (#1656).
+ * Now the composite's own rules decide: a clause that failed outranks one nobody could read.
+ */
+function evaluateClauses(
+  session: PredicateSession,
+  clauses: readonly Predicate[],
+  since: number,
+  diagnose: boolean,
+  baselines: Baselines | undefined,
+): Promise<EvalResult[]> {
+  return Promise.all(
+    clauses.map((p) =>
+      evaluatePredicate(session, p, since, diagnose, baselines).catch(unansweredRead),
+    ),
+  );
+}
+
 export async function evaluatePredicate(
   session: PredicateSession,
   predicate: Predicate,
@@ -488,11 +518,7 @@ async function evaluatePredicateRaw(
     case PredicateKind.ALL_OF: {
       const results = clearStarvedWhenSiblingsSaw(
         predicate.predicates,
-        await Promise.all(
-          predicate.predicates.map((p) =>
-            evaluatePredicate(session, p, since, diagnose, baselines),
-          ),
-        ),
+        await evaluateClauses(session, predicate.predicates, since, diagnose, baselines),
       );
       // A clause that genuinely failed OUTRANKS one nobody could read. Softening a real failure to
       // UNKNOWN would hide the defect the agent came for, which is the more expensive of the two
@@ -510,23 +536,19 @@ async function evaluatePredicateRaw(
           pass: false,
           failureReason: failed.failureReason ?? 'a sub-predicate of allOf failed',
           ...(anyDecided ? { decided: true } : {}),
-          evidence: results,
+          evidence: results.map(withoutReadError),
         };
       }
       const unreadable = results.find((r) => r.inconclusive !== undefined);
       if (unreadable !== undefined) {
-        return unreadableComposite(unreadable, results);
+        return unreadableComposite(unreadable, results.map(withoutReadError), results);
       }
       return { pass: true, evidence: results.map((r) => r.evidence) };
     }
     case PredicateKind.ANY_OF: {
       const results = clearStarvedWhenSiblingsSaw(
         predicate.predicates,
-        await Promise.all(
-          predicate.predicates.map((p) =>
-            evaluatePredicate(session, p, since, diagnose, baselines),
-          ),
-        ),
+        await evaluateClauses(session, predicate.predicates, since, diagnose, baselines),
       );
       const passed = results.find((r) => r.pass);
       if (passed !== undefined) {
@@ -536,7 +558,7 @@ async function evaluatePredicateRaw(
       // never read: the unreadable clause might have been the one that would have matched.
       const unreadable = results.find((r) => r.inconclusive !== undefined);
       if (unreadable !== undefined) {
-        return unreadableComposite(unreadable, results);
+        return unreadableComposite(unreadable, results.map(withoutReadError), results);
       }
       // A disjunction is decided when EVERY clause is permanently false: no branch can
       // ever become true, so waiting out the budget buys nothing. By this point every
@@ -546,7 +568,7 @@ async function evaluatePredicateRaw(
         pass: false,
         failureReason: 'no sub-predicate of anyOf matched',
         ...(allDecided ? { decided: true } : {}),
-        evidence: results,
+        evidence: results.map(withoutReadError),
       };
     }
     case PredicateKind.NOT: {
@@ -562,7 +584,7 @@ async function evaluatePredicateRaw(
       // nobody could evaluate became a verdict of verified, manufactured out of a missing reading.
       // You cannot negate an answer nobody had.
       if (inner.inconclusive !== undefined) {
-        return unreadableComposite(inner, inner);
+        return unreadableComposite(inner, withoutReadError(inner), [inner]);
       }
       return negate(predicate.predicate, inner);
     }
@@ -684,18 +706,6 @@ export function waitForPredicate(
     // Released in `finish`, on every exit path. Without it a flood inside the window can evict the
     // event the predicate is armed on, and the verdict blames the app (#668).
     const releaseWindow = session.protectWindow?.(since);
-    // A read that threw never looked at the app: the page did not answer, or went away. That is
-    // "could not tell", not "looked and it was false", so it is inconclusive, which the verdict rule
-    // turns into unknown. As a plain false it was graded assertion_failed: a command timeout on a
-    // live, throttled tab came back verified:no against a page that was never read.
-    const failed = (error: unknown): EvalResult => {
-      const reason = error instanceof Error ? error.message : String(error);
-      return {
-        pass: false,
-        failureReason: reason,
-        inconclusive: `the page did not answer: ${reason}`,
-      };
-    };
     let cooldownTimer: ReturnType<typeof setTimeout> | undefined;
     /** One-shot re-check timed to when a time-based predicate could first pass. See retryAfterMs. */
     let hintTimer: ReturnType<typeof setTimeout> | undefined;
@@ -712,7 +722,7 @@ export function waitForPredicate(
         error: error instanceof Error ? error.message : String(error),
       });
       finish({
-        ...failed(error),
+        ...unansweredRead(error),
         failureReason:
           'the wait could not be evaluated and was ended rather than left pending: ' +
           (error instanceof Error ? error.message : String(error)),
@@ -737,7 +747,7 @@ export function waitForPredicate(
       if (confirmTimer !== undefined) {
         clearTimeout(confirmTimer);
       }
-      resolve(result);
+      resolve(withoutReadError(result));
     };
     // Coalesce re-checks: at most ONE evaluatePredicate is ever in flight (each can be a browser
     // MATCH/STATE_READ round-trip). Events that arrive while one is running set a single trailing
@@ -774,6 +784,11 @@ export function waitForPredicate(
               finish(r);
               return;
             }
+            // Unknown because a read threw: end now, as a lone read that throws does (#1656).
+            if (r.readError !== undefined) {
+              finish(r);
+              return;
+            }
             // A time-based failure knows when it could stop being one — re-check THEN rather than on
             // the next blind tick. Without this, every `settled` wait paid up to a full poll interval
             // of dead time after the quiet window had already closed: measured at 566–627ms across
@@ -801,7 +816,7 @@ export function waitForPredicate(
             void evaluatePredicate(reader, predicate, since, true, baselines)
               .then(finish)
               .catch((error: unknown) => {
-                finish(failed(error));
+                finish(unansweredRead(error));
               });
           };
           if (!holdsForAbsence) {
@@ -827,7 +842,7 @@ export function waitForPredicate(
           confirmTimer = setTimeout(holdUntilQuiet, ABSENCE_HOLD_MS);
         })
         .catch((error: unknown) => {
-          finish(failed(error));
+          finish(unansweredRead(error));
         })
         .finally(() => {
           inFlight = false;
@@ -917,7 +932,7 @@ export function waitForPredicate(
           );
         })
         .catch((error: unknown) => {
-          finish(failed(error));
+          finish(unansweredRead(error));
         });
     }, timeoutMs);
     check();
@@ -948,11 +963,11 @@ export async function provenExpectedLinks(
     return per.flat();
   }
   if (PredicateKind.ANY_OF === predicate.kind) {
+    // Read like the anyOf itself (#1656): a branch whose read throws did not prove its link.
+    const read = await evaluateClauses(session, predicate.predicates, since, true, undefined);
     const per = await Promise.all(
-      predicate.predicates.map(async (p) =>
-        (await evaluatePredicate(session, p, since)).pass
-          ? provenExpectedLinks(session, p, since)
-          : [],
+      predicate.predicates.map(async (p, i) =>
+        true === read[i]?.pass ? provenExpectedLinks(session, p, since) : [],
       ),
     );
     return per.flat();

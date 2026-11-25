@@ -32,6 +32,8 @@ import {
 } from '@reticlehq/engine/question/predicate/predicate-route.js';
 import type { ArrivalClock } from '@/surface/tools/act/navigation/navigate-arrival.js';
 import { carryReticleIdentity } from '@/surface/tools/lease-tools.js';
+import { answerWithin, PAGE_ANSWER_MS } from '@/surface/tools/lease-readiness.js';
+import type { PageLoad } from '@/portal/pool/page-requests.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import type { Session } from '@/portal/session/session.js';
 import { anchorPrecondition, anchorQueryArgs } from './flow-step-runners.js';
@@ -110,14 +112,103 @@ const START_PATH_POLL_MS = 100;
  */
 const START_PATH_LOADING_CAP_MS = 30_000;
 
-/** A probe that fails counts as loaded, so it can only end the wait, never stretch it. */
-async function pageStillLoading(probe: () => Promise<boolean>): Promise<boolean> {
-  try {
-    return true === (await probe());
-  } catch {
-    return false;
-  }
+/** What a page said when replay asked whether it is still loading. */
+const LoadAnswer = {
+  LOADING: 'loading',
+  LOADED: 'loaded',
+  /** It did not answer in time. A script can block the page (#2155). */
+  NO_ANSWER: 'no-answer',
+} as const;
+type LoadAnswer = (typeof LoadAnswer)[keyof typeof LoadAnswer];
+
+/**
+ * A probe that says whether the page is still loading: a plain boolean, or the page's state with
+ * the request that keeps it loading. See `startPageLoadingProbe`.
+ */
+export type LoadingProbe = () => Promise<boolean | PageLoad>;
+
+/** What one question to the page found. */
+interface Asked {
+  answer: LoadAnswer;
+  /** The method and path of the request that keeps the page loading, when the probe names one. */
+  openRequest?: string;
+  /** The page's renderer crashed: it loads nothing, and replay stops waiting for it. */
+  crashed?: true;
 }
+
+const NO_ANSWER: Asked = { answer: LoadAnswer.NO_ANSWER };
+
+/**
+ * Ask the page once whether it is still loading. Never rejects.
+ *
+ * The probes say themselves whether a failed question means a closed page or a navigation
+ * (`pageLoadingOrFetching`). A probe that still rejects cannot say anything about the page, and it
+ * counts as loaded, so it can only end the wait, never stretch it (#1705).
+ */
+function askPage(probe: LoadingProbe): Promise<Asked> {
+  return Promise.resolve()
+    .then(probe)
+    .then(
+      (said): Asked => {
+        const state: PageLoad = 'boolean' === typeof said ? { loading: said } : said;
+        if (true === state.crashed) {
+          return { answer: LoadAnswer.LOADED, crashed: true };
+        }
+        if (!state.loading) {
+          return { answer: LoadAnswer.LOADED };
+        }
+        return state.openRequest === undefined
+          ? { answer: LoadAnswer.LOADING }
+          : { answer: LoadAnswer.LOADING, openRequest: state.openRequest };
+      },
+      (): Asked => ({ answer: LoadAnswer.LOADED }),
+    );
+}
+
+/**
+ * The reason the wait ended that the page's loading gives; undefined when the page did not delay
+ * the wait. The caller puts its own older reason after it.
+ */
+export function loadingLostHint(outcome: {
+  stillLoading: boolean;
+  unanswered: boolean;
+  openRequest?: string;
+  crashed?: true;
+}): string | undefined {
+  if (true === outcome.crashed) {
+    return PAGE_CRASHED_REASON;
+  }
+  if (outcome.unanswered) {
+    return PAGE_UNANSWERED_REASON;
+  }
+  if (!outcome.stillLoading) {
+    return undefined;
+  }
+  if (outcome.openRequest === undefined) {
+    return 'The page was still loading when replay stopped waiting: its document did not finish loading';
+  }
+  return (
+    `The page was still loading when replay stopped waiting: a request was still open ` +
+    `(${outcome.openRequest}). A request that never ends, such as a long poll or a stream, keeps ` +
+    'a page loading, and that page may never connect'
+  );
+}
+
+/** Why a page whose renderer crashed did not connect. The older reasons do not apply to it. */
+const PAGE_CRASHED_REASON =
+  'The page crashed: its renderer stopped, and a crashed page does not recover. Start the ' +
+  'command that opened the browser again, then replay';
+
+/** Why the wait ended on a page that did not answer the last question in time. */
+const PAGE_UNANSWERED_REASON =
+  'The page did not answer in time when replay asked whether it was still loading. A busy page ' +
+  'can answer late, and a script in an endless loop never answers';
+
+/** The older reason for a start page that did not connect: a slow first compile, or a slow tab. */
+const SLOW_START_REASON =
+  'A dev server that compiles on the first load can take longer than that: raise the wait with ' +
+  '`timeoutMs` on step 1 or `signalTimeoutMs` in the flow file, then replay. A backgrounded tab ' +
+  'can also be slow: bring it to the front';
 
 const REAL_ARRIVAL_CLOCK: ArrivalClock = {
   now: () => Date.now(),
@@ -282,8 +373,8 @@ export async function arriveAtStartPath(
   flow: FlowFile,
   timeoutMs: number = startPathBudgetMs(flow),
   clock: ArrivalClock = REAL_ARRIVAL_CLOCK,
-  /** Whether the tab is still loading. Replay passes one for a pool lease, the only tab it can ask. */
-  stillLoading?: () => Promise<boolean>,
+  /** Whether the tab is still loading: see `startPageLoadingProbe`. Absent: replay cannot ask. */
+  stillLoading?: LoadingProbe,
   loadingCapMs: number = START_PATH_LOADING_CAP_MS,
 ): Promise<StartPathArrival> {
   const move: MoveOptions = {
@@ -329,7 +420,7 @@ export async function arriveAtStartPath(
 interface MoveOptions {
   timeoutMs: number;
   clock: ArrivalClock;
-  stillLoading?: () => Promise<boolean>;
+  stillLoading?: LoadingProbe;
   loadingCapMs: number;
 }
 
@@ -382,11 +473,10 @@ async function moveTo(
     },
   );
   if ('lost' === outcome.kind) {
-    const why = outcome.stillLoading
-      ? 'The page was still loading when replay stopped waiting: check that the app finishes loading, then replay'
-      : 'A dev server that compiles on the first load can take longer than that: raise the wait with ' +
-        '`timeoutMs` on step 1 or `signalTimeoutMs` in the flow file, then replay. A backgrounded tab ' +
-        'can also be slow: bring it to the front';
+    // The new reason first, then the older one. A crashed page is not slow.
+    const hint = loadingLostHint(outcome);
+    const reasons = true === outcome.crashed ? [hint] : [hint, SLOW_START_REASON];
+    const why = reasons.filter((reason): reason is string => reason !== undefined).join('. ');
     return {
       lost:
         `replay ${here ? 'reloaded' : 'navigated to'} ${target} before step 1 and no page was connected ` +
@@ -595,7 +685,18 @@ export type NavigateOutcome =
   | { kind: 'arrived'; session: Session; wait?: StartPageWait }
   | { kind: 'redirected'; session: Session; wait?: StartPageWait }
   | { kind: 'refused' }
-  | { kind: 'lost'; waitedMs: number; stillLoading: boolean; wait?: StartPageWait };
+  | {
+      kind: 'lost';
+      waitedMs: number;
+      stillLoading: boolean;
+      /** The page did not answer whether it was still loading. */
+      unanswered: boolean;
+      /** The request that kept the page loading, when the probe named one. */
+      openRequest?: string;
+      /** The page's renderer crashed. */
+      crashed?: true;
+      wait?: StartPageWait;
+    };
 
 /**
  * Whether assigning `to` from `from` is a jump within the same document. That is the case when the
@@ -636,7 +737,7 @@ export async function navigateAndAwait(
     /** True when the destination is the page we are already on — see `arrivedSuccessor`. */
     isReload?: boolean;
     /** Whether the navigated page is still loading; absent when it cannot be asked. */
-    stillLoading?: () => Promise<boolean>;
+    stillLoading?: LoadingProbe;
     loadingCapMs?: number;
     /**
      * Accept the first NEW page at once, on any path. A flow's `navigate` step opens a URL the
@@ -673,7 +774,11 @@ export async function navigateAndAwait(
   const deadline = start + timeoutMs;
   const cap = start + Math.max(timeoutMs, loadingCapMs);
   let loading = false;
+  let unanswered = false;
   let extended = false;
+  // One question at a time: a page that does not answer is not asked again until it answers, so a
+  // frozen page does not collect one pending `page.evaluate` for each poll.
+  let asking: Promise<Asked> | undefined;
   const extendedWait = (): { wait?: StartPageWait } =>
     extended
       ? { wait: { waitedMs: clock.now() - start, budgetMs: timeoutMs, stillLoading: loading } }
@@ -691,14 +796,26 @@ export async function navigateAndAwait(
       if (arrived !== undefined) {
         return { kind: 'redirected', session: arrived.session, ...extendedWait() };
       }
-      // Past the budget, only a page that says it is still loading earns more time (#1705).
-      loading = stillLoading !== undefined && (await pageStillLoading(stillLoading));
-      extended ||= loading;
-      if (!loading || clock.now() >= cap) {
+      // Past the budget, only a page that says it is still loading earns more time (#1705), or one
+      // that does not answer: it can be busy running what it loaded (#2155). The cap ends both.
+      let said: Asked = { answer: LoadAnswer.LOADED };
+      if (stillLoading !== undefined) {
+        asking ??= askPage(stillLoading).finally(() => {
+          asking = undefined;
+        });
+        said = await answerWithin(asking, PAGE_ANSWER_MS, NO_ANSWER);
+      }
+      loading = LoadAnswer.LOADING === said.answer;
+      unanswered = LoadAnswer.NO_ANSWER === said.answer;
+      extended ||= LoadAnswer.LOADED !== said.answer;
+      if (LoadAnswer.LOADED === said.answer || clock.now() >= cap) {
         return {
           kind: 'lost',
           waitedMs: clock.now() - start,
           stillLoading: loading,
+          unanswered,
+          ...(said.openRequest === undefined ? {} : { openRequest: said.openRequest }),
+          ...(true === said.crashed ? { crashed: true } : {}),
           ...extendedWait(),
         };
       }
