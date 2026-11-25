@@ -486,11 +486,16 @@ export interface DeclinedDialog {
  * The first dialog in the window that Reticle answered on the app's behalf, or undefined.
  *
  * Only a dialog that carries `answered` counts. An `alert` has no answer, so it cannot change which
- * path the app took. The SDK and the leased-tab pool both record the answer in this one event.
+ * path the app took. A `confirm` answered `true` is not declined: the caller's own
+ * `confirmDangerous` said yes to it (#2167), so the app took the path the caller asked for. The SDK
+ * and the leased-tab pool both record the answer in this one event.
  */
 export function declinedDialogIn(events: readonly ReticleEvent[]): DeclinedDialog | undefined {
   const dialog = events.find(
-    (e) => e.type === EventType.DIALOG_OPENED && Object.hasOwn(e.data, 'answered'),
+    (e) =>
+      e.type === EventType.DIALOG_OPENED &&
+      Object.hasOwn(e.data, 'answered') &&
+      true !== e.data['answered'],
   );
   if (dialog === undefined) {
     return undefined;

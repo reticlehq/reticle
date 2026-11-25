@@ -102,6 +102,7 @@ export {
   bridgeWsUrl,
 } from './wire/constants/constants.js';
 export { DETERMINISM_GLOBAL_KEY } from './wire/constants/determinism.js';
+export { DIALOG_CONSENT_ARG } from './wire/constants/dialog-consent.js';
 export { DISCOVERY_CALL_URL, FOUNDER_EMAIL, FOUNDER_MAILTO } from './wire/constants/discovery.js';
 export {
   CanvasTrigger,
