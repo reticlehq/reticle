@@ -211,7 +211,7 @@
   },
   "src/dom/shadow-registry.ts": {
     "curly": {
-      "count": 13
+      "count": 12
     }
   },
   "src/dom/snapshot-ids.test.ts": {
