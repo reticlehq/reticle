@@ -83,6 +83,8 @@ const INTERACTIVE: ReadonlySet<UiRole> = new Set([
   UiRole.TAB,
   // A row has no name of its own, and a person clicks it to choose it.
   UiRole.ROW,
+  // An empty cell of a sheet has no name, and it is where a person types a value.
+  UiRole.CELL,
 ]);
 
 export function isAddressable(node: UiNode): boolean {

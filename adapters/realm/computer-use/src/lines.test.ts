@@ -42,6 +42,22 @@ describe('writeLines', () => {
     ]);
   });
 
+  // A new row of a sheet in Numbers has an empty cell, and that cell is where a person types.
+  // With no name it had no ref, so no agent could click it.
+  it('gives a ref to an empty cell', () => {
+    const sheet = node(UiRole.WINDOW, 'Costs', {
+      children: [
+        node(UiRole.ROW, '', { children: [node(UiRole.CELL, 'Total'), node(UiRole.CELL, '')] }),
+      ],
+    });
+    expect(writeLines(sheet, new RefTable()).split('\n')).toEqual([
+      '- window "Costs" (ref=e1)',
+      '  - row (ref=e2)',
+      '    - cell "Total" (ref=e3)',
+      '    - cell (ref=e4)',
+    ]);
+  });
+
   it('tells two siblings with the same role and name apart', () => {
     const twins = node(UiRole.WINDOW, 'List', {
       children: [node(UiRole.BUTTON, 'Open'), node(UiRole.BUTTON, 'Open')],

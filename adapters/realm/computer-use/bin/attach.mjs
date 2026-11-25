@@ -266,9 +266,17 @@ try {
 }
 // Only after the bridge answered: a command that ends before this leaves the application as it was.
 const program = quiet('ps', ['-o', 'comm=', '-p', String(pid)]) ?? '';
-const switched = plan.electronSwitch && isElectron(program, existsSync);
+let switched = plan.electronSwitch && isElectron(program, existsSync);
 if (switched) {
   ask(['web-tree', String(pid), 'on']);
+} else if (plan.electronSwitch && !windows) {
+  // A native application can build part of its tree only for a screen reader (the sheet of
+  // Numbers). The helper sets that switch, and keeps it only when the tree grew.
+  try {
+    switched = true === JSON.parse(ask(['web-tree', String(pid), 'try']) ?? '{}').set;
+  } catch {
+    switched = false;
+  }
 }
 say(`${plan.app} (${String(pid)}) is joined to ${plan.url}.`);
 // What can be read now. An application that was started behind a full-screen Space has its

@@ -17,6 +17,7 @@
 // Output is one JSON object on stdout. The helper decides nothing. It reports what it read.
 //
 //   reticle-ax web-tree <pid> on|off   (Electron: its accessibility switch)
+//   reticle-ax web-tree <pid> try      (any other app: the screen reader's switch, kept if it adds)
 //   reticle-ax capture <pid> <file.png> [screen]   (a picture of the application's window, or of
 //                                                  the whole display that holds it)
 //   reticle-ax apps                    (the applications that are open: name, process, pid)
@@ -61,6 +62,9 @@ func frame(_ position: AnyObject, _ size: AnyObject) -> CGRect? {
   guard AXValueGetValue(position as! AXValue, .cgPoint, &p),
     AXValueGetValue(size as! AXValue, .cgSize, &s)
   else { return nil }
+  // Numbers gives an infinite size for an element of its sheet. JSON has no infinity, and the
+  // helper ended with an exception when it wrote the tree.
+  guard [p.x, p.y, s.width, s.height].allSatisfy({ $0.isFinite }) else { return nil }
   return CGRect(origin: p, size: s)
 }
 
@@ -874,6 +878,35 @@ func run(_ args: [String]) throws {
     // press works. It is the attribute that Electron documents for a tool that is not a screen
     // reader. It costs the application some speed, so it is set only when the person asks, and
     // set back when the realm leaves.
+    if args.count > 3 && args[3] == "try" {
+      // Some native applications build part of their tree only for a screen reader: Numbers gives
+      // its sheet as an empty scroll area, and with this switch every cell with its value. Set it,
+      // and keep it only when the tree grew: for an application that already gives all of it, the
+      // switch only costs speed.
+      var before = snapshot(app).json
+      for _ in 0..<12 {
+        Thread.sleep(forTimeInterval: 0.15)
+        let again = snapshot(app).json
+        if again == before { break }
+        before = again
+      }
+      AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
+      readBefore.remove(pid)
+      var grew = false
+      var last = before
+      let until = Date().addingTimeInterval(3)
+      while Date() < until {
+        Thread.sleep(forTimeInterval: 0.15)
+        let now = snapshot(app).json
+        if now.count > before.count { grew = true }
+        if grew && now == last { break }
+        last = now
+      }
+      if !grew {
+        AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanFalse)
+      }
+      try emit(["set": grew])
+    }
     let on = args.count > 3 && args[3] == "on"
     if on {
       // An application that just started has no window yet. A switch that is set then is in
@@ -1074,7 +1107,7 @@ func run(_ args: [String]) throws {
     }
     target = next
   }
-  guard let now = values(target) else {
+  guard var now = values(target) else {
     try emit(["refused": "stale", "detail": "the element does not answer"])
   }
   let nameNow = [text(now[2]), text(now[3])].compactMap { $0 }.first { !$0.isEmpty } ?? ""
@@ -1195,7 +1228,35 @@ func run(_ args: [String]) throws {
   // Typing is keys too: a person types into the application in front, not at a point of it.
   let keyToApp = (action == "key" || action == "type") && text(now[0]) == "AXApplication"
   let needsReach = !direct && action != "raise" && !atPoint && !keyToApp
-  switch frame(now[7], now[8]).map({ reach(target, $0) }) ?? .unknown(code: -1) {
+  var reached = frame(now[7], now[8]).map({ reach(target, $0) }) ?? .unknown(code: -1)
+  // Stage Manager keeps a window in its strip at the side until its application comes to the
+  // front, and then slides it to the middle. The element is then covered by the strip, and its
+  // place is the old one: a click was refused, and would have gone to the old place. Read the
+  // element again while the window moves, a second and a half at most.
+  if foreground, case .no = reached {
+    let until = Date().addingTimeInterval(1.5)
+    while Date() < until {
+      Thread.sleep(forTimeInterval: 0.1)
+      guard let fresh = values(target) else { break }
+      now = fresh
+      reached = frame(now[7], now[8]).map({ reach(target, $0) }) ?? .unknown(code: -1)
+      if case .yes = reached { break }
+    }
+  }
+  // A part of the element can be under another view (a handle of a table lies on the middle of a
+  // cell). A person clicks the part they can see: try the middle of each quarter.
+  var visiblePoint: CGPoint?
+  if foreground, case .no = reached, let rect = frame(now[7], now[8]) {
+    for (fx, fy) in [(0.25, 0.5), (0.75, 0.5), (0.5, 0.25), (0.5, 0.75)] {
+      let point = CGPoint(x: rect.minX + rect.width * fx, y: rect.minY + rect.height * fy)
+      if case .yes = reach(target, CGRect(origin: point, size: .zero)) {
+        visiblePoint = point
+        reached = .yes
+        break
+      }
+    }
+  }
+  switch reached {
   case .yes: canReach = true
   case .no(let by):
     coveredBy = by
@@ -1397,7 +1458,7 @@ func run(_ args: [String]) throws {
     }
     let at =
       given.count == 2
-      ? CGPoint(x: given[0], y: given[1]) : CGPoint(x: rect.midX, y: rect.midY)
+      ? CGPoint(x: given[0], y: given[1]) : (visiblePoint ?? CGPoint(x: rect.midX, y: rect.midY))
     if given.count == 2 {
       // The reach test above is for the middle of the element. A point is another place: when a
       // window of another application is at that point, the click would go to that application.
