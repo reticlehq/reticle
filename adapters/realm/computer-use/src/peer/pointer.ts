@@ -164,6 +164,18 @@ export function dragValue(
   ontoFrame: Frame | undefined,
 ): string {
   fractionOnly(more, DRAG_TO_POINT_ARG, DRAG_TO_PICTURE_POINT_ARG);
+  // A path of the picture: a stroke of a brush, a lasso, a curve. Each point is a point of the
+  // last picture, as `point` is, and the drag goes through all of them in order.
+  const path = more[PATH_ARG];
+  if (Array.isArray(path)) {
+    const points = path.map((p) => pointOnScreen(picture, p, ActKind.DRAG));
+    if (points.length < 2 || points.some((p) => p === undefined)) {
+      throw new Error(
+        `args.${PATH_ARG} is a list of at least two points of the last picture: [{ x, y }, { x, y }, ...]. Take a picture with reticle_screenshot first.`,
+      );
+    }
+    return points.join(',');
+  }
   const start = pointFor(picture, more, ActKind.DRAG, frame);
   const to = boxFractionFromArgs(more, DRAG_TO_POINT_ARG);
   let end = pointOnScreen(picture, more[DRAG_TO_PICTURE_POINT_ARG], ActKind.DRAG);
@@ -220,7 +232,13 @@ export function pointerPath(
   value: string | undefined,
   frame: readonly [number, number, number, number] | undefined,
 ): { start?: Spot; end?: Spot } {
-  const n = (value ?? '').split(',').map(Number);
+  // The points come before the hand ("|mods=..."), and a path has more than two.
+  const n =
+    (value ?? '')
+      .split('|')[0]
+      ?.split(',')
+      .filter((x) => x !== '')
+      .map(Number) ?? [];
   const pair = (at: number): Spot | undefined => {
     const [x, y] = [n[at], n[at + 1]];
     return x !== undefined && y !== undefined && Number.isFinite(x) && Number.isFinite(y)
@@ -230,9 +248,9 @@ export function pointerPath(
   const middle: Spot | undefined =
     frame === undefined ? undefined : [frame[0] + frame[2] / 2, frame[1] + frame[3] / 2];
   if (kind === ActKind.DRAG) {
-    const four = 4 === n.length;
-    const start = four ? pair(0) : middle;
-    const end = four ? pair(2) : pair(0);
+    const fromPoint = n.length >= 4;
+    const start = fromPoint ? pair(0) : middle;
+    const end = pair(n.length - 2);
     return { ...(start === undefined ? {} : { start }), ...(end === undefined ? {} : { end }) };
   }
   let at: Spot | undefined;
@@ -243,4 +261,35 @@ export function pointerPath(
   }
   const start = at ?? middle;
   return start === undefined ? {} : { start };
+}
+
+/** A drag along points of the picture. */
+export const PATH_ARG = 'path';
+/** The keys held through a pointer action, as a key takes them: ["Shift", "Alt"]. */
+const MODIFIERS_ARG = 'modifiers';
+/** How long the button stays down before the pointer moves or lets go, in milliseconds. */
+export const HOLD_ARG = 'holdMs';
+const MAX_HOLD_MS = 10_000;
+
+/**
+ * How the hand holds a pointer action, after its points: "|mods=shift+alt|hold=300". The keys held
+ * through a click or a drag (shift-click to add to a choice, option-drag for a copy) and the time
+ * the button stays down. A click in the background is a press, which holds no key: it is refused,
+ * as nothing else would show that the keys were not held.
+ */
+export function handOf(kind: ActKind, more: Record<string, unknown>): string {
+  const keys = Array.isArray(more[MODIFIERS_ARG])
+    ? (more[MODIFIERS_ARG] as unknown[]).map(String)
+    : [];
+  const hold =
+    'number' === typeof more[HOLD_ARG] ? Math.min(MAX_HOLD_MS, Math.max(0, more[HOLD_ARG])) : 0;
+  if (0 === keys.length && 0 === hold) {
+    return '';
+  }
+  if (!POINT_KINDS.has(kind)) {
+    throw new Error(
+      `keys held through a click, and a held button, need the real pointer: add args.foreground: true. A ${kind} in the background holds no key.`,
+    );
+  }
+  return `${0 === keys.length ? '' : `|mods=${keys.map((k) => k.toLowerCase()).join('+')}`}${0 === hold ? '' : `|hold=${String(hold)}`}`;
 }

@@ -1704,6 +1704,49 @@ describe('PeerCommands', () => {
       expect(asked).toHaveLength(1);
     });
 
+    // A brush stroke, a lasso, a curve on a timeline: a drag that only went from a start to an end
+    // drew a straight line, and no key could be held while the pointer moved.
+    it('drags along a path of the picture, with keys held and the button held down', async () => {
+      const { commands, asked, moves } = picturing(shot);
+      await commands.answer(ReticleCommand.CAPTURE, {});
+      await commands.answer(ReticleCommand.ACT, {
+        ref: await refOf(commands, 'Save'),
+        action: ActionType.DRAG,
+        args: {
+          foreground: true,
+          path: [
+            { x: 200, y: 100 },
+            { x: 300, y: 160 },
+            { x: 400, y: 100 },
+          ],
+          modifiers: ['Shift', 'Alt'],
+          holdMs: 300,
+        },
+      });
+      expect(asked.at(-1)?.value).toBe('100,50,150,80,200,50|mods=shift+alt|hold=300');
+      expect(moves).toEqual([
+        [100, 50],
+        [200, 50],
+      ]);
+    });
+
+    it('clicks with keys held, and refuses keys that a click in the background cannot hold', async () => {
+      const { commands, asked } = picturing(shot);
+      await commands.answer(ReticleCommand.ACT, {
+        ref: await refOf(commands, 'Save'),
+        action: ActionType.CLICK,
+        args: { foreground: true, modifiers: ['Meta'] },
+      });
+      expect(asked.at(-1)?.value).toBe('|mods=meta');
+      await expect(
+        commands.answer(ReticleCommand.ACT, {
+          ref: await refOf(commands, 'Save'),
+          action: ActionType.CLICK,
+          args: { modifiers: ['Shift'] },
+        }),
+      ).rejects.toThrow(/foreground: true/);
+    });
+
     it('drags from a point of the picture to another point of it', async () => {
       const { commands, asked, moves } = picturing(shot);
       await commands.answer(ReticleCommand.CAPTURE, {});

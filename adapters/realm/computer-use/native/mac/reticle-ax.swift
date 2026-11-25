@@ -1000,9 +1000,24 @@ func run(_ args: [String]) throws {
   // point has its own test below. A hover at the edge of a window that a sidebar covers was
   // refused here, because the middle of the window was under that sidebar.
   // A drag from a point gives four numbers, and the wheel at a point gives three.
-  let pointCount = ["click": 2, "dblclick": 2, "rightclick": 2, "hover": 2, "drag": 4, "wheel": 3]
+  // A pointer action carries its points first, and after "|" how the hand holds it: the keys held
+  // ("mods=shift+alt") and how long the button stays down ("hold=500"). Only for the pointer: a
+  // text that is typed can hold a "|" of its own.
+  let pointerActions: Set<String> = ["click", "dblclick", "rightclick", "hover", "drag", "wheel"]
+  let handParts = pointerActions.contains(action) ? value.components(separatedBy: "|") : [value]
+  let pointValue = handParts.first ?? ""
+  var hand: [String: String] = [:]
+  for part in handParts.dropFirst() {
+    let pair = part.split(separator: "=", maxSplits: 1).map(String.init)
+    if pair.count == 2 { hand[pair[0]] = pair[1] }
+  }
+  let pointNumbers = pointValue.split(separator: ",").compactMap({ Double($0) })
+  let pointCount = ["click": 2, "dblclick": 2, "rightclick": 2, "hover": 2, "wheel": 3]
+  // A drag from a point is four numbers or more: a start, then each point of its path.
   let atPoint =
-    pointCount[action] == value.split(separator: ",").compactMap({ Double($0) }).count
+    action == "drag"
+    ? pointNumbers.count >= 4 && pointNumbers.count % 2 == 0
+    : pointCount[action] == pointNumbers.count
   // A key to the application as a whole aims at no point, so the test of a click does not apply:
   // the middle of the Dock is under the menu bar of the application in front. A key to a field
   // keeps the test.
@@ -1202,10 +1217,10 @@ func run(_ args: [String]) throws {
     // The middle of the element, or the point the caller gives as "x,y" on the screen: for an
     // application that gives no elements, a point in its picture is all a caller has.
     // The start of a drag is its first two numbers, and the point of the wheel its last two.
-    let numbers = value.split(separator: ",").compactMap { Double($0) }
+    let numbers = pointNumbers
     let given: [Double]
     switch action {
-    case "drag": given = numbers.count == 4 ? Array(numbers[0..<2]) : []
+    case "drag": given = numbers.count >= 4 ? Array(numbers[0..<2]) : []
     case "wheel": given = numbers.count == 3 ? Array(numbers[1..<3]) : []
     default: given = numbers
     }
@@ -1234,15 +1249,39 @@ func run(_ args: [String]) throws {
       }
     }
     let source = CGEventSource(stateID: .hidSystemState)
+    // The keys a hand holds through the action: shift-click to add to a choice, option-drag to make
+    // a copy, shift-drag for a straight line.
+    var held: CGEventFlags = []
+    for name in (hand["mods"] ?? "").lowercased().split(separator: "+") {
+      switch name {
+      case "shift": held.insert(.maskShift)
+      case "alt", "option": held.insert(.maskAlternate)
+      case "control", "ctrl": held.insert(.maskControl)
+      case "meta", "command", "cmd": held.insert(.maskCommand)
+      default: break
+      }
+    }
+    let holdSeconds = min(10, max(0, Double(hand["hold"] ?? "0") ?? 0) / 1000)
     func send(_ type: CGEventType, _ point: CGPoint, _ button: CGMouseButton, clicks: Int64 = 1) {
       guard
         let event = CGEvent(
           mouseEventSource: source, mouseType: type, mouseCursorPosition: point, mouseButton: button)
       else { return }
       event.setIntegerValueField(.mouseEventClickState, value: clicks)
+      if !held.isEmpty { event.flags = held }
       event.post(tap: .cghidEventTap)
       Thread.sleep(forTimeInterval: 0.03)
     }
+    func flagsTo(_ flags: CGEventFlags) {
+      guard let change = CGEvent(source: source) else { return }
+      change.type = .flagsChanged
+      change.flags = flags
+      change.post(tap: .cghidEventTap)
+      Thread.sleep(forTimeInterval: 0.02)
+    }
+    // Pressed before the pointer moves, and let go after it, whatever the action did.
+    if !held.isEmpty { flagsTo(held) }
+    defer { if !held.isEmpty { flagsTo([]) } }
     send(.mouseMoved, at, .left)
     // A second small move: a view learns that the pointer came in from a move inside it, and one
     // jump to its middle did not always tell it.
@@ -1251,6 +1290,7 @@ func run(_ args: [String]) throws {
     switch action {
     case "click":
       send(.leftMouseDown, at, .left)
+      if holdSeconds > 0 { Thread.sleep(forTimeInterval: holdSeconds) }
       send(.leftMouseUp, at, .left)
     case "dblclick":
       for count in [Int64(1), 2] {
@@ -1278,17 +1318,23 @@ func run(_ args: [String]) throws {
     case "drag":
       // To the point "x,y" on the screen, in steps: an application that follows a drag reads
       // where the pointer is on the way.
-      // "x,y" of the end, from the element; or "x,y,x,y" from a start to the end.
-      guard numbers.count == 2 || numbers.count == 4 else { try emit(["error": "drag-needs-a-point"]) }
-      let to = CGPoint(x: numbers[numbers.count - 2], y: numbers[numbers.count - 1])
-      send(.leftMouseDown, at, .left)
-      for step in 1...8 {
-        let part = CGFloat(step) / 8
-        send(
-          .leftMouseDragged,
-          CGPoint(x: at.x + (to.x - at.x) * part, y: at.y + (to.y - at.y) * part), .left)
+      // "x,y" of the end, from the element; or "x,y,x,y,..." from a start through each point of a
+      // path: a stroke of a brush, a lasso, a curve. Each part of the way is walked in small steps,
+      // as a hand moves, so an application that draws where the pointer is draws all of it.
+      guard numbers.count >= 2 && numbers.count % 2 == 0 else { try emit(["error": "drag-needs-a-point"]) }
+      var way: [CGPoint] = numbers.count == 2 ? [at] : []
+      for i in stride(from: 0, to: numbers.count, by: 2) { way.append(CGPoint(x: numbers[i], y: numbers[i + 1])) }
+      send(.leftMouseDown, way[0], .left)
+      if holdSeconds > 0 { Thread.sleep(forTimeInterval: holdSeconds) }
+      for (from, to) in zip(way, way.dropFirst()) {
+        let length = hypot(to.x - from.x, to.y - from.y)
+        let steps = max(4, min(40, Int(length / 6)))
+        for step in 1...steps {
+          let part = CGFloat(step) / CGFloat(steps)
+          send(.leftMouseDragged, CGPoint(x: from.x + (to.x - from.x) * part, y: from.y + (to.y - from.y) * part), .left)
+        }
       }
-      send(.leftMouseUp, to, .left)
+      send(.leftMouseUp, way[way.count - 1], .left)
     default: break
     }
     result = .success

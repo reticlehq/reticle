@@ -50,6 +50,7 @@ import { arrangeWindow } from './window.js';
 import { refusalOf } from './link-switch.js';
 import {
   NO_SCREEN_RECORDING,
+  handOf,
   pointerPath,
   contentMoved,
   kindFor,
@@ -886,10 +887,13 @@ export class PeerCommands {
         );
       }
     }
-    const value =
+    const base =
       kind === ActKind.DRAG
         ? dragValue(this.#picture, more, target.node.frame, await this.#ontoFrame(more))
         : (at ?? VALUE_OF[action] ?? given);
+    // A key press takes its modifiers in its key: only a pointer action takes a hand.
+    const hand = kind === ActKind.KEY ? '' : handOf(kind, more);
+    const value = '' === hand ? base : `${base ?? ''}${hand}`;
     const wanted = WANTS_CHECKED[action];
     if (wanted !== undefined) {
       if (!BOX_ROLES.has(target.node.role)) {

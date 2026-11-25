@@ -114,6 +114,19 @@ try {
     },
   });
   assert.equal(await status(), 'Pad: dragged 40');
+  // A drag along a path of the picture, through a point below the line: a brush stroke, not a
+  // straight line. It ends 40 points to the right, with Shift held through it.
+  await commands.answer(ReticleCommand.ACT, {
+    ref: window.ref,
+    action: ActionType.DRAG,
+    args: {
+      foreground: true,
+      path: [at, { x: at.x + 20 * scale, y: at.y + 10 * scale }, { x: at.x + 40 * scale, y: at.y }],
+      modifiers: ['Shift'],
+      settleMs: 700,
+    },
+  });
+  assert.equal(await status(), 'Pad: dragged 40');
   // The wheel turned at a point of the picture: a list of a web view that has no scroll bar is
   // scrolled where the pointer is, and the ref only names the window.
   await commands.answer(ReticleCommand.ACT, {
@@ -124,7 +137,7 @@ try {
   assert.equal(await status(), 'Pad: wheel down');
   rmSync(shot.path, { force: true });
 
-  process.stdout.write('computer-use pointercheck: 11 of 11 cases held\n');
+  process.stdout.write('computer-use pointercheck: 12 of 12 cases held\n');
 } finally {
   fixture.kill();
 }
