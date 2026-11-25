@@ -4,8 +4,8 @@
 //
 //   node native/mac/videocheck.mjs
 //
-// IT TAKES THE POINTER to drag the two handles, and THE KEYBOARD for two keys in the save panel. Needs the Accessibility
-// permission and ffmpeg (to make the clip and to measure the export). Build the package first.
+// IT TAKES THE POINTER to drag the two handles, and THE KEYBOARD for two keys in the save panel.
+// Needs the Accessibility permission. Build the package first.
 // Does not run if QuickTime Player is open already: its windows belong to the person.
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
@@ -27,18 +27,8 @@ const pidOf = () => {
     return 0;
   }
 };
-const has = (tool) => {
-  try {
-    execFileSync('which', [tool], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
-};
-if (0 !== pidOf() || !has('ffmpeg') || !has('ffprobe')) {
-  process.stdout.write(
-    'computer-use videocheck: skipped, QuickTime Player is open or ffmpeg is missing\n',
-  );
+if (0 !== pidOf()) {
+  process.stdout.write('computer-use videocheck: skipped, QuickTime Player is open already\n');
   process.exit(0);
 }
 
@@ -46,22 +36,13 @@ if (0 !== pidOf() || !has('ffmpeg') || !has('ffprobe')) {
 const dir = execFileSync('realpath', [mkdtempSync(`${tmpdir()}/reticle-video-`)], {
   encoding: 'utf8',
 }).trim();
-const clip = `${dir}/clip.mp4`;
+const clip = `${dir}/clip.mov`;
 const exported = `${dir}/trimmed.mov`;
-execFileSync('ffmpeg', [
-  ...['-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=duration=10:size=640x360:rate=30'],
-  ...['-pix_fmt', 'yuv420p', clip],
-]);
+// The clip is made, and the export measured, with AVFoundation: no tool to install.
+execFileSync('swiftc', ['-O', `${here}video.swift`, '-o', `${dir}/video`], { stdio: 'ignore' });
+execFileSync(`${dir}/video`, [clip]);
 const seconds = (path) =>
-  Number(
-    execFileSync(
-      'ffprobe',
-      ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', path],
-      {
-        encoding: 'utf8',
-      },
-    ).trim(),
-  );
+  Number(execFileSync(`${dir}/video`, [path, '--seconds'], { encoding: 'utf8' }).trim());
 assert.ok(Math.abs(seconds(clip) - 10) < 0.1);
 
 execFileSync('open', ['-a', APP, clip]);
