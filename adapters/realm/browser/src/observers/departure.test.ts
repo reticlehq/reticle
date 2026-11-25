@@ -145,6 +145,18 @@ describe('a native download is a departure too', () => {
     );
     expect(event?.data['download']).toBe(true);
   });
+
+  // A signed download link carries its secret in the query. Every other network path redacts it;
+  // the departure record wrote the raw href, so the signature reached `observe network`.
+  it('redacts a secret query parameter in the recorded url, as the network observer does', async () => {
+    const [event] = await clickAnchor({
+      href: 'https://files.example.com/report.pdf?token=s3cr3t-value&page=2',
+      download: '',
+    });
+    const url = String(event?.data['url']);
+    expect(url).not.toContain('s3cr3t-value');
+    expect(url).toContain('page=2');
+  });
 });
 
 describe('what is NOT a departure', () => {

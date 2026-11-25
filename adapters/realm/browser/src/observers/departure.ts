@@ -1,5 +1,6 @@
 import { EventType, NetInitiator } from '@reticlehq/core/page';
 import { observeSafely, type Emit, type Teardown } from './types.js';
+import { netUrlFields } from './net-detail/network-redact.js';
 
 /**
  * Where the browser is about to GO, recorded before it goes.
@@ -126,7 +127,8 @@ export function installDeparture(emit: Emit): Teardown {
     emit(EventType.NET_PENDING, {
       id: `nav-${String(seq)}`,
       method: 'GET',
-      url,
+      // Redacted like every other network record: a signed download link carries its secret here.
+      ...netUrlFields(url),
       initiator: NetInitiator.NAVIGATION,
       ...(download ? { download: true } : {}),
     });
