@@ -43,6 +43,7 @@ public static class ReticleWin32 {
   [DllImport("user32.dll")] public static extern bool GetCursorPos(out POINT p);
   [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
   [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint x, uint y, int data, UIntPtr extra);
+  [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
   [DllImport("user32.dll")] public static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr h, uint msg, IntPtr w, string l);
   [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X; public int Y; }
@@ -53,6 +54,82 @@ public static class ReticleWin32 {
   }
 }
 '@
+
+# Pictures of a window, made small, and what changed between them. In C#: a loop over the pixels
+# in PowerShell takes seconds.
+Add-Type -ReferencedAssemblies System.Drawing -TypeDefinition @'
+using System;
+using System.Collections;
+using System.Drawing;
+using System.Drawing.Drawing2D;
+using System.Drawing.Imaging;
+using System.Runtime.InteropServices;
+public class ReticlePicture { public byte[] Bytes; public int W; public int H; }
+public static class ReticlePixels {
+  const int Width = 240; const int Step = 24;
+  public static ReticlePicture Shot(int x, int y, int w, int h) {
+    if (w <= 0 || h <= 0) return null;
+    using (Bitmap full = new Bitmap(w, h)) {
+      using (Graphics g = Graphics.FromImage(full)) g.CopyFromScreen(x, y, 0, 0, full.Size);
+      int pw = Math.Min(Width, w); int ph = Math.Max(1, h * pw / w);
+      using (Bitmap small = new Bitmap(pw, ph, PixelFormat.Format32bppArgb)) {
+        using (Graphics g = Graphics.FromImage(small)) {
+          g.InterpolationMode = InterpolationMode.Bilinear; g.DrawImage(full, 0, 0, pw, ph);
+        }
+        BitmapData data = small.LockBits(new Rectangle(0, 0, pw, ph), ImageLockMode.ReadOnly, PixelFormat.Format32bppArgb);
+        byte[] bytes = new byte[pw * ph * 4];
+        for (int row = 0; row < ph; row++) Marshal.Copy(data.Scan0 + row * data.Stride, bytes, row * pw * 4, pw * 4);
+        small.UnlockBits(data);
+        ReticlePicture p = new ReticlePicture(); p.Bytes = bytes; p.W = pw; p.H = ph; return p;
+      }
+    }
+  }
+  static bool[] Moved(ReticlePicture a, ReticlePicture b) {
+    if (a == null || b == null || a.W != b.W || a.H != b.H) return null;
+    bool[] moved = new bool[a.W * a.H];
+    for (int p = 0; p < moved.Length; p++)
+      for (int c = 0; c < 3; c++) if (Math.Abs(a.Bytes[p * 4 + c] - b.Bytes[p * 4 + c]) > Step) moved[p] = true;
+    return moved;
+  }
+  // What moved between the two pictures of each pair moves by itself (a video, a spinner): it is
+  // made a little wider, and left out of the change.
+  public static Hashtable Change(ReticlePicture earlier, ReticlePicture before, ReticlePicture after, ReticlePicture later,
+      double wx, double wy, double ww, double wh) {
+    Hashtable answer = new Hashtable();
+    bool[] moved = Moved(before, after);
+    if (moved == null) { answer["changed"] = 1.0; answer["box"] = new double[] { wx, wy, ww, wh }; return answer; }
+    int w = before.W, h = before.H;
+    bool[] mask = new bool[w * h];
+    foreach (bool[] self in new bool[][] { Moved(earlier, before), Moved(after, later) }) {
+      if (self == null) continue;
+      for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) {
+        if (!self[y * w + x]) continue;
+        for (int yy = Math.Max(0, y - 2); yy <= Math.Min(h - 1, y + 2); yy++)
+          for (int xx = Math.Max(0, x - 2); xx <= Math.Min(w - 1, x + 2); xx++) mask[yy * w + xx] = true;
+      }
+    }
+    int count = 0, moving = 0, minX = w, minY = h, maxX = -1, maxY = -1;
+    for (int y = 0; y < h; y++) for (int x = 0; x < w; x++) {
+      int p = y * w + x;
+      if (mask[p]) { moving++; continue; }
+      if (!moved[p]) continue;
+      count++; minX = Math.Min(minX, x); maxX = Math.Max(maxX, x); minY = Math.Min(minY, y); maxY = Math.Max(maxY, y);
+    }
+    if (moving > 0) answer["moving"] = Math.Round((double)moving / (w * h), 4);
+    answer["changed"] = Math.Round((double)count / (w * h), 4);
+    if (count > 0) {
+      double sx = ww / w, sy = wh / h;
+      answer["box"] = new double[] { Math.Round(wx + minX * sx), Math.Round(wy + minY * sy),
+        Math.Round((maxX - minX + 1) * sx), Math.Round((maxY - minY + 1) * sy) };
+    }
+    return answer;
+  }
+}
+'@
+
+# The keys a pointer action holds: the names the realm sends, as virtual keys. Meta is Control on
+# Windows, as in Key-Words.
+$VkOf = @{ 'shift' = 0x10; 'control' = 0x11; 'ctrl' = 0x11; 'meta' = 0x11; 'alt' = 0x12; 'option' = 0x12 }
 
 $AE = [System.Windows.Automation.AutomationElement]
 $Walker = [System.Windows.Automation.TreeWalker]::ControlViewWalker
@@ -232,11 +309,12 @@ function Wait-Quiet([int]$procId, [int]$budgetMs, [int]$quietMs) {
   return $false
 }
 
-function Send-Click([int]$x, [int]$y, [int]$times, [bool]$right) {
+function Send-Click([int]$x, [int]$y, [int]$times, [bool]$right, [int]$holdMs = 0) {
   [ReticleWin32]::SetCursorPos($x, $y) | Out-Null
   $down = $(if ($right) { 0x0008 } else { 0x0002 }); $up = $(if ($right) { 0x0010 } else { 0x0004 })
   for ($k = 0; $k -lt $times; $k++) {
     [ReticleWin32]::mouse_event($down, 0, 0, 0, [UIntPtr]::Zero)
+    if ($holdMs -gt 0) { Start-Sleep -Milliseconds $holdMs }
     [ReticleWin32]::mouse_event($up, 0, 0, 0, [UIntPtr]::Zero)
   }
 }
@@ -272,6 +350,16 @@ function Invoke-Act($words) {
   }
   $pointer = @('click', 'dblclick', 'rightclick', 'hover', 'drag', 'wheel') -contains $kind
   if ($pointer -and -not $foreground) { return @{ refused = 'needs-foreground' } }
+  # A pointer value is its points, then the hand: "x,y|mods=shift+alt|hold=300|pixels=1".
+  $hand = @{}
+  if ($pointer) {
+    $parts = "$value".Split('|'); $value = $parts[0]
+    foreach ($part in $parts | Select-Object -Skip 1) {
+      $pair = $part.Split('=', 2); if ($pair.Count -eq 2) { $hand[$pair[0]] = $pair[1] }
+    }
+  }
+  $mods = @(("$($hand['mods'])").Split('+') | ForEach-Object { $VkOf[$_.ToLower()] } | Where-Object { $null -ne $_ })
+  $holdMs = [Math]::Min(10000, [Math]::Max(0, [int]("0$($hand['hold'])")))
   if ($foreground -and [ReticleWin32]::IdleMs() -lt 800) {
     Start-Sleep -Milliseconds 800
     if ([ReticleWin32]::IdleMs() -lt 800) { return @{ refused = 'person-active'; detail = 'the person at the machine is typing or moving the pointer' } }
@@ -282,6 +370,20 @@ function Invoke-Act($words) {
     return @{ refused = 'reach-unknown'; detail = $reach.detail }
   }
   $before = Read-App $procId
+  # A canvas shows its effect only in pixels: two pictures of the window before the action, a
+  # moment apart, so what moves by itself is known. Only when the realm asks (a point of a picture,
+  # an image, a window): a button shows its effect in its elements.
+  $shots = $null
+  if ($pointer -and $kind -ne 'hover' -and $hand['pixels'] -eq '1') {
+    $top = (Get-Windows $procId).shown
+    if ($top.Count -gt 0) {
+      $wr = $top[0].Current.BoundingRectangle
+      $shots = @{ rect = $wr; earlier = [ReticlePixels]::Shot([int]$wr.X, [int]$wr.Y, [int]$wr.Width, [int]$wr.Height) }
+      Start-Sleep -Milliseconds 100
+      $shots.before = [ReticlePixels]::Shot([int]$wr.X, [int]$wr.Y, [int]$wr.Width, [int]$wr.Height)
+    }
+  }
+  foreach ($vk in $mods) { [ReticleWin32]::keybd_event([byte]$vk, 0, 0, [UIntPtr]::Zero) }
   $delivered = $true
   try {
     switch ($kind) {
@@ -347,7 +449,29 @@ function Invoke-Act($words) {
         $x = $(if ($xy.Count -ge 2) { [int][double]$xy[0] } else { [int]($r.X + $r.Width / 2) })
         $y = $(if ($xy.Count -ge 2) { [int][double]$xy[1] } else { [int]($r.Y + $r.Height / 2) })
         if ($kind -eq 'hover') { [ReticleWin32]::SetCursorPos($x, $y) | Out-Null }
-        else { Send-Click $x $y $(if ($kind -eq 'dblclick') { 2 } else { 1 }) ($kind -eq 'rightclick') }
+        else { Send-Click $x $y $(if ($kind -eq 'dblclick') { 2 } else { 1 }) ($kind -eq 'rightclick') $holdMs }
+      }
+      'drag' {
+        # Two numbers: the end, from the middle of the element. Four or more: a path, from its first
+        # point. The pointer walks each part in small steps, as a hand moves.
+        $n = @("$value".Split(',') | Where-Object { $_ -ne '' } | ForEach-Object { [double]$_ })
+        $r = $el.Current.BoundingRectangle
+        $way = [System.Collections.ArrayList]::new()
+        if ($n.Count -eq 2) { [void]$way.Add(@(($r.X + $r.Width / 2), ($r.Y + $r.Height / 2))) }
+        for ($k = 0; $k + 1 -lt $n.Count; $k += 2) { [void]$way.Add(@($n[$k], $n[$k + 1])) }
+        if ($way.Count -lt 2) { return @{ error = 'a drag needs an end' } }
+        [ReticleWin32]::SetCursorPos([int]$way[0][0], [int]$way[0][1]) | Out-Null
+        [ReticleWin32]::mouse_event(0x0002, 0, 0, 0, [UIntPtr]::Zero)
+        if ($holdMs -gt 0) { Start-Sleep -Milliseconds $holdMs }
+        for ($k = 1; $k -lt $way.Count; $k++) {
+          $a = $way[$k - 1]; $b = $way[$k]
+          $steps = [Math]::Max(4, [Math]::Min(40, [int]([Math]::Sqrt([Math]::Pow($b[0] - $a[0], 2) + [Math]::Pow($b[1] - $a[1], 2)) / 6)))
+          for ($s = 1; $s -le $steps; $s++) {
+            [ReticleWin32]::SetCursorPos([int]($a[0] + ($b[0] - $a[0]) * $s / $steps), [int]($a[1] + ($b[1] - $a[1]) * $s / $steps)) | Out-Null
+            Start-Sleep -Milliseconds 8
+          }
+        }
+        [ReticleWin32]::mouse_event(0x0004, 0, 0, 0, [UIntPtr]::Zero)
       }
       'wheel' {
         $n = $value.Split(','); $r = $el.Current.BoundingRectangle
@@ -378,13 +502,26 @@ function Invoke-Act($words) {
   } catch {
     $script:LastError = $_.Exception.Message
     $delivered = $false
+  } finally {
+    foreach ($vk in $mods) { [ReticleWin32]::keybd_event([byte]$vk, 0, 2, [UIntPtr]::Zero) }
   }
   $settled = Wait-Quiet $procId $budgetMs $quiet
   $after = Read-App $procId
+  # The tree shows no change: the pixels can. Two pictures after, too, for a motion that started
+  # with the action or is slow.
+  $pixels = $null
+  if ($null -ne $shots -and $null -ne $after -and (($before.tree | ConvertTo-Json -Depth 100 -Compress) -eq ($after.tree | ConvertTo-Json -Depth 100 -Compress))) {
+    $wr = $shots.rect
+    $seen = [ReticlePixels]::Shot([int]$wr.X, [int]$wr.Y, [int]$wr.Width, [int]$wr.Height)
+    Start-Sleep -Milliseconds 100
+    $later = [ReticlePixels]::Shot([int]$wr.X, [int]$wr.Y, [int]$wr.Width, [int]$wr.Height)
+    $pixels = [ReticlePixels]::Change($shots.earlier, $shots.before, $seen, $later, $wr.X, $wr.Y, $wr.Width, $wr.Height)
+  }
   if ($null -eq $after) {
     return @{ delivered = $delivered; reachable = $true; settled = $settled; appGone = $true; before = $before.tree; after = @{ role = 'AXApplication'; children = @() }; unreadBefore = $before.unread; unreadAfter = 0 }
   }
   $answer = @{ delivered = $delivered; reachable = ($reach.reach -eq 'yes'); settled = $settled; before = $before.tree; after = $after.tree; unreadBefore = $before.unread; unreadAfter = $after.unread }
+  if ($null -ne $pixels) { $answer.pixels = $pixels }
   if ($env:RETICLE_UIA_DEBUG -and $script:LastError) { $answer.uiaError = $script:LastError }
   return $answer
 }

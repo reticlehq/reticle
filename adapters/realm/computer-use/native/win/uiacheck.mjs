@@ -3,7 +3,9 @@
 //   - the helper reads Notepad as a window with a text area that has a ref;
 //   - a value set in the text area is read back from the application, not from the answer;
 //   - a press on a menu item of the window is delivered and changes what is on the screen;
-//   - an element that is not there any more is refused as stale, never acted on.
+//   - an element that is not there any more is refused as stale, never acted on;
+//   - a drag on a canvas (ink.ps1) draws a line that no element shows: the realm reports the
+//     pixels that changed, and a bar that moves by itself is not counted as an effect.
 //
 //   node native/win/uiacheck.mjs
 //
@@ -94,7 +96,73 @@ try {
     commands.answer(ReticleCommand.ACT, { ref: 'e9999', action: ActionType.CLICK }),
     /no longer resolves|unknown ref|not found/i,
   );
-  process.stdout.write('computer-use uiacheck: 4 of 4 cases held\n');
+  await checkInk();
+  process.stdout.write('computer-use uiacheck: 6 of 6 cases held\n');
 } finally {
   notepad.kill();
+}
+
+/** A canvas: its effect is only in its pixels, beside a bar that moves by itself. */
+async function checkInk() {
+  const form = spawn(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-File',
+      fileURLToPath(new URL('ink.ps1', import.meta.url)),
+    ],
+    { stdio: 'ignore' },
+  );
+  const ink = new PeerCommands({
+    driver: new MacDriver({
+      helper: launch.file,
+      app: 'Ink',
+      pid: form.pid,
+      run: servingHelper(launch.prefix),
+    }),
+    emit: () => undefined,
+  });
+  try {
+    let canvas;
+    for (let i = 0; i < 30 && canvas?.ref === undefined; i += 1) {
+      await sleep(500);
+      canvas = (await ink.answer(ReticleCommand.QUERY, { name: 'Ink' })).elements.find(
+        (e) => 'window' !== e.role,
+      );
+    }
+    assert.ok(
+      canvas?.ref,
+      `the Ink form shows no canvas:\n${(await ink.answer(ReticleCommand.SNAPSHOT, {})).tree}`,
+    );
+    const drawn = await ink.answer(ReticleCommand.ACT, {
+      ref: canvas.ref,
+      action: ActionType.DRAG,
+      args: { foreground: true, settleMs: 400, to: { x: 0.85, y: 0.85 } },
+    });
+    assert.ok(
+      drawn.effect.pixelsChanged > 0,
+      `the stroke showed no pixels: ${JSON.stringify(drawn.effect)}`,
+    );
+    const missed = await ink.answer(ReticleCommand.ACT, {
+      ref: canvas.ref,
+      action: ActionType.CLICK,
+      args: { foreground: true, settleMs: 400 },
+    });
+    assert.equal(
+      missed.effect.pixelsChanged,
+      0,
+      `a click that drew nothing: ${JSON.stringify(missed.effect)}`,
+    );
+    assert.ok(
+      missed.effect.pixelsMovingByItself > 0,
+      `the moving bar was not seen: ${JSON.stringify(missed.effect)}`,
+    );
+    process.stdout.write(
+      `ok  a stroke: ${String(drawn.effect.pixelsChanged)} changed; a click beside a moving bar: 0 changed, ${String(missed.effect.pixelsMovingByItself)} moving\n`,
+    );
+  } finally {
+    form.kill();
+  }
 }
