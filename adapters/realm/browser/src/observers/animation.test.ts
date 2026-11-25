@@ -101,3 +101,54 @@ describe('animation observer: overlay self-pollution', () => {
     expect(events).toHaveLength(0);
   });
 });
+
+// #2484: a fade that a script runs with `el.animate()` (the Web Animations API, used by Motion)
+// fires no animationstart or animationend. The check then found no event and answered no.
+describe('installAnimation: Web Animations API', () => {
+  type Animate = (this: Element, ...args: unknown[]) => unknown;
+  const proto = Element.prototype as unknown as { animate?: Animate };
+  const had = Object.prototype.hasOwnProperty.call(proto, 'animate');
+  const original = proto.animate;
+  let finish: () => void = () => undefined;
+
+  beforeEach(() => {
+    proto.animate = function fakeAnimate(): unknown {
+      return {
+        id: '',
+        finished: new Promise<void>((resolve) => {
+          finish = resolve;
+        }),
+      };
+    };
+  });
+  afterEach(() => {
+    if (had && original !== undefined) {
+      proto.animate = original;
+    } else {
+      delete proto.animate;
+    }
+    document.body.innerHTML = '';
+  });
+
+  it('emits a start when el.animate() runs and an end when it finishes', async () => {
+    const { emit, events } = collect();
+    const teardown = installAnimation(emit);
+    const el = document.createElement('div');
+    document.body.appendChild(el);
+    el.animate([{ opacity: 0 }, { opacity: 1 }], 200);
+    expect(events.map((e) => [e.type, e.data['kind']])).toEqual([[EventType.ANIM_START, 'waapi']]);
+    finish();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(events.map((e) => e.type)).toEqual([EventType.ANIM_START, EventType.ANIM_END]);
+    teardown();
+  });
+
+  it('restores el.animate on teardown, unless something wrapped it after', () => {
+    const before = proto.animate;
+    const teardown = installAnimation(collect().emit);
+    expect(proto.animate).not.toBe(before);
+    teardown();
+    expect(proto.animate).toBe(before);
+  });
+});
