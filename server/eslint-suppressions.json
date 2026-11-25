@@ -1435,11 +1435,6 @@
       "count": 1
     }
   },
-  "src/language/flows/flow-save-root.test.ts": {
-    "curly": {
-      "count": 3
-    }
-  },
   "src/language/flows/flow-scope.ts": {
     "curly": {
       "count": 1
@@ -3403,14 +3398,6 @@
   },
   "src/surface/tools/read-tools.test.ts": {
     "curly": {
-      "count": 1
-    }
-  },
-  "src/surface/tools/read-tools.ts": {
-    "curly": {
-      "count": 4
-    },
-    "no-nested-ternary": {
       "count": 1
     }
   },

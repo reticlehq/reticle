@@ -33,9 +33,13 @@ import { recordingBacktrackWarning } from './recording/recording-backtrack.js';
 import { isValidFlowName, flowPath } from '@/memory/project/dir/reticle-dir.js';
 import { type FlowAnnotations } from './flows.js';
 import type { ToolDef, ToolDeps } from '@/surface/tools/tool-kit.js';
-import { flowsForListing, flowsForSession, flowsForSessionId } from './flow-store-for-session.js';
+import {
+  flowsForListing,
+  flowsForSavedRecording,
+  flowsForSession,
+  flowsForSessionId,
+} from './flow-store-for-session.js';
 import { rootForTarget, sessionTarget, type ProjectTarget } from '@/memory/project/session-root.js';
-import { originOf } from '@/portal/session/session-manager.js';
 import { resolveSuiteSelection } from './suite-selection.js';
 import { flowErrorMessage, latestRecordedFlow } from './flow-replay-run.js';
 import {
@@ -157,7 +161,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          'Present when the recording left a page and returned to it. Replay has no navigation steps, so the next click will look for a control on a page the tab is no longer on.',
+          'Present when the recording tab disconnected before save (names the fallback folder), or when the recording left a page and returned to it.',
         ),
       error: z.string().optional(),
       code: z.string().optional(),
@@ -223,15 +227,14 @@ export const FLOW_TOOLS: ToolDef[] = [
         ...(success !== undefined ? { success } : {}),
         ...(intent !== undefined ? { intent } : {}),
       };
-      const target = sessionTarget(deps, asString(args['sessionId']));
-      const { projectId } = target;
       // A zero-step recording is not a flow. Saving it wrote a file the suite reports "unverifiable"
       // forever while telling the agent it had saved a regression test — see empty-flow.
       const emptyRefusal = emptyFlowRefusal(program.steps.length, name);
       if (emptyRefusal !== undefined) {
         return Promise.resolve(emptyRefusal);
       }
-      const { flows, root } = flowsForSession(deps, target);
+      const savedFrom = flowsForSavedRecording(deps, asString(args['sessionId']), program.session);
+      const { flows, root, projectId } = savedFrom;
       const author = flowAuthor();
       const toSave = {
         ...program,
@@ -252,6 +255,8 @@ export const FLOW_TOOLS: ToolDef[] = [
         const saved = res.value.name;
         const path = isValidFlowName(saved) ? flowPath(root, saved, projectId) : undefined;
         const backtrack = recordingBacktrackWarning(program.routes ?? []);
+        const warnings = [savedFrom.warning, backtrack].filter((w): w is string => w !== undefined);
+        const warning = 0 === warnings.length ? undefined : warnings.join(' ');
         // Load what this flow INVOKES, so a composite is graded on the journey it runs rather than
         // on the one step it contains. Without this a composite whose sub-flows all assert still
         // warns that it checks nothing, and the only ways to silence that are to duplicate the
@@ -263,12 +268,12 @@ export const FLOW_TOOLS: ToolDef[] = [
               ...res.value,
               ...(path === undefined ? {} : { path }),
               assertions: classifyFlowAssertions(loaded.value, invoked),
-              ...(backtrack === undefined ? {} : { warning: backtrack }),
+              ...(warning === undefined ? {} : { warning }),
             }
           : {
               ...res.value,
               ...(path === undefined ? {} : { path }),
-              ...(backtrack === undefined ? {} : { warning: backtrack }),
+              ...(warning === undefined ? {} : { warning }),
             };
       });
     },
@@ -895,7 +900,7 @@ export const FLOW_TOOLS: ToolDef[] = [
       // Resolved like every other path now. This save used to go to the daemon's root while the
       // recorded-flow save resolved per session, so where a flow landed depended on which tool wrote
       // it — and the pair that disagreed were the two ways to save the same thing.
-      const target: ProjectTarget = { projectId: session.projectId, origin: originOf(session.url) };
+      const target = sessionTarget(deps, session.id);
       const res = await flowsForSession(deps, target).flows.saveFlow(flow, session.projectId);
       if (!res.ok) {
         return { error: flowErrorMessage(res.code, res.detail), code: res.code };

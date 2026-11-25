@@ -598,6 +598,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
           name: JOURNEY_RECORDING,
           version: REPLAY_PROGRAM_VERSION,
           steps: [journey],
+          session: session.id,
           ...(pageBefore === undefined ? {} : { startPath: pageBefore }),
         });
       }
