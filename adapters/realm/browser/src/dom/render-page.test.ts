@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { RETICLE_OVERLAY_SELECTOR } from '@reticlehq/core';
 import { cloneForRender, MASK } from './render-page.js';
 
@@ -10,6 +10,9 @@ describe('cloneForRender', () => {
   afterEach(() => {
     document.body.innerHTML = '';
     Reflect.deleteProperty(document, 'getAnimations');
+    Reflect.deleteProperty(window, 'scrollX');
+    Reflect.deleteProperty(window, 'scrollY');
+    vi.restoreAllMocks();
   });
 
   it('masks a password and a secret-named field, and keeps what the user typed elsewhere', () => {
@@ -63,5 +66,57 @@ describe('cloneForRender', () => {
 
     expect(twin.style.animation).toBe('none');
     expect(twin.style.opacity).toBe('0.9');
+  });
+
+  it('moves the frame to the viewport without a transform, so a fixed overlay fills the viewport', () => {
+    // #2433: a transform on the root makes the root the box that a fixed element fills. A
+    // full-screen overlay was drawn only as tall as the content: a thin band across the top.
+    Object.defineProperty(window, 'scrollX', { value: 0, configurable: true });
+    Object.defineProperty(window, 'scrollY', { value: 550, configurable: true });
+    document.body.innerHTML = '<p>page</p>';
+
+    const clone = cloneForRender(document);
+
+    expect(clone.style.transform).toBe('');
+    expect(clone.style.position).toBe('relative');
+    expect(clone.style.top).toBe('-550px');
+    expect(clone.style.left).toBe('0px');
+  });
+
+  it('draws a modal dialog above everything, with its backdrop, and not where it sits in the tree', () => {
+    // #2433: the clone keeps `open` but not the top layer. The dialog was drawn inside its parent,
+    // under an overlay that stacked above that parent, so the screenshot left it out.
+    document.body.innerHTML =
+      '<div id="wrap" style="position:relative;z-index:1"><p>page</p>' +
+      '<dialog id="d" open><h2 id="title" style="color:rgb(1, 2, 3)">Dialog title</h2>' +
+      '<script>var y = 1;</script></dialog></div>' +
+      '<div style="position:fixed;inset:0;z-index:50"></div>';
+    const dialog = document.getElementById('d') as HTMLDialogElement;
+    // jsdom has no showModal() and no top layer; a real browser matches `:modal` here.
+    vi.spyOn(dialog, 'matches').mockImplementation((selector) => ':modal' === selector);
+
+    const clone = cloneForRender(document);
+
+    const twin = clone.querySelector('#d') as HTMLElement;
+    expect(clone.querySelector('#wrap #d')).toBeNull();
+    const host = twin.parentElement as HTMLElement;
+    expect(host.parentElement).toBe(clone.querySelector('body'));
+    expect(host).toBe(clone.querySelector('body')?.lastElementChild);
+    expect(host.style.position).toBe('fixed');
+    expect(host.style.zIndex).toBe('2147483647');
+    expect(twin.style.position).toBe('fixed');
+    expect(twin.style.zIndex).toBe('2147483647');
+    // Styled as the page shows it now, since the selectors that styled it in place do not reach it.
+    expect((twin.querySelector('#title') as HTMLElement).style.color).toBe('rgb(1, 2, 3)');
+    expect(new XMLSerializer().serializeToString(clone)).not.toContain('var y');
+  });
+
+  it('leaves a dialog that is not in the top layer where it is', () => {
+    document.body.innerHTML = '<div id="wrap"><dialog id="d" open>inline</dialog></div>';
+
+    const clone = cloneForRender(document);
+
+    expect(clone.querySelector('#wrap #d')).not.toBeNull();
+    expect((clone.querySelector('#d') as HTMLElement).style.position).toBe('');
   });
 });

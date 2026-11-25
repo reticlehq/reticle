@@ -127,6 +127,84 @@ function animationsByElement(doc: Document): Map<Element, Animation[]> {
   return byElement;
 }
 
+/** Above everything the page can stack: the top layer draws over every z-index. */
+const TOP_Z_INDEX = '2147483647';
+/** The pseudo-classes of an element the browser draws in the top layer. */
+const TOP_LAYER = [':modal', ':popover-open'];
+const BACKDROP = '::backdrop';
+
+/**
+ * Is this element in the top layer: a dialog opened with `showModal()`, or an open popover?
+ *
+ * A clone keeps the `open` attribute but not the top layer, so the dialog is drawn where it sits in
+ * the tree: not centred, with no backdrop, and under any overlay that stacks above its ancestors.
+ */
+function inTopLayer(el: Element): boolean {
+  return TOP_LAYER.some((pseudo) => {
+    try {
+      return el.matches(pseudo);
+    } catch {
+      // An engine that does not know the pseudo-class has no top layer of that kind.
+      return false;
+    }
+  });
+}
+
+/**
+ * Write every computed property of `from` inline on `to`. A top-layer twin moves to the end of the
+ * body, so the selectors and inherited values that styled it in place no longer reach it.
+ */
+function inlineComputed(view: Window, from: Element, to: Element, pseudo?: string): void {
+  if (!(to instanceof HTMLElement || to instanceof SVGElement)) {
+    return;
+  }
+  const computed = view.getComputedStyle(from, pseudo);
+  for (const name of Array.from(computed)) {
+    to.style.setProperty(name, computed.getPropertyValue(name));
+  }
+  // The computed values are the frame the page shows now. A running animation would start again.
+  to.style.setProperty('animation', 'none');
+  to.style.setProperty('transition', 'none');
+}
+
+/**
+ * Draw the top layer on top. Each top-layer element's twin, styled as the page shows it now, moves
+ * into a box that draws its `::backdrop` over the whole viewport, above everything else. Returns the
+ * boxes, in document order, for the caller to put at the end of the clone.
+ */
+function liftTopLayer(doc: Document, pairs: ReadonlyArray<readonly [Element, Element]>): Element[] {
+  const view = doc.defaultView;
+  const lifted: Element[] = [];
+  if (null === view) {
+    return lifted;
+  }
+  const byLive = new Map(pairs);
+  for (const [el, twin] of pairs) {
+    if (!inTopLayer(el)) {
+      continue;
+    }
+    const host = twin.ownerDocument.createElement('div');
+    inlineComputed(view, el, host, BACKDROP);
+    host.style.setProperty('position', 'fixed');
+    host.style.setProperty('inset', '0');
+    host.style.setProperty('z-index', TOP_Z_INDEX);
+    inlineComputed(view, el, twin);
+    el.querySelectorAll('*').forEach((child) => {
+      const copy = byLive.get(child);
+      if (copy !== undefined) {
+        inlineComputed(view, child, copy);
+      }
+    });
+    if (twin instanceof HTMLElement || twin instanceof SVGElement) {
+      twin.style.setProperty('position', 'fixed');
+      twin.style.setProperty('z-index', TOP_Z_INDEX);
+    }
+    host.append(twin);
+    lifted.push(host);
+  }
+  return lifted;
+}
+
 /** Every stylesheet the page can read, as text. A cross-origin sheet throws and is left out. */
 function readableCss(doc: Document): string {
   const sheets = [...Array.from(doc.styleSheets), ...(doc.adoptedStyleSheets ?? [])];
@@ -144,9 +222,23 @@ function readableCss(doc: Document): string {
 }
 
 /**
+ * Move the clone so the image shows the viewport, not the top of the document: the same frame a
+ * browser screenshot takes.
+ *
+ * A relative offset, not a transform. A transform on the root makes the root the box that a fixed
+ * element fills, so a full-screen overlay was drawn only as tall as the content: a thin band (#2433).
+ */
+function showViewport(doc: Document, clone: HTMLElement): void {
+  const view = doc.defaultView;
+  clone.style.setProperty('position', 'relative');
+  clone.style.setProperty('left', `${String(-(view?.scrollX ?? 0))}px`);
+  clone.style.setProperty('top', `${String(-(view?.scrollY ?? 0))}px`);
+}
+
+/**
  * The document, ready to draw: live form state and the current animation frame carried over, secrets masked, scripts and Reticle's
- * own UI removed, and every readable stylesheet inlined into one `<style>` (a linked sheet would not
- * load inside an SVG image).
+ * own UI removed, every readable stylesheet inlined into one `<style>` (a linked sheet would not
+ * load inside an SVG image), the top layer drawn on top, and the viewport in the frame.
  */
 export function cloneForRender(doc: Document): HTMLElement {
   const root = doc.documentElement;
@@ -155,9 +247,11 @@ export function cloneForRender(doc: Document): HTMLElement {
   const live = root.querySelectorAll('*');
   const copied = clone.querySelectorAll('*');
   const moving = animationsByElement(doc);
+  const pairs: Array<readonly [Element, Element]> = [];
   live.forEach((el, i) => {
     const twin = copied[i];
     if (twin !== undefined) {
+      pairs.push([el, twin]);
       carryState(el, twin);
       const animations = moving.get(el);
       if (animations !== undefined) {
@@ -165,11 +259,13 @@ export function cloneForRender(doc: Document): HTMLElement {
       }
     }
   });
+  (clone.querySelector('body') ?? clone).append(...liftTopLayer(doc, pairs));
   const dropped = [RETICLE_OVERLAY, 'script', 'noscript', 'link[rel~="stylesheet"]', 'style'];
   clone.querySelectorAll(dropped.join(',')).forEach((el) => el.remove());
   const style = doc.createElement('style');
   style.textContent = readableCss(doc);
   (clone.querySelector('head') ?? clone).append(style);
+  showViewport(doc, clone);
   return clone;
 }
 
@@ -222,8 +318,6 @@ export async function renderPage(): Promise<RenderResult> {
     const width = Math.max(1, window.innerWidth);
     const height = Math.max(1, window.innerHeight);
     const clone = cloneForRender(document);
-    // The viewport, not the document: the same frame a browser screenshot would take.
-    clone.style.transform = `translate(${String(-window.scrollX)}px, ${String(-window.scrollY)}px)`;
     const xhtml = new XMLSerializer().serializeToString(clone);
     const svg =
       `<svg xmlns="${SVG_NS}" width="${String(width)}" height="${String(height)}">` +
