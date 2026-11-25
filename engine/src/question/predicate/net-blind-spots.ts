@@ -296,3 +296,20 @@ export function unrecordedCallMiss(
     assertion,
   };
 }
+
+/** A `net` clause named a method, and the only matching record has none (#2474). */
+export const UNOBSERVABLE_METHOD_ASSERTION = 'net.unobservable-method';
+
+/**
+ * Resource timing has no method, so the SDK writes none for a fetch or XHR sent before
+ * `connect()`. That record can neither match nor refute a clause that names a method.
+ */
+export function unobservableMethodMiss(filter: string, method: string | undefined): EvalResult {
+  return {
+    pass: false,
+    inconclusive: `a request matching ${filter} was sent before connect(), so its method was not recorded — assert without \`method\`, or call connect() earlier`,
+    observed: 'a matching request with no recorded method',
+    expected: `a ${method ?? ''} request matching ${filter}`,
+    assertion: UNOBSERVABLE_METHOD_ASSERTION,
+  };
+}
