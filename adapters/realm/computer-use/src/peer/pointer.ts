@@ -277,19 +277,39 @@ const MAX_HOLD_MS = 10_000;
  * the button stays down. A click in the background is a press, which holds no key: it is refused,
  * as nothing else would show that the keys were not held.
  */
-export function handOf(kind: ActKind, more: Record<string, unknown>): string {
+/** Roles whose effect can be only in pixels: a photo, a canvas, a frame of video, a window. */
+const CANVAS_ROLES: ReadonlySet<string> = new Set(['img', 'group', 'window', 'application']);
+
+/**
+ * Whether the helper compares pictures of the window for this action. Only for a point of a
+ * picture or an element that can be a canvas: each picture costs a wait for the window to draw,
+ * and a button shows its effect in its elements.
+ */
+export function wantsPixels(role: string, more: Record<string, unknown>): boolean {
+  return (
+    CANVAS_ROLES.has(role) ||
+    [PICTURE_POINT_ARG, PATH_ARG, DRAG_TO_PICTURE_POINT_ARG].some((key) => more[key] !== undefined)
+  );
+}
+
+export function handOf(kind: ActKind, more: Record<string, unknown>, pixels = false): string {
+  // A key press takes its modifiers in its key: only a pointer action takes a hand.
+  if (kind === ActKind.KEY) {
+    return '';
+  }
   const keys = Array.isArray(more[MODIFIERS_ARG])
     ? (more[MODIFIERS_ARG] as unknown[]).map(String)
     : [];
   const hold =
     'number' === typeof more[HOLD_ARG] ? Math.min(MAX_HOLD_MS, Math.max(0, more[HOLD_ARG])) : 0;
+  const compare = pixels && POINT_KINDS.has(kind) ? '|pixels=1' : '';
   if (0 === keys.length && 0 === hold) {
-    return '';
+    return compare;
   }
   if (!POINT_KINDS.has(kind)) {
     throw new Error(
       `keys held through a click, and a held button, need the real pointer: add args.foreground: true. A ${kind} in the background holds no key.`,
     );
   }
-  return `${0 === keys.length ? '' : `|mods=${keys.map((k) => k.toLowerCase()).join('+')}`}${0 === hold ? '' : `|hold=${String(hold)}`}`;
+  return `${0 === keys.length ? '' : `|mods=${keys.map((k) => k.toLowerCase()).join('+')}`}${0 === hold ? '' : `|hold=${String(hold)}`}${compare}`;
 }

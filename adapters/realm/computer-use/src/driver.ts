@@ -157,8 +157,10 @@ export interface ActOutcome {
    * The part of the window whose pixels changed (0 to 1), and the box around the change in screen
    * points. Read only when no element changed: a canvas shows its effect only in pixels. Absent:
    * the pixels were not compared (not a pointer in the foreground, no picture, or elements changed).
+   * `moving`: the part of the window that changed with no action (a video, a spinner). It is left
+   * out of `changed`, because a change there cannot be told from an effect.
    */
-  pixels?: { changed: number; box?: readonly number[] };
+  pixels?: { changed: number; box?: readonly number[]; moving?: number };
 }
 
 /** The signal for an action whose effect is only in the pixels: the part changed, and its box. */

@@ -24,6 +24,7 @@
 import AppKit
 import ApplicationServices
 import Foundation
+import ScreenCaptureKit
 import Security
 
 let attributes =
@@ -226,7 +227,47 @@ func mainWindow(_ pid: pid_t) -> (id: Int, rect: CGRect)? {
 /// A picture of one window, made small: `pictureWidth` pixels wide, 4 bytes for each pixel.
 /// A canvas (a photo, a video frame, a drawing) has no elements, so its pixels are its effect.
 let pictureWidth = 240
-func windowPixels(_ id: Int) -> (bytes: [UInt8], width: Int, height: Int)? {
+/// Waits for async work on a thread that has nothing else to do. The helper answers one command
+/// at a time, so a blocked thread costs nothing.
+func waitFor<T>(_ work: @escaping () async -> T?) -> T? {
+  let done = DispatchSemaphore(value: 0)
+  var out: T?
+  Task {
+    out = await work()
+    done.signal()
+  }
+  done.wait()
+  return out
+}
+/// The filter of the last window drawn, kept: to find a window again costs more than the picture.
+var pictureFilter: (id: Int, filter: Any)?
+/// A small picture of a window, drawn by the window server in this process: about 35 ms, where a
+/// run of `screencapture` and a PNG to decode took 90 ms or more.
+func windowImage(_ id: Int) -> CGImage? {
+  if #available(macOS 14.0, *) {
+    var filter = pictureFilter?.id == id ? pictureFilter?.filter as? SCContentFilter : nil
+    if filter == nil {
+      filter = waitFor {
+        let content = try? await SCShareableContent.excludingDesktopWindows(
+          false, onScreenWindowsOnly: true)
+        return content?.windows.first { $0.windowID == CGWindowID(id) }
+          .map { SCContentFilter(desktopIndependentWindow: $0) }
+      }
+      if let filter { pictureFilter = (id, filter) }
+    }
+    if let filter {
+      let config = SCStreamConfiguration()
+      config.width = pictureWidth
+      config.height = max(1, Int(Double(pictureWidth) * Double(filter.contentRect.height)
+        / Double(max(filter.contentRect.width, 1))))
+      config.showsCursor = false
+      if let image = waitFor({
+        try? await SCScreenshotManager.captureImage(contentFilter: filter, configuration: config)
+      }) {
+        return image
+      }
+    }
+  }
   let path = NSTemporaryDirectory() + "reticle-pixels-\(getpid())-\(id).png"
   defer { try? FileManager.default.removeItem(atPath: path) }
   let shot = Process()
@@ -234,10 +275,11 @@ func windowPixels(_ id: Int) -> (bytes: [UInt8], width: Int, height: Int)? {
   shot.arguments = ["-x", "-o", "-l", String(id), "-t", "png", path]
   try? shot.run()
   shot.waitUntilExit()
-  guard shot.terminationStatus == 0,
-    let image = NSImage(contentsOfFile: path)?.cgImage(forProposedRect: nil, context: nil, hints: nil),
-    image.width > 0
-  else { return nil }
+  guard shot.terminationStatus == 0 else { return nil }
+  return NSImage(contentsOfFile: path)?.cgImage(forProposedRect: nil, context: nil, hints: nil)
+}
+func windowPixels(_ id: Int) -> (bytes: [UInt8], width: Int, height: Int)? {
+  guard let image = windowImage(id), image.width > 0 else { return nil }
   let width = min(pictureWidth, image.width)
   let height = max(1, image.height * width / image.width)
   var bytes = [UInt8](repeating: 0, count: width * height * 4)
@@ -259,24 +301,57 @@ func windowPixels(_ id: Int) -> (bytes: [UInt8], width: Int, height: Int)? {
 /// points. A pixel counts when one channel moved more than `pixelStep`: less is the noise of the
 /// scaling and of a blinking caret's edge.
 let pixelStep = 24
-func pixelChange(
-  _ a: (bytes: [UInt8], width: Int, height: Int), _ b: (bytes: [UInt8], width: Int, height: Int),
-  window: CGRect
-) -> [String: Any]? {
+typealias Pixels = (bytes: [UInt8], width: Int, height: Int)
+
+/// The pixels that differ between two pictures of the same size.
+func pixelsMoved(_ a: Pixels, _ b: Pixels) -> [Bool] {
+  guard a.width == b.width, a.height == b.height else { return [] }
+  var moved = [Bool](repeating: false, count: a.width * a.height)
+  for p in 0..<moved.count {
+    for c in 0..<3 {
+      let i = p * 4 + c
+      if abs(Int(a.bytes[i]) - Int(b.bytes[i])) > pixelStep { moved[p] = true }
+    }
+  }
+  return moved
+}
+
+/// The pixels that moved by themselves, made a little wider: a video, a spinner or a caret moves
+/// between two pictures with no action, and its edge moves a pixel more in the next frame.
+func movingMask(_ pairs: [(Pixels, Pixels)], width: Int, height: Int) -> [Bool] {
+  var mask = [Bool](repeating: false, count: width * height)
+  for (a, b) in pairs {
+    let moved = pixelsMoved(a, b)
+    guard moved.count == mask.count else { continue }
+    for y in 0..<height {
+      for x in 0..<width where moved[y * width + x] {
+        for yy in max(0, y - 2)...min(height - 1, y + 2) {
+          for xx in max(0, x - 2)...min(width - 1, x + 2) { mask[yy * width + xx] = true }
+        }
+      }
+    }
+  }
+  return mask
+}
+
+/// What part of the window changed, leaving out the pixels in `moving`, which change by
+/// themselves. `moving` in the answer is the part of the window that moved with no action: a
+/// change there cannot be told from the action's effect, so it is not counted as one.
+func pixelChange(_ a: Pixels, _ b: Pixels, window: CGRect, moving: [Bool] = []) -> [String: Any]? {
   guard a.width == b.width, a.height == b.height else {
     // The window changed its size: all of it is new.
     return ["changed": 1.0, "box": [window.origin.x, window.origin.y, window.width, window.height]]
   }
+  let moved = pixelsMoved(a, b)
+  let still = moving.count == moved.count ? moving : [Bool](repeating: false, count: moved.count)
+  let movingPart = Double(still.filter { $0 }.count) / Double(max(1, still.count))
+  let rounded = { (n: Double) in (n * 10_000).rounded() / 10_000 }
   var count = 0
   var minX = a.width, minY = a.height, maxX = -1, maxY = -1
   for y in 0..<a.height {
     for x in 0..<a.width {
-      let i = (y * a.width + x) * 4
-      var moved = false
-      for c in 0..<3 where abs(Int(a.bytes[i + c]) - Int(b.bytes[i + c])) > pixelStep {
-        moved = true
-      }
-      guard moved else { continue }
+      let p = y * a.width + x
+      guard moved[p], !still[p] else { continue }
       count += 1
       minX = min(minX, x)
       maxX = max(maxX, x)
@@ -284,18 +359,19 @@ func pixelChange(
       maxY = max(maxY, y)
     }
   }
-  guard count > 0 else { return ["changed": 0.0] }
+  let extra: [String: Any] = movingPart > 0 ? ["moving": rounded(movingPart)] : [:]
+  guard count > 0 else { return ["changed": 0.0].merging(extra) { $1 } }
   // The first row in the memory of a bitmap context is the top of the picture.
   let sx = window.width / Double(a.width)
   let sy = window.height / Double(a.height)
   let top = minY
-  return [
-    "changed": (Double(count) / Double(a.width * a.height) * 10_000).rounded() / 10_000,
+  return extra.merging([
+    "changed": rounded(Double(count) / Double(a.width * a.height)),
     "box": [
       (window.origin.x + Double(minX) * sx).rounded(), (window.origin.y + Double(top) * sy).rounded(),
       (Double(maxX - minX + 1) * sx).rounded(), (Double(maxY - minY + 1) * sy).rounded(),
     ],
-  ]
+  ]) { $1 }
 }
 
 func snapshot(_ app: AXUIElement) -> (tree: [String: Any], unread: Int, json: Data) {
@@ -1093,13 +1169,18 @@ func run(_ args: [String]) throws {
   }
   // A canvas shows its effect only in pixels: take the window's picture before the hand moves.
   // Only for a pointer in the foreground, where the window is on the screen to be drawn.
+  // The realm asks for it ("pixels=1") only for a point of a picture or an element that can be a
+  // canvas: each picture costs time, and a button shows its effect in its elements.
   let pictureWindow = foreground && pointerActions.contains(action) && action != "hover"
-    ? mainWindow(pid) : nil
+    && hand["pixels"] == "1" ? mainWindow(pid) : nil
   // A window that just came to the front draws itself again (a selection turns from grey to
   // blue). That redraw is not the action's effect: wait for it before the first picture.
   if pictureWindow != nil, let was = appBefore, was.processIdentifier != pid {
     Thread.sleep(forTimeInterval: 0.2)
   }
+  // Two pictures, a moment apart: what moves between them moves by itself (a video that plays).
+  let pixelsEarlier = pictureWindow.flatMap { windowPixels($0.id) }
+  if pixelsEarlier != nil { Thread.sleep(forTimeInterval: 0.1) }
   let pixelsBefore = pictureWindow.flatMap { windowPixels($0.id) }
   let pointNumbers = pointValue.split(separator: ",").compactMap({ Double($0) })
   let pointCount = ["click": 2, "dblclick": 2, "rightclick": 2, "hover": 2, "wheel": 3]
@@ -1496,7 +1577,14 @@ func run(_ args: [String]) throws {
     let now = mainWindow(pid), now.id == window.id, now.rect.origin == window.rect.origin,
     let seen = windowPixels(now.id)
   {
-    pixels = pixelChange(was, seen, window: now.rect)
+    // And two after it: a motion that started with the action, or that is slow, shows there.
+    Thread.sleep(forTimeInterval: 0.1)
+    let later = windowPixels(now.id)
+    var pairs: [(Pixels, Pixels)] = []
+    if let earlier = pixelsEarlier { pairs.append((earlier, was)) }
+    if let later { pairs.append((seen, later)) }
+    pixels = pixelChange(was, seen, window: now.rect,
+      moving: movingMask(pairs, width: was.width, height: was.height))
   }
   putBack()
   var changedSettings: [[String: Any]]?

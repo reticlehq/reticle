@@ -18,6 +18,7 @@
 //            writes the title to the file the person names there.
 //   Pad      says which gesture of the real pointer it got: click, double, right, hover, dragged.
 //   Ink      a canvas. A drag on it draws a line, and nothing but its pixels changes.
+//   Spinner  a bar that moves by itself, and gives no element. Only with a second argument `spin`.
 //   Clock    a count that goes up every 400 ms with no action. Only with a second argument `clock`.
 // The window floats and the application never takes the keyboard, so a run does not disturb the
 // person at the machine.
@@ -173,6 +174,18 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
     ink.setAccessibilityRole(.image)
     ink.setAccessibilityLabel("Ink")
     window.contentView!.addSubview(ink)
+    if CommandLine.arguments.count > 2 && CommandLine.arguments[2] == "spin" {
+      // Pixels that change with no action, as a video that plays: no element shows them.
+      let bar = NSView(frame: NSRect(x: 20, y: 110, width: 8, height: 20))
+      bar.wantsLayer = true
+      bar.layer?.backgroundColor = NSColor.systemRed.cgColor
+      window.contentView!.addSubview(bar)
+      var step = 0
+      Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { _ in
+        step = (step + 1) % 30
+        bar.frame.origin.x = 20 + CGFloat(step * 3)
+      }
+    }
     if CommandLine.arguments.count > 2 && CommandLine.arguments[2] == "clock" {
       // In a group of its own: the realm learns the PLACE that changes, and the place of a
       // label that lies in the window is the whole window.

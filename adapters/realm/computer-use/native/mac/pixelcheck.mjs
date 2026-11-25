@@ -1,6 +1,7 @@
 // Checks that the realm sees an effect that is only in pixels: a drag on the fixture's Ink canvas
 // draws a line and changes no element. Before this, the realm said "nothing changed" for it, and
-// a model drew the line again. A click on a button that does nothing must show no pixel change.
+// a model drew the line again. A bar that moves by itself must not count as an effect, and a
+// click on a button that does nothing must show no pixel change.
 //
 //   node native/mac/pixelcheck.mjs
 //
@@ -26,7 +27,9 @@ for (const name of ['reticle-ax', 'fixture']) {
   });
 }
 
-const fixture = spawn(`${build}/fixture`, [tmpdir()], { stdio: 'ignore' });
+// `spin`: a bar in the window moves by itself all the time, as a video that plays. Its pixels
+// must not count as the effect of an action.
+const fixture = spawn(`${build}/fixture`, [tmpdir(), 'spin'], { stdio: 'ignore' });
 const signals = [];
 const commands = new PeerCommands({
   driver: new MacDriver({ helper: `${build}/reticle-ax`, app: 'fixture', pid: fixture.pid }),
@@ -60,6 +63,19 @@ try {
   );
   console.log(
     `ok  a stroke on a canvas: ${drawn.effect.pixelsChanged} of the window, box ${signal.data.box}`,
+  );
+
+  // A click on the canvas draws nothing. Only the bar moved, by itself: no effect, and the
+  // motion is said apart, so a model knows that part of the window cannot be read.
+  const missed = await commands.answer(ReticleCommand.ACT, {
+    ref: ink.ref,
+    action: ActionType.CLICK,
+    args: { foreground: true, settleMs: 400 },
+  });
+  assert.equal(missed.effect.pixelsChanged, 0, JSON.stringify(missed.effect));
+  assert.ok(missed.effect.pixelsMovingByItself > 0, JSON.stringify(missed.effect));
+  console.log(
+    `ok  a click that drew nothing, beside a moving bar: 0 changed, ${missed.effect.pixelsMovingByItself} moving by itself`,
   );
 
   const dead = await find('button', 'Dead');

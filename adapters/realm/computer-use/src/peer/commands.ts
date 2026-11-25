@@ -22,6 +22,7 @@ import {
 
 import { ActKind, ActRefusal, Delivery, PIXELS_CHANGED_SIGNAL, Reach } from '../driver.js';
 import type { ActOutcome, UiDriver } from '../driver.js';
+import { pixelEffect, sawNothing } from './act-effect.js';
 import { ChangeKind, effectOf } from '../effect.js';
 import type { Change } from '../effect.js';
 import { REWRITTEN, rewrittenSince, writeTimeOnDisk, writeTimesOf } from '../files.js';
@@ -51,6 +52,7 @@ import { refusalOf } from './link-switch.js';
 import {
   NO_SCREEN_RECORDING,
   handOf,
+  wantsPixels,
   pointerPath,
   contentMoved,
   kindFor,
@@ -151,17 +153,6 @@ function sameAtItsPlace(all: readonly Seen[], who: UiNode | undefined): Seen | u
     );
   });
   return 1 === same.length ? same[0] : undefined;
-}
-
-/** True when an action left nothing that this realm can see. */
-function sawNothing(outcome: ActOutcome, changesOnScreen: number): boolean {
-  return (
-    0 === changesOnScreen &&
-    0 === (outcome.settingsChanged ?? []).length &&
-    true !== outcome.clipboardChanged &&
-    !((outcome.pixels?.changed ?? 0) > 0) &&
-    0 === (outcome.bytesWritten ?? 0)
-  );
 }
 
 /** Each check is one question to the operating system. A search this wide is not a check. */
@@ -895,8 +886,7 @@ export class PeerCommands {
       kind === ActKind.DRAG
         ? dragValue(this.#picture, more, target.node.frame, await this.#ontoFrame(more))
         : (at ?? VALUE_OF[action] ?? given);
-    // A key press takes its modifiers in its key: only a pointer action takes a hand.
-    const hand = kind === ActKind.KEY ? '' : handOf(kind, more);
+    const hand = handOf(kind, more, wantsPixels(target.node.role, more));
     const value = '' === hand ? base : `${base ?? ''}${hand}`;
     const wanted = WANTS_CHECKED[action];
     if (wanted !== undefined) {
@@ -984,7 +974,7 @@ export class PeerCommands {
         ...(byItself > 0 ? { changedByItself: byItself } : {}),
         // Changes to elements that are not on the screen. They are not in the count above.
         ...(offScreen > 0 ? { changedOffScreen: offScreen } : {}),
-        ...(outcome.pixels === undefined ? {} : { pixelsChanged: outcome.pixels.changed }),
+        ...pixelEffect(outcome),
         ...(kind === ActKind.PRESS && sawNothing(outcome, changes.length + byItself + offScreen)
           ? { note: this.#deps.noEffectNote ?? NOTHING_SEEN_NOTE }
           : {}),

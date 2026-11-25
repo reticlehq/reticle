@@ -1613,7 +1613,7 @@ describe('PeerCommands', () => {
         action: ActionType.CLICK,
         args: { foreground: true, point: { x: 600, y: 400 } },
       });
-      expect(made.asked.at(-1)?.value).toBe('300,200');
+      expect(made.asked.at(-1)?.value).toBe('300,200|pixels=1');
     });
 
     it('says what to do when the terminal may not record the screen', async () => {
@@ -1628,7 +1628,7 @@ describe('PeerCommands', () => {
       await clickAt({ foreground: true, point: { x: 200, y: 100 } });
       // The window is at 0,0 and the picture has two pixels for each point.
       expect(asked.map((request) => [request.kind, request.value])).toEqual([
-        [ActKind.CLICK, '100,50'],
+        [ActKind.CLICK, '100,50|pixels=1'],
       ]);
     });
 
@@ -1723,7 +1723,7 @@ describe('PeerCommands', () => {
           holdMs: 300,
         },
       });
-      expect(asked.at(-1)?.value).toBe('100,50,150,80,200,50|mods=shift+alt|hold=300');
+      expect(asked.at(-1)?.value).toBe('100,50,150,80,200,50|mods=shift+alt|hold=300|pixels=1');
       expect(moves).toEqual([
         [100, 50],
         [200, 50],
@@ -1737,6 +1737,7 @@ describe('PeerCommands', () => {
         action: ActionType.CLICK,
         args: { foreground: true, modifiers: ['Meta'] },
       });
+      // A button shows its effect in its elements: no pictures, which cost a wait for the window.
       expect(asked.at(-1)?.value).toBe('|mods=meta');
       await expect(
         commands.answer(ReticleCommand.ACT, {
@@ -1755,8 +1756,9 @@ describe('PeerCommands', () => {
         action: ActionType.DRAG,
         args: { foreground: true, point: { x: 200, y: 100 }, toPoint: { x: 400, y: 200 } },
       });
-      // The picture has two pixels for each point, and the window is at 0,0.
-      expect(asked.at(-1)?.value).toBe('100,50,200,100');
+      // The picture has two pixels for each point, and the window is at 0,0. A point of a picture
+      // can be on a canvas, so the helper is asked to compare the pixels.
+      expect(asked.at(-1)?.value).toBe('100,50,200,100|pixels=1');
       // The pointer of the HUD presses at the start and goes to the end, as a hand drags. It
       // stayed at the start, so the person saw nothing move.
       expect(moves).toEqual([
@@ -2082,11 +2084,13 @@ describe('PeerCommands', () => {
       { name: 'pixels.changed', data: { changed: 0.04, box: [10, 20, 30, 40] } },
     ]);
 
-    const still = peer({ pixels: { changed: 0 } });
-    await still.commands.answer(ReticleCommand.ACT, {
+    // A video plays in the window: its pixels move with no action, and are not an effect.
+    const still = peer({ pixels: { changed: 0, moving: 0.2 } });
+    const missed = (await still.commands.answer(ReticleCommand.ACT, {
       ref: await refOf(still.commands, 'Save'),
       action: ActionType.CLICK,
-    });
+    })) as Record<string, unknown>;
+    expect(missed['effect']).toMatchObject({ pixelsChanged: 0, pixelsMovingByItself: 0.2 });
     expect(still.events.filter(([type]) => EventType.SIGNAL === type)).toEqual([]);
   });
 
