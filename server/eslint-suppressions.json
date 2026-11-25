@@ -201,11 +201,6 @@
       "count": 11
     }
   },
-  "src/command/cli/launch/sdk-version-match.ts": {
-    "curly": {
-      "count": 17
-    }
-  },
   "src/command/cli/lifecycle/daemon-lifecycle.ts": {
     "no-nested-ternary": {
       "count": 1
