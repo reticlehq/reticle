@@ -28,10 +28,15 @@ export interface DeclaredNetFailure {
   status?: number;
 }
 
-/** A `net { repeatable: true }` clause: the endpoint it declared a read, and its method if named. */
+/**
+ * A net clause that declared repeats on its endpoint, and its method if named. Without `count` it
+ * said `repeatable: true`: the endpoint reads, so any number of calls is expected (#1353). With
+ * `count` it said `count: N`: up to N calls there are the declared consequence (#2273).
+ */
 export interface DeclaredRead {
   urlContains: string;
   method?: string;
+  count?: number;
 }
 
 interface DeclaredExpectations {
@@ -53,8 +58,9 @@ interface DeclaredExpectations {
    */
   netUrls: readonly string[];
   /**
-   * The net clauses that said `repeatable: true`: reads, not writes (#1353). One with no
-   * `urlContains` is never here: the schema refuses it, and it would excuse every request.
+   * The net clauses that declared repeats: `repeatable: true` (reads, not writes, #1353) or a
+   * `count` (that many calls, #2273). One with no `urlContains` is never here: it would excuse
+   * every request.
    */
   repeatableNetUrls: readonly DeclaredRead[];
   /**
@@ -173,11 +179,19 @@ export function declaredExpectations(predicate: Predicate | undefined): Declared
         return;
       case PredicateKind.NET: {
         netUrls.push(p.urlContains ?? '');
-        if (true === p.repeatable && p.urlContains !== undefined && p.urlContains.trim() !== '') {
-          repeatableNetUrls.push({
-            urlContains: p.urlContains,
-            ...(p.method === undefined ? {} : { method: p.method }),
-          });
+        if (p.urlContains !== undefined && p.urlContains.trim() !== '') {
+          if (true === p.repeatable) {
+            repeatableNetUrls.push({
+              urlContains: p.urlContains,
+              ...(p.method === undefined ? {} : { method: p.method }),
+            });
+          } else if (p.count !== undefined) {
+            repeatableNetUrls.push({
+              urlContains: p.urlContains,
+              count: p.count,
+              ...(p.method === undefined ? {} : { method: p.method }),
+            });
+          }
         }
         const declaredFailure =
           false === p.ok || (p.status !== undefined && p.status >= FAILURE_STATUS_MIN);
@@ -317,21 +331,41 @@ export function matchesDeclaredFailure(
 }
 
 /**
- * Was this call declared a read? Same matching as `matchesDeclaredFailure`: the URL must contain
+ * Does this clause name this call? Same matching as `matchesDeclaredFailure`: the URL must contain
  * the clause's `urlContains`, and a method the clause named must agree, so a repeatable GET never
  * excuses a POST to the same endpoint (#1353).
+ */
+function declares(
+  r: DeclaredRead,
+  call: { method: string; url: string; matchUrl?: string },
+): boolean {
+  return (
+    (call.matchUrl ?? call.url).includes(r.urlContains) &&
+    (r.method === undefined || r.method.toUpperCase() === call.method.toUpperCase())
+  );
+}
+
+/**
+ * Was this call declared a read? A clause with `repeatable: true` (no `count`) that names it,
+ * matched as in `declares` (#1353).
  */
 export function isDeclaredRead(
   call: { method: string; url: string; matchUrl?: string },
   reads: readonly DeclaredRead[] | undefined,
 ): boolean {
-  if (reads === undefined) {
-    return false;
-  }
-  const haystack = call.matchUrl ?? call.url;
-  return reads.some(
-    (r) =>
-      haystack.includes(r.urlContains) &&
-      (r.method === undefined || r.method.toUpperCase() === call.method.toUpperCase()),
+  return (reads ?? []).some((r) => r.count === undefined && declares(r, call));
+}
+
+/**
+ * How many calls the assertion declared for this call's endpoint with `count`: the largest such
+ * count among the clauses that name it, or 0 when none does (#2273).
+ */
+export function declaredCountFor(
+  call: { method: string; url: string; matchUrl?: string },
+  reads: readonly DeclaredRead[] | undefined,
+): number {
+  return (reads ?? []).reduce(
+    (most, r) => (r.count !== undefined && declares(r, call) ? Math.max(most, r.count) : most),
+    0,
   );
 }
