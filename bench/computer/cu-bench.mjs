@@ -189,6 +189,44 @@ async function openFixture(dir, mode) {
   }).unref();
   await sleep(1500);
 }
+// The bench's own Chrome: a profile of its own, accessibility on, joined by its process. Never the
+// person's Chrome: the task does not run while another Chrome is open.
+const CHROME = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+/** The processes of this task's other applications, by name: a join by name would find the person's. */
+let taskPids = new Map();
+function personsChromeIsOpen() {
+  try {
+    return sh('pgrep', ['-f', CHROME])
+      .split('\n')
+      .filter(Boolean)
+      .some((pid) => !sh('ps', ['-o', 'command=', '-p', pid]).includes(OWN));
+  } catch {
+    return false;
+  }
+}
+async function openBenchChrome(dir, page) {
+  try {
+    // Only the Chrome of the bench's own folder.
+    sh('pkill', ['-f', `user-data-dir=${DIR}`]);
+  } catch {
+    // ponytail: no bench Chrome was running.
+  }
+  const chrome = spawn(
+    CHROME,
+    [
+      `--user-data-dir=${join(dir, 'chrome')}`,
+      '--no-first-run',
+      '--no-default-browser-check',
+      '--force-renderer-accessibility',
+      `file://${page}`,
+    ],
+    { stdio: 'ignore', detached: true },
+  );
+  chrome.unref();
+  await sleep(5000);
+  taskPids = new Map([['Google Chrome', chrome.pid]]);
+}
+
 const COLOUR_TEXT = [
   'The colour of the sky changes in the evening.',
   'Paint the door a warm colour.',
@@ -368,6 +406,31 @@ const TASKS = [
     task: 'The app "boxes" shows three boxes with the letters A, B and C. Click the box with the letter B.',
     check: (dir) => read(join(dir, 'clicked.txt')) === 'B',
   },
+  // Two applications and a hand-off: a value read in a web page, written into a file in TextEdit.
+  {
+    id: 'browser-to-textedit',
+    app: 'TextEdit',
+    async setup() {
+      const dir = fresh(this.id);
+      if (personsChromeIsOpen()) {
+        throw new Error(
+          'NOT RUN: Google Chrome of the person is open; the task needs its own Chrome',
+        );
+      }
+      const page = join(dir, 'order.html');
+      writeFileSync(
+        page,
+        '<!doctype html><title>Order</title><h1>Your order</h1><p>Thank you.</p><p>Order number: <b>R-48213</b></p><p>Delivery in 3 days.</p>',
+      );
+      const note = join(dir, 'note.txt');
+      writeFileSync(note, '');
+      await openIn('TextEdit', note);
+      await openBenchChrome(dir, page);
+      return note;
+    },
+    task: 'A Google Chrome window shows an order page. Write its order number as the only line of note.txt, which TextEdit has open, and save the file.',
+    check: (f) => read(f)?.trim() === 'R-48213',
+  },
   // The trap, and its twin. The application says "Exported" in both. In the trap nothing is
   // written, and the correct answer is "failed". The twin keeps an arm that always says "failed"
   // from passing. Every arm has the same `read_file` tool: the trap measures whether the agent
@@ -467,17 +530,27 @@ const DONE = {
 };
 
 // --- The reticle arm -------------------------------------------------------------------------
+// Another application than the one the task names, by its name: a task can use two. Refs belong
+// to the application they came from.
+const APP_ARG = {
+  type: 'string',
+  description:
+    'Another open application, by its name (for example "Calculator"). Absent: the app of the task.',
+};
+/** The session of each application this task joined, by name. Set by the run. */
+let appSessions = new Map();
+
 const RETICLE_TOOLS = [
   {
     name: 'screenshot',
     description: 'A picture of the window of the app.',
-    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+    input_schema: { type: 'object', properties: { app: APP_ARG }, additionalProperties: false },
   },
   {
     name: 'look',
     description:
       'The accessibility tree of the app: each element with its role, name, value and state, and a ref to act on.',
-    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+    input_schema: { type: 'object', properties: { app: APP_ARG }, additionalProperties: false },
   },
   {
     name: 'act',
@@ -489,6 +562,7 @@ const RETICLE_TOOLS = [
         ref: { type: 'string' },
         action: { type: 'string' },
         args: { type: 'object' },
+        app: APP_ARG,
       },
       required: ['ref', 'action'],
       additionalProperties: false,
@@ -513,13 +587,30 @@ const CHECK_TOOL = {
       action: { type: 'string' },
       args: { type: 'object' },
       until: { type: 'object' },
+      app: APP_ARG,
     },
     required: ['ref', 'action', 'until'],
     additionalProperties: false,
   },
 };
 
-async function runReticleCall(sessionId, name, input) {
+async function runReticleCall(taskSession, name, input) {
+  let sessionId = taskSession;
+  if ('string' === typeof input.app && input.app.length > 0) {
+    if (!appSessions.has(input.app)) {
+      const pid = taskPids.get(input.app);
+      const joined = await post('join', {
+        app: input.app,
+        keep: true,
+        ...(pid === undefined ? {} : { pid }),
+      });
+      if (joined.sessionId === undefined) {
+        throw new Error(joined.error ?? `${input.app} is not open`);
+      }
+      appSessions.set(input.app, joined.sessionId);
+    }
+    sessionId = appSessions.get(input.app);
+  }
   if (name === 'act_and_check') {
     const r = await tool('reticle_act_and_wait', {
       sessionId,
@@ -789,19 +880,39 @@ async function messages(body) {
   return r.json();
 }
 
-/** One arm on one task. The MCP server of cua-driver is closed also when the run throws. */
+/** The ids of the Finder windows open now. */
+const finderWindowIds = () =>
+  jxa('Application("Finder").finderWindows().map((w) => w.id()).join(",")').split(',');
+
+/**
+ * One arm on one task. The MCP server of cua-driver is closed also when the run throws. A Finder
+ * window that an agent opened during the run (a new window shows Recents) is closed after it: it
+ * is not the person's, and it kept the next run from starting.
+ */
 async function runOne(arm, task) {
+  taskPids = new Map();
+  const before = new Set(finderWindowIds());
   const cua = arm === 'cua-driver' ? cuaArm() : undefined;
   try {
     return await (OPENAI ? runOpenAI(arm, task, cua) : runArm(arm, task, cua));
   } finally {
     cua?.close();
+    const opened = finderWindowIds().filter((id) => id !== '' && !before.has(id));
+    if (opened.length > 0) {
+      jxa(
+        `for (const w of Application("Finder").finderWindows()) { if (${JSON.stringify(opened)}.includes(String(w.id()))) w.close(); }`,
+      );
+    }
   }
 }
 
 async function runArm(arm, task, cua) {
   const target = await task.setup();
-  const { sessionId } = cua === undefined ? await post('join', { app: task.app }) : {};
+  const { sessionId } =
+    cua === undefined
+      ? await post('join', { app: task.app, ...(task.pid ? { pid: task.pid() } : {}) })
+      : {};
+  appSessions = new Map();
   let run = (name, input) => runReticleCall(sessionId, name, input);
   let tools = [
     ...RETICLE_TOOLS,
@@ -1015,7 +1126,11 @@ async function computerActions(pixels, actions) {
 
 async function runOpenAI(arm, task, cua) {
   const target = await task.setup();
-  const { sessionId } = cua === undefined ? await post('join', { app: task.app }) : {};
+  const { sessionId } =
+    cua === undefined
+      ? await post('join', { app: task.app, ...(task.pid ? { pid: task.pid() } : {}) })
+      : {};
+  appSessions = new Map();
   const pixels = arm === 'openai-computer' ? pixelsArm(sessionId) : undefined;
   let run = (name, input) => runReticleCall(sessionId, name, input);
   let tools = [

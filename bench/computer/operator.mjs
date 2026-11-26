@@ -1,7 +1,8 @@
 // The operator of cu-bench.mjs: a real bridge, Reticle's computer joined to one application at a
 // time, and HTTP on 4499 that the bench calls.
 //
-//   POST /join  { app }          joins the open application by its name, answers { sessionId }
+//   POST /join  { app, keep? }   joins the open application by its name, answers { sessionId }.
+//                                Without `keep` it first closes the sessions of the last task.
 //   POST /tool  { name, args }   runs one tool of the agent's surface, answers its result
 //
 //   node bench/computer/operator.mjs
@@ -31,22 +32,38 @@ execFileSync('swiftc', ['-O', join(native, 'reticle-ax.swift'), '-o', helper], {
 const bridge = new Bridge({ port: 0, token: TOKEN });
 const bridgePort = await bridge.ready;
 const deps = makeDeps(bridge);
-let peer;
+// One session for each application of the task. A task that uses two applications (TextEdit and
+// Calculator) needs both: with one at a time, the reticle arms could not reach the second one,
+// while the arms that act on the screen could.
+const peers = new Map();
 let joined = 0;
 
-async function joinApp(app) {
-  if (peer !== undefined) {
-    peer.close();
-    await waitUntil(() => 0 === bridge.sessions.count());
+/** Close every session: a new task starts with none. */
+async function leaveAll() {
+  for (const one of peers.values()) {
+    one.close();
+  }
+  peers.clear();
+  await waitUntil(() => 0 === bridge.sessions.count());
+}
+
+async function joinApp(app, keep, pid) {
+  if (true !== keep) {
+    await leaveAll();
+  } else if (peers.has(app)) {
+    return { sessionId: peers.get(app).sessionId };
   }
   const listed = JSON.parse(execFileSync(helper, ['apps'], { encoding: 'utf8' })).apps;
-  const found = listed.find((one) => app === one.name || app === one.process);
+  // By its process when the bench gives one: the bench's own Chrome, never the person's.
+  const found = listed.find((one) =>
+    pid === undefined ? app === one.name || app === one.process : pid === one.pid,
+  );
   if (found === undefined) {
     throw new Error(`${app} is not open`);
   }
   joined += 1;
   const sessionId = `cu-bench-${String(joined)}`;
-  peer = connectPeer({
+  const peer = connectPeer({
     url: `ws://localhost:${String(bridgePort)}/reticle`,
     token: TOKEN,
     sessionId,
@@ -55,7 +72,8 @@ async function joinApp(app) {
     now: () => Date.now(),
   });
   await peer.ready;
-  await waitUntil(() => 1 === bridge.sessions.count());
+  peers.set(app, Object.assign(peer, { sessionId }));
+  await waitUntil(() => peers.size === bridge.sessions.count());
   return { sessionId };
 }
 
@@ -68,7 +86,7 @@ const server = createServer(async (request, response) => {
   let answer;
   try {
     if ('/join' === request.url) {
-      answer = await joinApp(input.app);
+      answer = await joinApp(input.app, input.keep, input.pid);
     } else if ('/tool' === request.url) {
       answer = await callTool(deps, input.name, input.args ?? {});
     } else {
