@@ -659,3 +659,24 @@ describe('what the HUD says once a run syncs, or never will', () => {
     expect(html).toContain('reticle connect');
   });
 });
+
+// A day's date and an estimate's basis went into `title="..."` with no escape. The date comes from
+// the project's `.reticle/impact.json`, which a cloned repository can ship: a date that closes the
+// attribute put an element of its choosing, with its own handler, into the person's page.
+describe('outside text in the report is escaped', () => {
+  it('keeps a hostile date and basis inside their title attributes', () => {
+    const attack = '"><img src=x onerror=alert(1)>';
+    const hostile = scope({ calls: 2, verdicts: 1, failed: 0 });
+    hostile.days = [{ date: attack, counts: hostile.counts }];
+    hostile.savings = {
+      ...hostile.savings,
+      tokens: { ...hostile.savings.tokens, basis: attack },
+      minutes: { ...hostile.savings.minutes, basis: attack },
+    };
+    const host = document.createElement('div');
+    host.innerHTML = reportBodyHtml(hostile);
+    expect(host.querySelector('img')).toBeNull();
+    // The text stays text: whole, inside the attribute it was meant for.
+    expect(host.querySelector('.reticle-report-bar')?.getAttribute('title')).toContain(attack);
+  });
+});

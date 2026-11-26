@@ -70,7 +70,7 @@ function card(value: string, label: string, basis?: string): string {
   const tag =
     basis === undefined
       ? ''
-      : `<span class="reticle-report-basis" title="${basis}">${REPORT_TEXT.ESTIMATE_TAG}</span>`;
+      : `<span class="reticle-report-basis" title="${esc(basis)}">${REPORT_TEXT.ESTIMATE_TAG}</span>`;
   return `<div class="reticle-report-card"><span class="reticle-report-value">${value}</span><span class="reticle-report-label">${label}${tag}</span></div>`;
 }
 
@@ -87,7 +87,7 @@ function chart(scope: ImpactScope): string {
   const bars = days
     .map((d) => {
       const pct = Math.max(4, Math.round((d.counts.verdicts / peak) * 100));
-      const title = `${d.date}: ${String(d.counts.verdicts)} verdicts, ${String(d.counts.failed)} defects`;
+      const title = `${esc(d.date)}: ${String(d.counts.verdicts)} verdicts, ${String(d.counts.failed)} defects`;
       const hot = d.counts.failed > 0 ? ' data-hot="1"' : '';
       return `<span class="reticle-report-bar" style="height:${String(pct)}%" title="${title}"${hot}></span>`;
     })
