@@ -10,12 +10,14 @@ import { basename, dirname } from 'node:path';
 import {
   asRecord,
   asString,
+  PictureTextsSchema,
   ReticleCommand,
   RETICLE_CAPTURE_FILE_PREFIX,
   RETICLE_TAURI_INERT_MARKER,
   TAURI_INERT_RECOMMENDATION,
   VisualReason,
 } from '@reticlehq/core';
+import type * as z from 'zod';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { trackCaptureDirectory } from './capture-cleanup.js';
 
@@ -33,7 +35,12 @@ export async function desktopCapture(
   fullPage: boolean,
   /** The whole display, with every application on it. Only a desktop realm takes it. */
   screen = false,
-): Promise<{ png?: Uint8Array; reason?: VisualReason; recommendation?: string }> {
+): Promise<{
+  png?: Uint8Array;
+  reason?: VisualReason;
+  recommendation?: string;
+  words?: z.infer<typeof PictureTextsSchema>;
+}> {
   const session = deps.sessions.resolve(sessionId);
   // A session that cannot take commands (no live browser behind it) simply has no pixels to give.
   if (typeof session.command !== 'function') {
@@ -66,7 +73,12 @@ export async function desktopCapture(
     const bytes = await readFile(path);
     await unlink(path).catch(() => undefined);
     trackCaptureDirectory(path);
-    return isCompletePng(bytes) ? { png: new Uint8Array(bytes) } : {};
+    // The words a desktop realm read in its picture, with their boxes. The list comes from the
+    // session, so it is checked: a list that does not fit is dropped, not passed on.
+    const words = undefined === r['texts'] ? undefined : PictureTextsSchema.safeParse(r);
+    return isCompletePng(bytes)
+      ? { png: new Uint8Array(bytes), ...(true === words?.success ? { words: words.data } : {}) }
+      : {};
   } catch {
     return {};
   }

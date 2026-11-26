@@ -16,6 +16,7 @@ import type {
   ActRequest,
   CaptureHow,
   Captured,
+  PictureText,
   ReachAnswer,
   UiDriver,
   UiRead,
@@ -30,6 +31,7 @@ const Command = {
   ACT: 'act',
   REACH: 'reach',
   CAPTURE: 'capture',
+  TEXTS: 'texts',
   SWITCH: 'web-tree',
 } as const;
 const TRY_SWITCH = 'try';
@@ -47,6 +49,11 @@ const TreeSchema = z.object({
   tree: AxNodeSchema,
   unread: z.number(),
   windowsNotOnScreen: z.number().optional(),
+});
+const TextsSchema = z.object({
+  texts: z.array(
+    z.object({ text: z.string(), box: z.array(z.number()).length(4), confidence: z.number() }),
+  ),
 });
 const CaptureSchema = z.object({
   ok: z.boolean(),
@@ -332,6 +339,12 @@ export class MacDriver implements UiDriver {
         ? {}
         : { appWindow: [app[0] ?? 0, app[1] ?? 0, app[2] ?? 0, app[3] ?? 0] }),
     };
+  }
+
+  /** The words of a picture file. Undefined from a helper that has no reader (Windows, Linux). */
+  async texts(path: string): Promise<readonly PictureText[] | undefined> {
+    const answer = TextsSchema.safeParse(await this.#ask([Command.TEXTS, path]));
+    return answer.success ? answer.data.texts : undefined;
   }
 
   async reach(target: Placed): Promise<ReachAnswer> {

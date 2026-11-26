@@ -52,6 +52,7 @@ import { refusalOf } from './link-switch.js';
 import {
   NO_SCREEN_RECORDING,
   handOf,
+  wordsOfPicture,
   wantsPixels,
   pointerPath,
   contentMoved,
@@ -565,7 +566,8 @@ export class PeerCommands {
       // A picture of the whole screen holds every window: a point can be in any of them.
       ...(screen ? { windows: windowFramesOf(shown.root) } : {}),
     };
-    return { ok: true, path: taken.path, ...(screen ? { screen } : {}) };
+    const words = wordsOfPicture(await this.#deps.driver.texts?.(taken.path));
+    return { ok: true, path: taken.path, ...(screen ? { screen } : {}), ...words };
   }
 
   #send(change: Change): void {

@@ -132,6 +132,7 @@ export * from './wire/platform.js';
 export * from './wire/channel.js';
 export * from './verdict/revision.js';
 export * from './realm/registry.js';
+export * from './realm/picture-text.js'; // the words a desktop realm read in its picture
 // The protocol is NOT re-exported here, deliberately.
 //
 // `open-verification` is the specification this codebase implements, and it is a separate

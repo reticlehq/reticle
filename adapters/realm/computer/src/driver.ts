@@ -199,6 +199,18 @@ export interface UiDriver {
    * For an application that gives no elements, the picture is what a caller reads.
    */
   capture?(how?: CaptureHow): Promise<Captured>;
+  /**
+   * The words of a picture file, read on this machine, each with its box in the pixels of the
+   * picture. Undefined: this system has no reader.
+   */
+  texts?(path: string): Promise<readonly PictureText[] | undefined>;
+}
+
+/** A word in a picture, its box in the pixels of the picture, and how sure the reader is. */
+export interface PictureText {
+  text: string;
+  box: readonly number[];
+  confidence: number;
 }
 
 /** What a picture shows. Absent `screen`: the window of the application only. */

@@ -27,6 +27,7 @@ import ApplicationServices
 import Foundation
 import ScreenCaptureKit
 import Security
+import Vision
 
 let attributes =
   [
@@ -882,6 +883,34 @@ func run(_ args: [String]) throws {
       }
     try emit(["apps": list])
   }
+  if args.count >= 2, args[1] == "texts" {
+    // The words in a picture, each with its box in the pixels of the picture: the same space as a
+    // `point` of a picture. A canvas, a game or a remote desktop has no elements, and its words
+    // are what an agent looks for. Vision reads them on this machine; nothing leaves it.
+    guard args.count >= 3, let image = NSImage(contentsOfFile: args[2]),
+      let picture = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
+    else { try emit(["error": "usage"]) }
+    let request = VNRecognizeTextRequest()
+    request.recognitionLevel = .accurate
+    request.usesLanguageCorrection = false
+    try? VNImageRequestHandler(cgImage: picture, options: [:]).perform([request])
+    let width = Double(picture.width)
+    let height = Double(picture.height)
+    let found: [[String: Any]] = (request.results ?? []).compactMap { seen in
+      guard let best = seen.topCandidates(1).first else { return nil }
+      // Vision's box is a fraction, from the bottom left. The picture's points are from the top left.
+      let box = seen.boundingBox
+      return [
+        "text": best.string, "confidence": Double(best.confidence),
+        "box": [
+          (box.minX * width).rounded(), ((1 - box.maxY) * height).rounded(),
+          (box.width * width).rounded(), (box.height * height).rounded(),
+        ],
+      ]
+    }
+    try emit(["texts": found])
+  }
+
   guard args.count >= 3, let pid = Int32(args[2]) else {
     try emit(["error": "usage"])
   }

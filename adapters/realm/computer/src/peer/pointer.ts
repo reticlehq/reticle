@@ -13,6 +13,7 @@ import {
 } from '@reticlehq/core';
 
 import { ActKind } from '../driver.js';
+import type { PictureText } from '../driver.js';
 import { UiRole, placeShown } from '../ui-node.js';
 import type { UiNode } from '../ui-node.js';
 import { KIND_OF } from './form.js';
@@ -362,4 +363,29 @@ export function handOf(kind: ActKind, more: Record<string, unknown>, pixels = fa
     );
   }
   return `${parts}${compare}`;
+}
+
+/** A word the reader is less sure of than this is noise on a canvas. */
+const MIN_TEXT_CONFIDENCE = 0.3;
+/** The most words of one picture in an answer. */
+const MAX_TEXTS = 200;
+
+/**
+ * The words of a picture for the answer: a canvas has no elements, and the box of a word is a
+ * point an agent can click. Declared: `textsCut` counts the words left out, unsure or past the
+ * most.
+ */
+export function wordsOfPicture(read: readonly PictureText[] | undefined): {
+  texts?: { text: string; box: readonly number[] }[];
+  textsCut?: number;
+} {
+  if (read === undefined) {
+    return {};
+  }
+  const kept = read
+    .filter((word) => word.confidence >= MIN_TEXT_CONFIDENCE)
+    .slice(0, MAX_TEXTS)
+    .map(({ text, box }) => ({ text, box }));
+  const cut = read.length - kept.length;
+  return { texts: kept, ...(cut > 0 ? { textsCut: cut } : {}) };
 }

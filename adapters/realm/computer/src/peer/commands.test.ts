@@ -1570,6 +1570,45 @@ describe('PeerCommands', () => {
       });
     });
 
+    // A canvas has no elements, and an agent had only pixels to guess from: "click the box B" was
+    // a guess of a point. The words of the picture, each with its box in the pixels of the
+    // picture, are a point the agent can give to a click.
+    it('gives the words of the picture with their boxes, and how many it left out', async () => {
+      const words = Array.from({ length: 205 }, (_, i) => ({
+        text: `w${String(i)}`,
+        box: [i, 10, 20, 8],
+        confidence: 0.9,
+      }));
+      const { commands } = picturing(shot);
+      const reading = new PeerCommands({
+        driver: {
+          ...fakeDriver(),
+          capture: () => Promise.resolve(shot as never),
+          texts: () =>
+            Promise.resolve([
+              { text: 'B', box: [660, 198, 38, 44], confidence: 1 },
+              { text: 'smudge', box: [0, 0, 4, 4], confidence: 0.1 },
+              ...words,
+            ]),
+        },
+        emit: () => undefined,
+      });
+      const answer = (await reading.answer(ReticleCommand.CAPTURE, {})) as {
+        texts: { text: string; box: number[] }[];
+        textsCut?: number;
+      };
+      expect(answer.texts[0]).toEqual({ text: 'B', box: [660, 198, 38, 44] });
+      // A word the reader is not sure of is noise on a canvas: left out, and counted.
+      expect(answer.texts.some((t) => 'smudge' === t.text)).toBe(false);
+      expect(answer.texts).toHaveLength(200);
+      expect(answer.textsCut).toBe(7);
+      // A realm with no reader gives the picture alone.
+      expect(await commands.answer(ReticleCommand.CAPTURE, {})).toEqual({
+        ok: true,
+        path: '/tmp/reticle-capture-1.png',
+      });
+    });
+
     // A whole-screen picture shows every application: an overlay of another one, a dialog of the
     // system. Its pixels start at the corner of the display, not of the window.
     it('takes the whole screen when asked, and a point of it is a point of the screen', async () => {

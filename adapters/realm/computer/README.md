@@ -143,6 +143,10 @@ A canvas, a game and some custom controls give nothing to read. For those:
 
 A picture proves little by itself. Name a file, a setting or the clipboard in `until` where the action has such an effect.
 
+## An application with no elements
+
+A canvas, a game or a remote desktop draws its own window and gives no elements. On macOS a picture of it (`reticle_screenshot`) comes with `texts`: each word in the picture, with its box `[x, y, width, height]` in the pixels of the picture. Apple Vision reads them on the machine; nothing leaves it. Click a word with `args.point` at the middle of its box. The answer counts the words it left out in `textsCut`.
+
 ## A desktop of its own for the agent
 
 On your own machine the agent and you share one screen: a step that needs the real pointer takes yours. Two ways keep them apart.

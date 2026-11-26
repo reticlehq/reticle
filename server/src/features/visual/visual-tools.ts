@@ -220,6 +220,7 @@ async function capture(
   reason?: string;
   recommendation?: string;
   runtime?: string | undefined;
+  words?: Awaited<ReturnType<typeof desktopCapture>>['words'];
 }> {
   /*
    * Only a provider driving THIS session's page. A launched provider photographs the one page it
@@ -233,7 +234,7 @@ async function capture(
     const whole = await desktopCapture(deps, sessionId, false, true);
     return whole.png === undefined
       ? { reason: whole.reason ?? VisualReason.NO_PROVIDER, recommendation: SCREEN_NEEDS_DESKTOP }
-      : { png: whole.png, runtime: runtimeOf(deps, sessionId) };
+      : { png: whole.png, runtime: runtimeOf(deps, sessionId), ...wordsOf(whole) };
   }
   const candidate = screenshotProvider(deps);
   const session = candidate === undefined ? undefined : deps.sessions.resolve(sessionId);
@@ -261,7 +262,7 @@ async function capture(
     if (args['clip'] !== undefined || args['ref'] !== undefined) {
       return { reason: VisualReason.CROP_UNSUPPORTED };
     }
-    return { png: desktop.png, runtime: runtimeOf(deps, sessionId) };
+    return { png: desktop.png, runtime: runtimeOf(deps, sessionId), ...wordsOf(desktop) };
   }
   if (desktop.reason !== undefined) {
     return desktop;
@@ -287,6 +288,13 @@ async function capture(
   return {
     reason: provider === undefined ? VisualReason.NO_PROVIDER : VisualReason.CAPTURE_FAILED,
   };
+}
+
+/** The words of a desktop picture, when the realm read any. */
+function wordsOf(shot: Awaited<ReturnType<typeof desktopCapture>>): {
+  words?: NonNullable<Awaited<ReturnType<typeof desktopCapture>>['words']>;
+} {
+  return shot.words === undefined ? {} : { words: shot.words };
 }
 
 function rectsFrom(value: unknown): VisualRect[] | undefined {
@@ -318,7 +326,7 @@ export const VISUAL_TOOLS: ToolDef[] = [
     name: ReticleTool.SCREENSHOT,
     example: { name: 'home' },
     description:
-      'Capture a pixel screenshot of the DRIVEN page (needs `reticle drive`/RETICLE_CDP_URL — the SDK has no screenshotter) and save it as a visual baseline at .reticle/visual/<name>.png. { fullPage } for the whole scroll height, { ref } or { clip:{x,y,width,height} } for one element/region. Returns { saved:true, name, path, bytes } or { ok:false, reason } when no driven browser is attached.',
+      "Capture a pixel screenshot of the DRIVEN page (needs `reticle drive`/RETICLE_CDP_URL — the SDK has no screenshotter) and save it as a visual baseline at .reticle/visual/<name>.png. { fullPage } for the whole scroll height, { ref } or { clip:{x,y,width,height} } for one element/region. Returns { saved:true, name, path, bytes } or { ok:false, reason } when no driven browser is attached. From a desktop session (Reticle's computer on macOS) it also gives `texts`: the words in the picture, each with its box {x,y,w,h} in the pixels of the picture, so a canvas with no elements can be clicked by `args.point` at the middle of a word.",
     inputSchema: {
       name: z
         .string()
@@ -357,7 +365,7 @@ export const VISUAL_TOOLS: ToolDef[] = [
     },
     handler: async (deps: ToolDeps, args) => {
       const sessionId = await captureTarget(deps, args);
-      const { png, reason, recommendation, runtime } = await capture(deps, sessionId, args);
+      const { png, reason, recommendation, runtime, words } = await capture(deps, sessionId, args);
       if (png === undefined) {
         return unavailable(reason, recommendation);
       }
@@ -376,7 +384,9 @@ export const VISUAL_TOOLS: ToolDef[] = [
       // tab do not render the same url the same way, and one shared baseline makes every
       // cross-runtime diff wrong. See visualDir.
       const path = await store.saveBaseline(name, png, runtime);
-      return { ok: true, saved: true, name, path, bytes: png.length };
+      // The words a desktop realm read in the picture, with their boxes: points to click on a
+      // canvas. Absent for a page and for a realm with no reader.
+      return { ok: true, saved: true, name, path, bytes: png.length, ...(words ?? {}) };
     },
   },
   {
