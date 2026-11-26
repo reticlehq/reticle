@@ -515,10 +515,11 @@ function Invoke-Act($words) {
   }
   $settled = Wait-Quiet $procId $budgetMs $quiet
   $after = Read-App $procId
-  # The tree shows no change: the pixels can. Two pictures after, too, for a motion that started
-  # with the action or is slow.
+  # The pixels, each time the realm asked for them: not only when the tree is the same. A press on
+  # a window that was not active changes its tree (the focus), and the stroke on the canvas was then
+  # not compared. Two pictures after, too, for a motion that started with the action or is slow.
   $pixels = $null
-  if ($null -ne $shots -and $null -ne $after -and (($before.tree | ConvertTo-Json -Depth 100 -Compress) -eq ($after.tree | ConvertTo-Json -Depth 100 -Compress))) {
+  if ($null -ne $shots -and $null -ne $after) {
     $wr = $shots.rect
     $seen = [ReticlePixels]::Shot([int]$wr.X, [int]$wr.Y, [int]$wr.Width, [int]$wr.Height)
     Start-Sleep -Milliseconds 100
