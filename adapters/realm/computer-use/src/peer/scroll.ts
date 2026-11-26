@@ -17,6 +17,8 @@ const SCROLL_BY_WHEEL = 'wheel';
 /** Lines of the wheel for a place (the end or the start), and for one move. */
 const WHEEL_TO_END = 40;
 const WHEEL_STEP = 5;
+/** About how far one line of the wheel moves a view, to turn a distance into lines. */
+const PIXELS_PER_LINE = 40;
 /** The most turns of the wheel to an end: 10 turns of 40 lines. */
 const WHEEL_TURNS_TO_END = 10;
 
@@ -50,12 +52,20 @@ export async function scrollBy(
   const ref = 'string' === typeof given ? given : undefined;
   // Neither how far nor where to: the wheel turned 0 lines, or the bar was set to its own place,
   // and the answer said that it scrolled.
+  const dx = 'number' === typeof args['dx'] ? args['dx'] : 0;
   if (
     'number' !== typeof args['fraction'] &&
-    !('number' === typeof args['dy'] && 0 !== args['dy'])
+    !('number' === typeof args['dy'] && 0 !== args['dy']) &&
+    0 === dx
   ) {
     throw new Error(
-      'a scroll needs args.dy (a number of pixels: more than 0 goes down, less than 0 goes up) or args.fraction (a place from 0, the top, to 1, the end).',
+      'a scroll needs args.dy (a number of pixels: more than 0 goes down, less than 0 goes up), args.dx (more than 0 goes right) or args.fraction (a place from 0, the top, to 1, the end).',
+    );
+  }
+  // Sideways only with the real wheel: a scroll bar of the side is not looked for.
+  if (0 !== dx && true !== args['foreground']) {
+    throw new Error(
+      'a scroll sideways (args.dx) turns the real wheel: add args.foreground: true, and a ref or a point.',
     );
   }
   const read = await ctx.driver.read();
@@ -89,8 +99,14 @@ export async function scrollBy(
     } else if ('number' === typeof dy && dy !== 0) {
       lines = Math.sign(dy) * WHEEL_STEP;
     }
-    // At a point of the picture when one is given: "lines,x,y". Else over the element.
-    const at = 'string' === typeof args[WHEEL_AT] ? `,${args[WHEEL_AT]}` : '';
+    // At a point of the picture when one is given: "lines,x,y". Else over the element. Lines to
+    // the side go in the hand: "|across=5" is to the right.
+    // A longer way to the side is more of the wheel, as a hand turns it further.
+    const acrossLines =
+      Math.sign(dx) *
+      Math.min(WHEEL_TO_END, Math.max(WHEEL_STEP, Math.round(Math.abs(dx) / PIXELS_PER_LINE)));
+    const across = 0 === dx ? '' : `|across=${String(acrossLines)}`;
+    const at = `${'string' === typeof args[WHEEL_AT] ? `,${args[WHEEL_AT]}` : ''}${across}`;
     const turn = async (): Promise<boolean> =>
       (
         await ctx.drive(over, ref, ActKind.WHEEL, `${String(lines)}${at}`, {
@@ -113,6 +129,7 @@ export async function scrollBy(
       scrolled: moved,
       by: SCROLL_BY_WHEEL,
       lines: lines * turns,
+      ...(0 === dx ? {} : { across: acrossLines * turns }),
       ...(toEnd ? { atEnd } : {}),
     };
   }

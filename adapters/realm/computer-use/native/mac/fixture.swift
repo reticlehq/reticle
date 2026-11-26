@@ -16,9 +16,13 @@
 //   Quit     ends the application 100 ms after the press, as a crash does.
 //   SaveAs   opens the save panel of the system, in the folder given as the first argument, and
 //            writes the title to the file the person names there.
-//   Pad      says which gesture of the real pointer it got: click, double, right, hover, dragged.
-//   Ink      a canvas. A drag on it draws a line, and nothing but its pixels changes.
+//   Pad      says which gesture of the real pointer it got: click, double, triple, right, middle,
+//            long (the button held 400 ms or more), hover, dragged, wheel up, down, left, right.
+//   Ink      a canvas. A drag on it draws a line, and nothing but its pixels changes. A file dropped
+//            on it from another application (Finder) makes the status say its name.
 //   Spinner  a bar that moves by itself, and gives no element. Only with a second argument `spin`.
+//   Keys     F5 and Command-1 make the status say "Key: F5" and "Key: Meta+1", when the
+//            application has the keyboard.
 //   Clock    a count that goes up every 400 ms with no action. Only with a second argument `clock`.
 // The window floats and the application never takes the keyboard, so a run does not disturb the
 // person at the machine.
@@ -39,6 +43,7 @@ final class Cover: NSView {
 final class Pad: NSView {
   var say: (String) -> Void = { _ in }
   var downAt: NSPoint?
+  var downTime = Date()
   override func draw(_ dirtyRect: NSRect) {
     NSColor.controlAccentColor.withAlphaComponent(0.25).setFill()
     bounds.fill()
@@ -51,16 +56,27 @@ final class Pad: NSView {
   override func mouseEntered(with event: NSEvent) { say("Pad: hover") }
   override func mouseDown(with event: NSEvent) {
     downAt = event.locationInWindow
-    say(event.clickCount >= 2 ? "Pad: double" : "Pad: click")
+    downTime = Date()
+    let words = [1: "Pad: click", 2: "Pad: double", 3: "Pad: triple"]
+    say(words[min(3, event.clickCount)] ?? "Pad: click")
   }
   override func mouseUp(with event: NSEvent) {
     guard let from = downAt else { return }
     let dx = Int((event.locationInWindow.x - from.x).rounded())
-    if abs(dx) > 5 { say("Pad: dragged \(dx)") }
+    if abs(dx) > 5 {
+      say("Pad: dragged \(dx)")
+    } else if Date().timeIntervalSince(downTime) >= 0.4 {
+      say("Pad: long")
+    }
   }
   override func rightMouseDown(with event: NSEvent) { say("Pad: right") }
+  override func otherMouseDown(with event: NSEvent) { say("Pad: middle") }
   override func scrollWheel(with event: NSEvent) {
-    say(event.scrollingDeltaY < 0 ? "Pad: wheel down" : "Pad: wheel up")
+    if abs(event.scrollingDeltaX) > abs(event.scrollingDeltaY) {
+      say(event.scrollingDeltaX < 0 ? "Pad: wheel right" : "Pad: wheel left")
+    } else {
+      say(event.scrollingDeltaY < 0 ? "Pad: wheel down" : "Pad: wheel up")
+    }
   }
   override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
 }
@@ -68,6 +84,19 @@ final class Pad: NSView {
 /// A canvas, as a photo editor has one: a drag draws, and no element says so.
 final class Ink: NSView {
   var line = NSBezierPath()
+  var say: (String) -> Void = { _ in }
+  override init(frame: NSRect) {
+    super.init(frame: frame)
+    registerForDraggedTypes([.fileURL])
+  }
+  required init?(coder: NSCoder) { nil }
+  override func draggingEntered(_ sender: NSDraggingInfo) -> NSDragOperation { .copy }
+  override func performDragOperation(_ sender: NSDraggingInfo) -> Bool {
+    let urls = sender.draggingPasteboard.readObjects(forClasses: [NSURL.self]) as? [URL] ?? []
+    guard let file = urls.first else { return false }
+    say("Dropped: \(file.lastPathComponent)")
+    return true
+  }
   override func draw(_ dirtyRect: NSRect) {
     NSColor.white.setFill()
     bounds.fill()
@@ -173,6 +202,7 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
     ink.setAccessibilityElement(true)
     ink.setAccessibilityRole(.image)
     ink.setAccessibilityLabel("Ink")
+    ink.say = { [weak self] words in self?.status.stringValue = words }
     window.contentView!.addSubview(ink)
     if CommandLine.arguments.count > 2 && CommandLine.arguments[2] == "spin" {
       // Pixels that change with no action, as a video that plays: no element shows them.
@@ -202,6 +232,18 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
         count += 1
         tick.stringValue = "Tick \(count)"
       }
+    }
+    // A function key and a shortcut with a digit: editors of video and sound live on them.
+    NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+      if event.keyCode == 96 {
+        self?.status.stringValue = "Key: F5"
+        return nil
+      }
+      if event.modifierFlags.contains(.command) && event.charactersIgnoringModifiers == "1" {
+        self?.status.stringValue = "Key: Meta+1"
+        return nil
+      }
+      return event
     }
     window.orderFrontRegardless()
     if ProcessInfo.processInfo.environment["RETICLE_FIXTURE_COLUMNS"] != nil { showColumns() }

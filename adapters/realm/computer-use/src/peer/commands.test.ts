@@ -1730,6 +1730,18 @@ describe('PeerCommands', () => {
       ]);
     });
 
+    // A triple-click chooses a line or a paragraph, and a middle click opens a link in a new tab.
+    // Neither could be asked for.
+    it('clicks three times and with the middle button, and only with the real pointer', async () => {
+      const { asked, clickAt } = picturing(shot);
+      await clickAt({ foreground: true, clickCount: 3 });
+      expect(asked.at(-1)?.value).toBe('|count=3');
+      await clickAt({ foreground: true, button: 'middle' });
+      expect(asked.at(-1)?.value).toBe('|button=middle');
+      await expect(clickAt({ clickCount: 3 })).rejects.toThrow(/foreground: true/);
+      await expect(clickAt({ foreground: true, clickCount: 9 })).rejects.toThrow(/clickCount/);
+    });
+
     it('clicks with keys held, and refuses keys that a click in the background cannot hold', async () => {
       const { commands, asked } = picturing(shot);
       await commands.answer(ReticleCommand.ACT, {
@@ -1795,6 +1807,73 @@ describe('PeerCommands', () => {
       expect(asked.map((request) => [request.kind, request.value])).toEqual([
         [ActKind.WHEEL, '5,100,50'],
       ]);
+    });
+
+    // A wide table, a timeline, a canvas: they scroll sideways, and the wheel moved only up and down.
+    it('turns the wheel sideways, and only with the real wheel', async () => {
+      const { commands, asked } = picturing(shot);
+      await commands.answer(ReticleCommand.CAPTURE, {});
+      const sideways = (args: Record<string, unknown>) =>
+        refOf(commands, 'Save').then((ref) =>
+          commands.answer(ReticleCommand.ACT, { ref, action: ActionType.SCROLL, args }),
+        );
+      await sideways({ foreground: true, point: { x: 200, y: 100 }, dx: 300 });
+      // 300 pixels is 8 lines of the wheel; a long way is at most 40.
+      expect(asked.at(-1)?.value).toBe('0,100,50|across=8');
+      await sideways({ foreground: true, point: { x: 200, y: 100 }, dx: -1, dy: 1 });
+      expect(asked.at(-1)?.value).toBe('5,100,50|across=-5');
+      await expect(sideways({ dx: 300 })).rejects.toThrow(/foreground: true/);
+    });
+
+    // Finder had the person's large window and a small one of a folder. The picture remembered only
+    // the largest window, so a drag from the small one was always refused as "moved".
+    it('takes a point for an element in any window that has not moved since the picture', async () => {
+      const app: UiRead = {
+        root: node(UiRole.APPLICATION, 'Finder', {
+          children: [
+            node(UiRole.WINDOW, 'Downloads', { frame: [0, 0, 1000, 800] }),
+            node(UiRole.WINDOW, 'Folder', {
+              frame: [600, 100, 300, 200],
+              children: [node(UiRole.BUTTON, 'File', { frame: [620, 150, 80, 30] })],
+            }),
+          ],
+        }),
+        unread: 0,
+        unmapped: [],
+      };
+      const asked: ActRequest[] = [];
+      const commands = new PeerCommands({
+        driver: {
+          ...fakeDriver(),
+          read: () => Promise.resolve(app),
+          capture: () =>
+            Promise.resolve({
+              ok: true,
+              path: '/tmp/reticle-capture-2.png',
+              window: [0, 0, 1500, 1000],
+              scale: 2,
+              appWindow: [0, 0, 1000, 800],
+            } as never),
+          act: (request) => {
+            asked.push(request);
+            return Promise.resolve({
+              delivered: true,
+              reachable: true,
+              settled: true,
+              before: app,
+              after: app,
+            });
+          },
+        },
+        emit: () => undefined,
+      });
+      await commands.answer(ReticleCommand.CAPTURE, { screen: true });
+      await commands.answer(ReticleCommand.ACT, {
+        ref: await refOf(commands, 'File'),
+        action: ActionType.DRAG,
+        args: { foreground: true, toPoint: { x: 200, y: 200 } },
+      });
+      expect(asked.at(-1)?.value).toBe('100,100|pixels=1');
     });
 
     it('refuses a point with no picture, and a point with no foreground', async () => {

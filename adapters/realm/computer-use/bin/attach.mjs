@@ -237,6 +237,12 @@ const hud =
       })
     : undefined;
 let leave = () => process.exit(0);
+const program = quiet('ps', ['-o', 'comm=', '-p', String(pid)]) ?? '';
+const electron = isElectron(program, existsSync);
+// A native application can build part of its tree only for a screen reader (the sheet of
+// Numbers). The driver tries that switch at its first read that shows a window, and keeps it only
+// when it fills a container that was empty.
+const screenReader = plan.electronSwitch && !electron && !windows;
 const sessionId = `cu-${plan.app}-${String(pid)}`.replace(/[^\w.-]/g, '-');
 const peer = connectPeer({
   url: plan.url,
@@ -247,6 +253,7 @@ const peer = connectPeer({
     helper,
     app: plan.app,
     pid,
+    screenReaderSwitch: screenReader,
     ...(launch === undefined || 0 === launch.prefix.length
       ? {}
       : { run: servingHelper(launch.prefix) }),
@@ -265,18 +272,9 @@ try {
   process.exit(1);
 }
 // Only after the bridge answered: a command that ends before this leaves the application as it was.
-const program = quiet('ps', ['-o', 'comm=', '-p', String(pid)]) ?? '';
-let switched = plan.electronSwitch && isElectron(program, existsSync);
+const switched = plan.electronSwitch && electron;
 if (switched) {
   ask(['web-tree', String(pid), 'on']);
-} else if (plan.electronSwitch && !windows) {
-  // A native application can build part of its tree only for a screen reader (the sheet of
-  // Numbers). The helper sets that switch, and keeps it only when the tree grew.
-  try {
-    switched = true === JSON.parse(ask(['web-tree', String(pid), 'try']) ?? '{}').set;
-  } catch {
-    switched = false;
-  }
 }
 say(`${plan.app} (${String(pid)}) is joined to ${plan.url}.`);
 // What can be read now. An application that was started behind a full-screen Space has its
@@ -307,7 +305,9 @@ if (plan.token === undefined) {
 }
 const stop = () => {
   hud?.close();
-  if (switched) {
+  // Off also when the driver only tried the screen reader switch: off is nothing for a switch
+  // that was never on.
+  if (switched || screenReader) {
     ask(['web-tree', String(pid), 'off']);
   }
   peer.close();

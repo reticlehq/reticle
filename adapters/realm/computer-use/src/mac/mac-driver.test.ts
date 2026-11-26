@@ -26,6 +26,34 @@ function driverAnswering(act: unknown): { driver: MacDriver; calls: string[][] }
 }
 
 describe('MacDriver', () => {
+  // Numbers gives its sheet only to a screen reader. Under Stage Manager an application opened in
+  // the background has no window on the screen, so a test of the switch at join time saw nothing
+  // to compare. The driver tries the switch at the first read that has a window, and once.
+  it('tries the screen reader switch once, at the first read that has a window', async () => {
+    const calls: string[][] = [];
+    let windows: unknown[] = [];
+    const driver = new MacDriver({
+      helper: 'reticle-ax',
+      app: 'Numbers',
+      pid: 7,
+      screenReaderSwitch: true,
+      run: (_file, args) => {
+        calls.push([...args]);
+        const answer =
+          'tree' === args[0]
+            ? { tree: { role: 'AXApplication', children: windows }, unread: 0 }
+            : { set: true };
+        return Promise.resolve(JSON.stringify(answer));
+      },
+    });
+    await driver.read();
+    expect(calls.filter(([command]) => 'web-tree' === command)).toEqual([]);
+    windows = [{ role: 'AXWindow', title: 'costs', children: [] }];
+    await driver.read();
+    await driver.read();
+    expect(calls.filter(([command]) => 'web-tree' === command)).toEqual([['web-tree', '7', 'try']]);
+  });
+
   it('asks the helper for the element it last read at that place', async () => {
     const { driver, calls } = driverAnswering({
       delivered: true,

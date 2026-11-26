@@ -58,6 +58,8 @@ import {
   kindFor,
   needsForeground,
   placesOf,
+  windowFramesOf,
+  windowMoved,
   dragValue,
   pointFor,
   usesPicture,
@@ -122,14 +124,6 @@ const RESTLESS_PLACES = 3;
  */
 const NOTHING_SEEN_NOTE =
   'The press was sent, and nothing changed: not on the screen, not on disk, not in a setting, not on the clipboard. The control may do nothing here, or the application did not act on the press. Do not take the press for done. Read the window again, and give `until` with the consequence you expect.';
-
-/** True when a window is not where it was when its picture was taken. Half a point is noise. */
-function moved(then: readonly number[] | undefined, now: readonly number[] | undefined): boolean {
-  if (then === undefined || now === undefined) {
-    return false;
-  }
-  return then.some((value, at) => Math.abs(value - (now[at] ?? value)) > 0.5);
-}
 
 /**
  * The element that a ref named, when its key is gone: an application can change the groups round
@@ -568,6 +562,8 @@ export class PeerCommands {
       scale: taken.scale,
       appWindow: taken.appWindow ?? taken.window,
       places: placesOf(shown.root),
+      // A picture of the whole screen holds every window: a point can be in any of them.
+      ...(screen ? { windows: windowFramesOf(shown.root) } : {}),
     };
     return { ok: true, path: taken.path, ...(screen ? { screen } : {}) };
   }
@@ -869,7 +865,7 @@ export class PeerCommands {
     const at =
       kind === ActKind.DRAG ? undefined : pointFor(this.#picture, more, kind, target.node.frame);
     const picture = usesPicture(more);
-    if (picture && moved(this.#picture?.appWindow, target.windowFrame)) {
+    if (picture && windowMoved(this.#picture, target.windowFrame)) {
       throw new Error(
         `the window of ${this.#deps.driver.subject().app} moved or changed its size after the picture was taken, so the point of the picture is now on something else. Take a new picture with reticle_screenshot, and give the point of that one.`,
       );

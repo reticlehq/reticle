@@ -309,9 +309,10 @@ function Wait-Quiet([int]$procId, [int]$budgetMs, [int]$quietMs) {
   return $false
 }
 
-function Send-Click([int]$x, [int]$y, [int]$times, [bool]$right, [int]$holdMs = 0) {
+function Send-Click([int]$x, [int]$y, [int]$times, [bool]$right, [int]$holdMs = 0, [bool]$middle = $false) {
   [ReticleWin32]::SetCursorPos($x, $y) | Out-Null
-  $down = $(if ($right) { 0x0008 } else { 0x0002 }); $up = $(if ($right) { 0x0010 } else { 0x0004 })
+  $down = $(if ($right) { 0x0008 } elseif ($middle) { 0x0020 } else { 0x0002 })
+  $up = $(if ($right) { 0x0010 } elseif ($middle) { 0x0040 } else { 0x0004 })
   for ($k = 0; $k -lt $times; $k++) {
     [ReticleWin32]::mouse_event($down, 0, 0, 0, [UIntPtr]::Zero)
     if ($holdMs -gt 0) { Start-Sleep -Milliseconds $holdMs }
@@ -449,7 +450,11 @@ function Invoke-Act($words) {
         $x = $(if ($xy.Count -ge 2) { [int][double]$xy[0] } else { [int]($r.X + $r.Width / 2) })
         $y = $(if ($xy.Count -ge 2) { [int][double]$xy[1] } else { [int]($r.Y + $r.Height / 2) })
         if ($kind -eq 'hover') { [ReticleWin32]::SetCursorPos($x, $y) | Out-Null }
-        else { Send-Click $x $y $(if ($kind -eq 'dblclick') { 2 } else { 1 }) ($kind -eq 'rightclick') $holdMs }
+        else {
+          # "count=3" is a triple-click, "button=middle" the middle button.
+          $times = $(if ($kind -eq 'dblclick') { 2 } else { [Math]::Min(3, [Math]::Max(1, [int]("0$($hand['count'])"))) })
+          Send-Click $x $y $times ($kind -eq 'rightclick') $holdMs ($hand['button'] -eq 'middle')
+        }
       }
       'drag' {
         # Two numbers: the end, from the middle of the element. Four or more: a path, from its first
@@ -478,7 +483,10 @@ function Invoke-Act($words) {
         $x = $(if ($n.Count -ge 3) { [int][double]$n[1] } else { [int]($r.X + $r.Width / 2) })
         $y = $(if ($n.Count -ge 3) { [int][double]$n[2] } else { [int]($r.Y + $r.Height / 2) })
         [ReticleWin32]::SetCursorPos($x, $y) | Out-Null
-        [ReticleWin32]::mouse_event(0x0800, 0, 0, -120 * [int][Math]::Ceiling([double]$n[0] / 3), [UIntPtr]::Zero)
+        if ([double]$n[0] -ne 0) { [ReticleWin32]::mouse_event(0x0800, 0, 0, -120 * [int][Math]::Ceiling([double]$n[0] / 3), [UIntPtr]::Zero) }
+        # "across=5" turns the wheel to the side: more than 0 is to the right.
+        $across = [int]("0$($hand['across'])".Replace('0-', '-'))
+        if ($across -ne 0) { [ReticleWin32]::mouse_event(0x01000, 0, 0, 120 * [Math]::Sign($across) * [int][Math]::Ceiling([Math]::Abs($across) / 3), [UIntPtr]::Zero) }
       }
       'window' {
         $top = $el

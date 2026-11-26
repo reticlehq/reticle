@@ -111,6 +111,9 @@ With `"count": 0` the same claim says that the application's own processes wrote
 | `scroll` | Moves the scroll bar. See below. |
 | `click` with `args.button: "right"` | Asks the element for the menu that a right-click gives. No pointer is used. |
 | `dblclick`, `hover`, `drag`, `focus` | Use the real pointer, or bring the application to the front. Only with `args.foreground: true`. See "The foreground" below. |
+| `click` with `args.clickCount: 3`, `args.button: "middle"`, `args.holdMs`, `args.modifiers` | A triple-click (a line or a paragraph), the middle button, a long press, and keys held through the click. Only with `args.foreground: true`. |
+| `drag` with `args.path` | Walks the pointer through each point of the last picture, as a brush or a lasso does. |
+| `scroll` with `args.dx` | Turns the real wheel to the side. Only with `args.foreground: true`. |
 
 Other actions are refused by name.
 
@@ -185,7 +188,7 @@ A press after which the realm saw nothing (no change on the screen, on disk, in 
 
 `native/mac/hudcheck.mjs` checks the window of the realm: it shows the action and its effect, and Pause stops the realm. The check presses Pause as a person does: a second realm reads the window and presses its button.
 
-`native/mac/pointercheck.mjs` (`pnpm --filter @reticlehq/computer-use check:pointer`) checks the real pointer: a click, a double-click, a right-click, a drag and a hover. It takes the pointer for a few seconds. The same command then runs `native/mac/keyscheck.mjs`: an application that was opened in the background comes to the front, and real keys go to it. It takes the keyboard for a few seconds. Last, `native/mac/pixelcheck.mjs` draws a stroke on a canvas of the fixture: no element changes, and the realm must report the pixels that changed and their box.
+`native/mac/pointercheck.mjs` (`pnpm --filter @reticlehq/computer-use check:pointer`) checks the real pointer: a click, a double-click, a triple-click, a right-click, a middle click, a long press, a drag, a hover, and the wheel down and to the side. It takes the pointer for a few seconds. The same command then runs `native/mac/keyscheck.mjs`: an application that was opened in the background comes to the front, and real keys go to it. It takes the keyboard for a few seconds. Last, `native/mac/pixelcheck.mjs` draws a stroke on a canvas of the fixture: no element changes, and the realm must report the pixels that changed and their box. Then `native/mac/dropcheck.mjs` drags a file from a Finder window onto the fixture's canvas: the fixture must name the file it got. The drop point is in a picture of the whole screen, because the canvas is in another application. Finder can open the window scrolled to the left in column view, so the check turns the wheel to the right until it sees the file, as a person does. It opens one Finder window on a folder of its own and closes only that one.
 
 `native/mac/photocheck.mjs` (`check:photo`) edits a photo in Preview: it rotates it from the Tools menu, draws a stroke with the markup tool, and saves it. The saved file must be turned and must hold the stroke. It does not run when Preview is open already. The same command then runs `native/mac/videocheck.mjs`: it trims a 10-second clip in QuickTime Player by dragging the two handles, exports it at 480p into a folder it chooses in the save panel, and the exported movie must be as long as the part kept. It makes the clip and measures the export with AVFoundation, and does not run when QuickTime Player is open already. Last, `native/mac/numberscheck.mjs` opens a sheet of costs in Numbers, changes a price, adds a row with a total as a formula, and exports the sheet as CSV. The total in the file must be the one Numbers computed.
 

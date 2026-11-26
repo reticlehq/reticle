@@ -13,7 +13,7 @@ import {
 } from '@reticlehq/core';
 
 import { ActKind } from '../driver.js';
-import { placeShown } from '../ui-node.js';
+import { UiRole, placeShown } from '../ui-node.js';
 import type { UiNode } from '../ui-node.js';
 import { KIND_OF } from './form.js';
 
@@ -26,6 +26,41 @@ export interface Picture {
   appWindow: readonly [number, number, number, number];
   /** Where each element on the screen was when the picture was taken, by its key. */
   places?: ReadonlyMap<string, readonly number[]>;
+  /** Where each window of the application was when the picture was taken. */
+  windows?: readonly (readonly number[])[];
+}
+
+/** True when a window is not where it was when its picture was taken. Half a point is noise. */
+function frameMoved(
+  then: readonly number[] | undefined,
+  now: readonly number[] | undefined,
+): boolean {
+  if (then === undefined || now === undefined) {
+    return false;
+  }
+  return then.some((value, at) => Math.abs(value - (now[at] ?? value)) > 0.5);
+}
+
+/**
+ * True when the window that holds the target is not at a place where a window of the application
+ * was when the picture was taken. Any window: an application with several windows (Finder) was
+ * refused for each one but its largest, which is the one the picture remembered.
+ */
+export function windowMoved(
+  picture: Picture | undefined,
+  now: readonly number[] | undefined,
+): boolean {
+  if (picture?.windows === undefined || now === undefined) {
+    return frameMoved(picture?.appWindow, now);
+  }
+  return !picture.windows.some((then) => !frameMoved(then, now));
+}
+
+/** The frame of each window of the application. */
+export function windowFramesOf(root: UiNode): (readonly number[])[] {
+  const windows =
+    UiRole.WINDOW === root.role ? [root] : root.children.filter((c) => UiRole.WINDOW === c.role);
+  return windows.flatMap((w) => (w.frame === undefined ? [] : [w.frame]));
 }
 
 /** The place of each element on the screen, by its key. */
@@ -269,6 +304,9 @@ export const PATH_ARG = 'path';
 const MODIFIERS_ARG = 'modifiers';
 /** How long the button stays down before the pointer moves or lets go, in milliseconds. */
 export const HOLD_ARG = 'holdMs';
+/** How many clicks: 2 is a double-click, 3 a triple-click. */
+const CLICK_COUNT_ARG = 'clickCount';
+const MIDDLE_BUTTON = 'middle';
 const MAX_HOLD_MS = 10_000;
 
 /**
@@ -302,14 +340,26 @@ export function handOf(kind: ActKind, more: Record<string, unknown>, pixels = fa
     : [];
   const hold =
     'number' === typeof more[HOLD_ARG] ? Math.min(MAX_HOLD_MS, Math.max(0, more[HOLD_ARG])) : 0;
+  const count = more[CLICK_COUNT_ARG];
+  if (count !== undefined && !(1 === count || 2 === count || 3 === count)) {
+    throw new Error(
+      `args.${CLICK_COUNT_ARG} is 1, 2 or 3: a triple-click chooses a line or a paragraph.`,
+    );
+  }
+  const parts = [
+    0 === keys.length ? '' : `|mods=${keys.map((k) => k.toLowerCase()).join('+')}`,
+    0 === hold ? '' : `|hold=${String(hold)}`,
+    'number' === typeof count && count > 1 ? `|count=${String(count)}` : '',
+    MIDDLE_BUTTON === more['button'] ? `|button=${MIDDLE_BUTTON}` : '',
+  ].join('');
   const compare = pixels && POINT_KINDS.has(kind) ? '|pixels=1' : '';
-  if (0 === keys.length && 0 === hold) {
+  if ('' === parts) {
     return compare;
   }
   if (!POINT_KINDS.has(kind)) {
     throw new Error(
-      `keys held through a click, and a held button, need the real pointer: add args.foreground: true. A ${kind} in the background holds no key.`,
+      `keys held through a click, a held button, more than one click and the middle button need the real pointer: add args.foreground: true. A ${kind} in the background has none of them.`,
     );
   }
-  return `${0 === keys.length ? '' : `|mods=${keys.map((k) => k.toLowerCase()).join('+')}`}${0 === hold ? '' : `|hold=${String(hold)}`}${compare}`;
+  return `${parts}${compare}`;
 }

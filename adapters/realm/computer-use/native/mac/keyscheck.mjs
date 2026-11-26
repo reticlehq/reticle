@@ -68,7 +68,20 @@ try {
     'the Return key did not reach the field',
   );
 
-  process.stdout.write('computer-use keyscheck: 4 of 4 cases held\n');
+  // A function key and a shortcut with a digit, to the application in front.
+  const statusAfter = async (text) => {
+    await act(onRegular, 'e1', ActionType.PRESS, { text, foreground: true });
+    return (await answerOf(onRegular, ReticleCommand.QUERY, { role: 'text' })).elements.map(
+      (element) => element.name,
+    );
+  };
+  assert.ok((await statusAfter('F5')).includes('Key: F5'), 'F5 did not reach the application');
+  assert.ok(
+    (await statusAfter('Meta+1')).includes('Key: Meta+1'),
+    'Command-1 did not reach the application',
+  );
+
+  process.stdout.write('computer-use keyscheck: 6 of 6 cases held\n');
 } finally {
   regular.kill();
 }

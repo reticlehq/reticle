@@ -378,6 +378,37 @@ func pixelChange(_ a: Pixels, _ b: Pixels, window: CGRect, moving: [Bool] = []) 
   ]) { $1 }
 }
 
+/// A container by its role and its frame: the switch adds elements before it, so a path of child
+/// indexes names another element after it.
+func containerKey(_ node: [String: Any]) -> String? {
+  guard let role = node["role"] as? String, ["AXScrollArea", "AXGroup", "AXSplitGroup"].contains(role),
+    let frame = node["frame"] as? [Double], frame.count == 4, frame[2] > 0, frame[3] > 0
+  else { return nil }
+  return "\(role)@\(frame.map { Int($0.rounded()) })"
+}
+
+func hasContent(_ node: [String: Any]) -> Bool {
+  (node["children"] as? [[String: Any]] ?? []).contains { ($0["role"] as? String) != "AXScrollBar" }
+}
+
+/// The containers that hold nothing but scroll bars.
+func emptyContainers(_ node: [String: Any]) -> Set<String> {
+  var found: Set<String> = []
+  if !hasContent(node), let key = containerKey(node) { found.insert(key) }
+  for child in node["children"] as? [[String: Any]] ?? [] { found.formUnion(emptyContainers(child)) }
+  return found
+}
+
+/// Which of the containers in `places` now hold content other than scroll bars.
+func filledContainers(_ node: [String: Any], among places: Set<String>) -> Set<String> {
+  var filled: Set<String> = []
+  if hasContent(node), let key = containerKey(node), places.contains(key) { filled.insert(key) }
+  for child in node["children"] as? [[String: Any]] ?? [] {
+    filled.formUnion(filledContainers(child, among: places))
+  }
+  return filled
+}
+
 func snapshot(_ app: AXUIElement) -> (tree: [String: Any], unread: Int, json: Data) {
   readBudget = readLimit
   var unread = 0
@@ -802,6 +833,13 @@ let keyCodes: [String: CGKeyCode] = [
   "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7, "c": 8, "v": 9, "b": 11, "q": 12,
   "w": 13, "e": 14, "r": 15, "y": 16, "t": 17, "o": 31, "u": 32, "i": 34, "p": 35, "l": 37, "j": 38,
   "k": 40, "n": 45, "m": 46,
+  // Digits and marks: shortcuts such as Command-1 or Command-= use them.
+  "1": 18, "2": 19, "3": 20, "4": 21, "5": 23, "6": 22, "7": 26, "8": 28, "9": 25, "0": 29,
+  "-": 27, "=": 24, "[": 33, "]": 30, "\\": 42, ";": 41, "'": 39, ",": 43, ".": 47, "/": 44,
+  "`": 50,
+  // The function keys: editors of video and sound use them (Shift-F12 appends a clip in Resolve).
+  "f1": 122, "f2": 120, "f3": 99, "f4": 118, "f5": 96, "f6": 97, "f7": 98, "f8": 100, "f9": 101,
+  "f10": 109, "f11": 103, "f12": 111,
 ]
 let modifierFlags: [String: CGEventFlags] = [
   "meta": .maskCommand, "shift": .maskShift, "alt": .maskAlternate, "control": .maskControl,
@@ -883,24 +921,28 @@ func run(_ args: [String]) throws {
       // its sheet as an empty scroll area, and with this switch every cell with its value. Set it,
       // and keep it only when the tree grew: for an application that already gives all of it, the
       // switch only costs speed.
-      var before = snapshot(app).json
+      var before = snapshot(app)
       for _ in 0..<12 {
         Thread.sleep(forTimeInterval: 0.15)
-        let again = snapshot(app).json
-        if again == before { break }
+        let again = snapshot(app)
+        if again.json == before.json { break }
         before = again
       }
+      // Not any growth: a feed or a list that loads by itself grows too, and would keep a switch
+      // that only costs it speed. The switch is kept when a container that held nothing but its
+      // scroll bars now holds content, as the sheet of Numbers does.
+      let empty = emptyContainers(before.tree)
       AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanTrue)
       readBefore.remove(pid)
       var grew = false
-      var last = before
+      var last = before.json
       let until = Date().addingTimeInterval(3)
       while Date() < until {
         Thread.sleep(forTimeInterval: 0.15)
-        let now = snapshot(app).json
-        if now.count > before.count { grew = true }
-        if grew && now == last { break }
-        last = now
+        let now = snapshot(app)
+        if !empty.isDisjoint(with: filledContainers(now.tree, among: empty)) { grew = true }
+        if grew && now.json == last { break }
+        last = now.json
       }
       if !grew {
         AXUIElementSetAttributeValue(app, "AXEnhancedUserInterface" as CFString, kCFBooleanFalse)
@@ -1521,9 +1563,14 @@ func run(_ args: [String]) throws {
     send(.mouseMoved, at, .left)
     switch action {
     case "click":
-      send(.leftMouseDown, at, .left)
-      if holdSeconds > 0 { Thread.sleep(forTimeInterval: holdSeconds) }
-      send(.leftMouseUp, at, .left)
+      // "count=3" is a triple-click (a line or a paragraph), "button=middle" the middle button.
+      let middle = hand["button"] == "middle"
+      let count = Int64(min(3, max(1, Int(hand["count"] ?? "1") ?? 1)))
+      for n in 1...count {
+        send(middle ? .otherMouseDown : .leftMouseDown, at, middle ? .center : .left, clicks: n)
+        if holdSeconds > 0 && n == count { Thread.sleep(forTimeInterval: holdSeconds) }
+        send(middle ? .otherMouseUp : .leftMouseUp, at, middle ? .center : .left, clicks: n)
+      }
     case "dblclick":
       for count in [Int64(1), 2] {
         send(.leftMouseDown, at, .left, clicks: count)
@@ -1535,13 +1582,16 @@ func run(_ args: [String]) throws {
     case "wheel":
       // Lines of the wheel over the element, in small turns as a hand gives them. More than 0 is
       // down; the system counts a turn up as more than 0, so the sign is turned over.
+      // "across=5" in the hand turns it to the side: more than 0 is to the right.
       let lines = Int32(numbers.first ?? 0)
-      let step: Int32 = lines > 0 ? -3 : 3
-      for _ in 0..<max(1, abs(Int(lines)) / 3) {
+      let across = Int32(hand["across"] ?? "0") ?? 0
+      let step: Int32 = lines == 0 ? 0 : (lines > 0 ? -3 : 3)
+      let side: Int32 = across == 0 ? 0 : (across > 0 ? -3 : 3)
+      for _ in 0..<max(1, max(abs(Int(lines)), abs(Int(across))) / 3) {
         guard
           let turn = CGEvent(
-            scrollWheelEvent2Source: source, units: .line, wheelCount: 1, wheel1: step, wheel2: 0,
-            wheel3: 0)
+            scrollWheelEvent2Source: source, units: .line, wheelCount: 2, wheel1: step,
+            wheel2: side, wheel3: 0)
         else { break }
         turn.location = at
         turn.post(tap: .cghidEventTap)

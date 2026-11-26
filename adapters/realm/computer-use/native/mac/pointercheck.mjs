@@ -135,9 +135,25 @@ try {
     args: { foreground: true, point: at, dy: 200, settleMs: 700 },
   });
   assert.equal(await status(), 'Pad: wheel down');
+  // Sideways: a wide table, a timeline.
+  await commands.answer(ReticleCommand.ACT, {
+    ref: window.ref,
+    action: ActionType.SCROLL,
+    args: { foreground: true, point: at, dx: 200, settleMs: 700 },
+  });
+  assert.equal(await status(), 'Pad: wheel right');
   rmSync(shot.path, { force: true });
 
-  process.stdout.write('computer-use pointercheck: 12 of 12 cases held\n');
+  // A long press: the pad says "long" when the button was down 400 ms or more.
+  assert.equal(await gesture(ActionType.CLICK, { foreground: true, holdMs: 600 }), 'Pad: long');
+  // A triple-click, which chooses a line or a paragraph, and the middle button.
+  assert.equal(await gesture(ActionType.CLICK, { foreground: true, clickCount: 3 }), 'Pad: triple');
+  assert.equal(
+    await gesture(ActionType.CLICK, { foreground: true, button: 'middle' }),
+    'Pad: middle',
+  );
+
+  process.stdout.write('computer-use pointercheck: 16 of 16 cases held\n');
 } finally {
   fixture.kill();
 }

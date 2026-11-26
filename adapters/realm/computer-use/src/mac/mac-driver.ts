@@ -25,7 +25,14 @@ import { AxNodeSchema, fromAx } from './from-ax.js';
 import type { AxNode } from './from-ax.js';
 import type { Placed } from '../ui-node.js';
 
-const Command = { TREE: 'tree', ACT: 'act', REACH: 'reach', CAPTURE: 'capture' } as const;
+const Command = {
+  TREE: 'tree',
+  ACT: 'act',
+  REACH: 'reach',
+  CAPTURE: 'capture',
+  SWITCH: 'web-tree',
+} as const;
+const TRY_SWITCH = 'try';
 /** The word that asks the helper for the whole display, and not the window only. */
 const SCREEN = 'screen';
 const HelperError = {
@@ -194,6 +201,12 @@ export interface MacDriverInput {
   app: string;
   pid: number;
   run?: RunHelper;
+  /**
+   * Try the switch a screen reader sets, once, at the first read that shows a window, and keep it
+   * when it fills a container that was empty (the sheet of Numbers). Not before a window: under
+   * Stage Manager an application opened in the background has none, and there is nothing to test.
+   */
+  screenReaderSwitch?: boolean;
 }
 
 function toRead(tree: AxNode, unread: number): UiRead {
@@ -221,6 +234,7 @@ export class MacDriver implements UiDriver {
   #captures = 0;
   /** The tree as the helper last gave it. An action names its element from this read. */
   #last: AxNode | undefined;
+  #switchTried = false;
 
   constructor(input: MacDriverInput) {
     this.#input = input;
@@ -260,7 +274,13 @@ export class MacDriver implements UiDriver {
   }
 
   async read(): Promise<UiRead> {
-    const answer = TreeSchema.parse(await this.#ask([Command.TREE, String(this.#input.pid)]));
+    let answer = TreeSchema.parse(await this.#ask([Command.TREE, String(this.#input.pid)]));
+    const hasWindow = answer.tree.children.some((child) => 'AXWindow' === child.role);
+    if (true === this.#input.screenReaderSwitch && !this.#switchTried && hasWindow) {
+      this.#switchTried = true;
+      await this.#ask([Command.SWITCH, String(this.#input.pid), TRY_SWITCH]);
+      answer = TreeSchema.parse(await this.#ask([Command.TREE, String(this.#input.pid)]));
+    }
     this.#last = answer.tree;
     return {
       ...toRead(answer.tree, answer.unread),

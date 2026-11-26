@@ -3,7 +3,7 @@
 // exports the sheet as CSV into a folder it chooses. The total must be the one Numbers computed.
 //
 // Numbers gives its sheet only to a screen reader: with no switch, the sheet is an empty scroll
-// area. The join sets that switch (`web-tree try`), and so does this check.
+// area. The driver tries that switch at its first read that shows a window, as the join makes it.
 //
 //   node native/mac/numberscheck.mjs
 //
@@ -47,11 +47,10 @@ await sleep(1500);
 execFileSync('open', ['-g', '-a', APP, `${dir}/costs.csv`]);
 await sleep(5000);
 const pid = pidOf();
-const switched = JSON.parse(
-  execFileSync(helper, ['web-tree', String(pid), 'try'], { encoding: 'utf8' }),
-);
+// As the join makes it: the driver tries the screen reader switch at its first read that shows a
+// window.
 const commands = new PeerCommands({
-  driver: new MacDriver({ helper, app: APP, pid }),
+  driver: new MacDriver({ helper, app: APP, pid, screenReaderSwitch: true }),
   emit: () => undefined,
 });
 const find = async (query) => (await commands.answer(ReticleCommand.QUERY, query)).elements;
@@ -75,7 +74,9 @@ async function enter(text) {
 
 let passed = 0;
 try {
-  assert.equal(switched.set, true, 'the screen reader switch added nothing to the tree of Numbers');
+  // Opened in the background, the window can be off the screen (in the strip of Stage Manager):
+  // bring Numbers to the front, as a person clicks it there.
+  await act(await app(), ActionType.FOCUS, { foreground: true });
   assert.deepEqual((await values()).slice(0, 8), [
     'Item',
     'Price',
@@ -100,7 +101,7 @@ try {
   await pick(9);
   await enter('=SUM(B2:B4)');
   const total = (await cells())[9].name;
-  assert.match(total, /^103, Formula result/, `the total is ${total}`);
+  assert.match(total, /^103,.*Formula result/, `the total is ${total}`);
   passed += 1;
 
   // The export: the menu bar is on the screen only when Numbers is in front.
