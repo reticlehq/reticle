@@ -50,3 +50,85 @@ describe('the board of the bridge', () => {
     });
   });
 });
+
+// The board carried only what an agent typed into it: a value read in one session reached another
+// only if the agent copied it right, and nothing said whether it arrived. A carry reads the value
+// from the element itself, writes it into the element of the other session, and reads it back.
+describe('a carry from one session to another', () => {
+  /** A session whose tree is lines, and whose fill sets the value of a ref (unless it is deaf). */
+  const fakeSession = (lines: Record<string, string>, deaf = false) => {
+    const values: Record<string, string> = {};
+    return {
+      beginAction: () => 'a1',
+      finishAction: () => undefined,
+      command: (name: string, args: Record<string, unknown>) => {
+        if ('snapshot' === name) {
+          const tree = Object.entries(lines)
+            .map(([ref, line]) =>
+              values[ref] === undefined ? line : `${line} [value="${values[ref] ?? ''}"]`,
+            )
+            .join('\n');
+          return Promise.resolve({ ok: true, result: { tree } });
+        }
+        if ('act' === name && !deaf) {
+          const value = (args['args'] as { value?: string } | undefined)?.value ?? '';
+          values[String(args['ref'])] = value;
+        }
+        return Promise.resolve({ ok: true, result: { ok: true } });
+      },
+    };
+  };
+  const bridgeOf = (sessions: Record<string, object>) => ({
+    resolve: (id: string) => {
+      const found = sessions[id];
+      if (found === undefined) {
+        throw new Error(`no session ${id}`);
+      }
+      return found;
+    },
+  });
+  const calculator = fakeSession({ e5: '- text "69,104" (ref=e5)' });
+
+  it('reads the value from the element, writes it in the other session, and proves it arrived', async () => {
+    const bridge = bridgeOf({
+      calc: calculator,
+      page: fakeSession({ e3: '- textbox "Total" (ref=e3)' }),
+    });
+    const carried = await BOARD_TOOL.handler(depsWith(bridge, 7), {
+      key: 'total',
+      carry: { from: { sessionId: 'calc', ref: 'e5' }, to: { sessionId: 'page', ref: 'e3' } },
+    });
+    expect(carried).toMatchObject({ ok: true, carried: '69,104', arrived: true });
+    expect(await BOARD_TOOL.handler(depsWith(bridge), { key: 'total' })).toMatchObject({
+      entries: [{ key: 'total', value: '69,104', from: 'calc' }],
+    });
+  });
+
+  it('says it did not arrive, and what the target shows, when the target did not take it', async () => {
+    const bridge = bridgeOf({
+      calc: calculator,
+      page: fakeSession({ e3: '- textbox "Total" (ref=e3)' }, true),
+    });
+    expect(
+      await BOARD_TOOL.handler(depsWith(bridge), {
+        key: 'total',
+        carry: { from: { sessionId: 'calc', ref: 'e5' }, to: { sessionId: 'page', ref: 'e3' } },
+      }),
+    ).toMatchObject({ ok: true, carried: '69,104', arrived: false, shows: '' });
+  });
+
+  it('refuses a source ref that is not in its session', async () => {
+    const bridge = bridgeOf({ calc: calculator, page: fakeSession({}) });
+    expect(
+      await BOARD_TOOL.handler(depsWith(bridge), {
+        key: 'total',
+        carry: { from: { sessionId: 'calc', ref: 'e9' }, to: { sessionId: 'page', ref: 'e3' } },
+      }),
+    ).toMatchObject({ ok: false });
+    const refused = (await BOARD_TOOL.handler(depsWith(bridge), {
+      key: 'total',
+      carry: { from: { sessionId: 'calc', ref: 'e9' }, to: { sessionId: 'page', ref: 'e3' } },
+    })) as { error?: string };
+    expect(refused.error).toContain('e9');
+  });
+});

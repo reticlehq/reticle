@@ -705,7 +705,7 @@ export const MERGE_PLANS: MergePlan[] = [
       // The first sentence is all a lean surface shows (160 characters), so it carries the
       // obligation and the HUD control; the rest is the detail for a full one.
       'By action: "yield" is MANDATORY before you stop driving; "tune" hides or moves the HUD, or sets the idle window; "account" says the plan, credits and Harness state. ' +
-      'In full: "yield" hands control back to the human (mode: waiting|ask, between turns); "tune" takes `hud` (hidden, shown, removed until reload, or a corner) for when the HUD covers a control you must test, and `idleEndMs`; "end" terminates the session for good; "resume" clears a human pause; "messages" drains the human→agent inbox; "review" lists/resolves the mistakes a human pinned to elements; "narrate" states your intent on the presenter HUD; "board" reads and writes named values that every session and agent on this bridge shares.',
+      'In full: "yield" hands control back to the human (mode: waiting|ask, between turns); "tune" takes `hud` (hidden, shown, removed until reload, or a corner) for when the HUD covers a control you must test, and `idleEndMs`; "end" terminates the session for good; "resume" clears a human pause; "messages" drains the human→agent inbox; "review" lists/resolves the mistakes a human pinned to elements; "narrate" states your intent on the presenter HUD; "board" reads and writes named values that every session and agent on this bridge shares, and with `carry` moves a value from an element of one session into an element of another and says whether it arrived.',
     members: {
       tune: ReticleTool.SESSION_TUNE,
       yield: ReticleTool.YIELD,
