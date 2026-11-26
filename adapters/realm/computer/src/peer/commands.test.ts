@@ -2283,6 +2283,21 @@ describe('a window on another Space', () => {
   });
 });
 
+// The server sends a document key (Escape, a shortcut) with no ref: its own message says the key
+// needs none. The computer realm then failed with "ref '' no longer resolves to an element".
+describe('a key with no ref', () => {
+  it('goes to the window, as a person types into the application in front', async () => {
+    const { commands, asked } = peer();
+    await commands.answer(ReticleCommand.ACT, {
+      action: ActionType.PRESS,
+      args: { text: 'g', modifiers: ['Meta'] },
+    });
+    expect(asked[0]?.kind).toBe(ActKind.KEY);
+    expect(asked[0]?.value).toBe('Meta+g');
+    expect(asked[0]?.target.node.role).toBe(UiRole.WINDOW);
+  });
+});
+
 describe('narrate', () => {
   it('shows what the agent says in the HUD, and declares that it serves it', async () => {
     const said: string[] = [];

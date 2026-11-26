@@ -46,7 +46,7 @@ import {
   testidOf,
 } from './form.js';
 import type { ActResult } from './form.js';
-import { READ_STATE, see } from './seen.js';
+import { keyTarget, READ_STATE, see } from './seen.js';
 import { arrangeWindow } from './window.js';
 import { refusalOf } from './link-switch.js';
 import {
@@ -848,7 +848,9 @@ export class PeerCommands {
         `the computer realm does not have the action ${action}. It has: ${PEER_ACTIONS.join(', ')}.`,
       );
     }
-    let target = await this.#resolve(ref);
+    const keyed = '' === ref && kind === ActKind.KEY;
+    const typed = keyed ? keyTarget(see((await this.#deps.driver.read()).root)) : undefined;
+    let target = typed ?? (await this.#resolve(ref));
     const refused = refusalOf(target, action, more, allowed);
     if (refused !== undefined) {
       throw new Error(refused);

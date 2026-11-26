@@ -4,7 +4,7 @@
  */
 import { ElementState } from '@reticlehq/core';
 
-import { placeShown } from '../ui-node.js';
+import { placeShown, UiRole } from '../ui-node.js';
 import type { Placed, UiNode } from '../ui-node.js';
 
 function intersects(a: UiNode['frame'], b: UiNode['frame']): boolean {
@@ -67,3 +67,16 @@ export const READ_STATE: Readonly<Partial<Record<string, (seen: Seen) => boolean
   [ElementState.CHECKED]: (s) => s.node.states.includes(ElementState.CHECKED),
   [ElementState.FOCUSED]: (s) => s.node.states.includes(ElementState.FOCUSED),
 };
+
+/**
+ * Where a key with no element goes: what has the keyboard, else the first window, else the
+ * application. A person types into the application in front; the server sends a document key
+ * (Escape, a shortcut) with no ref.
+ */
+export function keyTarget(all: readonly Seen[]): Seen | undefined {
+  return (
+    all.find((s) => s.node.states.includes(ElementState.FOCUSED)) ??
+    all.find((s) => s.node.role === UiRole.WINDOW) ??
+    all[0]
+  );
+}

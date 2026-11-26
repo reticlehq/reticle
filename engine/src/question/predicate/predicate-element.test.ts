@@ -879,3 +879,53 @@ it('says that the element was removed, not hidden, when nothing matches it at al
   expect(result.failureReason).toContain('absent: true');
   expect(result.failureReason).not.toContain('Huddle');
 });
+
+// The computer realm finds by role, name, text and test id; it has no placeholders. A check that
+// missed asked it for `{ placeholder }` to explain the miss, the realm refused the query, and the
+// refusal took the verdict with it: `act_and_wait` said "did not hold" with no reason at all.
+it('explains a miss on a page that cannot answer a placeholder query', async () => {
+  const page: PredicateSession = {
+    ...session,
+    command(_name, args) {
+      const query = (args as { query: Record<string, unknown> }).query;
+      if ('placeholder' in query) {
+        return Promise.reject(new Error('this query has none of role, name, text or test id'));
+      }
+      const elements =
+        'window' === query['role'] && undefined === query['name']
+          ? [
+              {
+                ref: 'e2',
+                role: 'window',
+                name: 'Slack - EF Global Community',
+                states: [],
+                visible: true,
+              },
+            ]
+          : [];
+      return Promise.resolve({
+        kind: 'command_result',
+        ok: true,
+        id: 'm',
+        result: { matched: elements.length > 0, count: elements.length, elements },
+      });
+    },
+  };
+  const missing = await evalElement(
+    page,
+    { role: 'menuitem', name: 'Fil' },
+    undefined,
+    false,
+    true,
+  );
+  expect(missing.pass).toBe(false);
+  expect(missing.failureReason).toContain('no element matched');
+  const nearMiss = await evalElement(
+    page,
+    { role: 'window', name: 'EF Global Community' },
+    undefined,
+    false,
+    true,
+  );
+  expect(nearMiss.failureReason).toContain('Slack - EF Global Community');
+});

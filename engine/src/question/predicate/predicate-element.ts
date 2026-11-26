@@ -885,8 +885,10 @@ async function nearestByName(
     { label: name, ...within },
     { placeholder: name, ...within },
   ]) {
-    const found = await matchOnce(session, query, state);
-    if (found.matched) {
+    // A diagnosis only. A realm that has no such field (the computer realm has no placeholders)
+    // refuses the query; that must not take the verdict with it, so the next locator is tried.
+    const found = await matchOnce(session, query, state).catch(() => undefined);
+    if (true === found?.matched) {
       return found.elements.slice(0, MAX_BY_NAME);
     }
   }

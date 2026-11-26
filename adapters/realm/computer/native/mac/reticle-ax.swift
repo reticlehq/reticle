@@ -669,7 +669,9 @@ func reach(_ target: AXUIElement, _ rect: CGRect) -> Reach {
     code = AXUIElementCopyElementAtPosition(system, Float(rect.midX), Float(rect.midY), &hit)
     guard code == .success, let top = hit else { continue }
     var at = top
-    for _ in 0..<8 {
+    // Up to the target from what is under the point. A web page nests deep: the text under the
+    // middle of Slack's page in Dia was 15 levels below its document, and 8 levels refused it.
+    for _ in 0..<64 {
       if CFEqual(at, target) { return .yes }
       var parent: AnyObject?
       guard AXUIElementCopyAttributeValue(at, kAXParentAttribute as CFString, &parent) == .success,
@@ -694,21 +696,9 @@ func reach(_ target: AXUIElement, _ rect: CGRect) -> Reach {
       }
     }
     if passesThrough(top, to: target) { return .yes }
-    // The answer is the target's own window: no part of the window takes the hit at that point, so
-    // no part covers the target. Dia's profile sidebar answers so, and its profile rows were
-    // refused as "covered by the window". Another part of the window over the target is the answer
-    // of the hit test, so that refusal stays.
-    if let hitRole = values(top).flatMap({ text($0[0]) }), hitRole == "AXWindow" {
-      var up = target
-      for _ in 0..<80 {
-        var parent: AnyObject?
-        guard AXUIElementCopyAttributeValue(up, kAXParentAttribute as CFString, &parent) == .success,
-          let above = parent, CFGetTypeID(above) == AXUIElementGetTypeID()
-        else { break }
-        up = above as! AXUIElement
-        if CFEqual(up, top) { return .yes }
-      }
-    }
+    // A bare window as the answer says nothing about the point: a plain view with no element of
+    // its own over the target (the fixture's Cover) answers so, and so does Dia's profile sidebar.
+    // The two cannot be told apart here, so it stays "covered". A point from the picture still works.
     let v = values(top)
     let role = v.flatMap { text($0[0]) } ?? "element"
     let name = v.flatMap { text($0[2]) ?? text($0[3]) } ?? ""
@@ -1312,15 +1302,19 @@ func run(_ args: [String]) throws {
   // the middle of the Dock is under the menu bar of the application in front. A key to a field
   // keeps the test.
   // Typing is keys too: a person types into the application in front, not at a point of it.
-  let keyToApp = (action == "key" || action == "type") && text(now[0]) == "AXApplication"
+  // A key to a window or to the page of a browser goes to what has the keyboard there, as to the
+  // application: Slack's search shortcut was refused because its window was "covered" at its middle.
+  let keyRoles: Set<String> = ["AXApplication", "AXWindow", "AXWebArea"]
+  let keyToApp = (action == "key" || action == "type") && keyRoles.contains(text(now[0]) ?? "")
   let needsReach = !direct && action != "raise" && !atPoint && !keyToApp
   var reached = frame(now[7], now[8]).map({ reach(target, $0) }) ?? .unknown(code: -1)
   // Stage Manager keeps a window in its strip at the side until its application comes to the
   // front, and then slides it to the middle. The element is then covered by the strip, and its
   // place is the old one: a click was refused, and would have gone to the old place. Read the
-  // element again while the window moves, a second and a half at most.
+  // element again while the window moves, three seconds at most: Slack's window, brought from
+  // another Space, was still moving after a second and a half.
   if foreground, case .no = reached {
-    let until = Date().addingTimeInterval(1.5)
+    let until = Date().addingTimeInterval(3.0)
     while Date() < until {
       Thread.sleep(forTimeInterval: 0.1)
       guard let fresh = values(target) else { break }
