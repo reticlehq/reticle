@@ -44,6 +44,7 @@ import { findUnitMismatches } from './unit-mismatch.js';
 import { asString } from '@reticlehq/core';
 import { declaredCountFor, isDeclaredRead, matchesDeclaredFailure } from '@/question/declared.js';
 import { runRegisteredFolds } from './contradiction-folds.js';
+import { boundedList, urlPrefix } from '../bounded-list.js';
 import { isMeaningfulStateChange } from '../state-bookkeeping.js';
 import type {
   Contradiction,
@@ -884,6 +885,22 @@ function findWindowContradictions(
       .map((e) => ({ id: asString(e.data['id']), call: netCall(e) }))
       .filter((p) => p.id === undefined || !settledIds.has(p.id));
     if (inFlight.length > 0) {
+      // A map page leaves hundreds of tiles pending (#2496). Both lists name a few entries, and the
+      // finding counts the rest, so the result stays short and the loss is declared. An open write
+      // is the call this finding is about, so a write is named before any read.
+      const calls = boundedList(
+        inFlight.map((p) => ({
+          label: describe(p.call),
+          group: `${p.call.method} ${urlPrefix(p.call.url)}`,
+          first: isMutating(p.call),
+        })),
+        '; ',
+      );
+      const ignored = boundedList(
+        ignoredForeign.map((url) => ({ label: url, group: urlPrefix(url) })),
+        ', ',
+      );
+      const omitted = calls.omitted + ignored.omitted;
       found.push({
         kind: ContradictionKind.REQUEST_NEVER_SETTLED,
         claim: 'the UI moved forward and the action reported done',
@@ -891,13 +908,13 @@ function findWindowContradictions(
         // The exclusion is never silent: if the toolchain's own traffic was dropped from this count,
         // the finding says which URLs, so an agent reading it can see what Reticle chose to ignore.
         detail: [
-          inFlight.map((p) => describe(p.call)).join('; '),
+          calls.text,
           ...(0 === ignoredForeign.length
             ? []
-            : [
-                `ignored as dev tooling, third-party or declared background: ${ignoredForeign.join(', ')}`,
-              ]),
+            : [`ignored as dev tooling, third-party or declared background: ${ignored.text}`]),
         ].join(' — '),
+        ...(omitted > 0 ? { omitted } : {}),
+        ...(omitted > 0 || calls.clipped || ignored.clipped ? { truncated: true as const } : {}),
       });
     }
   }

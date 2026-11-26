@@ -17,7 +17,7 @@ import {
   Verified,
   checkIntent,
 } from '@reticlehq/core';
-import { ReticleTool } from '@reticlehq/core';
+import { ContradictionSchema, ReticleTool } from '@reticlehq/core';
 import {
   countSchema,
   cursorSchema,
@@ -176,14 +176,7 @@ export const OBSERVE_TOOLS: ToolDef[] = [
       // Cross-channel disagreement in this window. Omitted when there is none, so a clean action
       // costs zero tokens and a contradiction is impossible to scroll past.
       contradictions: z
-        .array(
-          z.object({
-            kind: z.string(),
-            claim: z.string(),
-            counter: z.string(),
-            detail: z.string(),
-          }),
-        )
+        .array(ContradictionSchema)
         .optional()
         .describe(
           'Channels that DISAGREE about this action — e.g. the UI advanced while its request failed. Each is a false green: the screen looks right and the app is wrong.',

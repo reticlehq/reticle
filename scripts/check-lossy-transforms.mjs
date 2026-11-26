@@ -222,6 +222,17 @@ export const READ_PATH = Object.freeze({
       'calls onWidened for each top document it changed, which the pool keeps and the lease result reports as cspWidenedFor',
     ],
   },
+  'engine/src/bounded-list.ts': {
+    DETAIL_LIST_LIMIT: [Declaration.NONE, 'the bound itself, a number'],
+    DETAIL_LABEL_LIMIT: [Declaration.NONE, 'the bound on one name, a number'],
+    ListEntry: [Declaration.NONE, 'type'],
+    BoundedList: [Declaration.NONE, 'the result type'],
+    boundedList: [
+      Declaration.REPORT,
+      "names at most DETAIL_LIST_LIMIT entries or groups of a finding's detail list and clips each name at DETAIL_LABEL_LIMIT; it returns omitted and clipped beside the text, and request-never-settled carries them on the finding as omitted and truncated",
+    ],
+    urlPrefix: [Declaration.NONE, 'a group key for a URL; the URL itself is not changed'],
+  },
   'core/src/wire/toon.ts': {
     ToonElement: [Declaration.NONE, 'type'],
     toToon: [
@@ -252,6 +263,7 @@ export const CONFORMANCE_TESTS = Object.freeze([
   'adapters/realm/browser/src/security/serialization.test.ts',
   'adapters/realm/browser/src/transport/transport.overflow-marker.test.ts',
   'engine/src/window/ring-buffer.test.ts',
+  'engine/src/bounded-list.test.ts',
   'server/src/memory/journal/session-journal.lossy-conformance.test.ts',
   'server/src/portal/input/network-detail.lossy-conformance.test.ts',
   'server/src/portal/pool/csp-widen.test.ts',
