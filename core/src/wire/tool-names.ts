@@ -124,6 +124,11 @@ export const ReticleTool = {
    * desktop session, a browser session and a plan of the Harness pass a value to each other.
    */
   BOARD: 'reticle_board',
+  /**
+   * Join a tab that is open in the person's own browser (their mail, a cloud console), over the
+   * browser's debugging port, as a session: the reader is put in the tab, not in a tab of its own.
+   */
+  ATTACH_TAB: 'reticle_attach_tab',
   /** Human review: list the mistakes the human pinned to elements, and resolve them once fixed. */
   REVIEW: 'reticle_review',
   /** First-run readiness: block briefly until the app's SDK connects (smooths the init→connect race). */

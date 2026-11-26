@@ -1,0 +1,3 @@
+### Added
+
+- **`@reticlehq/server` — `reticle_attach_tab` joins a tab that is open in your own browser.** Over the browser's debugging port (a Chromium browser started with `--remote-debugging-port`), the tool puts the reader in the one tab whose address holds `match`, and answers with the session it became: your mail, a cloud console, a tool you are signed in to, read and driven from the inside. The page's security policy is set aside for that connection only, and `{ detach: true }` puts it back and closes the connection. A password vault (Bitwarden, 1Password, LastPass, Dashlane, Keeper) or a sign-in page is never joined. Reach it with `reticle_run`.

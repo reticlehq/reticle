@@ -324,7 +324,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 60: `lease-url-identity.ts`, the lease URL params, split out of lease-tools.ts at the 1000-line cap.
   // 61: `outside-project-sessions.ts`, the outside-project section of the session list.
   // tools.ts is at the line cap, so the section lives beside it (#2492).
-  'server/src/surface/tools': 61,
+  // 62 with `attach-tab-tool.ts`: the tool of the attach, beside the lease tools.
+  'server/src/surface/tools': 62,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it
@@ -379,7 +380,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // is still loading.
   // 17 with `lease-dialogs.ts` (#2167): how a leased page answers its native dialogs, and the yes
   // a press with `confirmDangerous` gives one `confirm`. Split out of browser-pool.ts at the cap.
-  'server/src/portal/pool': 17,
+  // 18 with `attach-tab.ts`: a tab of the person's own browser joined over its debugging port.
+  // Beside zero-install and context-permissions, which it uses, as the lease does.
+  'server/src/portal/pool': 18,
   // 22 since `session-verdict-facts.ts` was extracted (the count is source files, not tests): both
   // verdict-producing tools were threading the same session facts into `decideVerified` with the
   // same conditional-spread idiom, and a third fact would have been a third copy. Raised on

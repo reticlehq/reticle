@@ -210,7 +210,15 @@ describe('tool allowlists are complete', () => {
      * counting a write to a board would inflate the headline metric). On no surface list: it is
      * reached as an action of `reticle_session`.
      */
-    const PINNED_RAW_TOOL_COUNT = 69;
+    /*
+     * 70 since `reticle_attach_tab`: a tab of the person's own browser joined as a session, over the
+     * browser's debugging port. SESSION_EXEMPT_TOOLS yes: it makes the session, so none exists
+     * before it runs. Every other set no: it drives no element (ACTION), its debugging connection is
+     * its own and not the CDP route of a driven page (CDP), it mints no ref (the session it makes
+     * does, on its first look), and it gives no verdict (VERDICT). On no surface list: an agent
+     * reaches it with reticle_run, and SKILL.md is not grown for it.
+     */
+    const PINNED_RAW_TOOL_COUNT = 70;
 
     expect(
       RAW_TOOLS.length,

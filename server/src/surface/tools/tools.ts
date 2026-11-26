@@ -85,6 +85,7 @@ import { LINEAGE_TOOLS } from './lineage-tools.js';
 import { RECONCILE_TOOLS } from './reconcile-tools.js';
 import { READ_TOOLS } from './read-tools.js';
 import { LEASE_TOOLS } from './lease-tools.js';
+import { ATTACH_TAB_TOOL } from './attach-tab-tool.js';
 import { FEEDBACK_TOOLS } from './feedback-tools.js';
 import { ACCOUNT_TOOLS } from './account-tool.js';
 
@@ -641,6 +642,7 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
   ...SCROLL_TOOLS,
   // Session lifecycle: reticle_session — tune the presenter session (idle-end). See session-tools.ts.
   ...SESSION_TOOLS,
+  ATTACH_TAB_TOOL,
   // reticle_annotate (structured annotation → expect/dynamic/success). See annotate-tools.ts.
   ...ANNOTATE_TOOLS,
   // reticle_affected — which saved flows a diff invalidates. Unadvertised (zero per-turn cost),
