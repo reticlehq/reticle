@@ -107,7 +107,7 @@ Every `until`, `predicate` and `expect` is `{ kind, ...fields }`; unknown fields
 | kind | fields |
 | --- | --- |
 | `element` | `query: { testid \| role+name \| text \| label \| placeholder \| alt \| component, scope? }`, `state?`: `visible` `hidden` `enabled` `disabled` `checked` `expanded` `pressed` `focused` `present` `inViewport` `receivesPointer` `painted`, `absent?` |
-| `text` | `contains`, `scope?`, `visible?`, `absent?`, `ignoreCase?`, `satisfies?` |
+| `text` | `contains`, `scope?`, `visible?`, `absent?`, `ignoreCase?`, `satisfies?`, `count?` |
 | `net` | `method`, `urlContains`, `status`, `ok`, `count` (exact; omit = ≥1; 0 = never), `bodyContains`, `bodyMatches`, `requestBodyMatches`, `repeatable` |
 | `route` | `pathname` or `contains` |
 | `signal` | `name`, `dataMatches?`, `count?` (as `net`) |

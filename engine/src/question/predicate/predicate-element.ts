@@ -366,6 +366,36 @@ function stateTheSdkPredates(
   return sdkPredates(sdk, since) ? { sdk, state, since } : undefined;
 }
 
+/**
+ * A text `count` that does not hold: how many matched against how many were asked for.
+ *
+ * Not `decided`, as an over-count is on `net` and `signal` (see `evalExactCount`). Those count a
+ * window of events, which only grows. Copies on a page can go away again, after a re-render or a
+ * removed duplicate, so a reading of three is not the last word on a check that wants two.
+ */
+function countMiss(
+  match: { count: number; elements: unknown[] },
+  want: number,
+  subject: string,
+): EvalResult {
+  const copies = (n: number): string => `${String(n)} element(s) matching ${subject}`;
+  return {
+    pass: false,
+    failureReason: `expected exactly ${copies(want)}, saw ${String(match.count)}`,
+    observed: copies(match.count),
+    expected: `exactly ${copies(want)}`,
+    assertion: 'text.count',
+    evidence: match.elements,
+  };
+}
+
+/**
+ * The first SDK release whose match says when it is the one owner of a split phrase (`splitOwner`).
+ * An older page answers the same `count: 1` without saying so, and a text count read on it would
+ * pass on a page that shows several copies.
+ */
+const SPLIT_OWNER_SINCE = '3.10.12';
+
 /** The first SDK release whose element query accepts `matchCase`; an older page refuses the query. */
 const MATCH_CASE_SINCE = '3.7.0';
 
@@ -379,6 +409,8 @@ export async function evalElement(
   fullText = false,
   /** For an absence: only an element whose text satisfies this fails it. See `absentUnlessSatisfied`. */
   unlessText?: PropertyAssertion,
+  /** Exactly this many matches (a text `count` of one or more). See `countMiss`. */
+  count?: number,
 ): Promise<EvalResult> {
   const tooOld = stateTheSdkPredates(session.sdkVersion, state);
   if (tooOld !== undefined) {
@@ -394,6 +426,13 @@ export async function evalElement(
       expected: `SDK ${tooOld.since} or newer, which can answer '${tooOld.state}'`,
       assertion: 'element.state',
     };
+  }
+  if (count !== undefined && sdkPredates(session.sdkVersion, SPLIT_OWNER_SINCE)) {
+    const reason =
+      `the page's SDK is ${String(session.sdkVersion)}, and a text count needs ${SPLIT_OWNER_SINCE} or ` +
+      'newer: an older page reports one match for a phrase split across child elements, however ' +
+      `many copies it shows. Update the page's @reticlehq packages to ${SPLIT_OWNER_SINCE} or newer`;
+    return { pass: false, failureReason: reason, inconclusive: reason };
   }
   // Fields the browser's locator would have DROPPED, enforced back here — see residualQueryChecks.
   // Checked before the round-trip when nothing can enforce them: a predicate that cannot be evaluated
@@ -500,6 +539,18 @@ export async function evalElement(
       assertion: 'element.present',
       evidence: { scopeMissing: true },
     };
+  }
+  // A count that holds goes on to the presence checks below, so a matched copy that is covered or
+  // unreadable is still not a pass.
+  if (count !== undefined && true === match.splitOwner) {
+    const reason =
+      `no element's own text holds ${subject}: the phrase is split across child elements, and the ` +
+      `page reports one match for every such copy, so ${String(count)} copies cannot be counted. ` +
+      'Count a part of the phrase that sits whole in one element';
+    return { pass: false, failureReason: reason, inconclusive: reason };
+  }
+  if (count !== undefined && match.count !== count) {
+    return countMiss(match, count, subject);
   }
   const announced = substantiveMatches(query, match.elements);
   if (match.matched && (announced.length > 0 || 0 === match.elements.length)) {

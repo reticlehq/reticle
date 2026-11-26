@@ -96,6 +96,19 @@ describe('a check in words, when the agent gave none', () => {
     );
   });
 
+  // #2291: `count: 0` is an absence, and a count says how many copies it wanted.
+  it('words a text count, and reads count 0 as the absence it is', () => {
+    const counted = (count: number): Predicate => ({
+      kind: PredicateKind.TEXT,
+      contains: 'Answer',
+      count,
+    });
+    expect(failureSentence(counted(2))).toBe('The text "Answer" did not appear exactly 2 times');
+    expect(expectSentence(counted(1))).toBe('The text "Answer" appears exactly once');
+    expect(failureSentence(counted(0))).toBe('The text "Answer" appeared, and it should not have');
+    expect(expectSentence(counted(0))).toBe('The text "Answer" does not appear');
+  });
+
   it('names the one part of a conjunction that failed', () => {
     const both: Predicate = {
       kind: PredicateKind.ALL_OF,

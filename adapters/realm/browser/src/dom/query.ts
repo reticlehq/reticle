@@ -418,6 +418,8 @@ export function matchQuery(
     ...(fullText ? { fullText: true as const } : {}),
     ...(scopeMissing ? { scopeMissing: true } : {}),
     ...(found.scopeMatches > 1 ? { scopeMatches: found.scopeMatches } : {}),
+    // One owner stands for every split copy, so `count` is not a number of copies here.
+    ...(owner === undefined ? {} : { splitOwner: true as const }),
     ...(covered === undefined ? {} : { coveredBy: covered }),
     ...(unreadable === undefined ? {} : { unreadable }),
     // On a MISS, carry the same diagnosis `runQuery` has always returned. MATCH is the command every

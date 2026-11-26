@@ -445,16 +445,19 @@ async function evaluatePredicateRaw(
       // `scope` passes straight through: the text predicate has always been an element query with
       // only `text` filled in, so scoping it needs the field, not a second code path.
       const query = textPredicateQuery(predicate, session.sdkVersion);
+      // `count: 0` is the absence, and takes the absence path with everything it already handles.
+      const none = 0 === predicate.count;
       const found = await evalElement(
         session,
         query,
         true === predicate.visible ? ElementState.VISIBLE : undefined,
-        predicate.absent ?? false,
+        (predicate.absent ?? false) || none,
         diagnose,
         // A property is judged on the whole text, for an absence too: there only a match that
         // satisfies it fails the check, and the matches come back re-bounded.
         undefined !== predicate.satisfies,
         true === predicate.absent ? predicate.satisfies : undefined,
+        none ? undefined : predicate.count,
       );
       // An absence judged its property above, on each match.
       if (undefined === predicate.satisfies || true === predicate.absent) {
@@ -657,10 +660,25 @@ function assertsExactCount(predicate: Predicate): boolean {
   // leaves the store in the right shape and a presence check green on both. Reading `net` alone
   // meant a signal count resolved on its first match, so `count: 1` silently meant "at least 1" on
   // the one channel able to see the bug. `evalSignal` counts correctly; the wait stopped early.
+  // `text` too (#2291): a second copy of a heading can land a commit after the first, and `count: 1`
+  // read once would mean "at least 1" there as well.
   return (
-    (PredicateKind.NET === predicate.kind || PredicateKind.SIGNAL === predicate.kind) &&
+    (PredicateKind.NET === predicate.kind ||
+      PredicateKind.SIGNAL === predicate.kind ||
+      PredicateKind.TEXT === predicate.kind) &&
     predicate.count !== undefined
   );
+}
+
+/** A text `count` of one or more anywhere in the predicate: a number of copies that can go down. */
+function countsPageCopies(predicate: Predicate): boolean {
+  if (PredicateKind.ALL_OF === predicate.kind || PredicateKind.ANY_OF === predicate.kind) {
+    return predicate.predicates.some(countsPageCopies);
+  }
+  if (PredicateKind.NOT === predicate.kind) {
+    return countsPageCopies(predicate.predicate);
+  }
+  return PredicateKind.TEXT === predicate.kind && (predicate.count ?? 0) > 0;
 }
 
 /**
@@ -814,7 +832,16 @@ export function waitForPredicate(
           confirming = true;
           const confirm = (): void => {
             void evaluatePredicate(reader, predicate, since, true, baselines)
-              .then(finish)
+              .then((c) => {
+                // Copies on a page come and go, so a text count read once off by one (a re-render
+                // between two states) goes back to polling. A window of events only grows, which is
+                // why a failing confirm on `net` or `signal` is an over-count and already decided.
+                if (!c.pass && true !== c.decided && countsPageCopies(predicate)) {
+                  confirming = false;
+                  return;
+                }
+                finish(c);
+              })
               .catch((error: unknown) => {
                 finish(unansweredRead(error));
               });

@@ -393,6 +393,23 @@ describe('query empty hint', () => {
     expect(r.hint?.splitText).toBeUndefined();
   });
 
+  // #2291: a text `count` reads `count`, and the one-owner match stands for every split copy.
+  it('says MATCH answered with the one split owner, whose count is not a number of copies', () => {
+    render(
+      '<div><span>Total:</span><span> 5</span></div><div><span>Total:</span><span> 5</span></div>',
+    );
+    const split = matchQuery({ text: 'Total: 5' });
+    expect(split.count).toBe(1);
+    expect(split.splitOwner).toBe(true);
+  });
+
+  it('leaves splitOwner off when elements hold the text themselves', () => {
+    render('<h2>Answer</h2><h2>Answer</h2>');
+    const own = matchQuery({ text: 'Answer' });
+    expect(own.count).toBe(2);
+    expect(own.splitOwner).toBeUndefined();
+  });
+
   it('reflects location in route', () => {
     history.pushState({}, '', '/cart?x=1');
     const r = runQuery({ role: 'button', name: 'nope' });

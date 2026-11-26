@@ -40,6 +40,11 @@ function elementNoun(query: ElementQuery): string {
   return `an element matching ${JSON.stringify(query)}`;
 }
 
+/** `once`, `2 times`: how many copies a text `count` asks for. */
+function timesOf(count: number): string {
+  return 1 === count ? 'once' : `${String(count)} times`;
+}
+
 /** What a claim is about, as a noun: "a PATCH request to /assignee", 'the text "Saved"'. */
 function noun(predicate: Predicate): string {
   switch (predicate.kind) {
@@ -93,9 +98,12 @@ function missed(predicate: Predicate, assertion?: string): string {
         madeWithout(predicate, assertion) ?? `No ${noun(predicate).slice('a '.length)} was made`
       );
     case PredicateKind.TEXT:
-      return true === predicate.absent
-        ? `${capital(noun(predicate))} appeared${SHOULD_NOT}`
-        : `${capital(noun(predicate))} never appeared`;
+      if (true === predicate.absent || 0 === predicate.count) {
+        return `${capital(noun(predicate))} appeared${SHOULD_NOT}`;
+      }
+      return predicate.count === undefined
+        ? `${capital(noun(predicate))} never appeared`
+        : `${capital(noun(predicate))} did not appear exactly ${timesOf(predicate.count)}`;
     case PredicateKind.SIGNAL:
       return predicate.name === undefined
         ? 'The app reported no signal'
@@ -206,7 +214,12 @@ export function expectSentence(predicate: Predicate): string {
     case PredicateKind.NET:
       return `${capital(noun(predicate))} is made`;
     case PredicateKind.TEXT:
-      return `${capital(noun(predicate))} ${true === predicate.absent ? 'does not appear' : 'appears'}`;
+      if (true === predicate.absent || 0 === predicate.count) {
+        return `${capital(noun(predicate))} does not appear`;
+      }
+      return predicate.count === undefined
+        ? `${capital(noun(predicate))} appears`
+        : `${capital(noun(predicate))} appears exactly ${timesOf(predicate.count)}`;
     case PredicateKind.SIGNAL:
       return predicate.name === undefined
         ? 'The app reports a signal'

@@ -89,6 +89,9 @@ function relax(predicate: Predicate, money: boolean): Predicate {
     // An absent count stays exact: made word-level, it says no count is on the page, and a page
     // that shows another count fails it.
     true !== predicate.absent &&
+    // A counted text stays exact too: `satisfies` cannot sit beside `count`, and copies of the
+    // word-level form are not the copies that were counted.
+    predicate.count === undefined &&
     predicate.contains !== undefined &&
     HAS_NUMBER.test(predicate.contains)
   ) {
