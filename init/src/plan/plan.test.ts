@@ -584,7 +584,7 @@ describe('buildPlan — install', () => {
     expect(s.status).toBe(StepStatus.APPLY);
     expect(s.exec?.command).toBe('pnpm');
     // Vite (the default): the React kit + the Vite build plugin — never the retired core umbrella.
-    expect(s.exec?.args).toEqual(['add', '-D', '@reticlehq/react', '@reticlehq/vite-plugin']);
+    expect(s.exec?.args).toEqual(['add', '-D', '-E', '@reticlehq/react', '@reticlehq/vite-plugin']);
   });
 
   it('installs the kit + the framework build plugin, never the core umbrella', () => {
@@ -603,12 +603,14 @@ describe('buildPlan — install', () => {
     expect(step(vite, 'Install dependencies').exec?.args).toEqual([
       'add',
       '-D',
+      '-E',
       '@reticlehq/react',
       '@reticlehq/vite-plugin',
     ]);
     expect(step(next, 'Install dependencies').exec?.args).toEqual([
       'add',
       '-D',
+      '-E',
       '@reticlehq/react',
       '@reticlehq/next',
     ]);

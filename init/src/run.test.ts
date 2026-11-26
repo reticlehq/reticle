@@ -738,8 +738,8 @@ describe('runInit', () => {
     expect(call?.args.slice(0, 2)).toEqual(['add', '-D']);
     // Pinned: a stale registry cache once handed pnpm an older release while npm took the current
     // one in the next project, and a version-skewed SDK against a newer daemon is the -32000 path.
-    expect(call?.args[2]).toMatch(/^@reticlehq\/react@\d+\.\d+\.\d+/);
-    expect(call?.args[3]).toMatch(/^@reticlehq\/vite-plugin@\d+\.\d+\.\d+/);
+    expect(call?.args[3]).toMatch(/^@reticlehq\/react@\d+\.\d+\.\d+/);
+    expect(call?.args[4]).toMatch(/^@reticlehq\/vite-plugin@\d+\.\d+\.\d+/);
   });
 
   it('prints the install progress before the package manager runs and reports when it ends', () => {

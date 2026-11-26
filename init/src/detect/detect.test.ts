@@ -150,17 +150,17 @@ describe('detect package manager', () => {
 describe('installCommand', () => {
   it('renders the dev-install command per manager', () => {
     expect(installCommand(PackageManager.PNPM, '@reticlehq/react')).toBe(
-      'pnpm add -D @reticlehq/react',
+      'pnpm add -D -E @reticlehq/react',
     );
     expect(installCommand(PackageManager.NPM, '@reticlehq/react')).toBe(
-      'npm i -D @reticlehq/react',
+      'npm i -D -E @reticlehq/react',
     );
   });
 
   it('installs multiple packages in one command (the kit + its build plugin)', () => {
     expect(
       installCommand(PackageManager.PNPM, ['@reticlehq/react', '@reticlehq/vite-plugin']),
-    ).toBe('pnpm add -D @reticlehq/react @reticlehq/vite-plugin');
+    ).toBe('pnpm add -D -E @reticlehq/react @reticlehq/vite-plugin');
   });
 });
 
@@ -344,7 +344,7 @@ describe('the dependency install is quiet about things that are not ours', () =>
     // The plan shows this string and a user retypes it; teaching them our noise-suppression flags
     // would be teaching them our problem.
     expect(installCommand(PackageManager.NPM, '@reticlehq/react')).toBe(
-      'npm i -D @reticlehq/react',
+      'npm i -D -E @reticlehq/react',
     );
   });
 
@@ -356,6 +356,16 @@ describe('the dependency install is quiet about things that are not ours', () =>
       expect(args).not.toContain('--no-audit');
     }
   });
+});
+
+describe('dependency installs save exact SDK versions', () => {
+  it.each([PackageManager.NPM, PackageManager.PNPM, PackageManager.YARN, PackageManager.BUN])(
+    '%s receives the exact-save flag',
+    (pm) => {
+      const { args } = installCommandParts(pm, '@reticlehq/react');
+      expect(args).toContain('-E');
+    },
+  );
 });
 
 describe('customReconciler', () => {
