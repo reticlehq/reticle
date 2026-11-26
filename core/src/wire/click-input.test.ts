@@ -73,6 +73,19 @@ describe('actPointProblem', () => {
     expect(actPointProblem(ActionType.CLICK, { point: { x: 1, y: 2 } })).toMatch(/desktop session/);
   });
 
+  // The server ran the page's check for every session, so a desktop session could not minimize
+  // a window or click a point of a picture: "a page cannot move, resize, minimize or zoom its own
+  // window". An agent then pressed the minimize button, which did nothing, and said "done".
+  it('accepts, for a desktop session, the window and the points of a picture', () => {
+    expect(actPointProblem(ActionType.WINDOW, {}, true)).toBeUndefined();
+    expect(actPointProblem(ActionType.CLICK, { point: { x: 1, y: 2 } }, true)).toBeUndefined();
+    expect(
+      actPointProblem(ActionType.DRAG, { toPoint: { x: 1, y: 2 }, path: [] }, true),
+    ).toBeUndefined();
+    // The checks of a fraction stay: they hold for a desktop session too.
+    expect(actPointProblem(ActionType.FILL, { at: { x: 0.5, y: 0.5 } }, true)).toContain('`at`');
+  });
+
   it('accepts a point on each pointer action, and a drag end point on a drag', () => {
     for (const action of [
       ActionType.CLICK,

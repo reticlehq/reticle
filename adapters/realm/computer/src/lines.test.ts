@@ -44,6 +44,18 @@ describe('writeLines', () => {
 
   // A new row of a sheet in Numbers has an empty cell, and that cell is where a person types.
   // With no name it had no ref, so no agent could click it.
+  // The value of a text area kept its words and lost its lines: each line break was a space. An
+  // agent filled the text back on one line, saved, and the file lost every line break.
+  it('shows the line breaks of a value, on one line of the tree', () => {
+    const area = node(UiRole.WINDOW, 'Notes', {
+      children: [node(UiRole.TEXTBOX, 'Body', { value: 'first line\nsecond line' })],
+    });
+    expect(writeLines(area, new RefTable()).split('\n')).toEqual([
+      '- window "Notes" (ref=e1)',
+      '  - textbox "Body" (ref=e2) [value="first line\\nsecond line"]',
+    ]);
+  });
+
   it('gives a ref to an empty cell', () => {
     const sheet = node(UiRole.WINDOW, 'Costs', {
       children: [

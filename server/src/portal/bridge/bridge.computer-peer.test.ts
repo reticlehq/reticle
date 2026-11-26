@@ -150,6 +150,25 @@ describe('a computer peer on the bridge', () => {
     expect(page.tree).toContain('- button "Save" (ref=e2)');
   });
 
+  // The server ran the page's check for every session: a desktop session could not minimize its
+  // window or click a point of a picture. An agent pressed the minimize button instead, which did
+  // nothing, and said "done". The realm answers these; the server must not refuse them first.
+  it('passes the window action and the points of a picture to the application', async () => {
+    const said = async (args: Record<string, unknown>): Promise<string> => {
+      try {
+        return JSON.stringify(await callTool(deps, 'reticle_act', args));
+      } catch (error) {
+        return String(error);
+      }
+    };
+    const window = await said({ ref: 'e1', action: 'window', args: { arrange: 'minimize' } });
+    expect(window).not.toMatch(/a page cannot/);
+    const point = await said({ ref: 'e1', action: 'click', args: { point: { x: 5, y: 5 } } });
+    expect(point).not.toMatch(/is for a desktop session/);
+    // The application is shared by the tests that follow.
+    app.pressed.length = 0;
+  });
+
   it('proves an action by what the application showed after it', async () => {
     const result = (await callTool(deps, 'reticle_act_and_wait', {
       ref: 'e2',

@@ -91,9 +91,12 @@ export function isAddressable(node: UiNode): boolean {
   return INTERACTIVE.has(node.role) || node.name.length > 0;
 }
 
-/** A string in double quotes, with the escapes the tree parsers read back. */
+/**
+ * A string in double quotes, with the escapes the tree parsers read back. A line break is written
+ * as \n: the element stays on one line of the tree, and the agent still sees each line of a text.
+ */
 export function quoted(text: string): string {
-  return `"${text.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('\n', ' ')}"`;
+  return `"${text.replaceAll('\\', '\\\\').replaceAll('"', '\\"').replaceAll('\r', '').replaceAll('\n', '\\n')}"`;
 }
 
 /** `button "Save"`: the role, and the name when there is one. */

@@ -131,11 +131,18 @@ export function pointInBox(
 /**
  * Why `at` or `to` cannot be honoured on this action, or undefined when it can or is absent. A point
  * that is not two numbers is refused: an action at the centre is not the action that was asked for.
+ *
+ * `desktop` is true for a desktop session (a peer realm such as Reticle's computer). It takes the
+ * window action and the points of a picture, which a page refuses.
  */
-export function actPointProblem(action: string, args: Record<string, unknown>): string | undefined {
-  const desktop = desktopArgProblem(args, action);
-  if (desktop !== undefined) {
-    return desktop;
+export function actPointProblem(
+  action: string,
+  args: Record<string, unknown>,
+  desktop = false,
+): string | undefined {
+  const pageOnly = desktop ? undefined : desktopArgProblem(args, action);
+  if (pageOnly !== undefined) {
+    return pageOnly;
   }
   for (const key of [ACT_POINT_ARG, DRAG_TO_POINT_ARG] as const) {
     if (args[key] === undefined) {
