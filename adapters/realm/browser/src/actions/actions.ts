@@ -1,8 +1,6 @@
 import {
   ACT_POINT_ARG,
-  desktopArgProblem,
   DRAG_TO_REF_ARG,
-  WINDOW_NEEDS_DESKTOP_MSG,
   ActionType,
   ActionWarning,
   actPointProblem,
@@ -680,8 +678,6 @@ async function dispatchOther(
        * routes there before this ever runs.
        */
       throw new Error(ZOOM_NEEDS_REAL_BROWSER_MSG);
-    case ActionType.WINDOW:
-      throw new Error(WINDOW_NEEDS_DESKTOP_MSG);
     case ActionType.SCROLL: {
       // Either axis, either direction. `dy: -600` scrolls BACK up, `dx` moves a wide table sideways.
       // Both were unreachable: the only scroll stepped down, so anything that scrolled past was gone.
@@ -770,7 +766,7 @@ export async function executeAction(
   args: Record<string, unknown> = {},
 ): Promise<ActionResult> {
   const named = 0 < ref.length;
-  const pointProblem = desktopArgProblem(args) ?? actPointProblem(action, args);
+  const pointProblem = actPointProblem(action, args);
   if (pointProblem !== undefined) {
     throw new Error(`cannot ${action}: ${pointProblem}`);
   }

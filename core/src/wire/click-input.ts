@@ -1,4 +1,5 @@
 import { ActionType } from './constants/constants.js';
+import { WINDOW_NEEDS_DESKTOP_MSG } from './constants/window-arrangement.js';
 import { pressModifiersFromArgs } from './global-press.js';
 
 /** The pointer buttons a click can use, as the agent spells them in `args.button`. */
@@ -132,6 +133,10 @@ export function pointInBox(
  * that is not two numbers is refused: an action at the centre is not the action that was asked for.
  */
 export function actPointProblem(action: string, args: Record<string, unknown>): string | undefined {
+  const desktop = desktopArgProblem(args, action);
+  if (desktop !== undefined) {
+    return desktop;
+  }
   for (const key of [ACT_POINT_ARG, DRAG_TO_POINT_ARG] as const) {
     if (args[key] === undefined) {
       continue;
@@ -150,11 +155,17 @@ export function actPointProblem(action: string, args: Record<string, unknown>): 
 }
 
 /**
- * Why a page refuses the act, when it was given an argument that only a desktop realm takes.
- * Undefined when there is none. A page that ignored `point` would act at the centre of the element
- * and report the action that was asked for.
+ * Why a page refuses the act, when it is an action or has an argument that only a desktop realm
+ * takes. Undefined when there is none. A page that ignored `point` would act at the centre of the
+ * element and report the action that was asked for.
  */
-export function desktopArgProblem(args: Record<string, unknown>): string | undefined {
+export function desktopArgProblem(
+  args: Record<string, unknown>,
+  action?: string,
+): string | undefined {
+  if (ActionType.WINDOW === action) {
+    return WINDOW_NEEDS_DESKTOP_MSG;
+  }
   const key = DESKTOP_ONLY_ARGS.find((name) => args[name] !== undefined);
   return key === undefined
     ? undefined

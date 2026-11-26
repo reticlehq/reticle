@@ -66,6 +66,13 @@ describe('pointInBox', () => {
 });
 
 describe('actPointProblem', () => {
+  // A page has no window to arrange and no picture of the screen. It refused both in two places,
+  // and the browser's action file passed its line cap with the second one.
+  it('refuses, for a page, what only a desktop session takes', () => {
+    expect(actPointProblem(ActionType.WINDOW, {})).toMatch(/desktop/);
+    expect(actPointProblem(ActionType.CLICK, { point: { x: 1, y: 2 } })).toMatch(/desktop session/);
+  });
+
   it('accepts a point on each pointer action, and a drag end point on a drag', () => {
     for (const action of [
       ActionType.CLICK,
