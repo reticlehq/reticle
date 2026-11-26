@@ -34,6 +34,18 @@ export interface Replayability {
   why?: string[];
   /** A step sends a write request, so a replay changes real data. */
   writes?: true;
+  /**
+   * Each step whose text check save made word-level: the words are checked, the number is not, so
+   * a replay passes with any count (#2469). Declared because the transform drops data (rule 11).
+   */
+  relaxed?: string[];
+}
+
+/** Whether a replay of this flow means exactly what its drive proved: nothing to say about it. */
+export function replaysAsSaved(report: Replayability): boolean {
+  return (
+    Replayable.YES === report.status && report.writes === undefined && report.relaxed === undefined
+  );
 }
 
 const NUMBER = /\d[\d,.]*/g;
@@ -110,6 +122,18 @@ function writesNamed(predicate: Predicate | undefined): string[] {
   );
 }
 
+/** The text checks whose number save made "any number", as the words they kept. */
+function anyNumber(predicate: Predicate | undefined): string[] {
+  return leaves(predicate).flatMap((leaf) =>
+    PredicateKind.TEXT === leaf.kind &&
+    MATCHES_PATTERN === leaf.satisfies?.property &&
+    'string' === typeof leaf.satisfies.pattern &&
+    leaf.satisfies.pattern.includes(NUMBER_PATTERN)
+      ? [leaf.satisfies.pattern.split(NUMBER_PATTERN).join('N').replace(/\\(.)/g, '$1')]
+      : [],
+  );
+}
+
 /** The live data an expect names: a number in text, in an element's name or text, or in state. */
 function liveData(predicate: Predicate | undefined): string[] {
   return leaves(predicate).flatMap((leaf): string[] => {
@@ -170,6 +194,7 @@ export function replayability(flow: FlowFile): Replayability {
   const blocked: string[] = [];
   const bound: string[] = [];
   const writes: string[] = [];
+  const relaxed: string[] = [];
   if (flow.startPath === undefined || '' === flow.startPath) {
     blocked.push('no starting page was recorded, so a replay starts wherever the tab is');
   }
@@ -203,6 +228,11 @@ export function replayability(flow: FlowFile): Replayability {
       bound.push(`step ${at} acts on a control named '${anchor.name}', a live count`);
     }
     for (const data of liveData(step.expect)) bound.push(`step ${at} expects '${data}', live data`);
+    for (const words of anyNumber(step.expect)) {
+      relaxed.push(
+        `step ${at} checks '${words}' with any number N, so a replay passes after the count changes; to check the number, save the expect with satisfies { property: "matchesPattern", pattern } that names it`,
+      );
+    }
     for (const write of own ? writesNamed(step.expect) : [])
       writes.push(`step ${at} sends ${write}`);
     if (own && true === step.writes && 0 === writesNamed(step.expect).length) {
@@ -216,6 +246,7 @@ export function replayability(flow: FlowFile): Replayability {
     status,
     ...(0 === why.length ? {} : { why }),
     ...(0 === writes.length ? {} : { writes: true }),
+    ...(0 === relaxed.length ? {} : { relaxed }),
   };
 }
 
@@ -230,5 +261,5 @@ export const REPLAYABILITY_OUTPUT = z
   .array(z.unknown())
   .optional()
   .describe(
-    'Each flow that cannot replay as saved: not_replayable (no starting page, an anchor no replay can find or several elements share) or data_bound (live data in an expect), and writes when a step sends a write request. A drift on such a flow is the flow, not the app.',
+    'Each flow that cannot replay as saved: not_replayable (no starting page, an anchor no replay can find or several elements share) or data_bound (live data in an expect), writes when a step sends a write request, and relaxed when a text check accepts any number. A drift on such a flow is the flow, not the app; a pass on a relaxed step did not check its number.',
   );

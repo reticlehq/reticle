@@ -67,7 +67,7 @@ import { describeFlowZodFailure, parseFlowFileText } from './flow-expect-grammar
 import {
   readyForReplay,
   replayability,
-  Replayable,
+  replaysAsSaved,
   type Replayability,
 } from './flow-replayable.js';
 import type { Clock } from '@/machine/clock.js';
@@ -570,9 +570,7 @@ export class FlowStore {
       degraded: flow.steps.filter((s) => true === s.degraded).length,
       empty: 0 === flow.steps.length,
       ...(gap === undefined ? {} : { intentGap: gap }),
-      ...(Replayable.YES === replay.status && replay.writes === undefined
-        ? {}
-        : { replayability: replay }),
+      ...(replaysAsSaved(replay) ? {} : { replayability: replay }),
     };
   }
 
