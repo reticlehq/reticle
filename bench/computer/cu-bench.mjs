@@ -121,11 +121,15 @@ async function finderAt(dir) {
 }
 
 /** The first window of an application, as System Events gives it. Absent: it has no window. */
-function windowOf(app) {
+/**
+ * The window of the task by its name, as System Events gives it. Not "window 1": TextEdit kept
+ * windows of earlier runs, and a minimized one of them passed the minimize task of another arm.
+ */
+function windowOf(app, name) {
   try {
     const [x, y, width, height, minimized] = sh('osascript', [
       '-e',
-      `tell application "System Events" to tell window 1 of process "${app}" to return position & size & {value of attribute "AXMinimized"}`,
+      `tell application "System Events" to tell (first window of process "${app}" whose name is "${name}") to return position & size & {value of attribute "AXMinimized"}`,
     ])
       .trim()
       .split(/,\s*/);
@@ -277,7 +281,7 @@ const TASKS = [
     },
     task: 'TextEdit has left.txt open. Put its window on the left half of the screen.',
     check: () => {
-      const w = windowOf('TextEdit');
+      const w = windowOf('TextEdit', 'left.txt');
       const screen = screenSize();
       return w !== undefined && w.x <= 8 && Math.abs(w.width - screen.width / 2) <= 16;
     },
@@ -292,7 +296,7 @@ const TASKS = [
       return f;
     },
     task: 'TextEdit has small.txt open. Minimize its window to the Dock.',
-    check: () => windowOf('TextEdit')?.minimized === true,
+    check: () => windowOf('TextEdit', 'small.txt')?.minimized === true,
   },
   // Harder: several applications in one task. The checker reads the file and Calculator's display.
   {
