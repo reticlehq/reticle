@@ -113,12 +113,18 @@ export function describePropertyAssertion(assertion: PropertyAssertion): string 
     case 'unchanged':
       return 'that is unchanged';
     case 'increased':
-      return assertion.by === undefined
-        ? 'that increased'
+      if (assertion.by === undefined) {
+        return 'that increased';
+      }
+      return assertion.by.tolerance !== undefined
+        ? `increased by ${assertion.by.op} ${String(assertion.by.value)} (±${String(assertion.by.tolerance)})`
         : `increased by ${assertion.by.op} ${String(assertion.by.value)}`;
     case 'decreased':
-      return assertion.by === undefined
-        ? 'that decreased'
+      if (assertion.by === undefined) {
+        return 'that decreased';
+      }
+      return assertion.by.tolerance !== undefined
+        ? `decreased by ${assertion.by.op} ${String(assertion.by.value)} (±${String(assertion.by.tolerance)})`
         : `decreased by ${assertion.by.op} ${String(assertion.by.value)}`;
   }
 }
