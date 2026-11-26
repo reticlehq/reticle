@@ -43,6 +43,29 @@ describe('reticle_attach_tab', () => {
     expect(minted).toEqual(['https://settings.aws.com']);
   });
 
+  // Dia keeps each profile in its own browser context. The grant reached only the default one, so
+  // the Slack tab of another profile held the reader, waited on a permission prompt, and the
+  // attach said only "no session joined".
+  it('says that the tab waits on the local network prompt when the grant did not reach it', async () => {
+    const deps = depsWith([], []);
+    const answer = await runAttachTab(
+      deps,
+      { match: 'app.slack.com', waitMs: 300 },
+      {
+        bundle: 'READER',
+        attach: () =>
+          Promise.resolve({
+            url: 'https://app.slack.com/',
+            title: 'Slack',
+            localNetwork: 'prompt',
+          }),
+      },
+    );
+    expect(answer['ok']).toBe(false);
+    expect(String(answer['error'])).toContain('local network');
+    expect(String(answer['error'])).toContain('profile to the front');
+  });
+
   it('says what to do when no daemon pass can be made', async () => {
     const deps = { bridgePort: 14500, sessions: { all: () => [] } } as unknown as ToolDeps;
     const answer = await runAttachTab(deps, { match: 'x' }, {});

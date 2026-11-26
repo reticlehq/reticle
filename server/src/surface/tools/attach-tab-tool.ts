@@ -9,7 +9,12 @@
 import { bridgeWsUrl, ReticleEnv, ReticleTool } from '@reticlehq/core';
 import { z } from 'zod';
 
-import { attachTab, detachTabs, type AttachTabOptions } from '@/portal/pool/attach-tab.js';
+import {
+  attachTab,
+  detachTabs,
+  type AttachedTab,
+  type AttachTabOptions,
+} from '@/portal/pool/attach-tab.js';
 import { readReaderBundle, zeroInstallScript } from '@/portal/pool/zero-install.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
 
@@ -20,7 +25,7 @@ const POLL_MS = 250;
 
 /** What the attach uses. Tests give their own. */
 export interface AttachIo {
-  attach?: (opts: AttachTabOptions) => Promise<{ url: string; title: string }>;
+  attach?: (opts: AttachTabOptions) => Promise<AttachedTab>;
   bundle?: string;
 }
 
@@ -41,6 +46,9 @@ export async function runAttachTab(
     // The end of a task: every joined tab has its page security again, and the connection closes.
     return { ok: true, detached: await detachTabs(cdpUrl) };
   }
+  if ('' === match) {
+    return { ok: false, error: 'give `match`: part of the address of the one tab to join.' };
+  }
   const nonces = deps.nonces;
   const port = deps.bridgePort;
   if (nonces === undefined || port === undefined) {
@@ -60,7 +68,7 @@ export async function runAttachTab(
           token: nonces.mint({ origin: new URL(url).origin }).nonce,
         });
   const before = new Set(deps.sessions.all().map((s) => s.id));
-  let attached: { url: string; title: string };
+  let attached: AttachedTab;
   try {
     attached = await (io.attach ?? attachTab)({ cdpUrl, match, scriptFor });
   } catch (error) {
@@ -79,6 +87,12 @@ export async function runAttachTab(
     }
     await sleep(POLL_MS);
   }
+  if ('prompt' === attached.localNetwork) {
+    return {
+      ok: false,
+      error: `the tab "${attached.title}" has the reader, and the browser holds its connection to the daemon until a person allows local network access. The grant did not reach this tab: it is in a browser profile that is not in front. Bring that profile to the front and attach again, or press "Allow" on the browser's prompt.`,
+    };
+  }
   return {
     ok: false,
     error: `the tab "${attached.title}" was reloaded with the reader, and no session of ${origin} joined in ${String(waitMs)} ms. The page may block scripts that the debugging port adds.`,
@@ -90,7 +104,8 @@ export const ATTACH_TAB_TOOL: ToolDef = {
   description:
     "Join a tab that is open in the person's own browser, as a session: their mail, a cloud console, a tool they are signed in to. The browser must run with --remote-debugging-port (default http://127.0.0.1:9222, or RETICLE_CDP_URL). `match` is part of the address of the one tab. The tab is reloaded once, and its page security is set aside for this connection only. A password vault or a sign-in page is never joined. Answers with the sessionId to give every later call. Give { detach: true } at the end of the task.",
   inputSchema: {
-    match: z.string().min(1).describe('Part of the address of the one tab to join.'),
+    // Optional so that `{ detach: true }` alone passes: a required `match` refused the detach.
+    match: z.string().min(1).optional().describe('Part of the address of the one tab to join.'),
     cdpUrl: z.string().optional().describe('The debugging address of the browser.'),
     waitMs: z.number().int().positive().max(60_000).optional(),
     detach: z

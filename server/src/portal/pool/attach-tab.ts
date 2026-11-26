@@ -38,6 +38,13 @@ export interface AttachableBrowser {
   close?(): Promise<void>;
 }
 
+/** A joined tab. `localNetwork`: the tab's Local Network Access state, when it could be read. */
+export interface AttachedTab {
+  url: string;
+  title: string;
+  localNetwork?: string;
+}
+
 type CdpSession = { send(method: string, params?: object): Promise<unknown> };
 
 export interface AttachTabOptions {
@@ -139,7 +146,7 @@ export async function detachTabs(cdpUrl: string): Promise<number> {
 }
 
 /** Join the tab, and say its address and title. Throws when no one tab fits or nothing can run. */
-export async function attachTab(opts: AttachTabOptions): Promise<{ url: string; title: string }> {
+export async function attachTab(opts: AttachTabOptions): Promise<AttachedTab> {
   let browser = held.get(opts.cdpUrl);
   if (browser === undefined || opts.connect !== undefined) {
     browser = (opts.connect ?? connectOverCdp)(opts.cdpUrl);
@@ -172,5 +179,18 @@ export async function attachTab(opts: AttachTabOptions): Promise<{ url: string; 
   }
   await page.reload({ waitUntil: 'domcontentloaded' });
   await injectReaderInto(page, opts.scriptFor(page.url()));
-  return { url: page.url(), title: await page.title() };
+  // Dia keeps each profile in its own browser context, and the grant reaches the default one only.
+  // A tab of another profile then waits on the browser's prompt: the caller must say so.
+  const state = await page
+    .evaluate(LOCAL_NETWORK_STATE_READ)
+    .catch(() => undefined)
+    .then((value) => ('string' === typeof value ? value : undefined));
+  return {
+    url: page.url(),
+    title: await page.title(),
+    ...(state === undefined ? {} : { localNetwork: state }),
+  };
 }
+
+/** Evaluated in the tab: the state of its Local Network Access permission. */
+const LOCAL_NETWORK_STATE_READ = `navigator.permissions.query({ name: '${LOCAL_NETWORK_ACCESS}' }).then((s) => s.state, () => undefined)`;

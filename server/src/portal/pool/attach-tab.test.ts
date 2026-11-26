@@ -88,6 +88,7 @@ describe('attach to a tab that is open in the person browser', () => {
       'reload',
       'init:reader for https://settings.aws.com/team',
       'now:reader for https://settings.aws.com/team',
+      expect.stringContaining('local-network-access'),
     ]);
   });
 

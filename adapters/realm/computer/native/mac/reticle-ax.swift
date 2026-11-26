@@ -694,6 +694,21 @@ func reach(_ target: AXUIElement, _ rect: CGRect) -> Reach {
       }
     }
     if passesThrough(top, to: target) { return .yes }
+    // The answer is the target's own window: no part of the window takes the hit at that point, so
+    // no part covers the target. Dia's profile sidebar answers so, and its profile rows were
+    // refused as "covered by the window". Another part of the window over the target is the answer
+    // of the hit test, so that refusal stays.
+    if let hitRole = values(top).flatMap({ text($0[0]) }), hitRole == "AXWindow" {
+      var up = target
+      for _ in 0..<80 {
+        var parent: AnyObject?
+        guard AXUIElementCopyAttributeValue(up, kAXParentAttribute as CFString, &parent) == .success,
+          let above = parent, CFGetTypeID(above) == AXUIElementGetTypeID()
+        else { break }
+        up = above as! AXUIElement
+        if CFEqual(up, top) { return .yes }
+      }
+    }
     let v = values(top)
     let role = v.flatMap { text($0[0]) } ?? "element"
     let name = v.flatMap { text($0[2]) ?? text($0[3]) } ?? ""
