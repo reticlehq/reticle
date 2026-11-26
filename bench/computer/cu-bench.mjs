@@ -430,7 +430,7 @@ const TASKS = [
 ];
 
 const SYSTEM =
-  'You operate a real Mac to do one task. Act only on the app the task names. When the task is finished, call the tool `done` with status "done" and a short answer. If the task cannot be done, call `done` with status "failed" and say why. Do not say "done" until you have seen that the task is done.';
+  'You operate a real Mac to do one task. Act only on the app the task names. When the task is finished, call the tool `done` with status "done" and a short answer. If the task cannot be done, call `done` with status "failed" and say why. Do not say "done" until you have seen that the task is done: check the result on the screen, and check a file on the disk with read_file.';
 
 // The same file tool for every arm, so that no arm sees the disk and another not. It reads only
 // below the folder of the bench.
@@ -505,7 +505,7 @@ const shotFactor = new Map();
 const CHECK_TOOL = {
   name: 'act_and_check',
   description:
-    'Do an action on an element by its ref, and prove its consequence in the same call. `until` names what must be true after it: { kind: "element", query: { text: "..." } or { role: "...", name: "..." }, state: "visible" | "hidden" | "checked" | "unchecked" }. The answer has `verified`: "yes" only when the application showed the consequence; "no" says what it showed instead. Use it for the step that ends the task, and for each step whose result you must know. A file on the disk is not on the screen: read it with read_file.',
+    'Do an action on an element by its ref, and prove its consequence in the same call. `until` names what must be true after it: { kind: "element", query: { text: "..." } or { role: "...", name: "..." }, state: "visible" | "hidden" | "checked" | "unchecked" }. The answer has `verified`: "yes" only when the application showed the consequence; "no" says what it showed instead.',
   input_schema: {
     type: 'object',
     properties: {
@@ -550,7 +550,15 @@ async function runReticleCall(sessionId, name, input) {
     shotFactor.set(sessionId, width / shown);
     const small = `${r.path}.jpg`;
     sh('sips', ['-s', 'format', 'jpeg', '--resampleWidth', String(shown), r.path, '--out', small]);
-    return { image: readFileSync(small).toString('base64') };
+    // The product's words of the picture, in the pixels of the picture the model sees.
+    const scaled = (r.texts ?? []).map(({ text, box }) => ({
+      text,
+      box: box.map((n) => Math.round(n / (width / shown))),
+    }));
+    return {
+      image: readFileSync(small).toString('base64'),
+      ...(scaled.length > 0 ? { words: scaled } : {}),
+    };
   }
   const args = { foreground: true, ...(input.args ?? {}) };
   const factor = shotFactor.get(sessionId) ?? 1;
@@ -866,6 +874,9 @@ async function runArm(arm, task, cua) {
           content = out.blocks;
         } else if ('object' === typeof out && out.image !== undefined) {
           content = [
+            ...(out.words === undefined
+              ? []
+              : [{ type: 'text', text: `Words in the picture: ${JSON.stringify(out.words)}` }]),
             {
               type: 'image',
               source: { type: 'base64', media_type: 'image/jpeg', data: out.image },
@@ -1084,7 +1095,13 @@ async function runOpenAI(arm, task, cua) {
         let blocks = 'object' === typeof out && out.blocks !== undefined ? out.blocks : undefined;
         if ('object' === typeof out && out.image !== undefined) {
           blocks = [
-            { type: 'text', text: 'The screenshot is below.' },
+            {
+              type: 'text',
+              text:
+                out.words === undefined
+                  ? 'The screenshot is below.'
+                  : `The screenshot is below. Words in it, with boxes {x,y,w,h} in its pixels: ${JSON.stringify(out.words)}`,
+            },
             {
               type: 'image',
               source: { type: 'base64', media_type: 'image/jpeg', data: out.image },
