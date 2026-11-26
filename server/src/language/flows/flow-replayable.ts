@@ -111,15 +111,68 @@ function leaves(predicate: Predicate | undefined): Predicate[] {
   return [predicate];
 }
 
-/** The write requests an expect names, as "METHOD url". */
+/** The write requests an expect names, as "METHOD url": the ones it asks for, and the ones it forbids. */
+interface NamedWrites {
+  sends: string[];
+  forbids: string[];
+}
+
+/**
+ * A request the expect forbids is not a write: `count: 0`, or a request under `not`. The two
+ * cancel, so `not` over `count: 0` asks for the request again.
+ */
+function namedWrites(predicate: Predicate | undefined, negated = false): NamedWrites {
+  const none: NamedWrites = { sends: [], forbids: [] };
+  if (predicate === undefined) {
+    return none;
+  }
+  if (PredicateKind.ALL_OF === predicate.kind || PredicateKind.ANY_OF === predicate.kind) {
+    return predicate.predicates
+      .map((p) => namedWrites(p, negated))
+      .reduce(
+        (all, one) => ({
+          sends: [...all.sends, ...one.sends],
+          forbids: [...all.forbids, ...one.forbids],
+        }),
+        none,
+      );
+  }
+  if (PredicateKind.NOT === predicate.kind) {
+    return namedWrites(predicate.predicate, !negated);
+  }
+  if (
+    PredicateKind.NET !== predicate.kind ||
+    predicate.method === undefined ||
+    !MUTATING_METHODS.includes(predicate.method.toUpperCase())
+  ) {
+    return none;
+  }
+  const named = `${predicate.method.toUpperCase()} ${predicate.urlContains ?? ''}`.trim();
+  if (negated === (0 !== predicate.count)) {
+    return { sends: [], forbids: [named] };
+  }
+  return { sends: [named], forbids: [] };
+}
+
+/** The write requests an expect asks for, as "METHOD url". */
 function writesNamed(predicate: Predicate | undefined): string[] {
-  return leaves(predicate).flatMap((leaf) =>
-    PredicateKind.NET === leaf.kind &&
-    leaf.method !== undefined &&
-    MUTATING_METHODS.includes(leaf.method.toUpperCase())
-      ? [`${leaf.method.toUpperCase()} ${leaf.urlContains ?? ''}`.trim()]
-      : [],
-  );
+  return namedWrites(predicate).sends;
+}
+
+/**
+ * Why a step marked `writes` whose expect names no write is a write.
+ *
+ * The recorder marks a step that sent a write request. Before #2497, save also marked a step whose
+ * expect only FORBIDS a write request, and the file keeps that mark. The two marks look the same, so
+ * the mark stays: a replay that sends real data is worse than a flow held back. The reason then names
+ * the forbidden request and says how to clear the mark.
+ */
+function markedWriteReason(at: string, expect: Predicate | undefined): string {
+  const forbids = namedWrites(expect).forbids;
+  if (0 === forbids.length) {
+    return `step ${at} sent a write request when it was recorded`;
+  }
+  return `step ${at} is marked as a write, but its expect forbids ${forbids.join(', ')}. An older version marked such a step. If the step sends no write request, remove "writes": true from the step in the flow file`;
 }
 
 /** The text checks whose number save made "any number", as the words they kept. */
@@ -236,7 +289,7 @@ export function replayability(flow: FlowFile): Replayability {
     for (const write of own ? writesNamed(step.expect) : [])
       writes.push(`step ${at} sends ${write}`);
     if (own && true === step.writes && 0 === writesNamed(step.expect).length) {
-      writes.push(`step ${at} sent a write request when it was recorded`);
+      writes.push(markedWriteReason(at, step.expect));
     }
   }
   const why = [...blocked, ...bound, ...writes];

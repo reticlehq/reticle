@@ -124,6 +124,44 @@ describe('a flow made ready to replay at save', () => {
     expect(report.why?.join(' ')).toMatch(/step 1\.1 sends PATCH \/v1\/issues\/1af0/);
   });
 
+  // A navigation flow checked that no POST went out. Its `count: 0` named a POST, so the flow
+  // was marked a write flow, and `skipWrites` held back a flow that writes nothing.
+  it('does not mark a step whose expect forbids a write request', () => {
+    const post = { kind: 'net', method: 'POST', urlContains: '/api' } as const;
+    const forbids = readyForReplay(
+      flowOf([
+        click('menu', { ...post, count: 0 }),
+        click('link', { kind: 'not', predicate: post }),
+        click('tab', {
+          kind: 'allOf',
+          predicates: [
+            { kind: 'route', pathname: '/issues' },
+            { kind: 'not', predicate: { kind: 'anyOf', predicates: [post] } },
+          ],
+        }),
+      ]),
+    );
+    expect(forbids.steps.map((step) => step.writes)).toEqual([undefined, undefined, undefined]);
+    expect(replayability(forbids)).toEqual({ status: Replayable.YES });
+  });
+
+  it('still marks a step whose expect asks for a write request, a negated absence too', () => {
+    const post = { kind: 'net', method: 'POST', urlContains: '/api' } as const;
+    const sends = readyForReplay(
+      flowOf([
+        click('save', { ...post, count: 1 }),
+        click('send', { kind: 'not', predicate: { ...post, count: 0 } }),
+        click('again', { kind: 'not', predicate: { kind: 'not', predicate: post } }),
+      ]),
+    );
+    expect(sends.steps.map((step) => step.writes)).toEqual([true, true, true]);
+    expect(replayability(sends).why).toEqual([
+      'step 1 sends POST /api',
+      'step 2 sends POST /api',
+      'step 3 sends POST /api',
+    ]);
+  });
+
   it('says why a flow cannot replay: no starting page, no anchor, a shared test id', () => {
     const report = replayability(
       flowOf(
@@ -200,6 +238,27 @@ describe('a certify run that must not change data', () => {
         { ...reads, name: 'reads' },
       ]),
     ).toEqual(['marks']);
+  });
+});
+
+// Before #2497, save marked a step `writes` when its expect only forbade a write request, and the
+// flow file keeps that mark. The recorder's own mark looks the same, so the mark stays and the flow
+// is still held back; the report must not claim the recording sent a write, and must say how to clear it.
+describe('a flow saved with a forbidden request marked as a write', () => {
+  const forbids = { kind: 'net', method: 'POST', urlContains: '/api', count: 0 } as const;
+  const saved = flowOf([{ ...click('menu', forbids), writes: true }], { name: 'nav' });
+
+  it('is still held back by skipWrites, and the report names the forbidden request', () => {
+    expect(writingFlows([saved])).toEqual(['nav']);
+    expect(replayability(readyForReplay(saved)).why).toEqual([
+      'step 1 is marked as a write, but its expect forbids POST /api. An older version marked such a step. If the step sends no write request, remove "writes": true from the step in the flow file',
+    ]);
+  });
+
+  it('runs once the mark is removed from the file', () => {
+    const cleared = flowOf([click('menu', forbids)], { name: 'nav' });
+    expect(writingFlows([cleared])).toEqual([]);
+    expect(replayability(readyForReplay(cleared))).toEqual({ status: Replayable.YES });
   });
 });
 
