@@ -17,7 +17,7 @@
 //
 //   node --env-file=../../.env bench/computer/cu-bench.mjs [arm] [taskId]
 //
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -402,6 +402,85 @@ function pixelsArm(sessionId) {
   };
 }
 
+// --- The cua-driver arm ---------------------------------------------------------------------
+// cua-driver (https://github.com/trycua/cua), an open-source Mac driver that also reads the
+// accessibility tree. The model gets cua-driver's own tools, with its own names, descriptions and
+// schemas, from its own MCP server, and each call goes to that server. Nothing of Reticle is in
+// this arm. Tools that change cua-driver's settings or its recorder are left out.
+const CUA_LEFT_OUT = new Set([
+  'set_config',
+  'set_recording',
+  'replay_trajectory',
+  'set_agent_cursor_enabled',
+  'set_agent_cursor_motion',
+  'set_agent_cursor_style',
+]);
+
+function cuaArm() {
+  const child = spawn('cua-driver', ['mcp'], { stdio: ['pipe', 'pipe', 'ignore'] });
+  const waiting = new Map();
+  let buffer = '';
+  let next = 0;
+  child.stdout.on('data', (chunk) => {
+    buffer += chunk;
+    for (let at = buffer.indexOf('\n'); at >= 0; at = buffer.indexOf('\n')) {
+      const line = buffer.slice(0, at);
+      buffer = buffer.slice(at + 1);
+      const message = line.trim() === '' ? undefined : JSON.parse(line);
+      waiting.get(message?.id)?.(message);
+      waiting.delete(message?.id);
+    }
+  });
+  const rpc = (method, params) =>
+    new Promise((resolve, reject) => {
+      next += 1;
+      const id = next;
+      waiting.set(id, (m) =>
+        m.error ? reject(new Error(JSON.stringify(m.error))) : resolve(m.result),
+      );
+      child.stdin.write(`${JSON.stringify({ jsonrpc: '2.0', id, method, params })}\n`);
+    });
+  const ready = (async () => {
+    await rpc('initialize', {
+      protocolVersion: '2025-06-18',
+      capabilities: {},
+      clientInfo: { name: 'cu-bench', version: '1' },
+    });
+    child.stdin.write(
+      `${JSON.stringify({ jsonrpc: '2.0', method: 'notifications/initialized' })}\n`,
+    );
+    const { tools } = await rpc('tools/list', {});
+    return tools
+      .filter((t) => !CUA_LEFT_OUT.has(t.name))
+      .map((t) => ({
+        name: t.name,
+        description: t.description ?? '',
+        input_schema: t.inputSchema,
+      }));
+  })();
+  return {
+    tools: () => ready,
+    close: () => child.kill(),
+    async run(name, input) {
+      const result = await rpc('tools/call', { name, arguments: input });
+      const content = (result.content ?? []).map((c) =>
+        'image' === c.type
+          ? { type: 'image', source: { type: 'base64', media_type: c.mimeType, data: c.data } }
+          : { type: 'text', text: String(c.text ?? JSON.stringify(c)).slice(0, 20000) },
+      );
+      if (true === result.isError) {
+        throw new Error(
+          content
+            .map((c) => c.text ?? '')
+            .join(' ')
+            .slice(0, 2000),
+        );
+      }
+      return { blocks: content.length > 0 ? content : [{ type: 'text', text: 'OK' }] };
+    },
+  };
+}
+
 // --- The loop --------------------------------------------------------------------------------
 async function messages(body) {
   const r = await fetch('https://api.anthropic.com/v1/messages', {
@@ -419,14 +498,28 @@ async function messages(body) {
   return r.json();
 }
 
+/** One arm on one task. The MCP server of cua-driver is closed also when the run throws. */
 async function runOne(arm, task) {
+  const cua = arm === 'cua-driver' ? cuaArm() : undefined;
+  try {
+    return await runArm(arm, task, cua);
+  } finally {
+    cua?.close();
+  }
+}
+
+async function runArm(arm, task, cua) {
   const target = await task.setup();
-  const { sessionId } = await post('join', { app: task.app });
-  const run =
-    arm === 'cu-toolset'
-      ? pixelsArm(sessionId)
-      : (name, input) => runReticleCall(sessionId, name, input);
-  const tools = arm === 'cu-toolset' ? [...PIXEL_TOOLS, DONE] : [...RETICLE_TOOLS, DONE];
+  const { sessionId } = cua === undefined ? await post('join', { app: task.app }) : {};
+  let run = (name, input) => runReticleCall(sessionId, name, input);
+  let tools = [...RETICLE_TOOLS, DONE];
+  if (arm === 'cu-toolset') {
+    run = pixelsArm(sessionId);
+    tools = [...PIXEL_TOOLS, DONE];
+  } else if (cua !== undefined) {
+    run = (name, input) => cua.run(name, input);
+    tools = [...(await cua.tools()), DONE];
+  }
   const convo = [{ role: 'user', content: `App: ${task.app}.\n\n${task.task}` }];
   const usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
   const started = Date.now();
@@ -479,15 +572,17 @@ async function runOne(arm, task) {
       calls += 1;
       try {
         const out = await run(use.name, use.input);
-        const content =
-          'object' === typeof out && out.image !== undefined
-            ? [
-                {
-                  type: 'image',
-                  source: { type: 'base64', media_type: 'image/jpeg', data: out.image },
-                },
-              ]
-            : String(out);
+        let content = String(out);
+        if ('object' === typeof out && out.blocks !== undefined) {
+          content = out.blocks;
+        } else if ('object' === typeof out && out.image !== undefined) {
+          content = [
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: 'image/jpeg', data: out.image },
+            },
+          ];
+        }
         results.push({ type: 'tool_result', tool_use_id: use.id, ...echo, content });
       } catch (error) {
         errors += 1;
@@ -527,7 +622,8 @@ async function runOne(arm, task) {
 }
 
 const [armArg, taskArg] = process.argv.slice(2);
-const arms = armArg === undefined || armArg === 'all' ? ['reticle', 'cu-toolset'] : [armArg];
+const arms =
+  armArg === undefined || armArg === 'all' ? ['reticle', 'cu-toolset', 'cua-driver'] : [armArg];
 const tasks = TASKS.filter((t) => taskArg === undefined || t.id === taskArg);
 mkdirSync(DIR, { recursive: true });
 chmodSync(DIR, 0o755);
@@ -536,7 +632,7 @@ for (const task of tasks) {
     try {
       const row = await runOne(arm, task);
       console.log(
-        `${row.arm.padEnd(8)} ${row.task.padEnd(24)} ${row.passed ? 'PASS' : 'FAIL'} ${row.status} turns=${String(row.turns)} calls=${String(row.calls)} ms=${String(row.ms)}`,
+        `${row.arm.padEnd(10)} ${row.task.padEnd(24)} ${row.passed ? 'PASS' : 'FAIL'} ${row.status} turns=${String(row.turns)} calls=${String(row.calls)} ms=${String(row.ms)}`,
       );
     } catch (error) {
       console.log(

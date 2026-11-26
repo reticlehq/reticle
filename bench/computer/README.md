@@ -6,8 +6,9 @@
 | --- | --- |
 | `reticle` | `look`: the accessibility tree with refs. `act`: an action on a ref, which answers with what changed. |
 | `cu-toolset` | Claude's `computer_toolset_20260801` schema: screenshots, and clicks and keys at points of them. |
+| `cua-driver` | [cua-driver](https://github.com/trycua/cua), an open-source Mac driver: its own tools, from its own MCP server (`cua-driver mcp`), and its own executor. |
 
-Reticle's helper carries out the actions of **both** arms. The `cu-toolset` arm is not Anthropic's own computer-use setup. The benchmark compares two ways to choose actions on one executor. Describe the arm in exactly these words wherever a number from it goes.
+Reticle's helper carries out the actions of the `reticle` and `cu-toolset` arms. The `cu-toolset` arm is not Anthropic's own computer-use setup. Those two compare two ways to choose actions on one executor. The `cua-driver` arm is a whole other product: nothing of Reticle is in it. It leaves out only the tools that change cua-driver's settings or its recorder. Describe the arm in exactly these words wherever a number from it goes.
 
 ## Tasks
 
@@ -17,10 +18,11 @@ Zoom, a button held down on its own, the middle click and the triple click are o
 
 ## Run it
 
-Needs the operator of the computer run (a bridge, and HTTP on 4499 that joins an app and runs a tool), the screen for the whole run, and `ANTHROPIC_API_KEY`.
+Needs the operator (`operator.mjs`: a bridge, and HTTP on 4499 that joins an app and runs a tool), the screen for the whole run, and `ANTHROPIC_API_KEY`. The `cua-driver` arm needs `cua-driver` 0.2 or later, with its Accessibility and Screen Recording permissions.
 
 ```bash
-node --env-file=.env bench/computer/cu-bench.mjs            # both arms, all tasks
+pnpm build && node bench/computer/operator.mjs &               # the operator
+node --env-file=.env bench/computer/cu-bench.mjs            # every arm, every task
 node --env-file=.env bench/computer/cu-bench.mjs reticle calculator-multiply
 ```
 
