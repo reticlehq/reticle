@@ -14,6 +14,12 @@ interface DowngradedFlow {
   steps: number[];
 }
 
+/** A flow file that is on disk but that this Reticle could not read, and why. */
+export interface UnreadableFlow {
+  flow: string;
+  error: string;
+}
+
 interface GateInput {
   /** Flows that must be covered (from the affected index over the changed files). */
   affected: readonly string[];
@@ -31,6 +37,8 @@ interface GateInput {
   coverageRegressed?: readonly { level: string; was: number; now: number }[];
   /** Changed files the browser loaded and never ran a function of. */
   unexecuted?: readonly string[];
+  /** Saved flow files this build could not read — nothing can be said about what they cover. */
+  unreadable?: readonly UnreadableFlow[];
 }
 
 interface GateResult {
@@ -50,6 +58,8 @@ interface GateResult {
   coverageRegressed: { level: string; was: number; now: number }[];
   /** BLOCKING: changed code that never ran in any drive. */
   unexecuted: string[];
+  /** BLOCKING: flow files that exist and could not be read. */
+  unreadable: UnreadableFlow[];
 }
 
 export function gateDecision(input: GateInput): GateResult {
@@ -70,6 +80,7 @@ export function gateDecision(input: GateInput): GateResult {
   const unflowed = [...(input.unflowed ?? [])];
   const coverageRegressed = [...(input.coverageRegressed ?? [])];
   const unexecuted = [...(input.unexecuted ?? [])];
+  const unreadable = [...(input.unreadable ?? [])];
   return {
     pass:
       0 === uncovered.length &&
@@ -77,7 +88,8 @@ export function gateDecision(input: GateInput): GateResult {
       0 === deleted.length &&
       0 === unflowed.length &&
       0 === coverageRegressed.length &&
-      0 === unexecuted.length,
+      0 === unexecuted.length &&
+      0 === unreadable.length,
     uncovered,
     quarantined,
     downgraded,
@@ -85,6 +97,7 @@ export function gateDecision(input: GateInput): GateResult {
     unflowed,
     coverageRegressed,
     unexecuted,
+    unreadable,
   };
 }
 
