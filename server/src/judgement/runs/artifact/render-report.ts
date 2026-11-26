@@ -103,7 +103,8 @@ export function renderRunReport(run: ReticleVerificationRun): string {
   }
 
   if (run.verdict.status !== VerdictStatus.PASS && run.verdict.reasons.length > 0) {
-    out.push('', 'Why it failed:');
+    const heading = run.verdict.status === VerdictStatus.FAIL ? 'Why it failed:' : 'Not proved:';
+    out.push('', heading);
     for (const reason of run.verdict.reasons) out.push(`  - ${reason}`);
   }
 

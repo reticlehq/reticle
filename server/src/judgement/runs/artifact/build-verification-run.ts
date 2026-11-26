@@ -20,6 +20,10 @@ import {
 import { redactForProfile } from './profile-redact.js';
 import { supersededChecks } from '@reticlehq/engine/evidence/superseded-checks.js';
 
+function undecidedReason(count: number): string {
+  return `${String(count)} check(s) undecided`;
+}
+
 /**
  * Everything a caller supplies; schemaVersion/createdAt/verdict are filled/computed by the builder.
  * runId is a plain string here (string in) — the schema brands it to RunId on the way out (branded out),
@@ -92,14 +96,16 @@ export function computeVerdict(raw: VerificationRunInput): RunVerdict {
   else if (fails > 0) status = VerdictStatus.FAIL;
   else if ((skippedFlows > 0 || undecidedChecks > 0) && passes > 0) {
     status = VerdictStatus.PARTIAL;
-    if (0 < undecidedChecks) reasons.push(`${String(undecidedChecks)} check(s) undecided`);
+    if (0 < undecidedChecks) reasons.push(undecidedReason(undecidedChecks));
   } else if (0 === passes) {
     // Nothing passed and nothing failed, so nothing was proved -- an empty run, or one whose every
     // flow was skipped. Reporting that as PASS is the false green this whole file exists to prevent:
     // every consumer here reads `status` and none reads `confidence`, so a caveat parked in the
     // confidence field would never reach the person deciding whether to ship.
     status = VerdictStatus.UNKNOWN;
-    reasons.push('nothing ran, so nothing was proved');
+    reasons.push(
+      0 < undecidedChecks ? undecidedReason(undecidedChecks) : 'nothing ran, so nothing was proved',
+    );
   } else status = VerdictStatus.PASS;
 
   const ran = input.flows.length + input.checks.length;

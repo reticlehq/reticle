@@ -89,6 +89,17 @@ describe('computeVerdict', () => {
     expect(v.reasons.some((r) => r.includes('undecided'))).toBe(true);
   });
 
+  it('only undecided checks → UNKNOWN with undecided reason, not "nothing ran"', () => {
+    const check = (status: Verified) => ({
+      predicate: `p-${status}`,
+      status,
+    });
+    const v = computeVerdict({ ...base, checks: [check(Verified.UNKNOWN)] });
+    expect(v.status).toBe(VerdictStatus.UNKNOWN);
+    expect(v.reasons).toEqual(['1 check(s) undecided']);
+    expect(v.reasons.join(' ')).not.toContain('nothing ran');
+  });
+
   // Driven over MCP: a passive assert read the text Generate produces before its POST answered,
   // and the same claim held a moment later; the run said PARTIAL for a journey that worked.
   it('a passive check superseded by the same claim holding later does not fail the run', () => {
