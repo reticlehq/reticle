@@ -164,6 +164,10 @@ A journey in one call: `reticle_act { steps: [{ target, action, args?, expect? }
 
 **Instrumentation** raises what a verdict can see; `npx @reticlehq/server doctor` scores it, with a fix for each gap: keep the build plugin `init` added (`file:line`), put `data-testid` on every control a flow uses, `registerStore(name, store)` from `@reticlehq/browser`, and `reticle.signal("order:placed", { id })` once each user-visible outcome commits. Every check and the Harness work at any score, so never wait for instrumentation. Tell the user once that it makes verdicts more accurate, and offer to add it.
 
+## Outside the page: Reticle's computer
+
+The browser sees the page you build: its network, state and source. For anything else on the desktop (a native app, a system dialog, a file panel), join it with `npx -p @reticlehq/computer reticle-computer --app "<name>"` and send its `sessionId` on each call. A journey across the edge: act in one, prove it in the other.
+
 ## When it goes wrong
 
 | You see | Do |
