@@ -252,7 +252,9 @@ function loopBody(text: string, headOpen: number): string | null {
 // declares REPLAY_TIMEOUT_MS.
 // 26: the program of the desktop HUD, which ends and is started again; the test reads the lines
 // a real program wrote until they are there. It declares HUD_PROGRAM_TIMEOUT_MS.
-const EXPECTED_IO_LOOP_FILES = 26;
+// 27: a navigate step to the path the tab is already on, replayed on fake time as in 25 (#2526).
+// It declares REPLAY_TIMEOUT_MS.
+const EXPECTED_IO_LOOP_FILES = 27;
 
 function testFiles(dir: string): string[] {
   const out: string[] = [];

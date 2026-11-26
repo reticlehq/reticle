@@ -71,6 +71,7 @@ import {
   loadingLostHint,
   navigateAndAwait,
   noteReplayEnded,
+  onPathAlready,
   routeClaimsWhereTheTabIs,
   startPathMismatchHint,
   withStartPageWait,
@@ -458,14 +459,20 @@ async function replayOnce(
   const openPage: OpenPage<FlowReplaySession> = async (url) => {
     // The page this step opens can compile as long as a start page does (#2155).
     const loading = await startPageLoadingProbe(deps.pool, deps.realInput, live);
+    const expectedPath = pathOfUrl(url);
     const outcome = await navigateAndAwait(
       deps.sessions,
       live,
       url,
-      pathOfUrl(url),
+      expectedPath,
       startPathBudgetMs(loaded.value),
       undefined,
-      { acceptRedirect: true, ...(loading === undefined ? {} : { stillLoading: loading }) },
+      {
+        acceptRedirect: true,
+        // The page that asked for the load is on this path too until it unloads (#2526).
+        isReload: onPathAlready(live, expectedPath),
+        ...(loading === undefined ? {} : { stillLoading: loading }),
+      },
     );
     if ('arrived' === outcome.kind || 'redirected' === outcome.kind) {
       live = outcome.session;

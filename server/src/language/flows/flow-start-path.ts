@@ -249,6 +249,20 @@ function arrivedSuccessor(
 }
 
 /**
+ * Whether the tab is on `path` already, whatever the query on either side.
+ *
+ * A `navigate` step to such a URL loads the same path again. The page that asked for the load still
+ * answers on that path until it unloads, so it must not count as the page that arrived (#2526).
+ */
+export function onPathAlready(session: StartPathSession, path: string): boolean {
+  const current = currentPathOf(session);
+  if (current === undefined) {
+    return false;
+  }
+  return samePath(current, path);
+}
+
+/**
  * Can step 1 start from where the tab already is?
  *
  * A route mismatch is NOT on its own a reason to navigate. The condition worth a page load is that
