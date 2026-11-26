@@ -74,9 +74,11 @@ import {
   routeClaimsWhereTheTabIs,
   startPathMismatchHint,
   withStartPageWait,
+  applyPageLanguageHint,
 } from './flow-start-path.js';
 import { startPageLoadingProbe } from './start-page-loading.js';
 import { requestSender, type OpenPage } from './steps/page-steps.js';
+import { pageLanguageOf } from '@/portal/session/hello-identity.js';
 
 export function latestRecordedFlow(
   events: ReticleEvent[],
@@ -659,6 +661,10 @@ async function replayOnce(
     arrival.resetCost === undefined;
   const staleTarget = staleTargetResult(name, steps, { startControlRequired });
   if (staleTarget !== undefined) {
+    // The same rule as the drift below: a wrong page outranks a wrong language.
+    if (startPathHint === undefined) {
+      applyPageLanguageHint(staleTarget, loaded.value, { lang: pageLanguageOf(live) });
+    }
     return withStartPageWait(staleTarget, arrival);
   }
   const driftSteps = steps.filter((s) => s.drift !== undefined).length;
@@ -758,6 +764,10 @@ async function replayOnce(
     result.decision = buildDecision(result, loaded.value, intentSaid, invokedFlows);
   }
   applyStartPathHint(result, startPathHint);
+  // A wrong page outranks a wrong language: on another route the copy is not the question.
+  if (startPathHint === undefined) {
+    applyPageLanguageHint(result, loaded.value, { lang: pageLanguageOf(live) });
+  }
   if (deviation !== undefined) {
     result.deviation = deviation;
   }

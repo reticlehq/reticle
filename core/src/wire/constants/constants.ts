@@ -230,6 +230,8 @@ export const TRANSPORT_LIMITS = {
   MAX_SESSION_ID_LENGTH: 128,
   MAX_URL_LENGTH: 4096,
   MAX_TITLE_LENGTH: 512,
+  /** A BCP 47 tag such as `en` or `zh-Hant-TW`. 35 holds every tag that the registry lists. */
+  MAX_LANG_LENGTH: 35,
   MAX_ADAPTERS: 32,
   /*
    * The cap on ONE vocabulary in `contractParts` — the commands, events or actions a peer says it

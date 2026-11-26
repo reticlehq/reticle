@@ -388,7 +388,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 29 with `agent-link.ts` (the HUD's coding-agent line), `narration-args.ts` (who a HUD narration
   // line is from), `zero-install-first-call.ts` (opening an unwired app on the first call) and
   // `recorded-gaps.ts` (the gaps a session's verdicts recorded): each reads the session it sits beside.
-  'server/src/portal/session': 29,
+  // +1: hello-identity.ts, `refreshIdentity` split out of bridge.ts at the 1000-line cap, with the
+  // page language each HELLO announced (#2278). It reads the session it sits beside.
+  'server/src/portal/session': 30,
   // 32 since two leaves were extracted out of `flow-replay.ts` to break the last runtime cycle in
   // this directory: `flow-replay-types.ts` (shapes two collaborators share) and `flow-anchor.ts`
   // (resolving a step's anchor). Breaking a cycle costs files — a module that sits UNDER two others

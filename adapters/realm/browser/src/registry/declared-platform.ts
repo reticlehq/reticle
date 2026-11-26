@@ -1,4 +1,9 @@
-import { PlatformProfile, RETICLE_IPC_GLOBAL, ReticleCommand } from '@reticlehq/core/page';
+import {
+  PlatformProfile,
+  RETICLE_IPC_GLOBAL,
+  ReticleCommand,
+  TRANSPORT_LIMITS,
+} from '@reticlehq/core/page';
 
 /**
  * What kind of place this is, and what it can be asked to do.
@@ -90,4 +95,21 @@ export const SERVED_COMMANDS: readonly string[] = [
  */
 export function declaredCommands(): string[] {
   return [...SERVED_COMMANDS];
+}
+
+/**
+ * The page language, as the `lang` attribute of `<html>` says it.
+ *
+ * Undefined when the page sets no language, and when the tag is longer than the wire cap. The HELLO
+ * schema refuses a longer tag, and a refused HELLO costs the whole session, so the SDK sends no tag.
+ */
+export function pageLang(): string | undefined {
+  if ('undefined' === typeof document) {
+    return undefined;
+  }
+  const lang = document.documentElement.lang.trim();
+  if (0 === lang.length || lang.length > TRANSPORT_LIMITS.MAX_LANG_LENGTH) {
+    return undefined;
+  }
+  return lang;
 }

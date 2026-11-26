@@ -65,6 +65,8 @@ interface ActiveRecording {
   steps: RecordedStep[];
   /** The route the journey began on. See CompiledProgram.startPath. */
   startPath?: string;
+  /** The page language at start. See CompiledProgram.startLang. */
+  startLang?: string;
   /**
    * The document the tab was on at start. A full-page load makes a new one even when the SDK keeps
    * its session id, and its clock is from a different connection, so this is how stop tells (#1411).
@@ -101,6 +103,8 @@ export interface CompiledProgram {
    * because it started one route further along.
    */
   startPath?: string;
+  /** The page language when recording started. See FlowFile.startLang. */
+  startLang?: string;
   /**
    * Pages the recording sat on, in order, consecutive stays collapsed. In-memory only — not written
    * to the flow file. Lets save warn about a backtrack (a journey that cannot replay) without a
@@ -220,6 +224,7 @@ export class RecordingStore {
     startPath?: string,
     session?: string,
     document?: string,
+    startLang?: string,
   ): void {
     const openedOver = new Map<string, number>();
     for (const [outer, rec] of this.#targets(session)) {
@@ -230,6 +235,7 @@ export class RecordingStore {
       steps: [],
       openedOver,
       ...(startPath === undefined ? {} : { startPath }),
+      ...(startLang === undefined ? {} : { startLang }),
       ...(session === undefined ? {} : { session }),
       ...(document === undefined ? {} : { document }),
     });

@@ -38,6 +38,7 @@ import { asNumber, asString, parseInteractive } from '@reticlehq/core';
 
 import { type ToolDef, sessionIdShape, commandOrThrow, snapshotTree } from './tool-kit.js';
 import { bufferEnvelope } from '@/portal/session/session-health.js';
+import { pageLanguageOf } from '@/portal/session/hello-identity.js';
 
 /** What record-stop says when the span crossed a full-page load (#1411). */
 const RECORDING_CROSSED_RELOAD =
@@ -201,6 +202,7 @@ export const READ_TOOLS: ToolDef[] = [
         pageOf(session.url),
         session.id,
         session.currentDocumentId,
+        pageLanguageOf(session),
       );
       return Promise.resolve({
         recordingName: name,
@@ -270,6 +272,7 @@ export const READ_TOOLS: ToolDef[] = [
         steps: rec.steps,
         session: rec.session ?? session.id,
         ...(rec.startPath === undefined ? {} : { startPath: rec.startPath }),
+        ...(rec.startLang === undefined ? {} : { startLang: rec.startLang }),
         ...(0 === routes.length ? {} : { routes }),
       };
       deps.recordings.saveCompiled(program);

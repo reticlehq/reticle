@@ -17,6 +17,7 @@ import { getAccessibleName, getRole, isSensitiveField } from '@/dom/a11y.js';
 import { positionAmongNamesakes } from '@/actions/action-report.js';
 import { isReticleOverlay } from '@/dom/dom-ignore.js';
 import { getCapabilities } from '@/registry/capabilities.js';
+import { pageLang } from '@/registry/declared-platform.js';
 import { TOOLBAR_CSS, BTN_CSS, NAME_CSS, STATUS_CSS, MENU_CSS } from './recorder-styles.js';
 
 /**
@@ -182,6 +183,7 @@ export function compileRecording(
   annotations: Annotation[],
   createdAt: number,
   startPath?: string,
+  startLang?: string,
 ): FlowFile {
   const out: FlowStep[] = steps.map((s) => ({ ...s }));
   const dynamic: FlowAnchor[] = [];
@@ -215,6 +217,9 @@ export function compileRecording(
   const flow: FlowFile = { version: FLOW_FILE_VERSION, name, createdAt, steps: out };
   if (startPath !== undefined && startPath.length > 0) {
     flow.startPath = startPath;
+  }
+  if (startLang !== undefined) {
+    flow.startLang = startLang;
   }
   if (dynamic.length > 0) {
     flow.dynamic = dynamic;
@@ -267,6 +272,8 @@ class Recorder implements RecorderHandle {
   #steps: FlowStep[] = [];
   /** The pathname the recording began on, so replay can navigate here before step 1. */
   #startPath: string | undefined;
+  /** The page language when the recording began. See FlowFile.startLang. */
+  #startLang: string | undefined;
   #annotations: Annotation[] = [];
   #pendingFill: PendingFill | undefined;
   #captureAbort: AbortController | undefined;
@@ -483,6 +490,7 @@ class Recorder implements RecorderHandle {
     // A fresh span — no leakage from a previous Record→Stop cycle.
     this.#steps = [];
     this.#startPath = 'undefined' === typeof location ? undefined : location.pathname;
+    this.#startLang = pageLang();
     this.#annotations = [];
     this.#pendingFill = undefined;
     this.#draft = undefined;
@@ -499,6 +507,7 @@ class Recorder implements RecorderHandle {
       this.#annotations,
       this.#deps.now(),
       this.#startPath,
+      this.#startLang,
     );
     this.#deps.emit(EventType.FLOW_RECORDED, { name, flow });
     this.#setStatus(0 === this.#steps.length ? RECORDER_EMPTY_MSG : STATUS_IDLE);
