@@ -19,6 +19,7 @@
 # AT-SPI itself did not reach the application under Xvfb; xdotool's did.
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -303,6 +304,70 @@ def click(x, y, times, button, hold_ms):
             xdo('click', button)
 
 
+def no_real_input():
+    # Why the real pointer and keys cannot be used here, or None when they can. A Wayland session
+    # takes no input from a program; xdotool reaches only X.
+    if os.environ.get('XDG_SESSION_TYPE') == 'wayland' or (
+            os.environ.get('WAYLAND_DISPLAY') and not os.environ.get('DISPLAY')):
+        return 'this Linux session is Wayland, which takes no pointer and no keys from a program'
+    if not os.environ.get('DISPLAY'):
+        return 'there is no X display (DISPLAY is not set)'
+    if shutil.which('xdotool') is None:
+        return 'xdotool is not installed (sudo apt-get install xdotool)'
+    return None
+
+
+def idle_ms():
+    # ponytail: xprintidle reads the idle time of the X server. Without it there is no check.
+    if shutil.which('xprintidle') is None:
+        return 10 ** 9
+    try:
+        return int(subprocess.run(['xprintidle'], capture_output=True, text=True, timeout=5).stdout.strip())
+    except (ValueError, subprocess.SubprocessError):
+        return 10 ** 9
+
+
+def arrange(pid, value):
+    # The window of the application, moved and sized as X moves it: through the window manager when
+    # there is one, and directly when there is none (a screen in memory).
+    found = subprocess.run(['xdotool', 'search', '--onlyvisible', '--pid', str(pid)],
+                           capture_output=True, text=True, timeout=10).stdout.split()
+    if not found:
+        return None
+    wid = found[0]
+    width, height = (int(n) for n in subprocess.run(['xdotool', 'getdisplaygeometry'], capture_output=True,
+                                                     text=True, timeout=10).stdout.split())
+    frames = {'left': (0, 0, width // 2, height), 'right': (width // 2, 0, width // 2, height),
+              'zoom': (0, 0, width, height), 'fullscreen': (0, 0, width, height)}
+    wanted = None
+    if value == 'minimize':
+        xdo('windowminimize', wid)
+    elif value == 'restore':
+        xdo('windowmap', wid)
+    elif value in frames or value.startswith('frame:'):
+        wanted = list(frames.get(value) or [int(float(n)) for n in value[len('frame:'):].split(',')])
+        xdo('windowmove', wid, wanted[0], wanted[1])
+        xdo('windowsize', wid, wanted[2], wanted[3])
+    else:
+        return None
+    return {'pid': pid, 'wid': wid, 'wanted': wanted}
+
+
+def window_state(arranged):
+    # Read again after the change: the answer of X to a move is not the proof that it moved.
+    shell = subprocess.run(['xdotool', 'getwindowgeometry', '--shell', arranged['wid']],
+                           capture_output=True, text=True, timeout=10).stdout
+    geometry = dict(line.split('=', 1) for line in shell.split() if '=' in line)
+    shown = subprocess.run(['xdotool', 'search', '--onlyvisible', '--pid', str(arranged['pid'])],
+                           capture_output=True, text=True, timeout=10).stdout.split()
+    state = {'minimized': arranged['wid'] not in shown, 'fullscreen': False}
+    if all(k in geometry for k in ('X', 'Y', 'WIDTH', 'HEIGHT')):
+        state['frame'] = [int(geometry[k]) for k in ('X', 'Y', 'WIDTH', 'HEIGHT')]
+    if arranged['wanted'] is not None:
+        state['wanted'] = arranged['wanted']
+    return state
+
+
 def mods_of(words):
     return [MOD_KEY[m.lower()] for m in words if m.lower() in MOD_KEY]
 
@@ -452,6 +517,9 @@ def act(words):
     pointer = kind in POINTER
     if pointer and not foreground:
         return {'refused': 'needs-foreground'}
+    no_input = no_real_input()
+    if no_input is not None and (pointer or kind == 'window' or (foreground and kind in ('type', 'key'))):
+        return {'refused': 'no-real-input', 'detail': no_input}
     # A pointer value is its points, then the hand: "x,y|mods=shift+alt|hold=300|pixels=1".
     hand = {}
     if pointer:
@@ -463,8 +531,11 @@ def act(words):
                 hand[pair[0]] = pair[1]
     held = mods_of(hand.get('mods', '').split('+'))
     hold_ms = min(10000, max(0, int(hand.get('hold', '0') or 0)))
-    # ponytail: no check that the person is typing or moving the pointer; X has no portable idle
-    # time without an extension. Add it with XScreenSaver's idle query when a person is at a Linux box.
+    # The person at the machine is typing or moving the pointer: wait, and refuse when they still are.
+    if foreground and idle_ms() < 800:
+        time.sleep(0.8)
+        if idle_ms() < 800:
+            return {'refused': 'person-active', 'detail': 'the person at the machine is typing or moving the pointer'}
     rch = reach(el, pid) if el is not None else {'reach': 'yes'}
     if rch['reach'] != 'yes' and not direct and kind not in ('raise', 'window') and pointer:
         if rch['reach'] == 'no':
@@ -482,6 +553,7 @@ def act(words):
     for m in held:
         xdo('keydown', m)
     delivered = True
+    arranged = None
     try:
         if kind == 'press':
             delivered = press(el)
@@ -541,9 +613,8 @@ def act(words):
             for _ in range(abs(across) // 3 or (1 if across else 0)):
                 xdo('click', 7 if across > 0 else 6)
         elif kind == 'window':
-            # ponytail: X windows are moved by the window manager, which AT-SPI does not reach.
-            # Add it with xdotool or EWMH messages when a check needs it.
-            return {'error': 'unsupported-window-action'}
+            arranged = arrange(pid, value)
+            delivered = arranged is not None
         else:
             return {'error': f'unknown-action {kind}'}
     except Exception as error:  # noqa: BLE001
@@ -569,6 +640,8 @@ def act(words):
         time.sleep(0.1)
         later = shot(*wr)
         result['pixels'] = change(shots['earlier'], shots['before'], seen, later, *wr)
+    if arranged is not None:
+        result['windowState'] = window_state(arranged)
     if os.environ.get('RETICLE_ATSPI_DEBUG') and last_error:
         result['atspiError'] = last_error
     return result

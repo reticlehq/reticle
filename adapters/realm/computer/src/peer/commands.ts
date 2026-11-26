@@ -666,6 +666,11 @@ export class PeerCommands {
         `the person at the machine is using the keyboard or the pointer, so the realm did not take the pointer for ${target.node.role} "${target.node.name}". It waited five seconds. Try again when they are not typing, or do the step without the foreground.`,
       );
     }
+    if (outcome.refused === ActRefusal.NO_REAL_INPUT) {
+      throw new Error(
+        `no real pointer or key was sent: ${outcome.detail ?? 'the desktop takes none from a program'}. Do the step without args.foreground, through the accessibility interface, or log in to an X session.`,
+      );
+    }
     if (outcome.refused === ActRefusal.NEEDS_FOREGROUND) {
       throw new Error(needsForeground(kind, this.#deps.driver.subject().app));
     }

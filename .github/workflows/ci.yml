@@ -282,7 +282,7 @@ jobs:
         run: node adapters/realm/computer/native/win/uiacheck.mjs
 
   # Computer use on Linux: the AT-SPI helper reads and drives a GTK application through the same
-  # driver and reader as macOS and Windows, on an X11 screen in memory. The X screen starts inside
+  # driver and reader as macOS and Windows, on an X screen in memory. The X screen starts inside
   # the session bus: the bus then starts the accessibility bus for the application.
   computer-linux:
     runs-on: ubuntu-latest
@@ -300,7 +300,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends python3-gi python3-gi-cairo \
-            gir1.2-atspi-2.0 gir1.2-gtk-3.0 at-spi2-core libatk-adaptor xvfb xdotool dbus-x11
+            gir1.2-atspi-2.0 gir1.2-gtk-3.0 at-spi2-core libatk-adaptor xvfb xdotool xprintidle dbus-x11
       - run: pnpm --filter @reticlehq/computer... build
       - name: Computer use on Linux (AT-SPI)
         run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x800x24" node adapters/realm/computer/native/linux/atspicheck.mjs

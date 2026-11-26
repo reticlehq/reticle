@@ -2129,6 +2129,22 @@ describe('PeerCommands', () => {
     ).rejects.toThrow(/could not tell if a person can reach button "Save".*in front/s);
   });
 
+  // A Wayland session of Linux takes no pointer and no keys from a program. The helper refused,
+  // and the agent must learn that the step works without the foreground, not "the OS refused it".
+  it('says how to do the step when the desktop takes no real input', async () => {
+    const { commands } = peer({
+      refused: ActRefusal.NO_REAL_INPUT,
+      detail: 'this Linux session is Wayland',
+    });
+    await expect(
+      commands.answer(ReticleCommand.ACT, {
+        ref: await refOf(commands, 'Save'),
+        action: ActionType.CLICK,
+        args: { foreground: true },
+      }),
+    ).rejects.toThrow(/this Linux session is Wayland.*without args\.foreground/s);
+  });
+
   it('sends a signal when the action put something on the clipboard, with no content', async () => {
     const copied = peer({ clipboardChanged: true });
     await copied.commands.answer(ReticleCommand.ACT, {

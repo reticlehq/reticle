@@ -386,6 +386,7 @@ function Invoke-Act($words) {
   }
   foreach ($vk in $mods) { [ReticleWin32]::keybd_event([byte]$vk, 0, 0, [UIntPtr]::Zero) }
   $delivered = $true
+  $arranged = $null
   try {
     switch ($kind) {
       'press' {
@@ -493,6 +494,7 @@ function Invoke-Act($words) {
         while ($null -ne $top -and $top.Current.ControlType.ProgrammaticName -ne 'ControlType.Window') { $top = $Walker.GetParent($top) }
         $win = Get-Pattern $top ([System.Windows.Automation.WindowPattern]::Pattern)
         $move = Get-Pattern $top ([System.Windows.Automation.TransformPattern]::Pattern)
+        $arranged = @{ top = $top; win = $win }
         switch -Regex ($value) {
           '^minimize$' { $win.SetWindowVisualState('Minimized') }
           '^(zoom|fullscreen)$' { $win.SetWindowVisualState('Maximized') }
@@ -515,6 +517,14 @@ function Invoke-Act($words) {
   }
   $settled = Wait-Quiet $procId $budgetMs $quiet
   $after = Read-App $procId
+  # The window, read again after an arrangement: the answer of the system to the set is not the
+  # proof that it moved. The realm refuses an arrangement with no state.
+  $windowState = $null
+  if ($null -ne $arranged) {
+    $wr = $arranged.top.Current.BoundingRectangle
+    $windowState = @{ minimized = ($null -ne $arranged.win -and $arranged.win.Current.WindowVisualState -eq 'Minimized'); fullscreen = $false }
+    if (-not $wr.IsEmpty) { $windowState.frame = @($wr.X, $wr.Y, $wr.Width, $wr.Height) }
+  }
   # The pixels, each time the realm asked for them: not only when the tree is the same. A press on
   # a window that was not active changes its tree (the focus), and the stroke on the canvas was then
   # not compared. Two pictures after, too, for a motion that started with the action or is slow.
@@ -531,6 +541,7 @@ function Invoke-Act($words) {
   }
   $answer = @{ delivered = $delivered; reachable = ($reach.reach -eq 'yes'); settled = $settled; before = $before.tree; after = $after.tree; unreadBefore = $before.unread; unreadAfter = $after.unread }
   if ($null -ne $pixels) { $answer.pixels = $pixels }
+  if ($null -ne $windowState) { $answer.windowState = $windowState }
   if ($env:RETICLE_UIA_DEBUG -and $script:LastError) { $answer.uiaError = $script:LastError }
   return $answer
 }

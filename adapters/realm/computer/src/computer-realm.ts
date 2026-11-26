@@ -142,6 +142,7 @@ const REFUSAL_OF: Readonly<Record<ActRefusal, RefusalReason>> = {
   [ActRefusal.UNREACHABLE]: RefusalReason.GUARDED,
   [ActRefusal.REACH_UNKNOWN]: RefusalReason.UNAVAILABLE,
   [ActRefusal.NEEDS_FOREGROUND]: RefusalReason.UNAVAILABLE,
+  [ActRefusal.NO_REAL_INPUT]: RefusalReason.UNAVAILABLE,
   [ActRefusal.PERSON_ACTIVE]: RefusalReason.GUARDED,
   [ActRefusal.NO_KEYBOARD]: RefusalReason.GUARDED,
 };

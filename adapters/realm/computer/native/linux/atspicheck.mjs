@@ -6,7 +6,8 @@
 //   - a click on the check box with the real pointer checks it;
 //   - an element that is not there any more is refused as stale, never acted on;
 //   - a drag on the canvas draws a line that no element shows: the realm reports the pixels that
-//     changed, and a bar that moves by itself is not counted as an effect.
+//     changed, and a bar that moves by itself is not counted as an effect;
+//   - the window takes a frame and a half of the screen, and the answer is its new frame.
 //
 //   node native/linux/atspicheck.mjs
 //
@@ -17,7 +18,7 @@ import { execFileSync, spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
-import { ActionType, ReticleCommand } from '@reticlehq/core';
+import { ActionType, ReticleCommand, WindowArrangement } from '@reticlehq/core';
 
 import { MacDriver, PeerCommands, helperLaunch, servingHelper } from '../../dist/index.js';
 
@@ -125,7 +126,33 @@ try {
     `the moving bar was not seen: ${JSON.stringify(missed.effect)}`,
   );
   held += 1;
-  process.stdout.write(`computer atspicheck: ${String(held)} of 6 cases held\n`);
+
+  // The window moves and takes a size, as a person arranges it, and the answer is its new frame.
+  const win = (await query({ role: 'window' }))[0];
+  const placed = await commands.answer(ReticleCommand.ACT, {
+    ref: win.ref,
+    action: ActionType.WINDOW,
+    args: { frame: { x: 200, y: 150, width: 520, height: 380 } },
+  });
+  const { x, y, width, height } = placed.window ?? {};
+  assert.deepEqual({ x, y, width, height }, { x: 200, y: 150, width: 520, height: 380 });
+  const half = await commands.answer(ReticleCommand.ACT, {
+    ref: (await query({ role: 'window' }))[0].ref,
+    action: ActionType.WINDOW,
+    args: { arrange: WindowArrangement.LEFT },
+  });
+  assert.equal(
+    half.window?.x,
+    0,
+    `the left half is not at the left: ${JSON.stringify(half.window)}`,
+  );
+  assert.equal(
+    half.window?.width,
+    640,
+    `the left half is not half: ${JSON.stringify(half.window)}`,
+  );
+  held += 1;
+  process.stdout.write(`computer atspicheck: ${String(held)} of 7 cases held\n`);
 } finally {
   fixture.kill();
 }

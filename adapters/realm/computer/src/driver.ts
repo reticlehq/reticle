@@ -66,6 +66,11 @@ export const ActRefusal = {
    * whatever application has it, so none was sent.
    */
   NO_KEYBOARD: 'no-keyboard',
+  /**
+   * The desktop takes no pointer and no keys from a program: a Wayland session of Linux. The
+   * detail says why. The step can still be done through the accessibility interface.
+   */
+  NO_REAL_INPUT: 'no-real-input',
 } as const;
 export type ActRefusal = (typeof ActRefusal)[keyof typeof ActRefusal];
 

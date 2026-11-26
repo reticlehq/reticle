@@ -5,7 +5,8 @@
 //   - a press on a menu item of the window is delivered and changes what is on the screen;
 //   - an element that is not there any more is refused as stale, never acted on;
 //   - a drag on a canvas (ink.ps1) draws a line that no element shows: the realm reports the
-//     pixels that changed, and a bar that moves by itself is not counted as an effect.
+//     pixels that changed, and a bar that moves by itself is not counted as an effect;
+//   - the window takes a frame, and the answer is its new frame, read again after the move.
 //
 //   node native/win/uiacheck.mjs
 //
@@ -96,8 +97,17 @@ try {
     commands.answer(ReticleCommand.ACT, { ref: 'e9999', action: ActionType.CLICK }),
     /no longer resolves|unknown ref|not found/i,
   );
+  // The window moves and takes a size, and the answer is its new frame, read again after the move.
+  const win = (await commands.answer(ReticleCommand.QUERY, { role: 'window' })).elements[0];
+  const placed = await commands.answer(ReticleCommand.ACT, {
+    ref: win.ref,
+    action: ActionType.WINDOW,
+    args: { frame: { x: 200, y: 150, width: 640, height: 420 } },
+  });
+  const { x, y, width, height } = placed.window ?? {};
+  assert.deepEqual({ x, y, width, height }, { x: 200, y: 150, width: 640, height: 420 });
   await checkInk();
-  process.stdout.write('computer uiacheck: 6 of 6 cases held\n');
+  process.stdout.write('computer uiacheck: 7 of 7 cases held\n');
 } finally {
   notepad.kill();
 }
