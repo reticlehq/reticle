@@ -71,7 +71,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // edit is most of that action's code, and a page that never inserts text should not download it.
   // +1: upload-input.ts, the upload resolution split out of actions.ts at the max-lines cap (#1633).
   'adapters/realm/browser/src/actions': 13,
-  'adapters/realm/browser/src/dom': 20,
+  // 21 with trusted-html.ts: Reticle's page UI writes HTML through it, so a page that requires
+  // Trusted Types (Slack) still mounts the UI. Beside the other DOM helpers it is a sibling of.
+  'adapters/realm/browser/src/dom': 21,
   // +1: error-repeats.ts, the limiter every uncaught-error path in console.ts goes through (#986).
   'adapters/realm/browser/src/observers': 27,
   // 17 since the HUD's position primitives left `presenter-drag.ts` for their own leaf: the drag

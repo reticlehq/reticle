@@ -104,6 +104,8 @@ import { errorText } from '@/util/error-text.js';
 /** Narration rows held for a panel that has not arrived yet. */
 const MAX_PENDING_NARRATIONS = 20;
 
+const ANNOTATOR_UNAVAILABLE = '[Reticle] the page annotator is off on this page:';
+
 const KILLED_MESSAGE =
   '[Reticle] killed for this page. Restart your dev server or reload the page to bring it back.';
 
@@ -458,8 +460,14 @@ export class Reticle {
         // so the answer does not change when it does.
         shouldBlock: () => this.#readPanelSettings?.().blockPageInteractions ?? true,
       });
-      this.#annotator.mount();
-      this.#presenter?.bindAnnotator(this.#annotator);
+      try {
+        this.#annotator.mount();
+        this.#presenter?.bindAnnotator(this.#annotator);
+      } catch (error) {
+        // A page that refuses Reticle's Trusted Types policy: no annotator, and the dial still runs.
+        this.#annotator = undefined;
+        nativeWarn(`${ANNOTATOR_UNAVAILABLE} ${String(error)}`);
+      }
     }
 
     this.#transport.connect();

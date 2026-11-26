@@ -105,6 +105,7 @@ import {
   rememberLog,
   type RememberedRow,
 } from './chrome/log-memory.js';
+import { trustedHtml } from '../dom/trusted-html.js';
 
 /** How long the copy button shows it worked. */
 const COPIED_FLASH_MS = 1600;
@@ -333,12 +334,12 @@ export class Presenter {
     // panel and take it away again on every tool call — which reads as a second UI flashing in rather
     // than as the one status line changing what it says.
     const actStrip = `<div class="reticle-act-strip" data-liveness="idle"><span class="reticle-act-dot" aria-hidden="true"></span><span class="reticle-act" data-reticle-act-line>${ACT_STRIP.READY}</span>${CONTROLS_BANNER_HTML}<span class="reticle-chip" data-reticle-chip></span><div class="reticle-act-actions">${CONTROLS_STATUS_HTML}</div></div>`;
-    root.innerHTML = `
+    root.innerHTML = trustedHtml(`
       ${blockerHtml()}
       <div data-reticle-glow></div>
       <div data-reticle-cursor></div>
       <div data-reticle-ring></div>
-      ${HudShell.dockHtml(actStrip, '', DATA_RETICLE_LOG, CONTROLS_MARKS_HTML, CONTROLS_FOOT_HTML)}`;
+      ${HudShell.dockHtml(actStrip, '', DATA_RETICLE_LOG, CONTROLS_MARKS_HTML, CONTROLS_FOOT_HTML)}`);
     document.body.appendChild(root);
     this.#root = root;
     this.#glow = root.querySelector<HTMLElement>('[data-reticle-glow]') ?? undefined;

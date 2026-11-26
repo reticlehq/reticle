@@ -36,6 +36,7 @@ import { TourAnchor } from '@reticlehq/core/tour';
 import { RETICLE_URL_PARAM } from '@reticlehq/core/page';
 import { appModalOpen } from '@/dom/dom-ignore.js';
 import { TOUR_SEEN_KEY_PREFIX } from '@/storage-keys.js';
+import { trustedHtml } from '../../dom/trusted-html.js';
 
 /** Where "they have seen it" is remembered. Per project, so a second app still gets its tour. */
 export { TOUR_SEEN_KEY_PREFIX };
@@ -310,7 +311,7 @@ export function mountTour(deps: TourDeps): TourHandle | undefined {
   const draw = (): void => {
     const slide = slides[index];
     if (undefined === slide) return;
-    root.innerHTML = `<div class="reticle-tour-scrim"></div>${slideHtml(slide)}`;
+    root.innerHTML = trustedHtml(`<div class="reticle-tour-scrim"></div>${slideHtml(slide)}`);
     // The highlight is drawn only when the thing it points at is actually on the page. A ring
     // floating over nothing is worse than no ring: it tells somebody to look where there is
     // nothing to see, and the HUD is genuinely absent when the panel is disabled.

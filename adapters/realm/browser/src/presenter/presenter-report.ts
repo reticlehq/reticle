@@ -22,6 +22,7 @@ import {
   compactNumber,
   COVERAGE_LEVELS,
 } from './chrome/presenter-report-copy.js';
+import { trustedHtml } from '../dom/trusted-html.js';
 
 /**
  * The impact report: what Reticle has actually done for this user.
@@ -479,7 +480,7 @@ export class PresenterReport {
   #paint(): void {
     const scope = this.#scope();
     if (this.#body === undefined) return;
-    this.#body.innerHTML =
+    this.#body.innerHTML = trustedHtml(
       scope === undefined
         ? `<p class="reticle-report-empty">${REPORT_TEXT.EMPTY}</p>`
         : reportBodyHtml(
@@ -489,7 +490,8 @@ export class PresenterReport {
             this.#snapshot?.projectName,
             this.#global ? undefined : this.#snapshot?.coverage,
             this.#global ? undefined : this.#snapshot?.sync,
-          );
+          ),
+    );
   }
 
   #openShare(url: string): void {

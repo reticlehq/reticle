@@ -4,6 +4,7 @@ import {
   type HeroIconBodyKey,
   type HeroIconSolidBodyKey,
 } from './presenter-heroicons-data.js';
+import { trustedHtml } from '../../dom/trusted-html.js';
 
 /** Presenter icon keys used by the HUD. */
 export const PresenterIcon = {
@@ -75,7 +76,7 @@ function buildSvg(name: HeroIconBodyKey, sizePx: number): SVGSVGElement {
   svg.setAttribute('height', String(sizePx));
   svg.setAttribute('fill', 'none');
   if (!(root instanceof SVGSVGElement)) {
-    svg.innerHTML = body;
+    svg.innerHTML = trustedHtml(body);
   }
   svgCache.set(cacheKey, svg);
   return document.importNode(svg, true);

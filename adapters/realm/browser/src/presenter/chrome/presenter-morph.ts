@@ -10,9 +10,11 @@
  *
  * ponytail: positional, not keyed. A region that reorders siblings would replace them; none does.
  */
+import { trustedHtml } from '../../dom/trusted-html.js';
+
 export function morphHtml(target: Element, html: string): void {
   const next = document.createElement('template');
-  next.innerHTML = html;
+  next.innerHTML = trustedHtml(html);
   morphChildren(target, next.content);
 }
 
