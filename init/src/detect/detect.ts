@@ -533,10 +533,10 @@ export function detect(input: DetectInput): Detection {
 }
 
 const INSTALL_ARGS: Record<PackageManager, readonly string[]> = {
-  [PackageManager.PNPM]: ['add', '-D'],
-  [PackageManager.YARN]: ['add', '-D'],
-  [PackageManager.BUN]: ['add', '-d'],
-  [PackageManager.NPM]: ['i', '-D'],
+  [PackageManager.PNPM]: ['add', '-D', '-E'],
+  [PackageManager.YARN]: ['add', '-D', '-E'],
+  [PackageManager.BUN]: ['add', '-d', '-E'],
+  [PackageManager.NPM]: ['i', '-D', '-E'],
 };
 
 /**
