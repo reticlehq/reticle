@@ -9,6 +9,7 @@ import { RETICLE_DEFAULT_PORT, bridgeWsUrl } from '@reticlehq/core';
 const Flag = {
   APP: '--app',
   PORT: '--port',
+  HOST: '--host',
   WATCH: '--watch',
   PROJECT: '--project',
   NO_ELECTRON_SWITCH: '--no-electron-switch',
@@ -20,6 +21,7 @@ const Flag = {
 const Env = {
   TOKEN: 'RETICLE_TOKEN',
   PORT: 'RETICLE_PORT',
+  HOST: 'RETICLE_HOST',
   TOKEN_DIR: 'RETICLE_PAIRING_TOKEN_DIR',
 } as const;
 const STATE_DIR = '.reticle';
@@ -109,12 +111,15 @@ export function attachPlan(
     }
   }
   const port = Number(valuesOf(Flag.PORT)[0] ?? env[Env.PORT] ?? RETICLE_DEFAULT_PORT);
+  // Another host when the agent's computer is a container or a virtual machine, and the daemon
+  // runs on the person's machine. The token then comes from RETICLE_TOKEN.
+  const host = valuesOf(Flag.HOST)[0] ?? env[Env.HOST];
   const token =
     env[Env.TOKEN] ??
     readFile(join(env[Env.TOKEN_DIR] ?? join(home, STATE_DIR), TOKEN_FILE))?.trim();
   return {
     app,
-    url: bridgeWsUrl(port),
+    url: host === undefined || 0 === host.length ? bridgeWsUrl(port) : bridgeWsUrl(port, host),
     ...(token === undefined || 0 === token.length ? {} : { token }),
     watch: valuesOf(Flag.WATCH),
     ...(projectId === undefined ? {} : { projectId }),

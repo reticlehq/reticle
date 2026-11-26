@@ -54,6 +54,17 @@ describe('attachPlan', () => {
     expect(plan).toMatchObject({ url: 'ws://localhost:4411/reticle', token: 'tok-env', watch: [] });
   });
 
+  // A machine of its own for the agent (a container or a virtual machine) runs this command, and
+  // the daemon runs on the person's machine. The command dialled only localhost.
+  it('dials the daemon on another host, from --host or the environment', () => {
+    expect(
+      attachPlan(['--app', 'Notes', '--host', 'host.docker.internal'], {}, '/home', read),
+    ).toMatchObject({ url: 'ws://host.docker.internal:4400/reticle' });
+    expect(
+      attachPlan(['--app', 'Notes'], { RETICLE_HOST: '192.168.64.1' }, '/home', read),
+    ).toMatchObject({ url: 'ws://192.168.64.1:4400/reticle' });
+  });
+
   it('says what is missing when no application is named', () => {
     expect(attachPlan([], {}, '/home', read)).toEqual({
       error: 'Name the application: --app <name>. To see the names that are open: --list.',

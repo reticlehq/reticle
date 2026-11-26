@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 // reticle-computer: joins a running application to the Reticle bridge, so the tools an agent
-// has for a web page work on it. macOS only for now. Nothing is installed in the application.
+// has for a web page work on it: macOS, Windows and Linux. Nothing is installed in the application.
+// With --host (or RETICLE_HOST) it joins a daemon on another machine: run it in a container or a
+// virtual machine of its own, and the agent works there while the person keeps their screen.
 //
-//   reticle-computer --app <name> [--project <folder>] [--port <port>] [--watch <folder>]...
+//   reticle-computer --app <name> [--project <folder>] [--port <port>] [--host <host>] [--watch <folder>]...
 //                        [--no-electron-switch] [--background-only] [--no-hud] [--open]
 //   reticle-computer --list                   (the applications that are open, as JSON)
 //   reticle-computer --app <name> --doctor     (checks that it can work, and says what to do)
