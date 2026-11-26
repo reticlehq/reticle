@@ -38,7 +38,7 @@ import { driveFlowsFrom } from '@/memory/journal/drive-flow.js';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import { LIVE_CONTROL_TOOLS } from '@/portal/session/live-control-tools.js';
-import { JOURNEY_RECORDING } from './act/sequence-grade.js';
+import { JOURNEY_NOT_KEPT, JOURNEY_RECORDING } from './act/sequence-grade.js';
 
 const ORIGIN = 'http://localhost:5173';
 const SAVED_AS = 'four-claims';
@@ -242,7 +242,7 @@ describe('a journey whose claims held keeps every claim when it is saved', () =>
       flowName: JOURNEY_RECORDING,
       saveAs: SAVED_AS,
     })) as Saved;
-    expect(saved.error).toBe('the last journey did not verify yes; nothing to keep');
+    expect(saved.error).toBe(JOURNEY_NOT_KEPT);
     expect((await flows.load(SAVED_AS)).ok).toBe(false);
   });
 

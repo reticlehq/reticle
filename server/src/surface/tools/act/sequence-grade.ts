@@ -233,6 +233,9 @@ export function gradeSequence(
 /** The stopped recording a proved journey is held under, so the `keep` offer can be taken. */
 export const JOURNEY_RECORDING = 'last-journey';
 
+/** Why saving `last-journey` refuses after a journey that was not offered for keeping. */
+export const JOURNEY_NOT_KEPT = 'the last journey did not verify yes; nothing to keep';
+
 export function offerToKeep(grade: SequenceGrade): string | undefined {
   if (grade.verified !== Verified.YES || 0 === grade.declared) {
     return undefined;

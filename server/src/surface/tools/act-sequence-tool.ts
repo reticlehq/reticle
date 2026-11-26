@@ -56,6 +56,7 @@ import {
 import {
   DeviationMode,
   gradeSequence,
+  JOURNEY_NOT_KEPT,
   JOURNEY_RECORDING,
   offerToKeep,
   type StepExpectation,
@@ -603,10 +604,7 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
         });
       } else {
         // An older journey left under this name would be saved as if it were this one.
-        deps.recordings.discardCompiled(
-          JOURNEY_RECORDING,
-          'the last journey did not verify yes; nothing to keep',
-        );
+        deps.recordings.discardCompiled(JOURNEY_RECORDING, JOURNEY_NOT_KEPT);
       }
       const tailStart =
         DeviationMode.HALT === onDeviation && stoppedAt !== undefined
