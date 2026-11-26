@@ -2256,6 +2256,33 @@ describe('PeerCommands', () => {
 // had no action for it, so two tabs of Dia could not be put next to each other.
 // The agent said what it was about to do, and a desktop session refused it: "this page does not
 // serve narrate". The person watching the HUD saw each action and never why.
+// Dia was on another Space, and the page look answered with no window and no reason. The reason
+// rode in `next`, and the server says a `next` line only once in a session, so the second look
+// read as an application with no window.
+describe('a window on another Space', () => {
+  it('says on every look that the application cannot be read, and why', async () => {
+    const driver: UiDriver = {
+      ...fakeDriver(),
+      read: () =>
+        Promise.resolve({
+          root: { role: UiRole.APPLICATION, name: 'Dia', states: [], children: [] },
+          unread: 0,
+          windowsNotOnScreen: 2,
+        } as unknown as UiRead),
+    };
+    const commands = new PeerCommands({ driver, emit: () => undefined });
+    for (const _ of [1, 2]) {
+      const answer = (await commands.answer(ReticleCommand.SNAPSHOT, {})) as Record<
+        string,
+        unknown
+      >;
+      expect(answer['readable']).toBe(false);
+      expect(String(answer['why'])).toContain('another Space');
+      expect(answer['next']).toBeUndefined();
+    }
+  });
+});
+
 describe('narrate', () => {
   it('shows what the agent says in the HUD, and declares that it serves it', async () => {
     const said: string[] = [];

@@ -494,8 +494,7 @@ async function dispatchOther(
         el.focus();
         return setNativeValue(el, el.value + args['text']);
       }
-      assertNotRichText(el, 'type into');
-      throw new Error(`cannot type into a <${el.tagName.toLowerCase()}>`);
+      return (await import('./insert-text.js')).typeIntoNonField(el, args['text']);
     case ActionType.CLEAR:
       assertNotEditorTextArea(el, 'clear');
       if (isInput(el) || isTextArea(el)) {

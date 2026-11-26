@@ -827,3 +827,55 @@ it('a role and name miss names the whole query', async () => {
   const result = await evalElement(page, { role: 'button', name: 'Go' }, undefined, false, true);
   expect(result.failureReason).toContain('(query {"role":"button","name":"Go"})');
 });
+
+/** A page that answers every element query with `elements`, filtered by the asked state. */
+function pageOf(
+  elements: { ref: string; role: string; name: string; states: string[]; visible: boolean }[],
+): PredicateSession {
+  return {
+    ...session,
+    command(_name, args) {
+      const { query, state: want } = args as {
+        query: { role?: string; name?: string };
+        state?: string;
+      };
+      const { role, name } = query;
+      const found = elements.filter(
+        (e) =>
+          (role === undefined || e.role === role) &&
+          (name === undefined || e.name === name) &&
+          (want === undefined ||
+            (ElementState.HIDDEN === want ? !e.visible : e.states.includes(want))),
+      );
+      return Promise.resolve({
+        kind: 'command_result',
+        ok: true,
+        id: 'm',
+        result: { matched: found.length > 0, count: found.length, elements: found },
+      });
+    },
+  };
+}
+
+// Slack's search dialog was removed when the search ran. `state: "hidden"` on it failed, and the
+// reason named another dialog ("saw: Huddle"), so the agent could not tell that the dialog was gone.
+it('says that the element was removed, not hidden, when nothing matches it at all', async () => {
+  const huddle = {
+    ref: 'e3',
+    role: 'dialog',
+    name: 'Huddle',
+    states: ['present', 'hidden'],
+    visible: false,
+  };
+  const result = await evalElement(
+    pageOf([huddle]),
+    { role: 'dialog', name: 'Search' },
+    ElementState.HIDDEN,
+    false,
+    true,
+  );
+  expect(result.pass).toBe(false);
+  expect(result.failureReason).toContain('removed, not hidden');
+  expect(result.failureReason).toContain('absent: true');
+  expect(result.failureReason).not.toContain('Huddle');
+});

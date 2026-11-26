@@ -577,6 +577,19 @@ export async function evalElement(
         evidence: { nearMiss: relaxed.elements },
       };
     }
+    // Nothing matches it in any state: it was removed. The role-only list below named other,
+    // unrelated elements of that role (a "Huddle" dialog for a removed "Search" dialog).
+    if (ElementState.HIDDEN === state) {
+      return {
+        pass: false,
+        failureReason:
+          `nothing matching ${subject} is on the page: it was removed, not hidden. ` +
+          'To assert that it is gone, use `absent: true`',
+        observed: `no element matching ${subject}, in any state`,
+        expected: `an element matching ${subject} in state '${state}'`,
+        assertion: 'element.state',
+      };
+    }
   }
   if (query.role !== undefined && query.name !== undefined) {
     // The diagnosis looks where the check looked. A check scoped to one cell must not list the

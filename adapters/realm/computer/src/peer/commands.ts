@@ -379,7 +379,9 @@ export class PeerCommands {
       ...(read.windowsNotOnScreen === undefined || 0 === read.windowsNotOnScreen
         ? {}
         : {
-            next: `${String(read.windowsNotOnScreen)} window(s) of this application are on another Space or made small. They cannot be read from here. Ask the person to bring the application to this Space.`,
+            // Not `next`: the server says a `next` line once in a session, and this is a state.
+            readable: false,
+            why: `${String(read.windowsNotOnScreen)} window(s) of this application are on another Space or made small. They cannot be read from here. Ask the person to bring the application to this Space.`,
           }),
       unread: read.unread,
     };
