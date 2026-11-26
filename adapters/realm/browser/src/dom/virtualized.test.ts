@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { unmountedRowsIn } from './virtualized.js';
+import { clearOfVirtualized, countUnmountedRows, unmountedRowsIn } from './virtualized.js';
 
 /** jsdom reports 0 for every layout box, so the geometry has to be stubbed explicitly. */
 function box(el: HTMLElement, top: number, height: number): void {
@@ -29,7 +29,9 @@ describe('rows a container reserved space for but never rendered', () => {
     document.body.innerHTML = '<div id="v"><div id="spacer"></div></div>';
     const view = document.querySelector<HTMLElement>('#v');
     const spacer = document.querySelector<HTMLElement>('#spacer');
-    if (null === view || null === spacer) throw new Error('fixture');
+    if (null === view || null === spacer) {
+      throw new Error('fixture');
+    }
     scroller(view, 1700, 560);
     box(spacer, 0, 1700);
     for (let i = 0; i < 29; i += 1) {
@@ -46,7 +48,9 @@ describe('rows a container reserved space for but never rendered', () => {
     // its rows still span the whole area, so nothing is reserved-and-empty.
     document.body.innerHTML = '<div id="v"></div>';
     const view = document.querySelector<HTMLElement>('#v');
-    if (null === view) throw new Error('fixture');
+    if (null === view) {
+      throw new Error('fixture');
+    }
     scroller(view, 1000, 400);
     for (let i = 0; i < 20; i += 1) {
       const row = document.createElement('div');
@@ -59,7 +63,9 @@ describe('rows a container reserved space for but never rendered', () => {
   it('reports ZERO for a container that does not scroll', () => {
     document.body.innerHTML = '<div id="v"><div></div><div></div></div>';
     const view = document.querySelector<HTMLElement>('#v');
-    if (null === view) throw new Error('fixture');
+    if (null === view) {
+      throw new Error('fixture');
+    }
     scroller(view, 300, 300);
     expect(unmountedRowsIn(view)).toBe(0);
   });
@@ -140,7 +146,9 @@ describe('rows a container reserved space for but never rendered', () => {
     document.body.innerHTML = '<div id="v"><div id="spacer"></div></div>';
     const view = document.querySelector<HTMLElement>('#v');
     const spacer = document.querySelector<HTMLElement>('#spacer');
-    if (null === view || null === spacer) throw new Error('fixture');
+    if (null === view || null === spacer) {
+      throw new Error('fixture');
+    }
     scroller(view, 3400, 560);
     box(spacer, 0, 3400);
     for (let i = 0; i < 20; i += 1) {
@@ -149,5 +157,78 @@ describe('rows a container reserved space for but never rendered', () => {
       box(row, 1700 + i * 34, 34); // a window in the middle: rows above AND below are unmounted
     }
     expect(unmountedRowsIn(view)).toBeGreaterThan(70);
+  });
+});
+
+/**
+ * The count says how many rows are not rendered. The containment proof says which elements cannot
+ * hold such a row (#2298). The two read one list of virtualized containers. If they did not, the
+ * proof could call an element clear of a list that the count had just reported.
+ */
+describe('the containment proof and the count agree on which containers are virtualized', () => {
+  /** A virtualized list, an ordinary long list and a panel, side by side. */
+  function page(): {
+    virtual: HTMLElement;
+    virtualRow: HTMLElement;
+    ordinary: HTMLElement;
+    ordinaryRow: HTMLElement;
+    panel: HTMLElement;
+  } {
+    document.body.innerHTML =
+      '<div id="v"><div id="spacer"></div></div><div id="o"></div><section id="panel"></section>';
+    const virtual = document.querySelector<HTMLElement>('#v');
+    const spacer = document.querySelector<HTMLElement>('#spacer');
+    const ordinary = document.querySelector<HTMLElement>('#o');
+    const panel = document.querySelector<HTMLElement>('#panel');
+    if (null === virtual || null === spacer || null === ordinary || null === panel) {
+      throw new Error('fixture');
+    }
+    scroller(virtual, 1700, 560);
+    box(spacer, 0, 1700);
+    for (let i = 0; i < 29; i += 1) {
+      const row = document.createElement('div');
+      spacer.append(row);
+      box(row, i * 34, 34);
+    }
+    scroller(ordinary, 1000, 400);
+    for (let i = 0; i < 20; i += 1) {
+      const row = document.createElement('div');
+      ordinary.append(row);
+      box(row, i * 50, 30);
+    }
+    const virtualRow = spacer.firstElementChild;
+    const ordinaryRow = ordinary.firstElementChild;
+    if (!(virtualRow instanceof HTMLElement) || !(ordinaryRow instanceof HTMLElement)) {
+      throw new Error('fixture');
+    }
+    return { virtual, virtualRow, ordinary, ordinaryRow, panel };
+  }
+
+  it('tests the container that the count includes, and no other', () => {
+    const { virtual, virtualRow, ordinary, ordinaryRow, panel } = page();
+    // Only the first list adds to the count: 21 rows, as measured on it alone.
+    expect(unmountedRowsIn(virtual)).toBe(21);
+    expect(unmountedRowsIn(ordinary)).toBe(0);
+    expect(countUnmountedRows()).toBe(21);
+
+    // The container, each node inside it and each node that contains it are not clear of it.
+    expect(clearOfVirtualized([virtual], [])).toBe(false);
+    expect(clearOfVirtualized([virtualRow], [])).toBe(false);
+    expect(clearOfVirtualized([document.body], [])).toBe(false);
+    // A match inside the container fails the proof, also when the root is clear.
+    expect(clearOfVirtualized([panel], [virtualRow])).toBe(false);
+
+    // A container that adds nothing to the count is not virtualized for the proof.
+    expect(clearOfVirtualized([panel], [])).toBe(true);
+    expect(clearOfVirtualized([ordinary], [ordinaryRow])).toBe(true);
+    expect(clearOfVirtualized([panel, ordinary], [panel, ordinaryRow])).toBe(true);
+  });
+
+  it('calls each element clear when the count is zero', () => {
+    const { virtual, virtualRow, panel } = page();
+    // The list now renders each row it reserved space for, so nothing is unmounted.
+    scroller(virtual, 986, 560);
+    expect(countUnmountedRows()).toBe(0);
+    expect(clearOfVirtualized([virtual, document.body, panel], [virtualRow])).toBe(true);
   });
 });

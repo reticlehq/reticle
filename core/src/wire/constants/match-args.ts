@@ -16,4 +16,6 @@
 export const MatchArg = {
   /** `true` describes each match with up to `TRANSPORT_LIMITS.MAX_FULL_TEXT` characters of text, not the display-sized 80. */
   FULL_TEXT: 'fullText',
+  /** `true` asks the page to prove that a ref `scope` and every match are outside each virtualized list. See `MatchResult.outsideVirtualized`. */
+  OUTSIDE_VIRTUALIZED: 'outsideVirtualized',
 } as const;

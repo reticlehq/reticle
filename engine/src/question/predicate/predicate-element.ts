@@ -227,6 +227,8 @@ export async function matchOnce(
   state: ElementState | undefined,
   diagnose?: boolean,
   fullText = false,
+  /** Ask the page to prove that the ref scope and every match are outside each virtualized list. */
+  outsideVirtualized = false,
 ): Promise<MatchResult> {
   // A page that declared its commands and left match out can never answer (#1990): the session
   // refuses the send, and that refusal used to be read as "zero matches". Refuse before the trip.
@@ -238,6 +240,7 @@ export async function matchOnce(
     state,
     ...(true === diagnose ? { diagnose: true } : {}),
     ...(fullText ? { [MatchArg.FULL_TEXT]: true } : {}),
+    ...(outsideVirtualized ? { [MatchArg.OUTSIDE_VIRTUALIZED]: true } : {}),
   });
   // A reply with an error never looked at the page. Read as zero matches, a query the page's schema
   // refused or a matcher that threw became a false `no`. Thrown, the verdict reads it as unknown.
@@ -372,28 +375,35 @@ function stateTheSdkPredates(
  * Shared by both absence spellings so `not(element)` and `absent: true` agree on whether the
  * target control itself is mounted in another state. Drops truncated residual results because a
  * cut prefix cannot prove a residual match.
+ *
+ * A scoped query also asks the page for the proof that the scope and every match are outside each
+ * virtualized list. `outsideVirtualized` is true only when this side asked and the page said yes:
+ * an older page does not answer, and an answer that nobody asked for is not used.
  */
 async function mountedIgnoringState(
   session: PredicateSession,
   query: ElementQuery,
   residualChecks: readonly [string, string][],
   fullText: boolean,
-): Promise<{ elements: ElementDescriptor[]; count: number }> {
+): Promise<{ elements: ElementDescriptor[]; count: number; outsideVirtualized: boolean }> {
+  const asked = query.scope !== undefined;
   const relaxed = await matchOnce(
     session,
     withAltProjected(query, residualChecks),
     undefined,
     false,
     fullText,
+    asked,
   );
+  const outsideVirtualized = asked && true === relaxed.outsideVirtualized;
   if (0 === residualChecks.length) {
-    return { elements: relaxed.elements, count: relaxed.count };
+    return { elements: relaxed.elements, count: relaxed.count, outsideVirtualized };
   }
   if (relaxed.count !== relaxed.elements.length) {
-    return { elements: [], count: 0 };
+    return { elements: [], count: 0, outsideVirtualized: false };
   }
   const kept = relaxed.elements.filter((element) => satisfiesResiduals(element, residualChecks));
-  return { elements: kept, count: kept.length };
+  return { elements: kept, count: kept.length, outsideVirtualized };
 }
 
 /** The first SDK release whose element query accepts `matchCase`; an older page refuses the query. */
@@ -521,13 +531,20 @@ export async function evalElement(
       };
     }
     // Check whether the locator matches one mounted element in another state (#2298).
-    // That evidence lets the blind-spot rule separate a state check on a mounted control from an
-    // absent element that could hide in unmounted virtual rows. Only attach a single unambiguous
-    // match so large match lists never bloat a passing verdict.
+    // The blind-spot rule reads this evidence. The mounted match alone proves nothing about
+    // unmounted virtual rows: only the page's `outsideVirtualized` answer does. Only attach a
+    // single unambiguous match so large match lists never bloat a passing verdict.
     if (diagnose && state !== undefined) {
       const mounted = await mountedIgnoringState(session, query, residual.checks, textOnThisSide);
       if (1 === mounted.count && 1 === mounted.elements.length) {
-        return { pass: true, evidence: { absent: true, nearMiss: mounted.elements } };
+        return {
+          pass: true,
+          evidence: {
+            absent: true,
+            nearMiss: mounted.elements,
+            ...(mounted.outsideVirtualized ? { outsideVirtualized: true } : {}),
+          },
+        };
       }
     }
     return { pass: true, evidence: { absent: true } };
@@ -615,10 +632,11 @@ export async function evalElement(
         }${ariaNote}`,
         expected: `element matching ${subject} in state '${state}'`,
         assertion: ELEMENT_STATE_ASSERTION,
-        evidence:
-          mounted.count > mounted.elements.length
-            ? { nearMiss: mounted.elements, nearMissCount: mounted.count }
-            : { nearMiss: mounted.elements },
+        evidence: {
+          nearMiss: mounted.elements,
+          ...(mounted.count > mounted.elements.length ? { nearMissCount: mounted.count } : {}),
+          ...(mounted.outsideVirtualized ? { outsideVirtualized: true } : {}),
+        },
       };
     }
   }

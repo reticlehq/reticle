@@ -109,11 +109,6 @@
       "count": 3
     }
   },
-  "src/commands/commands.ts": {
-    "no-nested-ternary": {
-      "count": 1
-    }
-  },
   "src/commands/commands.upload-inspect.test.ts": {
     "curly": {
       "count": 5
@@ -232,16 +227,6 @@
   "src/dom/theme.ts": {
     "curly": {
       "count": 12
-    }
-  },
-  "src/dom/virtualized.test.ts": {
-    "curly": {
-      "count": 4
-    }
-  },
-  "src/dom/virtualized.ts": {
-    "curly": {
-      "count": 9
     }
   },
   "src/edit-epoch.ts": {

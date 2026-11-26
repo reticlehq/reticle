@@ -339,20 +339,38 @@ function negatedElementEvidence(evidence: unknown): unknown {
 }
 
 /**
- * Did this state-absence check locate exactly one mounted element in another state (#2298)?
+ * Did the page prove that this state-absence check cannot match an unmounted virtual row (#2298)?
  *
- * When one specific control is mounted and lacks the negated state, unmounted virtual rows cannot
- * hold a checked copy of that control. Multiple mounted matches or a truncated count stay
- * conservative because repeated row controls can appear in unmounted rows as well.
+ * One mounted match in another state is not that proof. A virtual list repeats a control in each
+ * row, with the same role, name and testid, so an unmounted row can hold a copy in the negated
+ * state. The proof is the `outsideVirtualized` answer of the page. The page gives it only when the
+ * `scope` is a ref to a live region that is not inside a virtualized list and does not contain one,
+ * and the mounted match is not inside one. The search stays in that region, and a row that a list
+ * did not render is not in it.
+ *
+ * The other conditions keep the question about one control: a `scope`, a state, a query that names
+ * a specific control, and exactly one mounted match. An unscoped query, a CSS scope, an older page
+ * that does not answer, multiple mounted matches and a truncated count all keep the blind spot.
  */
-function mountedTargetLacksState(predicate: AbsencePredicate, evidence: unknown): boolean {
-  if (undefined === predicate.state || !namesSpecificElement(predicate.query)) {
+function mountedTargetOutsideVirtualized(predicate: AbsencePredicate, evidence: unknown): boolean {
+  if (
+    undefined === predicate.state ||
+    'string' !== typeof predicate.query?.scope ||
+    !namesSpecificElement(predicate.query)
+  ) {
     return false;
   }
   if ('object' !== typeof evidence || null === evidence) {
     return false;
   }
-  const record = evidence as { nearMiss?: unknown; nearMissCount?: unknown };
+  const record = evidence as {
+    nearMiss?: unknown;
+    nearMissCount?: unknown;
+    outsideVirtualized?: unknown;
+  };
+  if (true !== record.outsideVirtualized) {
+    return false;
+  }
   if (!Array.isArray(record.nearMiss) || 1 !== record.nearMiss.length) {
     return false;
   }
@@ -379,7 +397,8 @@ const NEVER_VIRTUALIZED_ROLES: ReadonlySet<string> = new Set([
  * names the target by its testid shows that the target was on the page and left (#2176). Only a
  * page-level role counts: a virtualizer unmounts a ROW when it scrolls out of view, and that row's
  * removal says nothing about the data. The blind-spot event carries a count and no container, so
- * the engine cannot tell whether a target is outside every virtualized container.
+ * the engine cannot tell from it whether a target is outside every virtualized container. Only the
+ * page can prove that: see `mountedTargetOutsideVirtualized`.
  */
 function sawPageLevelTargetLeave(
   query: AbsencePredicate['query'],
@@ -404,10 +423,11 @@ function sawPageLevelTargetLeave(
  *
  * Fires on three blind-spot kinds:
  *   - CROSS_ORIGIN_IFRAME (only when the predicate is scoped to a frame region)
- *   - VIRTUALIZED_UNMOUNTED — a row that was never rendered could hold the element (scoped:
- *     skipped when the queried role is structurally page-level, like dialog or a landmark, or when
- *     the window saw the target itself leave as a page-level node)
- *   - CLOSED_SHADOW_ROOT — a subtree Reticle cannot see into
+ *   - VIRTUALIZED_UNMOUNTED: a row that was never rendered could hold the element. Skipped when
+ *     the queried role is structurally page-level, like dialog or a landmark. Skipped when the
+ *     window saw the target itself leave as a page-level node. Skipped when the page proved that a
+ *     ref `scope` and its one mounted match are outside every virtualized list (#2298).
+ *   - CLOSED_SHADOW_ROOT: a subtree Reticle cannot see into
  */
 export function absenceBlindSpotNote(
   predicate: AbsencePredicate,
@@ -443,7 +463,7 @@ export function absenceBlindSpotNote(
   const virtualizedApplies =
     (undefined === role || !NEVER_VIRTUALIZED_ROLES.has(role)) &&
     !sawPageLevelTargetLeave(predicate.query, windowEvents) &&
-    !mountedTargetLacksState(predicate, evidence);
+    !mountedTargetOutsideVirtualized(predicate, evidence);
   const relevant = spots.filter((spot) => {
     if (spot.count <= 0) {
       return false;
