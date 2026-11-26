@@ -38,7 +38,7 @@ import { driveFlowsFrom } from '@/memory/journal/drive-flow.js';
 import type { Session } from '@/portal/session/session.js';
 import type { SessionManager } from '@/portal/session/session-manager.js';
 import { LIVE_CONTROL_TOOLS } from '@/portal/session/live-control-tools.js';
-import { JOURNEY_RECORDING } from './act/sequence-grade.js';
+import { JOURNEY_NOT_KEPT, JOURNEY_RECORDING } from './act/sequence-grade.js';
 
 const ORIGIN = 'http://localhost:5173';
 const SAVED_AS = 'four-claims';
@@ -228,6 +228,22 @@ describe('a journey whose claims held keeps every claim when it is saved', () =>
     })) as Saved;
     expect(await savedSubExpects(flows, SAVED_AS)).toEqual(declared(steps));
     expect(saved.assertions?.consequenceSteps).toBe(4);
+  });
+
+  it('refuses to save an older journey when the newest one did not verify yes', async () => {
+    const { result, deps, flows } = await driveAndKeep([signalled(1), signalled(2)]);
+    expect(result.verified).toBe(Verified.YES);
+    const failed = (await tool(ReticleTool.ACT_SEQUENCE).handler(deps, {
+      steps: [signalled(3), { ...click(4), expect: { kind: 'signal', name: 'never' } }, click(5)],
+      timeout_ms: 500,
+    })) as { verified?: string; keep?: string };
+    expect(failed.verified).not.toBe(Verified.YES);
+    const saved = (await tool(ReticleTool.FLOW_SAVE).handler(deps, {
+      flowName: JOURNEY_RECORDING,
+      saveAs: SAVED_AS,
+    })) as Saved;
+    expect(saved.error).toBe(JOURNEY_NOT_KEPT);
+    expect((await flows.load(SAVED_AS)).ok).toBe(false);
   });
 
   it('saves every claim from a recording the agent opened', async () => {

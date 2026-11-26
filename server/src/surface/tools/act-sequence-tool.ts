@@ -56,6 +56,7 @@ import {
 import {
   DeviationMode,
   gradeSequence,
+  JOURNEY_NOT_KEPT,
   JOURNEY_RECORDING,
   offerToKeep,
   type StepExpectation,
@@ -601,6 +602,9 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
           session: session.id,
           ...(pageBefore === undefined ? {} : { startPath: pageBefore }),
         });
+      } else {
+        // An older journey left under this name would be saved as if it were this one.
+        deps.recordings.discardCompiled(JOURNEY_RECORDING, JOURNEY_NOT_KEPT);
       }
       const tailStart =
         DeviationMode.HALT === onDeviation && stoppedAt !== undefined
