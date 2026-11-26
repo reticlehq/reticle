@@ -16,4 +16,8 @@
 export const MatchArg = {
   /** `true` describes each match with up to `TRANSPORT_LIMITS.MAX_FULL_TEXT` characters of text, not the display-sized 80. */
   FULL_TEXT: 'fullText',
+  /** `true` asks the page to measure each match's geometry (#1539): box, viewport, clipping, overlap. */
+  GEOMETRY: 'geometry',
+  /** The second element query an `overlaps` geometry ask is measured against (#1539). */
+  OVERLAPS_QUERY: 'overlapsQuery',
 } as const;
