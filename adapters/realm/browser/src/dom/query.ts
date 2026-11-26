@@ -33,7 +33,15 @@ import { hitTestOccluder } from './occlusion.js';
 import { isSensitiveKey } from '@/security/serialization.js';
 import { declaredTestids } from '@/registry/capabilities.js';
 import { refs } from './addressing/refs.js';
-import { firstIn, firstListIn, hintRoots, pageContent, resolveContainers } from './scope-roots.js';
+import {
+  firstIn,
+  firstListIn,
+  hintRoots,
+  pageContent,
+  refScopeRoot,
+  resolveContainers,
+} from './scope-roots.js';
+import { clearOfVirtualized } from './virtualized.js';
 import { getTestIdAttr, readTestId, testIdSelector } from './addressing/testid-attr.js';
 import { stableSelectorFor } from './stable-selector.js';
 import {
@@ -357,6 +365,8 @@ export function matchQuery(
   wholePhrase = true,
   diagnose: boolean = true,
   fullText = false,
+  /** Ask for the proof that a ref scope and every match are outside each virtualized list (#2298). */
+  proveOutsideVirtualized = false,
 ): MatchResult {
   // NO blanket try/catch here. It would turn ANY exception during candidate-finding into
   // `elements = []`, which is the same lie as the `default` arm above: a query that could not run
@@ -411,11 +421,15 @@ export function matchQuery(
   });
   const covered = dialogCovering(filtered);
   const unreadable = wantedTextOf(query) === undefined ? undefined : unreadableMatch(described);
+  // Only a ref scope can give the proof: it names one live element, and the search stays below it.
+  const scopeRoot = proveOutsideVirtualized ? refScopeRoot(query.scope) : undefined;
+  const outside = scopeRoot !== undefined && clearOfVirtualized([scopeRoot], filtered);
   return {
     matched: filtered.length > 0,
     count: filtered.length,
     elements: descriptors,
     ...(fullText ? { fullText: true as const } : {}),
+    ...(outside ? { outsideVirtualized: true as const } : {}),
     ...(scopeMissing ? { scopeMissing: true } : {}),
     ...(found.scopeMatches > 1 ? { scopeMatches: found.scopeMatches } : {}),
     ...(covered === undefined ? {} : { coveredBy: covered }),

@@ -42,6 +42,22 @@ export function resolveContainers(scope: string | undefined): {
 }
 
 /**
+ * The live element that a ref scope names. Undefined for no scope, for a CSS scope, and for a ref
+ * that resolves to no element.
+ *
+ * Only a ref counts, because a ref names one element that is on the page now. A CSS scope is a
+ * pattern: it can also match inside a row that a virtualized list did not render, so its roots
+ * prove nothing about such rows (#2298).
+ */
+export function refScopeRoot(scope: string | undefined): Element | undefined {
+  if (scope === undefined) {
+    return undefined;
+  }
+  const byRef = refs.resolve(scope);
+  return isActionTarget(byRef) ? byRef : undefined;
+}
+
+/**
  * The roots a zero-match hint describes: every element the scope matched. A hint WANTS the page's
  * orientation even when the scope is gone, so it falls back to the body (the match path already
  * reported scopeMissing, so this cannot mask it).

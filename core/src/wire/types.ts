@@ -150,6 +150,14 @@ export interface MatchResult {
    */
   fullText?: true;
   /**
+   * Present, and true, only when the page honoured `MatchArg.OUTSIDE_VIRTUALIZED` and proved it: the
+   * `scope` is a ref to a live element that is not inside a virtualized list and does not contain
+   * one, and no match is inside one. An unmounted row of such a list then cannot hold a match. A page
+   * too old to know the argument ignores it and does not send the field, so a caller that does not
+   * see it must not assume the proof.
+   */
+  outsideVirtualized?: true;
+  /**
    * True when a `scope` was given but resolved to nothing (the container was unmounted or the selector
    * matched no element). The search returns zero matches WITHOUT falling back to the whole page, and
    * this flag says why — so "element absent" and "scope vanished" stay distinguishable. Without it, a

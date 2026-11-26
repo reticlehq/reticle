@@ -97,6 +97,14 @@ function queryFromArgs(args: Record<string, unknown>): ElementQuery {
   };
 }
 
+/** Why an element has no source: only this element has no stamp, or no element on the page has one. */
+function sourceUnavailableReason(doc: Document): string {
+  if (documentHasSourceStamps(doc)) {
+    return 'This element has no source stamp. Others on the page do, so the stamping loader is running — the nearest stamped ancestor is out of range, or this element is rendered outside instrumented code.';
+  }
+  return 'No element in this document carries a source stamp, so the stamping loader is not running: an older adapter, a bundler whose hook never ran, or a build the plugin was dropped from. Add @reticlehq/vite-plugin (or @reticlehq/babel-plugin) to the dev build and restart the dev server to get `file:line` back.';
+}
+
 function inspect(ref: string, reveal = false): unknown {
   const el = refs.resolve(ref);
   // THROW, exactly as executeAction does. Returning an error payload made it a SUCCESSFUL command
@@ -146,11 +154,7 @@ function inspect(ref: string, reveal = false): unknown {
   // have one this session, and the fix is a build-config change rather than anything about this
   // element. Only computed when `source` is already absent, so the ordinary path pays nothing.
   const sourceUnavailable =
-    source !== undefined
-      ? undefined
-      : documentHasSourceStamps(el.ownerDocument)
-        ? 'This element has no source stamp. Others on the page do, so the stamping loader is running — the nearest stamped ancestor is out of range, or this element is rendered outside instrumented code.'
-        : 'No element in this document carries a source stamp, so the stamping loader is not running: an older adapter, a bundler whose hook never ran, or a build the plugin was dropped from. Add @reticlehq/vite-plugin (or @reticlehq/babel-plugin) to the dev build and restart the dev server to get `file:line` back.';
+    source !== undefined ? undefined : sourceUnavailableReason(el.ownerDocument);
   /*
    * Both axes, because the X one is where the most common visual defect on the web hides.
    *
@@ -462,6 +466,7 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
       undefined,
       true === args['diagnose'],
       true === args[MatchArg.FULL_TEXT],
+      true === args[MatchArg.OUTSIDE_VIRTUALIZED],
     ),
   );
   // Each act ends with a canvas sample, before it answers, so the frame it drew is tied to it.

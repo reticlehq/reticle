@@ -14,6 +14,8 @@
  * zero and never reports.
  */
 
+import { isElement } from './realm.js';
+
 /** Below this, the empty space is padding or a sticky header rather than a virtualized remainder. */
 const UNMOUNTED_RATIO = 0.25;
 
@@ -32,9 +34,13 @@ function rowHost(container: HTMLElement): HTMLElement {
       (c): c is HTMLElement => c instanceof HTMLElement,
     );
     const only = 1 === children.length ? children[0] : undefined;
-    if (only === undefined) return host;
+    if (only === undefined) {
+      return host;
+    }
     // A spacer is a single child that fills (or over-fills) the scroll area.
-    if (only.offsetHeight < host.scrollHeight * 0.9) return host;
+    if (only.offsetHeight < host.scrollHeight * 0.9) {
+      return host;
+    }
     host = only;
   }
   return host;
@@ -44,11 +50,15 @@ function rowHost(container: HTMLElement): HTMLElement {
 export function unmountedRowsIn(container: HTMLElement): number {
   const scrollHeight = container.scrollHeight;
   const clientHeight = container.clientHeight;
-  if (clientHeight <= 0 || scrollHeight < clientHeight * MIN_SCROLL_RATIO) return 0;
+  if (clientHeight <= 0 || scrollHeight < clientHeight * MIN_SCROLL_RATIO) {
+    return 0;
+  }
 
   const host = rowHost(container);
   const rows = Array.from(host.children).filter((c): c is HTMLElement => c instanceof HTMLElement);
-  if (rows.length < 2) return 0;
+  if (rows.length < 2) {
+    return 0;
+  }
 
   let top = Infinity;
   let bottom = 0;
@@ -64,26 +74,105 @@ export function unmountedRowsIn(container: HTMLElement): number {
       container.clientTop +
       container.scrollTop;
     const rowBottom = rowTop + row.offsetHeight;
-    if (rowTop < top) top = rowTop;
-    if (rowBottom > bottom) bottom = rowBottom;
+    if (rowTop < top) {
+      top = rowTop;
+    }
+    if (rowBottom > bottom) {
+      bottom = rowBottom;
+    }
     totalHeight += row.offsetHeight;
   }
   // Space the container reserved and left empty: above the first row plus below the last.
   const empty = Math.max(0, top) + Math.max(0, scrollHeight - bottom);
-  if (empty < scrollHeight * UNMOUNTED_RATIO) return 0;
+  if (empty < scrollHeight * UNMOUNTED_RATIO) {
+    return 0;
+  }
 
   const averageRow = totalHeight / rows.length;
-  if (averageRow <= 0) return 0;
+  if (averageRow <= 0) {
+    return 0;
+  }
   return Math.round(empty / averageRow);
+}
+
+/**
+ * Every scroll container on the page that holds space for rows it has not rendered, with its count.
+ *
+ * One enumerator feeds the blind-spot count and the containment proof below. The two then agree on
+ * which containers are virtualized: a container the count includes is a container the proof tests.
+ */
+function virtualized(): { container: HTMLElement; unmounted: number }[] {
+  const found: { container: HTMLElement; unmounted: number }[] = [];
+  for (const element of document.querySelectorAll<HTMLElement>('*')) {
+    // Cheap gate first: only elements that actually scroll are worth measuring.
+    if (element.scrollHeight <= element.clientHeight) {
+      continue;
+    }
+    const unmounted = unmountedRowsIn(element);
+    if (unmounted > 0) {
+      found.push({ container: element, unmounted });
+    }
+  }
+  return found;
 }
 
 /** Total unmounted rows across every scroll container on the page. */
 export function countUnmountedRows(): number {
   let total = 0;
-  for (const element of document.querySelectorAll<HTMLElement>('*')) {
-    // Cheap gate first: only elements that actually scroll are worth measuring.
-    if (element.scrollHeight <= element.clientHeight) continue;
-    total += unmountedRowsIn(element);
+  for (const { unmounted } of virtualized()) {
+    total += unmounted;
   }
   return total;
+}
+
+/**
+ * The next node up the tree that a query searches: the parent node, the host of a shadow root, or
+ * the frame element of a document. Null at the top document, and at a frame the page cannot read.
+ */
+function composedParent(node: Node): Node | null {
+  if (null !== node.parentNode) {
+    return node.parentNode;
+  }
+  // `host` exists on a ShadowRoot and not on a Document. Read the property as
+  // `parentAcrossShadowBoundary` does: `instanceof ShadowRoot` is false for a root from a frame.
+  const host: unknown = (node as Partial<ShadowRoot>).host;
+  if (isElement(host)) {
+    return host;
+  }
+  try {
+    return (node as Partial<Document>).defaultView?.frameElement ?? null;
+  } catch {
+    // The parent page has another origin and refuses the read. The walk stops at this document.
+    return null;
+  }
+}
+
+/** Whether `node` is `ancestor` or is below it, through shadow roots and same-origin frames. */
+function isWithin(node: Node, ancestor: Node): boolean {
+  for (let current: Node | null = node; null !== current; current = composedParent(current)) {
+    if (current === ancestor) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Whether `roots` and `matches` are clear of every virtualized container the blind spot counts.
+ *
+ * True only when each root is not inside a virtualized container and does not contain one, and no
+ * match is inside one. A row that such a container did not render would be below the container, so
+ * it cannot be below a root that is clear of the container. A query that searches only those roots
+ * then cannot match an unmounted row (#2298). With no virtualized container on the page, the answer
+ * is true.
+ */
+export function clearOfVirtualized(
+  roots: readonly Element[],
+  matches: readonly Element[],
+): boolean {
+  return virtualized().every(
+    ({ container }) =>
+      roots.every((root) => !isWithin(root, container) && !isWithin(container, root)) &&
+      matches.every((el) => !isWithin(el, container)),
+  );
 }

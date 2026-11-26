@@ -3,6 +3,7 @@ import {
   AppRuntime,
   BlindSpotKind,
   EventType,
+  MatchArg,
   ReticleCommand,
   Verified,
   VerifiedReason,
@@ -60,7 +61,9 @@ function depsWithBlindSpots(
 
 const tool = (name: string): ToolDef => {
   const found = TOOLS.find((t) => t.name === name);
-  if (found === undefined) throw new Error(`${name} is not on the surface`);
+  if (found === undefined) {
+    throw new Error(`${name} is not on the surface`);
+  }
   return found;
 };
 
@@ -404,5 +407,169 @@ describe('reticle_act_and_wait downgrades absence when blind spots hide the targ
       unknown
     >;
     expect(r['verifiedReason']).not.toBe(VerifiedReason.ABSENCE_BLIND_SPOT);
+  });
+});
+
+/**
+ * A state negation on one mounted checkbox beside virtualized rows (#2298).
+ *
+ * One mounted unchecked box does not prove that no unmounted row holds a checked one: a virtual
+ * list repeats the control in each row. The verdict is `yes` only when the query has a ref `scope`
+ * and the page proves that the scope is outside each virtualized list.
+ */
+describe('a state negation on one mounted checkbox beside virtualized rows (#2298)', () => {
+  /** A ref to a settings panel beside the list. */
+  const PANEL = 'e2';
+
+  /**
+   * A page with one mounted "Notify me" box and 12 unmounted virtual rows. `proves` is whether the
+   * page answers `outsideVirtualized` when asked: a current page whose scope is clear of the list
+   * does, and an older page, or a scope inside the list, does not.
+   */
+  function mountedCheckboxDeps(proves: boolean, startsChecked: boolean): ToolDeps {
+    let checked = startsChecked;
+    const checkbox = (isChecked: boolean) => ({
+      ref: 'e4',
+      role: 'checkbox',
+      name: 'Notify me',
+      states: isChecked ? ['visible', 'enabled', 'checked'] : ['visible', 'enabled'],
+      visible: true,
+    });
+    const command = (name: string, args?: unknown): Promise<CommandResult> => {
+      if (name === ReticleCommand.MATCH) {
+        const payload = (args ?? {}) as Record<string, unknown>;
+        const matched = 'checked' === payload['state'] ? checked : true;
+        const asked = true === payload[MatchArg.OUTSIDE_VIRTUALIZED];
+        return Promise.resolve({
+          kind: 'command_result',
+          id: 'q1',
+          ok: true,
+          result: {
+            matched,
+            count: matched ? 1 : 0,
+            elements: matched ? [checkbox(checked)] : [],
+            ...(proves && asked ? { outsideVirtualized: true } : {}),
+          },
+        });
+      }
+      checked = false;
+      return Promise.resolve({
+        kind: 'command_result',
+        id: 'c1',
+        ok: true,
+        result: { dispatched: true, settled: true, effect: { domMutatedWithin: 1 } },
+      });
+    };
+    const noEvents: ReticleEvent[] = [];
+    const session = createFakeSession(
+      {
+        elapsed: () => 1000,
+        command,
+        queryEvents: () => Promise.resolve(noEvents),
+        eventsSince: () => noEvents,
+        bufferHealth: () => ({ total: 10, dropped: 0 }),
+        blindSpots: () => ({ [BlindSpotKind.VIRTUALIZED_UNMOUNTED]: 12 }),
+        health: () => ({ lastSeenMs: 0, throttled: false, focused: true }),
+      },
+      { url: 'http://localhost:5173/app' },
+    );
+    const sessions: Partial<SessionManager> = { resolve: () => session };
+    return {
+      sessions: sessions as SessionManager,
+      baselines: new BaselineStore(),
+      recordings: new RecordingStore(),
+      flows: new FlowStore(createNodeFileSystem(), '/tmp/reticle-test/.reticle', { now: () => 0 }),
+      project: new ProjectStore(createNodeFileSystem(), '/tmp/reticle-test/.reticle', {
+        now: () => 0,
+      }),
+      annotations: new AnnotationStore(),
+      fs: createNodeFileSystem(),
+      reticleRoot: '/tmp/reticle-test/.reticle',
+      now: () => 0,
+    };
+  }
+
+  /** "No element matching `query` is checked", in both spellings. */
+  const spellings = (query: Record<string, unknown>): Record<string, unknown>[] => [
+    { kind: 'not', predicate: { kind: 'element', query, state: 'checked' } },
+    { kind: 'element', query, state: 'checked', absent: true },
+  ];
+
+  const UNSCOPED = [{ testid: 'x' }, { role: 'checkbox', name: 'Notify me' }];
+  const SCOPED = UNSCOPED.map((query) => ({ ...query, scope: PANEL }));
+
+  /** The verdict of `reticle_act_and_wait`: the click clears the box, then `until` is judged. */
+  const actVerdict = async (
+    proves: boolean,
+    until: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> =>
+    (await tool(ReticleTool.ACT_AND_WAIT).handler(mountedCheckboxDeps(proves, true), {
+      ref: 'e4',
+      action: 'click',
+      until,
+    })) as Record<string, unknown>;
+
+  /** The verdict of `reticle_assert` on a page where the box is already unchecked. */
+  const assertVerdict = async (
+    proves: boolean,
+    predicate: Record<string, unknown>,
+  ): Promise<Record<string, unknown>> =>
+    (await tool(ReticleTool.ASSERT).handler(mountedCheckboxDeps(proves, false), {
+      predicate,
+      timeout_ms: 0,
+    })) as Record<string, unknown>;
+
+  /**
+   * Both tools on each predicate. Each call has its own session, and the act calls run together:
+   * an act waits for the page to settle, and one after another they would take many seconds.
+   */
+  const verdicts = async (
+    proves: boolean,
+    predicates: Record<string, unknown>[],
+  ): Promise<{ acted: Record<string, unknown>; asserted: Record<string, unknown> }[]> =>
+    Promise.all(
+      predicates.map(async (predicate) => ({
+        acted: await actVerdict(proves, predicate),
+        asserted: await assertVerdict(proves, predicate),
+      })),
+    );
+
+  const expectUnknown = (result: Record<string, unknown>): void => {
+    expect(result['verified']).toBe(Verified.UNKNOWN);
+    expect(result['verifiedReason']).toBe(VerifiedReason.ABSENCE_BLIND_SPOT);
+  };
+
+  const expectYes = (result: Record<string, unknown>): void => {
+    expect(result['verified']).toBe(Verified.YES);
+    expect(result['verifiedReason']).not.toBe(VerifiedReason.ABSENCE_BLIND_SPOT);
+  };
+
+  it.each([
+    { page: 'gives no proof', proves: false },
+    { page: 'would give the proof', proves: true },
+  ])('keeps unknown for an unscoped query when the page $page', async ({ proves }) => {
+    for (const { acted, asserted } of await verdicts(proves, UNSCOPED.flatMap(spellings))) {
+      expectUnknown(acted);
+      expect(asserted['pass']).toBe(true);
+      expectUnknown(asserted);
+    }
+  });
+
+  it('verifies a query scoped by ref when the page proves the scope is outside each list', async () => {
+    for (const { acted, asserted } of await verdicts(true, SCOPED.flatMap(spellings))) {
+      expectYes(acted);
+      expect(asserted['pass']).toBe(true);
+      expectYes(asserted);
+    }
+  });
+
+  it('keeps unknown for a scoped query when the page gives no proof', async () => {
+    // An older SDK does not know the argument. A current SDK does not answer for a scope inside
+    // the list. The two look the same from here, and neither is a proof.
+    for (const { acted, asserted } of await verdicts(false, SCOPED.flatMap(spellings))) {
+      expectUnknown(acted);
+      expect(asserted['pass']).toBe(true);
+      expectUnknown(asserted);
+    }
   });
 });

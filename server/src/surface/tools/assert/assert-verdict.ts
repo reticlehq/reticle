@@ -165,7 +165,7 @@ export async function assertVerdict(
       : {};
   const windowEvents = await session.queryEvents({ since });
   // The window lets a target the page was seen to remove escape the virtualized blind spot.
-  const absenceBlindSpot = absenceBlindSpotNote(predicate, spots, windowEvents);
+  const absenceBlindSpot = absenceBlindSpotNote(predicate, spots, windowEvents, evidence);
   // Everything before the window, passed as LEARNING material only. A scale error disagrees with a
   // value the API stated earlier in the session, which an action-scoped window can never contain —
   // measured live, `observe` over a wide window reported `unit-mismatch` while `assert` on the same

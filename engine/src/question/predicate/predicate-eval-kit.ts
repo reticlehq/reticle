@@ -1,6 +1,9 @@
 import { PredicateKind, REDACTED_VALUE, asNumber, asString, selectPath } from '@reticlehq/core';
 import type { Predicate } from './predicate-schema.js';
 
+/** Assertion tag `evalElement` returns when the target is mounted in another state. */
+export const ELEMENT_STATE_ASSERTION = 'element.state';
+
 /**
  * What an evaluation ANSWERS, and the small comparisons every oracle answers it with.
  *
