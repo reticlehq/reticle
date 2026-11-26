@@ -256,6 +256,8 @@ export class Reticle {
   /** Whether this build stamps data-reticle-source, when the build plugin said. See #hello. */
   #sourceMapping: boolean | undefined = undefined;
   #projectId: string | undefined;
+  /** The project directory, announced in HELLO. See ReticleConnectOptions.root. */
+  #projectRoot: string | undefined;
   /** App-declared extra redaction keys, announced in hello so the driven path honours them too. */
   #redactKeys: string[] = [];
   /** Act-row log handle for the in-flight act/act_sequence, so its outcome stamps the right row. */
@@ -312,11 +314,10 @@ export class Reticle {
       return;
     }
 
-    // Publish the project root for the adapters' source relativisation. Done HERE, in library code,
-    // so the app-side connect stays plain JavaScript - see ReticleConnectOptions.root.
-    if (options.root !== undefined && options.root.length > 0) {
-      (globalThis as Record<string, unknown>)[RETICLE_ROOT_GLOBAL] = options.root;
-    }
+    // Publish the project root for source paths, and keep it for the HELLO. A new connect starts
+    // clean, so a root from an earlier session in this page does not stay on the next hello.
+    this.#projectRoot = undefined;
+    this.#rememberRoot(options.root);
     // The build plugin defines this; a hand-wired connect can pass it explicitly. Either way an
     // absent value means UNKNOWN, so the bridge never reports an unknown pair as in sync.
     const declaredVersion =
@@ -754,23 +755,35 @@ export class Reticle {
     this.#redactKeys = wireRedactionKeys(config);
   }
 
+  /** Store a project root the page has not announced yet. True when this call set it. */
+  #rememberRoot(root: string | undefined): boolean {
+    if (root === undefined || 0 === root.length || this.#projectRoot !== undefined) {
+      return false;
+    }
+    this.#projectRoot = root;
+    (globalThis as Record<string, unknown>)[RETICLE_ROOT_GLOBAL] = root;
+    return true;
+  }
+
   /**
    * An app that calls `connect()` itself runs before the build plugin's injected
    * `connect({ projectId })`, so the first HELLO went without an id and every session of that app
    * landed in `unmatched/`. A later call that names a project this page has not announced announces
-   * it now. A page that already declared a project keeps it: a second, different id is not a reason
-   * to move a live session's evidence.
+   * it now. A page that already declared a project keeps it. A later root is announced the same way.
    */
   #adoptLateProjectId(options: ReticleConnectOptions): void {
-    if (this.#projectId !== undefined) {
-      return;
+    const rootNow = this.#rememberRoot(options.root);
+    let projectNow = false;
+    if (this.#projectId === undefined) {
+      const late = resolveConnectIdentity(options, window.location.search).projectId;
+      if (late !== undefined) {
+        this.#projectId = late;
+        projectNow = true;
+      }
     }
-    const late = resolveConnectIdentity(options, window.location.search).projectId;
-    if (late === undefined) {
-      return;
+    if (rootNow || projectNow) {
+      this.#transport?.reannounce();
     }
-    this.#projectId = late;
-    this.#transport?.reannounce();
   }
 
   #hello(): HelloMessage {
@@ -779,6 +792,7 @@ export class Reticle {
       protocolVersion: RETICLE_PROTOCOL_VERSION,
       sessionId: this.#session,
       ...(this.#projectId === undefined ? {} : { projectId: this.#projectId }),
+      ...(this.#projectRoot === undefined ? {} : { root: this.#projectRoot }),
       url: pageHref(),
       title: scrubKnownSecrets(document.title),
       adapters: adapterNames(),

@@ -105,6 +105,8 @@ export class Session implements HandshakeFacts {
    * Set once more, by `adoptProject`, when a page that said nothing names its project later.
    */
   projectId: ProjectId | undefined;
+  /** The project directory the page reported. Absent when the page said nothing. */
+  projectRoot: string | undefined;
   /** Take a later HELLO's project id when the first carried none. A set project is kept. */
   adoptProject(projectId: string): boolean {
     if (this.projectId !== undefined) return false;
@@ -191,6 +193,7 @@ export class Session implements HandshakeFacts {
   constructor(hello: HelloMessage, socket: WebSocket, clock: Clock) {
     this.id = hello.sessionId;
     this.projectId = hello.projectId === undefined ? undefined : asProjectId(hello.projectId);
+    this.projectRoot = hello.root;
     this.url = hello.url;
     this.title = hello.title;
     this.adapters = hello.adapters;

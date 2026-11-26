@@ -151,6 +151,13 @@ export const HelloMessageSchema = z.object({
    * ⇒ resolution falls back to origin + recency.
    */
   projectId: sessionIdSchema.optional(),
+  /**
+   * The project directory this page was built from.
+   *
+   * The build plugin sends it. A page reached through a port forward reports a directory that is
+   * not on the machine the daemon runs on. Absent on an older SDK.
+   */
+  root: z.string().min(1).max(TRANSPORT_LIMITS.MAX_URL_LENGTH).optional(),
   adapters: z
     .array(z.string().max(TRANSPORT_LIMITS.MAX_ADAPTER_NAME_LENGTH))
     .max(TRANSPORT_LIMITS.MAX_ADAPTERS),

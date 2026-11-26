@@ -27,6 +27,11 @@ describe('env and scope on a HELLO', () => {
     expect(parsed.scope).toBe('observe');
   });
 
+  it('keeps a project root, and an older HELLO without one stays valid', () => {
+    expect(HelloMessageSchema.parse({ ...base, root: '/remote/app' }).root).toBe('/remote/app');
+    expect(HelloMessageSchema.parse(base).root).toBeUndefined();
+  });
+
   it('refuses a word outside the vocabulary', () => {
     expect(HelloMessageSchema.safeParse({ ...base, env: 'staging' }).success).toBe(false);
     expect(HelloMessageSchema.safeParse({ ...base, scope: 'admin' }).success).toBe(false);

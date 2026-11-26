@@ -55,6 +55,30 @@ describe('a project id that arrives after the first connect()', () => {
     expect(socket.hellos().at(-1)?.['projectId']).toBe('shop');
   });
 
+  it('announces a project root on the first hello, and a root that arrives later', () => {
+    vi.stubGlobal('WebSocket', RecordingSocket);
+    sdk.connect({ root: '/remote/app' });
+    const socket = RecordingSocket.last;
+    if (socket === undefined) {
+      throw new Error('connect() opened no socket');
+    }
+    socket.open();
+    expect(socket.hellos().at(-1)?.['root']).toBe('/remote/app');
+
+    sdk.disconnect();
+    sdk.connect();
+    const second = RecordingSocket.last;
+    if (second === undefined) {
+      throw new Error('connect() opened no socket');
+    }
+    second.open();
+    expect(second.hellos().at(-1)?.['root']).toBeUndefined();
+
+    sdk.connect({ root: '/remote/later' });
+
+    expect(second.hellos().at(-1)?.['root']).toBe('/remote/later');
+  });
+
   it('keeps the first id when a later call names a different one', () => {
     vi.stubGlobal('WebSocket', RecordingSocket);
     sdk.connect({ projectId: 'shop' });
