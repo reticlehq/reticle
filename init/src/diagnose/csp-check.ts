@@ -41,8 +41,23 @@ interface DirectiveSourceList {
 
 const TERNARY_GAP = /^"\s*:\s*"$/;
 const EXPRESSION_EDGE = /^["'`})\]]+|["'`})\]]+$/g;
+/** A template-literal expression, `${...}`, with no braces inside it. */
+const TEMPLATE_EXPRESSION = /\$\{[^{}]*\}/g;
 
-function directiveSources(text: string, directive: string): DirectiveSourceList[] | undefined {
+/**
+ * The text with each double quote inside a template expression made a single quote.
+ *
+ * A double quote ends the source list (see directiveSources), but inside `${...}` it only starts a
+ * string in the expression. `connect-src 'self'${dev ? " ws://localhost:4400" : ""}` then ended at
+ * `${dev ? `, and doctor reported a bridge that the development branch admits (#2335). The length
+ * stays the same, so match positions stay correct.
+ */
+function withTemplateQuotesSingle(text: string): string {
+  return text.replace(TEMPLATE_EXPRESSION, (expression) => expression.replaceAll('"', "'"));
+}
+
+function directiveSources(source: string, directive: string): DirectiveSourceList[] | undefined {
+  const text = withTemplateQuotesSingle(source);
   // Stops at the directive separator or the closing double quote of the enclosing string. Single
   // quotes are NOT terminators: `'self'` is a source, not the end of the list.
   const matches = [...text.matchAll(new RegExp(`${directive}([^;"]*)`, 'gi'))];
