@@ -472,7 +472,14 @@ export function buildSuiteVerdict(
     passed,
     failed,
     summary:
-      summary + silentSteps + neverOpened + disagreed + notHydrated + sharedState + asSaved + anyNumber,
+      summary +
+      silentSteps +
+      neverOpened +
+      disagreed +
+      notHydrated +
+      sharedState +
+      asSaved +
+      anyNumber,
     failures,
     ...(isolation === undefined ? {} : { isolation }),
     ...(unverifiable.length > 0 ? { unverifiable } : {}),
