@@ -5,6 +5,7 @@
  * in the voice of the failure a reader opens it for. A conjunction names the one part that failed.
  */
 import { describe, expect, it } from 'vitest';
+import { MeasureOp } from 'open-verification';
 import { PredicateKind } from './consequence.js';
 import type { Predicate } from './predicate.js';
 import {
@@ -29,6 +30,39 @@ describe('a check in words, when the agent gave none', () => {
     );
     expect(failureSentence({ kind: PredicateKind.NET })).toBe('No request was made');
     expect(failureSentence(text('Copied'))).toBe('The text "Copied" never appeared');
+    expect(
+      failureSentence({
+        kind: PredicateKind.TEXT,
+        satisfies: { property: 'matchesPattern', pattern: '\\d+ items' },
+      }),
+    ).toBe('Text matching /\\d+ items/ never appeared');
+    expect(
+      failureSentence({
+        kind: PredicateKind.TEXT,
+        satisfies: {
+          property: 'increased',
+          by: { op: MeasureOp.AT_LEAST, value: 5, tolerance: 1 },
+        },
+      }),
+    ).toBe('Text increased by at-least 5 (±1) never appeared');
+    expect(
+      failureSentence({
+        kind: PredicateKind.TEXT,
+        satisfies: {
+          property: 'increased',
+          by: { op: MeasureOp.AT_LEAST, value: 5, tolerance: 2 },
+        },
+      }),
+    ).toBe('Text increased by at-least 5 (±2) never appeared');
+    expect(
+      failureSentence({
+        kind: PredicateKind.TEXT,
+        satisfies: {
+          property: 'decreased',
+          by: { op: MeasureOp.EQUALS, value: 10, tolerance: 0.5 },
+        },
+      }),
+    ).toBe('Text decreased by equals 10 (±0.5) never appeared');
     expect(failureSentence({ kind: PredicateKind.ROUTE, pathname: '/welcome' })).toBe(
       'The page never moved to /welcome',
     );

@@ -91,3 +91,40 @@ export const propertyAssertionSchema = z.discriminatedUnion('property', [
   z.object({ property: z.literal('increased'), by: deltaSchema.optional() }).strict(),
   z.object({ property: z.literal('decreased'), by: deltaSchema.optional() }).strict(),
 ]);
+
+/**
+ * A short phrase describing a property assertion for claim titles and sentences.
+ * e.g. "matching /\d+ items/", "that is non-empty"
+ */
+export function describePropertyAssertion(assertion: PropertyAssertion): string {
+  switch (assertion.property) {
+    case 'matchesPattern':
+      return `matching /${assertion.pattern}/`;
+    case 'nonEmpty':
+      return 'that is non-empty';
+    case 'oneOf':
+      return `matching one of ${JSON.stringify(assertion.values)}`;
+    case 'withinTolerance':
+      return `within ${String(assertion.tolerance)} of ${String(assertion.of)}`;
+    case 'type':
+      return `of type ${assertion.is}`;
+    case 'changed':
+      return 'that changed';
+    case 'unchanged':
+      return 'that is unchanged';
+    case 'increased':
+      if (assertion.by === undefined) {
+        return 'that increased';
+      }
+      return assertion.by.tolerance !== undefined
+        ? `increased by ${assertion.by.op} ${String(assertion.by.value)} (±${String(assertion.by.tolerance)})`
+        : `increased by ${assertion.by.op} ${String(assertion.by.value)}`;
+    case 'decreased':
+      if (assertion.by === undefined) {
+        return 'that decreased';
+      }
+      return assertion.by.tolerance !== undefined
+        ? `decreased by ${assertion.by.op} ${String(assertion.by.value)} (±${String(assertion.by.tolerance)})`
+        : `decreased by ${assertion.by.op} ${String(assertion.by.value)}`;
+  }
+}

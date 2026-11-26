@@ -16,7 +16,7 @@
  * one sentence an agent is known to read, and a caveat parked anywhere else is a caveat nobody reads.
  */
 
-import { PredicateKind, compareSourceClauses } from '@reticlehq/core';
+import { PredicateKind, compareSourceClauses, describePropertyAssertion } from '@reticlehq/core';
 import type { Predicate } from '@/question/predicate/predicate.js';
 
 /** Enough to recognise the one that is stuck; not so many that a chatty window eats the verdict. */
@@ -54,7 +54,7 @@ const WORDED: Readonly<Record<string, readonly string[]>> = {
   [PredicateKind.NET]: ['method', 'urlContains'],
   [PredicateKind.ROUTE]: ['pathname', 'contains'],
   [PredicateKind.STATE]: ['path'],
-  [PredicateKind.TEXT]: ['contains', 'ignoreCase'],
+  [PredicateKind.TEXT]: ['contains', 'ignoreCase', 'satisfies'],
   [PredicateKind.ELEMENT]: ['query', 'state'],
   [PredicateKind.ANIMATION]: ['name'],
 };
@@ -91,8 +91,17 @@ function waitPhrase(predicate: Predicate): string {
       return `state at '${predicate.path}'`;
     // Every part that decides the claim stays in it: the label is the check's title downstream, and
     // one that dropped `ignoreCase` or the wanted state read as a different check from its own result.
-    case PredicateKind.TEXT:
-      return `text containing '${predicate.contains}'${true === predicate.ignoreCase ? ', ignoring case' : ''}`;
+    case PredicateKind.TEXT: {
+      const parts: string[] = [];
+      if (predicate.contains !== undefined) {
+        parts.push(`containing '${predicate.contains}'`);
+      }
+      if (predicate.satisfies !== undefined) {
+        parts.push(describePropertyAssertion(predicate.satisfies));
+      }
+      const desc = parts.length > 0 ? parts.join(' ') : 'present';
+      return `text ${desc}${true === predicate.ignoreCase ? ', ignoring case' : ''}`;
+    }
     case PredicateKind.ELEMENT:
       return `an element matching ${JSON.stringify(predicate.query)}${
         predicate.state === undefined ? '' : ` in state '${predicate.state}'`
