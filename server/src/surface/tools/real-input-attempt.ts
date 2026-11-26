@@ -637,6 +637,11 @@ export async function tryRealInput(
   if (pointProblem !== undefined) {
     throw new Error(`cannot ${action}: ${pointProblem}`);
   }
+  // A desktop realm moves its own pointer and keys (`foreground`). The route below is a page's: a
+  // hover was refused there with "cannot hover without a real pointer", and never reached the realm.
+  if (isPeerRealm(session.runtime)) {
+    return synthetic(InputModeReason.REALM_OWN_INPUT);
+  }
   if (action === ActionType.HOVER) {
     return hoverForReal(deps, session, ref, inner, provider);
   }
