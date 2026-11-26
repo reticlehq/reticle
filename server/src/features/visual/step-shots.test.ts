@@ -1,10 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createHash } from 'node:crypto';
-import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PNG } from 'pngjs';
-import { RETICLE_CAPTURE_FILE_PREFIX, ReticleCommand, ScreenshotSource } from '@reticlehq/core';
+import {
+  RETICLE_CAPTURE_FILE_PREFIX,
+  ReticleCommand,
+  ReticleTool,
+  STEP_SCREENSHOT,
+  ScreenshotSource,
+} from '@reticlehq/core';
 import { removeTempDir } from '@/machine/temp-dir.js';
 import { createNodeFileSystem } from '@/memory/project/fs/fs-port.js';
 import { withShotRun } from '@/judgement/runs/default-run-id.js';
@@ -352,6 +358,33 @@ describe('takeStepShot', () => {
     expect(shot).toMatchObject({ path: join(root, 'visual', 'runs', 'run-1', '0001-replay.jpg') });
     await shotsLanded(root, 'run-1');
     expect(await readStepShots(deps.fs, root, 'run-1')).toMatchObject([{ step: 'checkout#2' }]);
+  });
+
+  it('at the per-run limit, says what still works and where pictures come from next', async () => {
+    const { deps, root, sessionId } = await setup({ render: rendered(fakeJpeg(8, 6)) });
+    // A run that already holds the most one run keeps.
+    const full = join(root, 'visual', 'runs', driveRunId(sessionId));
+    await mkdir(full, { recursive: true });
+    await writeFile(
+      join(full, STEP_SCREENSHOT.MANIFEST_FILE),
+      `${JSON.stringify({ seq: STEP_SCREENSHOT.MAX_PER_RUN })}\n`,
+    );
+
+    const refused = await takeStepShot(deps, sessionId, 'reticle_act');
+
+    const error = 'error' in refused ? refused.error : '';
+    expect(error).toContain(`already holds ${String(STEP_SCREENSHOT.MAX_PER_RUN)}`);
+    expect(error).toContain('still give verdicts');
+    expect(error).toContain(ReticleTool.FLOW_REPLAY);
+    // It never sends the agent to end its session: an end is final, mid-drive.
+    expect(error).not.toContain('"end"');
+    // What the text promises: a replay gets its own run, from its first picture.
+    const replayed = await withShotRun('run-replay', () =>
+      takeStepShot(deps, sessionId, 'reticle_replay'),
+    );
+    expect(replayed).toMatchObject({
+      path: join(root, 'visual', 'runs', 'run-replay', '0001-replay.jpg'),
+    });
   });
 });
 

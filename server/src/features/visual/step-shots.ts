@@ -64,6 +64,16 @@ const TOOL_PREFIX = /^reticle_/;
 const SEQ_WIDTH = 4;
 /** A prior capture on this tab produced nothing — see the header. */
 const NOTHING = 'none';
+/**
+ * Why a step got no picture at the per-run limit, and what the agent can do. An agent on a long
+ * drive was told only that the run was full, and could not tell how to go on. No call starts a new
+ * run for the agent's own session: only its end does, and an end is final. A flow replay always
+ * runs in a run of its own.
+ */
+export const RUN_FULL =
+  `no screenshot: this run already holds ${String(STEP_SCREENSHOT.MAX_PER_RUN)}, the most one run keeps. ` +
+  'Your actions and checks still work and still give verdicts. Only the picture is missing. ' +
+  `A flow replay (${ReticleTool.FLOW_REPLAY}) runs in its own run, with its own limit.`;
 /** CDP's quality scale is 0–100. */
 const CDP_QUALITY = Math.round(STEP_SCREENSHOT.JPEG_QUALITY * 100);
 
@@ -317,9 +327,7 @@ async function shoot(
   void filmTab(deps, session, dir);
   const seq = await allocate(deps.fs, dir);
   if (seq > STEP_SCREENSHOT.MAX_PER_RUN) {
-    return {
-      error: `no screenshot: this run already holds ${String(STEP_SCREENSHOT.MAX_PER_RUN)}, the most one run keeps`,
-    };
+    return { error: RUN_FULL };
   }
   // The first capture of a tab is one nothing has vouched for yet (the in-page renderer loads on
   // first use): it is tried again once and waited for, so its answer is a path that landed or the
