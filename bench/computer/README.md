@@ -18,6 +18,8 @@ Zoom, a button held down on its own, the middle click and the triple click are o
 
 ## Run it
 
+It runs on your own Mac. It closes only what it opened: its TextEdit documents and the Finder windows of its own folder (`/tmp/reticle-cu-bench`). It does not start while TextEdit has a document of yours or Finder a window of yours open, because an agent acts in the whole application. Save and close them first.
+
 Needs the operator (`operator.mjs`: a bridge, and HTTP on 4499 that joins an app and runs a tool), the screen for the whole run, and `ANTHROPIC_API_KEY`. The `cua-driver` arm needs `cua-driver` 0.2 or later, with its Accessibility and Screen Recording permissions.
 
 ```bash

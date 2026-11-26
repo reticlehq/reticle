@@ -40,9 +40,37 @@ if (!KEY) {
 
 const sh = (cmd, args) => execFileSync(cmd, args, { encoding: 'utf8' });
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+// The bench runs on the person's own Mac. It closes only what it opened: the TextEdit documents
+// and the Finder windows of its own folder. Before, it quit TextEdit "saving no" and closed every
+// Finder window, so a document of the person with changes not saved was lost.
+const OWN = '/reticle-cu-bench/';
+const jxa = (script) => sh('osascript', ['-l', 'JavaScript', '-e', script]).trim();
+/** How many TextEdit documents and Finder windows are the person's, not the bench's. */
+function notOurs() {
+  return {
+    documents: Number(
+      jxa(
+        `const t = Application("TextEdit"); t.running() ? t.documents().filter((d) => { try { return !String(d.path()).includes("${OWN}"); } catch (e) { return true; } }).length : 0`,
+      ),
+    ),
+    windows: Number(
+      jxa(
+        `Application("Finder").finderWindows().filter((w) => { try { return !decodeURI(w.target().url()).includes("${OWN}"); } catch (e) { return true; } }).length`,
+      ),
+    ),
+  };
+}
 const quit = (app) => {
   try {
-    sh('osascript', ['-e', `tell application "${app}" to quit saving no`]);
+    if ('TextEdit' === app) {
+      // Its own documents only. TextEdit quits only when no other document is open.
+      jxa(
+        `const t = Application("TextEdit"); if (t.running()) { for (const d of t.documents()) { try { if (String(d.path()).includes("${OWN}")) d.close({ saving: "no" }); } catch (e) {} } if (0 === t.documents().length) t.quit(); }`,
+      );
+      return;
+    }
+    // Calculator holds no document.
+    sh('osascript', ['-e', `tell application "${app}" to quit`]);
   } catch {
     // ponytail: the app was not running.
   }
@@ -72,7 +100,10 @@ async function openIn(app, path) {
   await sleep(2500);
 }
 async function finderAt(dir) {
-  sh('osascript', ['-e', 'tell application "Finder" to close every window']);
+  // The Finder windows of the bench's own folder only.
+  jxa(
+    `for (const w of Application("Finder").finderWindows()) { try { if (decodeURI(w.target().url()).includes("${OWN}")) w.close(); } catch (e) {} }`,
+  );
   sh('open', [dir]);
   await sleep(2000);
 }
@@ -1074,6 +1105,14 @@ const arms = armArg === undefined || armArg === 'all' ? ALL_ARMS : [armArg];
 const tasks = TASKS.filter((t) => taskArg === undefined || t.id === taskArg);
 mkdirSync(DIR, { recursive: true });
 chmodSync(DIR, 0o755);
+// An agent acts in the whole application: it must not find a document or a window of the person.
+const theirs = notOurs();
+if (theirs.documents > 0 || theirs.windows > 0) {
+  console.log(
+    `NOT RUN: TextEdit has ${String(theirs.documents)} document(s) and Finder ${String(theirs.windows)} window(s) that are not the bench's. Save and close them first: an agent could act on them.`,
+  );
+  process.exit(1);
+}
 for (const task of tasks) {
   for (const arm of arms) {
     try {
