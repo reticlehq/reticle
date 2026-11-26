@@ -16,7 +16,7 @@
  * one sentence an agent is known to read, and a caveat parked anywhere else is a caveat nobody reads.
  */
 
-import { PredicateKind, compareSourceClauses } from '@reticlehq/core';
+import { PredicateKind, compareSourceClauses, describePropertyAssertion } from '@reticlehq/core';
 import type { Predicate } from '@/question/predicate/predicate.js';
 
 /** Enough to recognise the one that is stuck; not so many that a chatty window eats the verdict. */
@@ -73,37 +73,6 @@ function otherConditions(predicate: Predicate): string {
   return 0 === rest.length ? '' : ` where ${JSON.stringify(Object.fromEntries(rest))}`;
 }
 
-type TextProperty = NonNullable<
-  Extract<Predicate, { kind: typeof PredicateKind.TEXT }>['satisfies']
->;
-
-function describeTextProperty(assertion: TextProperty): string {
-  switch (assertion.property) {
-    case 'matchesPattern':
-      return `matching /${assertion.pattern}/`;
-    case 'nonEmpty':
-      return 'that is non-empty';
-    case 'oneOf':
-      return `matching one of ${JSON.stringify(assertion.values)}`;
-    case 'withinTolerance':
-      return `within ${String(assertion.tolerance)} of ${String(assertion.of)}`;
-    case 'type':
-      return `of type ${assertion.is}`;
-    case 'changed':
-      return 'that changed';
-    case 'unchanged':
-      return 'that is unchanged';
-    case 'increased':
-      return assertion.by === undefined
-        ? 'that increased'
-        : `increased by ${assertion.by.op} ${String(assertion.by.value)}`;
-    case 'decreased':
-      return assertion.by === undefined
-        ? 'that decreased'
-        : `decreased by ${assertion.by.op} ${String(assertion.by.value)}`;
-  }
-}
-
 function waitPhrase(predicate: Predicate): string {
   switch (predicate.kind) {
     case PredicateKind.SETTLED:
@@ -128,7 +97,7 @@ function waitPhrase(predicate: Predicate): string {
         parts.push(`containing '${predicate.contains}'`);
       }
       if (predicate.satisfies !== undefined) {
-        parts.push(describeTextProperty(predicate.satisfies));
+        parts.push(describePropertyAssertion(predicate.satisfies));
       }
       const desc = parts.length > 0 ? parts.join(' ') : 'present';
       return `text ${desc}${true === predicate.ignoreCase ? ', ignoring case' : ''}`;

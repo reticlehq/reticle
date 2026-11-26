@@ -181,7 +181,8 @@ const MAX_FILES_IMPORTING_CORE = 46;
  * is the type alias the blind-spot check imports to walk the predicate tree. Both cross the
  * engine/core boundary. They join the import `blind-spots.ts` already has, so the file count is
  * unmoved.
- *
+ */
+/*
  * 71 -> 72 for a canvas that changes on its own (#1525).
  *
  * `canvasPaint` tells a change the SDK's poll found from one an act's digest found, so a chart on
@@ -197,13 +198,17 @@ const MAX_FILES_IMPORTING_CORE = 46;
  * contradiction pass. Copying it here would give the engine and the server two rules for one
  * question again. Both join imports that `event-filters.ts`, `contradiction-evidence.ts`,
  * `contradictions.ts` and `predicate-eval.ts` already have, so the file count is unmoved.
- */
-/*
+ *
  * 74 -> 75 for `isFadedReason`. The browser writes the reason and the engine reads it. The prefix
  * was copied in both packages, so a reworded reason would break the match with no failing test.
  * The shared prefix lives in core, the same case as `UNREACHABLE_NOTICE_PREFIX`.
+ *
+ * 75 -> 76 for describing property assertions in unsettled wait targets (#2400).
+ *
+ * `describePropertyAssertion` formats a property assertion for claims and wait phrases.
+ * Sharing it avoids duplicating the property wording logic between core and engine.
  */
-const MAX_DISTINCT_SYMBOLS = 75;
+const MAX_DISTINCT_SYMBOLS = 76;
 
 /*
  * `node:path`'s dirname, not a hand-rolled one.
