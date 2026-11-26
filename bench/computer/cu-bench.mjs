@@ -21,8 +21,10 @@ import { execFileSync, spawn } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const KEY = process.env.ANTHROPIC_API_KEY;
-const MODEL = process.env.BENCH_MODEL ?? 'claude-opus-5-5';
+// BENCH_PROVIDER=openai runs the arms with an OpenAI model, and adds OpenAI's own computer tool.
+const OPENAI = 'openai' === process.env.BENCH_PROVIDER;
+const KEY = OPENAI ? process.env.OPENAI_API_KEY : process.env.ANTHROPIC_API_KEY;
+const MODEL = process.env.BENCH_MODEL ?? (OPENAI ? 'gpt-5.4' : 'claude-opus-5-5');
 const EFFORT = process.env.BENCH_EFFORT ?? 'medium';
 const MAX_TURNS = Number(process.env.BENCH_MAX_TURNS ?? 30);
 const OPERATOR = 'http://127.0.0.1:4499';
@@ -31,7 +33,8 @@ const SHOT_WIDTH = 1280;
 const OUT = new URL('./results.jsonl', import.meta.url);
 
 if (!KEY) {
-  console.log('NOT MEASURED: ANTHROPIC_API_KEY is not set.');
+  const provider = OPENAI ? 'OPENAI' : 'ANTHROPIC';
+  console.log(`NOT MEASURED: the ${provider} API key is not set.`);
   process.exit(0);
 }
 
@@ -88,6 +91,23 @@ function windowOf(app) {
     return undefined;
   }
 }
+/**
+ * What the display of Calculator shows, from System Events: outside every arm. An answer alone is
+ * not the proof: a model can work out 1234 × 56 without Calculator.
+ */
+function calculatorShows() {
+  try {
+    return sh('osascript', [
+      '-l',
+      'JavaScript',
+      '-e',
+      'const out = []; for (const e of Application("System Events").processes["Calculator"].windows[0].entireContents()) { try { if (e.role() === "AXStaticText") out.push(String(e.value())) } catch (x) {} } out.join("\\n")',
+    ]).replace(/[\u200e\u200f]/g, '');
+  } catch {
+    return '';
+  }
+}
+
 /** The size of the main screen, from the bounds of the desktop. */
 function screenSize() {
   const [, , width, height] = sh('osascript', [
@@ -132,7 +152,7 @@ const TASKS = [
       await openIn('Calculator');
     },
     task: 'Use the Calculator app to compute 1234 × 56. Give the result in your answer.',
-    check: (_, answer) => /69,?104/.test(answer),
+    check: (_, answer) => /69,?104/.test(answer) && /^69,?104$/m.test(calculatorShows()),
   },
   {
     id: 'finder-new-folder',
@@ -222,7 +242,9 @@ const TASKS = [
       await openIn('Calculator');
     },
     task: 'Use the Calculator app to compute 10 ÷ 0, and give the number that it shows.',
-    check: (_, answer, status) => status === 'failed' || /error|not a number/i.test(answer),
+    check: (_, answer, status) =>
+      status === 'failed' ||
+      (/error|not a number/i.test(answer) && /error|not a number/i.test(calculatorShows())),
   },
 ];
 
@@ -502,7 +524,7 @@ async function messages(body) {
 async function runOne(arm, task) {
   const cua = arm === 'cua-driver' ? cuaArm() : undefined;
   try {
-    return await runArm(arm, task, cua);
+    return await (OPENAI ? runOpenAI(arm, task, cua) : runArm(arm, task, cua));
   } finally {
     cua?.close();
   }
@@ -621,9 +643,233 @@ async function runArm(arm, task, cua) {
   return row;
 }
 
+// --- The OpenAI loop ---------------------------------------------------------------------------
+// The same tasks, checkers and arms, with an OpenAI model on the Responses API. `openai-computer`
+// is OpenAI's own computer tool: it asks for screenshots and for clicks and keys at points of them,
+// and Reticle's helper carries them out, as in the `cu-toolset` arm.
+async function responses(body) {
+  const r = await fetch('https://api.openai.com/v1/responses', {
+    method: 'POST',
+    headers: { authorization: `Bearer ${KEY}`, 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const j = await r.json();
+  if (!r.ok || j.error) {
+    throw new Error(`openai ${String(r.status)}: ${JSON.stringify(j.error).slice(0, 400)}`);
+  }
+  return j;
+}
+const asFunction = (t) => ({
+  type: 'function',
+  name: t.name,
+  description: t.description,
+  parameters: t.input_schema,
+  strict: false,
+});
+// OpenAI's key names, as the realm names them.
+const OPENAI_KEYS = {
+  enter: 'Return',
+  return: 'Return',
+  esc: 'Escape',
+  escape: 'Escape',
+  tab: 'Tab',
+  backspace: 'Backspace',
+  delete: 'Delete',
+  space: 'Space',
+  up: 'ArrowUp',
+  down: 'ArrowDown',
+  left: 'ArrowLeft',
+  right: 'ArrowRight',
+  arrowup: 'ArrowUp',
+  arrowdown: 'ArrowDown',
+  arrowleft: 'ArrowLeft',
+  arrowright: 'ArrowRight',
+  home: 'Home',
+  end: 'End',
+  pageup: 'PageUp',
+  pagedown: 'PageDown',
+};
+async function computerActions(pixels, actions) {
+  for (const a of actions) {
+    const point = [a.x, a.y];
+    if ('click' === a.type) {
+      await pixels(a.button === 'right' ? 'right_click' : 'left_click', { coordinate: point });
+    } else if ('double_click' === a.type) {
+      await pixels('double_click', { coordinate: point });
+    } else if ('move' === a.type) {
+      await pixels('mouse_move', { coordinate: point });
+    } else if ('drag' === a.type) {
+      const path = a.path ?? [];
+      await pixels('left_click_drag', {
+        start_coordinate: [path[0].x, path[0].y],
+        coordinate: [path.at(-1).x, path.at(-1).y],
+      });
+    } else if ('scroll' === a.type) {
+      const down = (a.scroll_y ?? 0) >= 0 ? 'down' : 'up';
+      await pixels('scroll', { coordinate: point, scroll_direction: down });
+    } else if ('type' === a.type) {
+      await pixels('type', { text: a.text });
+    } else if ('keypress' === a.type) {
+      const keys = (a.keys ?? []).map((k) => {
+        const low = k.toLowerCase();
+        return MODS[low] ?? OPENAI_KEYS[low] ?? (1 === k.length ? low : k);
+      });
+      await pixels('key', { text: keys.join('+') });
+    } else if ('wait' === a.type) {
+      await sleep(1000);
+    }
+  }
+  return pixels('screenshot', {});
+}
+
+async function runOpenAI(arm, task, cua) {
+  const target = await task.setup();
+  const { sessionId } = cua === undefined ? await post('join', { app: task.app }) : {};
+  const pixels = arm === 'openai-computer' ? pixelsArm(sessionId) : undefined;
+  let run = (name, input) => runReticleCall(sessionId, name, input);
+  let tools = [...RETICLE_TOOLS, DONE].map(asFunction);
+  if (pixels !== undefined) {
+    tools = [{ type: 'computer' }, asFunction(DONE)];
+  } else if (cua !== undefined) {
+    run = (name, input) => cua.run(name, input);
+    tools = [...(await cua.tools()), DONE].map(asFunction);
+  }
+  const usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
+  const started = Date.now();
+  let input = [{ role: 'user', content: `App: ${task.app}.\n\n${task.task}` }];
+  let previous;
+  let calls = 0;
+  let errors = 0;
+  let finish;
+  let turns = 0;
+  for (; turns < MAX_TURNS && finish === undefined; turns += 1) {
+    const reply = await responses({
+      model: MODEL,
+      instructions: SYSTEM,
+      tools,
+      input,
+      ...(previous === undefined ? {} : { previous_response_id: previous }),
+      reasoning: { effort: EFFORT },
+      truncation: 'auto',
+    });
+    previous = reply.id;
+    usage.input +=
+      (reply.usage?.input_tokens ?? 0) - (reply.usage?.input_tokens_details?.cached_tokens ?? 0);
+    usage.cacheRead += reply.usage?.input_tokens_details?.cached_tokens ?? 0;
+    usage.output += reply.usage?.output_tokens ?? 0;
+    const uses = reply.output.filter(
+      (o) => 'function_call' === o.type || 'computer_call' === o.type,
+    );
+    if (uses.length === 0) {
+      const said = reply.output.find((o) => 'message' === o.type)?.content?.[0]?.text;
+      finish = { status: 'no-call', answer: said ?? reply.status };
+      break;
+    }
+    input = [];
+    const images = [];
+    for (const use of uses) {
+      if ('function_call' === use.type && 'done' === use.name) {
+        finish = JSON.parse(use.arguments || '{}');
+        input.push({ type: 'function_call_output', call_id: use.call_id, output: 'OK' });
+        continue;
+      }
+      calls += 1;
+      try {
+        if ('computer_call' === use.type) {
+          const shot = await computerActions(
+            pixels,
+            use.actions ?? (use.action ? [use.action] : []),
+          );
+          input.push({
+            type: 'computer_call_output',
+            call_id: use.call_id,
+            acknowledged_safety_checks: use.pending_safety_checks ?? [],
+            output: {
+              type: 'computer_screenshot',
+              image_url: `data:image/jpeg;base64,${shot.image}`,
+            },
+          });
+          continue;
+        }
+        const out = await run(use.name, JSON.parse(use.arguments || '{}'));
+        const blocks = 'object' === typeof out && out.blocks !== undefined ? out.blocks : undefined;
+        const text =
+          blocks === undefined
+            ? String(out)
+            : blocks
+                .filter((b) => 'text' === b.type)
+                .map((b) => b.text)
+                .join('\n');
+        input.push({ type: 'function_call_output', call_id: use.call_id, output: text || 'OK' });
+        for (const b of blocks ?? []) {
+          if ('image' === b.type) {
+            images.push({
+              type: 'input_image',
+              image_url: `data:${b.source.media_type};base64,${b.source.data}`,
+            });
+          }
+        }
+      } catch (error) {
+        errors += 1;
+        const failed = String(error.message ?? error);
+        if ('computer_call' === use.type) {
+          // The computer tool takes only a screenshot as its answer: the error goes beside it.
+          const shot = await pixels('screenshot', {});
+          input.push({
+            type: 'computer_call_output',
+            call_id: use.call_id,
+            acknowledged_safety_checks: use.pending_safety_checks ?? [],
+            output: {
+              type: 'computer_screenshot',
+              image_url: `data:image/jpeg;base64,${shot.image}`,
+            },
+          });
+          input.push({ role: 'user', content: `The last computer action failed: ${failed}` });
+        } else {
+          input.push({
+            type: 'function_call_output',
+            call_id: use.call_id,
+            output: `ERROR: ${failed}`,
+          });
+        }
+      }
+    }
+    // A function answer takes no picture: cua-driver's screenshots go to the model beside it.
+    if (images.length > 0) {
+      input.push({
+        role: 'user',
+        content: [{ type: 'input_text', text: 'The screenshots of the last calls.' }, ...images],
+      });
+    }
+  }
+  const answer = finish?.answer ?? '';
+  const status = finish?.status ?? 'out-of-turns';
+  const passed = Boolean(task.check(target, answer, status));
+  const row = {
+    arm,
+    task: task.id,
+    impossible: Boolean(task.impossible),
+    passed,
+    status,
+    falseDone: status === 'done' && !passed,
+    answer: answer.slice(0, 300),
+    turns,
+    calls,
+    errors,
+    ms: Date.now() - started,
+    usage,
+    model: MODEL,
+    effort: EFFORT,
+  };
+  writeFileSync(OUT, `${JSON.stringify(row)}\n`, { flag: 'a' });
+  return row;
+}
+
 const [armArg, taskArg] = process.argv.slice(2);
-const arms =
-  armArg === undefined || armArg === 'all' ? ['reticle', 'cu-toolset', 'cua-driver'] : [armArg];
+const ALL_ARMS = OPENAI
+  ? ['reticle', 'openai-computer', 'cua-driver']
+  : ['reticle', 'cu-toolset', 'cua-driver'];
+const arms = armArg === undefined || armArg === 'all' ? ALL_ARMS : [armArg];
 const tasks = TASKS.filter((t) => taskArg === undefined || t.id === taskArg);
 mkdirSync(DIR, { recursive: true });
 chmodSync(DIR, 0o755);

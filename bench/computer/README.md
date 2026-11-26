@@ -26,4 +26,12 @@ node --env-file=.env bench/computer/cu-bench.mjs            # every arm, every t
 node --env-file=.env bench/computer/cu-bench.mjs reticle calculator-multiply
 ```
 
+`BENCH_PROVIDER=openai` runs the arms with an OpenAI model (`gpt-5.4` unless `BENCH_MODEL` says another) on the Responses API, with `OPENAI_API_KEY`. There `openai-computer` takes the place of `cu-toolset`: OpenAI's own computer tool, whose clicks and keys Reticle's helper carries out.
+
+```bash
+BENCH_PROVIDER=openai node --env-file=.env bench/computer/cu-bench.mjs all
+```
+
+The two Calculator tasks are checked against the display of Calculator, read from System Events, and not only against the answer: a model can work out 1234 × 56 without Calculator.
+
 Each run adds one line to `results.jsonl`: pass, status, false done, turns, calls, errors, time and tokens.
