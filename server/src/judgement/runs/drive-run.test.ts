@@ -589,7 +589,7 @@ describe('an agent session ending', () => {
     expect(run.verdict.status).toBe(VerdictStatus.UNKNOWN);
     expect(run.verdict.reasons).toEqual(['1 check(s) undecided']);
     const report = renderRunReport(run);
-    expect(report).toContain('Undecided:');
+    expect(report).toContain('Not proved:');
     expect(report).toContain('1 check(s) undecided');
     expect(report).not.toContain('Why it failed:');
   });
