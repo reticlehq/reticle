@@ -414,6 +414,9 @@ export class RecordingStore {
    * Only recordings this one opened OVER are rewritten. Overlapping spans are not nesting: a
    * recording that began before this one did not contain it, and a document that invokes something
    * it never drove replays a journey nobody took.
+   *
+   * An ambient tape is never rewritten. It is saved on its own at session end, and nothing says the
+   * recording closed inside it will ever be saved: its `invoke` would name no document (#2493).
    */
   stop(name: string): ActiveRecording | undefined {
     const rec = this.#active.get(name);
@@ -425,7 +428,7 @@ export class RecordingStore {
       const parent = this.#active.get(outer);
       // Gone already, or somehow shorter than when we started: leave it exactly as it is rather
       // than splice a range that no longer means what it meant.
-      if (parent === undefined || parent.steps.length < mark) {
+      if (isAmbient(outer) || parent === undefined || parent.steps.length < mark) {
         continue;
       }
       parent.steps.splice(mark, parent.steps.length - mark, {

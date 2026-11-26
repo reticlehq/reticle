@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { RecordingStore, type RecordedStep } from './recordings.js';
+import { ambientRecordingOf, RecordingStore, type RecordedStep } from './recordings.js';
 
 /**
  * Recording a SUB-FLOW, so a composite can be authored by driving rather than by hand.
@@ -72,5 +72,25 @@ describe('recording a sub-flow inside another', () => {
     store.capture(step('b'));
     store.stop('early');
     expect(store.stop('late')?.steps.map((s) => s.invoke ?? s.args['id'])).toEqual(['b']);
+  });
+
+  // The ambient tape is saved on its own at session end, and the recording closed inside it may
+  // never be saved: an invoke there names a document that does not exist (#2493).
+  it('keeps the real steps on the ambient tape instead of an invoke', () => {
+    const store = new RecordingStore();
+    store.capture(step('open-drawer'), undefined, 's1');
+
+    store.start('close-drawer', 1, undefined, 's1');
+    store.capture(step('closed'), undefined, 's1');
+    store.stop('close-drawer');
+
+    store.capture(step('cancel'), undefined, 's1');
+    const ambient = store.stop(ambientRecordingOf('s1'));
+
+    expect(ambient?.steps.map((s) => s.invoke ?? s.args['id'])).toEqual([
+      'open-drawer',
+      'closed',
+      'cancel',
+    ]);
   });
 });
