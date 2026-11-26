@@ -14,7 +14,7 @@ import {
   unreachedRoutes,
   SuiteIsolation,
 } from '@reticlehq/core';
-import { replayability, Replayable } from './flow-replayable.js';
+import { replayability, Replayable, replaysAsSaved } from './flow-replayable.js';
 import { classifyFlowAssertions, FlowAssertionGrade } from './flow-classify.js';
 import { SUCCESS_STEP_TOOL } from './flow-success.js';
 import { RECORD_A_FLOW } from './suite/coverage.js';
@@ -418,21 +418,29 @@ export function buildSuiteVerdict(
   const notAsSaved = runs.flatMap(({ replay, flow }) => {
     if (flow === undefined) return [];
     const report = replayability(flow);
-    return Replayable.YES === report.status && report.writes === undefined
-      ? []
-      : [{ flow: replay.name, ...report }];
+    return replaysAsSaved(report) ? [] : [{ flow: replay.name, ...report }];
   });
   const notReplayable = notAsSaved.filter((row) => Replayable.YES !== row.status);
   const asSaved =
     0 === notReplayable.length
       ? ''
       : ` — ${String(notReplayable.length)} of ${String(total)} flows are not replayable as saved (${notReplayable.map((row) => row.flow).join(', ')}): a drift there is the flow, not the app`;
+  const passedNames = new Set(
+    runs.filter(({ replay }) => ReplayStatus.OK === replay.status).map(({ replay }) => replay.name),
+  );
+  const relaxedRows = notAsSaved.filter(
+    (row) => row.relaxed !== undefined && passedNames.has(row.flow),
+  );
+  const anyNumber =
+    0 === relaxedRows.length
+      ? ''
+      : ` — ${String(relaxedRows.length)} of ${String(total)} flows passed a text check that accepts any number (${relaxedRows.map((row) => row.flow).join(', ')}): the count on that step was not checked`;
   return {
     status,
     total,
     passed,
     failed,
-    summary: summary + silentSteps + neverOpened + disagreed + sharedState + asSaved,
+    summary: summary + silentSteps + neverOpened + disagreed + sharedState + asSaved + anyNumber,
     failures,
     ...(isolation === undefined ? {} : { isolation }),
     ...(unverifiable.length > 0 ? { unverifiable } : {}),

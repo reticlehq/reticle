@@ -19,7 +19,7 @@ import { recordedStepToFlowStep } from './flows.js';
 import { compileActStep, WriteOutcome, wroteIn } from './replay.js';
 import { buildSuiteVerdict } from './decision.js';
 import { writingFlows } from './suite-selection.js';
-import { readyForReplay, replayability, Replayable } from './flow-replayable.js';
+import { readyForReplay, replayability, Replayable, replaysAsSaved } from './flow-replayable.js';
 
 const click = (value: string, expect?: FlowStep['expect']): FlowStep => ({
   tool: 'reticle_act',
@@ -47,6 +47,26 @@ describe('a flow made ready to replay at save', () => {
       satisfies: { property: 'matchesPattern', pattern: 'Open \\d[\\d,.]*' },
     });
     expect(replayability(ready).status).toBe(Replayable.YES);
+  });
+
+  // #2469: "3 results" saved as words plus any number, and the save said nothing. A replay after
+  // the count changed then passed. The loss must be declared (AGENTS rule 11).
+  it('names each step whose number it no longer checks, and how to keep it', () => {
+    const ready = readyForReplay(
+      flowOf([click('filter', { kind: 'text', contains: '3 results' })]),
+    );
+    const report = replayability(ready);
+    expect(report.status).toBe(Replayable.YES);
+    expect(report.relaxed?.join(' ')).toMatch(/step 1 checks 'N results' with any number/);
+    expect(report.relaxed?.join(' ')).toContain('matchesPattern');
+    expect(replaysAsSaved(report)).toBe(false);
+  });
+
+  it('says nothing about a text check with no number', () => {
+    const ready = readyForReplay(flowOf([click('tab', { kind: 'text', contains: 'Saved' })]));
+    const report = replayability(ready);
+    expect(report.relaxed).toBeUndefined();
+    expect(replaysAsSaved(report)).toBe(true);
   });
 
   // "3 items" is absent. Made word-level, it said that no "<number> items" is on the page, so a
@@ -145,6 +165,24 @@ describe('the suite verdict reports each flow that cannot replay as saved', () =
       { flow: 'counted', status: Replayable.DATA_BOUND, why: ["step 1 expects '365', live data"] },
     ]);
     expect(verdict.summary).toMatch(/1 of 2 flows are not replayable as saved \(counted\)/);
+  });
+
+  // #2469: a pass on a step whose number save loosened did not check that number. The suite says so
+  // on every replay, not only when the flow was saved.
+  it('names a passing flow whose text check accepts any number', () => {
+    const passed = { name: 'filtered', status: ReplayStatus.OK, steps: [] };
+    const flow = readyForReplay(flowOf([click('f', { kind: 'text', contains: '3 results' })]));
+    const verdict = buildSuiteVerdict([{ replay: passed, flow }]);
+    expect(verdict.replayability?.[0]).toMatchObject({ flow: 'filtered', status: Replayable.YES });
+    expect(verdict.summary).toMatch(
+      /1 of 1 flows passed a text check that accepts any number \(filtered\)/,
+    );
+  });
+
+  it('says nothing about any number when that flow did not pass', () => {
+    const drifted = { name: 'filtered', status: ReplayStatus.DRIFT, steps: [] };
+    const flow = readyForReplay(flowOf([click('f', { kind: 'text', contains: '3 results' })]));
+    expect(buildSuiteVerdict([{ replay: drifted, flow }]).summary).not.toMatch(/any number/);
   });
 });
 
