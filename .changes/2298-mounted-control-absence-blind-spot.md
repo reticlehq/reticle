@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/engine`, `@reticlehq/server`: State checks on one mounted control gave `unknown` beside a virtual list.** Asserting that a named checkbox was not `checked` returned `verified: "unknown"` (`absence_blind_spot`) when the page also had unmounted virtual rows, even though the checkbox itself was mounted and unchecked. `reticle_assert` and `reticle_act_and_wait` now return `yes` when the query targets one control and exactly one mounted element matches it in another state (for both `not(element)` and `absent: true`). Bare role queries, multiple mounted matches, and unmounted controls still return `unknown`. Closes [#2298](https://github.com/reticlehq/reticle/issues/2298).

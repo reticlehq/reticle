@@ -60,7 +60,9 @@ function depsWithBlindSpots(
 
 const tool = (name: string): ToolDef => {
   const found = TOOLS.find((t) => t.name === name);
-  if (found === undefined) throw new Error(`${name} is not on the surface`);
+  if (found === undefined) {
+    throw new Error(`${name} is not on the surface`);
+  }
   return found;
 };
 
@@ -404,5 +406,87 @@ describe('reticle_act_and_wait downgrades absence when blind spots hide the targ
       unknown
     >;
     expect(r['verifiedReason']).not.toBe(VerifiedReason.ABSENCE_BLIND_SPOT);
+  });
+
+  it('verifies a state negation on one mounted checkbox beside virtualized rows (#2298)', async () => {
+    let checked = true;
+    const checkbox = (isChecked: boolean) => ({
+      ref: 'e4',
+      role: 'checkbox',
+      name: 'Notify me',
+      states: isChecked ? ['visible', 'enabled', 'checked'] : ['visible', 'enabled'],
+      visible: true,
+    });
+    const command = (name: string, args?: unknown): Promise<CommandResult> => {
+      if (name === ReticleCommand.MATCH) {
+        const payload = args as { state?: string };
+        const matched = 'checked' === payload?.state ? checked : true;
+        return Promise.resolve({
+          kind: 'command_result',
+          id: 'q1',
+          ok: true,
+          result: {
+            matched,
+            count: matched ? 1 : 0,
+            elements: matched ? [checkbox(checked)] : [],
+          },
+        });
+      }
+      checked = false;
+      return Promise.resolve({
+        kind: 'command_result',
+        id: 'c1',
+        ok: true,
+        result: { dispatched: true, settled: true, effect: { domMutatedWithin: 1 } },
+      });
+    };
+    const noEvents: ReticleEvent[] = [];
+    const session = createFakeSession(
+      {
+        elapsed: () => 1000,
+        command,
+        queryEvents: () => Promise.resolve(noEvents),
+        eventsSince: () => noEvents,
+        bufferHealth: () => ({ total: 10, dropped: 0 }),
+        blindSpots: () => ({ [BlindSpotKind.VIRTUALIZED_UNMOUNTED]: 12 }),
+        health: () => ({ lastSeenMs: 0, throttled: false, focused: true }),
+      },
+      { url: 'http://localhost:5173/app' },
+    );
+    const sessions: Partial<SessionManager> = { resolve: () => session };
+    const deps: ToolDeps = {
+      sessions: sessions as SessionManager,
+      baselines: new BaselineStore(),
+      recordings: new RecordingStore(),
+      flows: new FlowStore(createNodeFileSystem(), '/tmp/reticle-test/.reticle', { now: () => 0 }),
+      project: new ProjectStore(createNodeFileSystem(), '/tmp/reticle-test/.reticle', {
+        now: () => 0,
+      }),
+      annotations: new AnnotationStore(),
+      fs: createNodeFileSystem(),
+      reticleRoot: '/tmp/reticle-test/.reticle',
+      now: () => 0,
+    };
+
+    const predicate = {
+      kind: 'not',
+      predicate: { kind: 'element', query: { testid: 'x' }, state: 'checked' },
+    };
+
+    const actResult = (await tool(ReticleTool.ACT_AND_WAIT).handler(deps, {
+      ref: 'e4',
+      action: 'click',
+      until: predicate,
+    })) as Record<string, unknown>;
+    expect(actResult['verified']).toBe(Verified.YES);
+    expect(actResult['verifiedReason']).not.toBe(VerifiedReason.ABSENCE_BLIND_SPOT);
+
+    const assertResult = (await tool(ReticleTool.ASSERT).handler(deps, {
+      predicate,
+      timeout_ms: 0,
+    })) as Record<string, unknown>;
+    expect(assertResult['pass']).toBe(true);
+    expect(assertResult['verified']).toBe(Verified.YES);
+    expect(assertResult['verifiedReason']).not.toBe(VerifiedReason.ABSENCE_BLIND_SPOT);
   });
 });

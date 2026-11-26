@@ -10,6 +10,7 @@
 export { BlindSpotKind } from '@reticlehq/core';
 import { readStateRender, StateRender } from '../disagreement/contradictions.js';
 import type { ContradictionOptions } from '../disagreement/contradiction-types.js';
+import { ELEMENT_STATE_ASSERTION } from '@/question/predicate/predicate-eval-kit.js';
 import {
   BlindSpotKind,
   ChannelId,
@@ -271,15 +272,91 @@ function droppedByTransport(events: readonly ReticleEvent[]): number {
 interface AbsencePredicate {
   kind: string;
   absent?: boolean;
+  state?: string | undefined;
   query?: {
     scope?: unknown;
+    self?: boolean | undefined;
     role?: string | undefined;
+    name?: string | undefined;
     by?: string | undefined;
     value?: string | undefined;
     testid?: string | undefined;
     text?: string | undefined;
+    label?: string | undefined;
+    placeholder?: string | undefined;
+    alt?: string | undefined;
+    source?: unknown;
   };
   predicate?: AbsencePredicate;
+}
+
+/**
+ * Does this query name a specific control rather than a bare role or an empty query?
+ *
+ * A bare `{ role: "checkbox" }` asks about every checkbox on the page, including any inside
+ * unmounted virtual rows. A query with a testid, name, text, label, placeholder, alt, source, or
+ * explicit self selector targets a specific control (#2298).
+ */
+function namesSpecificElement(query: AbsencePredicate['query']): boolean {
+  if (undefined === query) {
+    return false;
+  }
+  if (
+    undefined !== query.testid ||
+    undefined !== query.name ||
+    undefined !== query.text ||
+    undefined !== query.label ||
+    undefined !== query.placeholder ||
+    undefined !== query.alt ||
+    undefined !== query.source ||
+    true === query.self
+  ) {
+    return true;
+  }
+  return undefined !== query.by && QueryBy.ROLE !== query.by && undefined !== query.value;
+}
+
+/**
+ * Extract the inner `element.state` near-miss evidence from a passing `not(element)` result.
+ *
+ * `negate()` wraps the failing inner result as `{ negated, held: false, saw }`. Only an
+ * `element.state` failure proves the locator itself matched a mounted element; other misses (such
+ * as `element.role+name`) matched a different element and must not lift the blind spot.
+ */
+function negatedElementEvidence(evidence: unknown): unknown {
+  if ('object' !== typeof evidence || null === evidence) {
+    return undefined;
+  }
+  const saw = (evidence as { saw?: unknown }).saw;
+  if ('object' !== typeof saw || null === saw) {
+    return undefined;
+  }
+  const inner = saw as { assertion?: unknown; evidence?: unknown };
+  if (ELEMENT_STATE_ASSERTION !== inner.assertion) {
+    return undefined;
+  }
+  return inner.evidence;
+}
+
+/**
+ * Did this state-absence check locate exactly one mounted element in another state (#2298)?
+ *
+ * When one specific control is mounted and lacks the negated state, unmounted virtual rows cannot
+ * hold a checked copy of that control. Multiple mounted matches or a truncated count stay
+ * conservative because repeated row controls can appear in unmounted rows as well.
+ */
+function mountedTargetLacksState(predicate: AbsencePredicate, evidence: unknown): boolean {
+  if (undefined === predicate.state || !namesSpecificElement(predicate.query)) {
+    return false;
+  }
+  if ('object' !== typeof evidence || null === evidence) {
+    return false;
+  }
+  const record = evidence as { nearMiss?: unknown; nearMissCount?: unknown };
+  if (!Array.isArray(record.nearMiss) || 1 !== record.nearMiss.length) {
+    return false;
+  }
+  return undefined === record.nearMissCount || 1 === record.nearMissCount;
 }
 
 /**
@@ -336,6 +413,7 @@ export function absenceBlindSpotNote(
   predicate: AbsencePredicate,
   spots: readonly BlindSpot[],
   windowEvents: readonly ReticleEvent[] = [],
+  evidence?: unknown,
 ): string | undefined {
   // `not(element)` is the third spelling of an absence assertion — the `not` wrapper IS the
   // negation, so the inner predicate will not carry `absent: true`. Unwrap and synthesize it.
@@ -346,7 +424,12 @@ export function absenceBlindSpotNote(
       if (true === predicate.predicate.absent) {
         return undefined;
       }
-      return absenceBlindSpotNote({ ...predicate.predicate, absent: true }, spots, windowEvents);
+      return absenceBlindSpotNote(
+        { ...predicate.predicate, absent: true },
+        spots,
+        windowEvents,
+        negatedElementEvidence(evidence),
+      );
     }
     return undefined;
   }
@@ -359,7 +442,8 @@ export function absenceBlindSpotNote(
     (QueryBy.ROLE === predicate.query?.by ? predicate.query.value : undefined);
   const virtualizedApplies =
     (undefined === role || !NEVER_VIRTUALIZED_ROLES.has(role)) &&
-    !sawPageLevelTargetLeave(predicate.query, windowEvents);
+    !sawPageLevelTargetLeave(predicate.query, windowEvents) &&
+    !mountedTargetLacksState(predicate, evidence);
   const relevant = spots.filter((spot) => {
     if (spot.count <= 0) {
       return false;

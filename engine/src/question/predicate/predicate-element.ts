@@ -32,7 +32,7 @@ import {
 // runtime. `PredicateSession` is the predicate layer's interface to a session and belongs with the
 // evaluator that defines it.
 import type { PredicateSession } from './predicate-session.js';
-import { clipBody, sdkPredates } from './predicate-eval-kit.js';
+import { clipBody, ELEMENT_STATE_ASSERTION, sdkPredates } from './predicate-eval-kit.js';
 import { describeTestidMiss } from './testid-near-miss.js';
 import { describeCaseMiss, describeSplitTextMiss } from './split-text-miss.js';
 import { satisfiesProperty, type Baseline, type PropertyAssertion } from './property.js';
@@ -366,6 +366,36 @@ function stateTheSdkPredates(
   return sdkPredates(sdk, since) ? { sdk, state, since } : undefined;
 }
 
+/**
+ * Re-run `query` without its state constraint and apply any residual checks on this side (#2298).
+ *
+ * Shared by both absence spellings so `not(element)` and `absent: true` agree on whether the
+ * target control itself is mounted in another state. Drops truncated residual results because a
+ * cut prefix cannot prove a residual match.
+ */
+async function mountedIgnoringState(
+  session: PredicateSession,
+  query: ElementQuery,
+  residualChecks: readonly [string, string][],
+  fullText: boolean,
+): Promise<{ elements: ElementDescriptor[]; count: number }> {
+  const relaxed = await matchOnce(
+    session,
+    withAltProjected(query, residualChecks),
+    undefined,
+    false,
+    fullText,
+  );
+  if (0 === residualChecks.length) {
+    return { elements: relaxed.elements, count: relaxed.count };
+  }
+  if (relaxed.count !== relaxed.elements.length) {
+    return { elements: [], count: 0 };
+  }
+  const kept = relaxed.elements.filter((element) => satisfiesResiduals(element, residualChecks));
+  return { elements: kept, count: kept.length };
+}
+
 /** The first SDK release whose element query accepts `matchCase`; an older page refuses the query. */
 const MATCH_CASE_SINCE = '3.7.0';
 
@@ -392,7 +422,7 @@ export async function evalElement(
       inconclusive: reason,
       observed: `SDK ${tooOld.sdk}`,
       expected: `SDK ${tooOld.since} or newer, which can answer '${tooOld.state}'`,
-      assertion: 'element.state',
+      assertion: ELEMENT_STATE_ASSERTION,
     };
   }
   // Fields the browser's locator would have DROPPED, enforced back here — see residualQueryChecks.
@@ -480,16 +510,27 @@ export async function evalElement(
     if (match.matched && unlessText !== undefined) {
       return absentUnlessSatisfied(match, unlessText, subject);
     }
-    return match.matched
-      ? {
-          pass: false,
-          failureReason: describeAbsentMiss(match, state, subject),
-          observed: `${String(match.count)} element(s) matching ${subject}`,
-          expected: `no element matching ${subject}`,
-          assertion: 'element.absent',
-          evidence: match.elements,
-        }
-      : { pass: true, evidence: { absent: true } };
+    if (match.matched) {
+      return {
+        pass: false,
+        failureReason: describeAbsentMiss(match, state, subject),
+        observed: `${String(match.count)} element(s) matching ${subject}`,
+        expected: `no element matching ${subject}`,
+        assertion: 'element.absent',
+        evidence: match.elements,
+      };
+    }
+    // Check whether the locator matches one mounted element in another state (#2298).
+    // That evidence lets the blind-spot rule separate a state check on a mounted control from an
+    // absent element that could hide in unmounted virtual rows. Only attach a single unambiguous
+    // match so large match lists never bloat a passing verdict.
+    if (diagnose && state !== undefined) {
+      const mounted = await mountedIgnoringState(session, query, residual.checks, textOnThisSide);
+      if (1 === mounted.count && 1 === mounted.elements.length) {
+        return { pass: true, evidence: { absent: true, nearMiss: mounted.elements } };
+      }
+    }
+    return { pass: true, evidence: { absent: true } };
   }
   if (true === match.scopeMissing) {
     return {
@@ -563,18 +604,21 @@ export async function evalElement(
 
   // Diagnostic near-miss: was it there but in the wrong state, or a similar element present?
   if (state !== undefined) {
-    const relaxed = await matchOnce(session, query, undefined);
-    if (relaxed.matched) {
+    const mounted = await mountedIgnoringState(session, query, residual.checks, textOnThisSide);
+    if (mounted.elements.length > 0) {
       const ariaNote = true === match.hint?.ariaHiddenState ? ` — ${ARIA_HIDDEN_STATE_NOTE}` : '';
       return {
         pass: false,
-        failureReason: `element matching ${subject} exists${describeRef(relaxed.elements[0])} but not in state '${state}'${ariaNote}`,
+        failureReason: `element matching ${subject} exists${describeRef(mounted.elements[0])} but not in state '${state}'${ariaNote}`,
         observed: `element matching ${subject} is present, states: ${
-          relaxed.elements[0]?.states.join(', ') ?? 'unknown'
+          mounted.elements[0]?.states.join(', ') ?? 'unknown'
         }${ariaNote}`,
         expected: `element matching ${subject} in state '${state}'`,
-        assertion: 'element.state',
-        evidence: { nearMiss: relaxed.elements },
+        assertion: ELEMENT_STATE_ASSERTION,
+        evidence:
+          mounted.count > mounted.elements.length
+            ? { nearMiss: mounted.elements, nearMissCount: mounted.count }
+            : { nearMiss: mounted.elements },
       };
     }
   }

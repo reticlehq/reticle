@@ -36,7 +36,7 @@ import { evalAnimationPredicate } from './predicate-animation.js';
 export { PredicateSchema, PredicateKind };
 export type { Predicate, EvalResult };
 import { withinBudget, type PredicateSession } from './predicate-session.js';
-import { unansweredRead, withoutReadError } from './predicate-eval-kit.js';
+import { ELEMENT_STATE_ASSERTION, unansweredRead, withoutReadError } from './predicate-eval-kit.js';
 export type { PredicateSession } from './predicate-session.js';
 
 const ANIMATION_RUNTIME = {
@@ -183,7 +183,7 @@ function evidenceProvesPageRendered(result: EvalResult): boolean {
   if ('splitText' in evidence || 'caseMiss' in evidence) {
     return true;
   }
-  if ('nearMiss' in evidence && 'element.state' === result.assertion) {
+  if ('nearMiss' in evidence && ELEMENT_STATE_ASSERTION === result.assertion) {
     return true;
   }
   return false;

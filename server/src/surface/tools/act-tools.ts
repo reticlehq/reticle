@@ -652,7 +652,7 @@ export const ACT_TOOLS: ToolDef[] = [
         // The window's own counts, so sampling before it is not described as this window's (#1414).
         const windowSpots = blindSpotsFromState(session.blindSpots(since), session.runtime);
         const coverage = buildCoverageStatement(spots, windowSpots);
-        const absenceBlindSpot = absenceBlindSpotNote(until, spots, windowEvents);
+        const absenceBlindSpot = absenceBlindSpotNote(until, spots, windowEvents, verdict.evidence);
         // A green resting on hidden matches says the node exists, not that it shows (#1408).
         const hiddenMatch = hiddenMatchNote(until, verdict.evidence);
         // Nothing subscribed ⇒ the state channel is dark, and the summary must say so rather than

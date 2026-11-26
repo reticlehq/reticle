@@ -2983,11 +2983,6 @@
       "count": 1
     }
   },
-  "src/surface/tools/assert/assert-coverage-honesty.test.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
   "src/surface/tools/assert/assert-gap-reads-own-source.test.ts": {
     "curly": {
       "count": 2
