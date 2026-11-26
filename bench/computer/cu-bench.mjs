@@ -498,7 +498,40 @@ const RETICLE_TOOLS = [
 
 // How much larger the realm's last picture is than the screenshot the model saw, for each session.
 const shotFactor = new Map();
+// The `reticle-verify` arm: the same tools, and Reticle's proof. An action names its consequence,
+// and the answer is a verdict: `verified` yes, no or unknown, from what the application showed.
+// It is the tool the product tells an agent to use (SKILL.md: "Name the consequence BEFORE
+// acting"); the `reticle` arm leaves it out, so the two show what the proof adds.
+const CHECK_TOOL = {
+  name: 'act_and_check',
+  description:
+    'Do an action on an element by its ref, and prove its consequence in the same call. `until` names what must be true after it: { kind: "element", query: { text: "..." } or { role: "...", name: "..." }, state: "visible" | "hidden" | "checked" | "unchecked" }. The answer has `verified`: "yes" only when the application showed the consequence; "no" says what it showed instead. Use it for the step that ends the task, and for each step whose result you must know. A file on the disk is not on the screen: read it with read_file.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      ref: { type: 'string' },
+      action: { type: 'string' },
+      args: { type: 'object' },
+      until: { type: 'object' },
+    },
+    required: ['ref', 'action', 'until'],
+    additionalProperties: false,
+  },
+};
+
 async function runReticleCall(sessionId, name, input) {
+  if (name === 'act_and_check') {
+    const r = await tool('reticle_act_and_wait', {
+      sessionId,
+      ref: input.ref,
+      action: input.action,
+      args: { foreground: true, ...(input.args ?? {}) },
+      until: input.until,
+      timeout_ms: 4000,
+    });
+    const { screenshot: _shot, ...rest } = r;
+    return JSON.stringify(rest).slice(0, 6000);
+  }
   if (name === 'look') {
     const r = await tool('reticle_snapshot', { sessionId });
     return r.tree ?? JSON.stringify(r).slice(0, 4000);
@@ -762,7 +795,12 @@ async function runArm(arm, task, cua) {
   const target = await task.setup();
   const { sessionId } = cua === undefined ? await post('join', { app: task.app }) : {};
   let run = (name, input) => runReticleCall(sessionId, name, input);
-  let tools = [...RETICLE_TOOLS, READ_FILE, DONE];
+  let tools = [
+    ...RETICLE_TOOLS,
+    ...(arm === 'reticle-verify' ? [CHECK_TOOL] : []),
+    READ_FILE,
+    DONE,
+  ];
   if (arm === 'cu-toolset') {
     run = pixelsArm(sessionId);
     tools = [...PIXEL_TOOLS, READ_FILE, DONE];
@@ -969,7 +1007,12 @@ async function runOpenAI(arm, task, cua) {
   const { sessionId } = cua === undefined ? await post('join', { app: task.app }) : {};
   const pixels = arm === 'openai-computer' ? pixelsArm(sessionId) : undefined;
   let run = (name, input) => runReticleCall(sessionId, name, input);
-  let tools = [...RETICLE_TOOLS, READ_FILE, DONE].map(asFunction);
+  let tools = [
+    ...RETICLE_TOOLS,
+    ...(arm === 'reticle-verify' ? [CHECK_TOOL] : []),
+    READ_FILE,
+    DONE,
+  ].map(asFunction);
   if (pixels !== undefined) {
     tools = [{ type: 'computer' }, asFunction(READ_FILE), asFunction(DONE)];
   } else if (cua !== undefined) {
@@ -1124,8 +1167,8 @@ async function runOpenAI(arm, task, cua) {
 
 const [armArg, taskArg] = process.argv.slice(2);
 const ALL_ARMS = OPENAI
-  ? ['reticle', 'openai-computer', 'cua-driver']
-  : ['reticle', 'cu-toolset', 'cua-driver'];
+  ? ['reticle', 'reticle-verify', 'openai-computer', 'cua-driver']
+  : ['reticle', 'reticle-verify', 'cu-toolset', 'cua-driver'];
 const arms = armArg === undefined || armArg === 'all' ? ALL_ARMS : [armArg];
 const tasks = TASKS.filter((t) => taskArg === undefined || t.id === taskArg);
 mkdirSync(DIR, { recursive: true });

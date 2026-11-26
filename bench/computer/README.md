@@ -5,6 +5,7 @@
 | Arm | What the model sees |
 | --- | --- |
 | `reticle` | `look`: the accessibility tree with refs. `act`: an action on a ref, which answers with what changed. |
+| `reticle-verify` | The tools of `reticle`, and Reticle's proof: `act_and_check` does an action and proves a consequence named before it (`reticle_act_and_wait`), and answers `verified` yes, no or unknown. The product tells an agent to use it; `reticle` leaves it out, so the two arms show what the proof adds. |
 | `cu-toolset` | Claude's `computer_toolset_20260801` schema: screenshots, and clicks and keys at points of them. |
 | `cua-driver` | [cua-driver](https://github.com/trycua/cua), an open-source Mac driver: its own tools, from its own MCP server (`cua-driver mcp`), and its own executor. |
 
