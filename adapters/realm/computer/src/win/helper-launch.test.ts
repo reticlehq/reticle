@@ -17,7 +17,14 @@ describe('the helper for each operating system', () => {
     expect(windows?.prefix).toContain('Bypass');
   });
 
+  it('is the AT-SPI script in Python on Linux', () => {
+    expect(helperLaunch('linux', '/n')).toEqual({
+      file: 'python3',
+      prefix: [join('/n', 'linux', 'reticle-atspi.py')],
+    });
+  });
+
   it('is none on an operating system with no helper', () => {
-    expect(helperLaunch('linux', '/n')).toBeUndefined();
+    expect(helperLaunch('freebsd', '/n')).toBeUndefined();
   });
 });

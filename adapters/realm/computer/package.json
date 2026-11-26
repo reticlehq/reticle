@@ -45,6 +45,7 @@
     "dist",
     "native/mac/reticle-ax.swift",
     "native/win/reticle-uia.ps1",
+    "native/linux/reticle-atspi.py",
     "README.md",
     "NOTICE"
   ],

@@ -1,0 +1,119 @@
+// Checks the computer realm on Linux against a GTK application (fixture.py), through the AT-SPI
+// helper (reticle-atspi.py) and the same driver and reader that macOS and Windows use:
+//   - the helper reads the application as a window with a field that has a ref;
+//   - a value set in the field is read back from the application, not from the answer;
+//   - a press on the Save button is delivered, and the status text then says what was saved;
+//   - a click on the check box with the real pointer checks it;
+//   - an element that is not there any more is refused as stale, never acted on;
+//   - a drag on the canvas draws a line that no element shows: the realm reports the pixels that
+//     changed, and a bar that moves by itself is not counted as an effect.
+//
+//   node native/linux/atspicheck.mjs
+//
+// Linux with an X display and the AT-SPI bus only (xvfb-run and dbus-run-session in CI). Build
+// the package first. The fixture is started and closed by the check.
+import assert from 'node:assert/strict';
+import { spawn } from 'node:child_process';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { fileURLToPath } from 'node:url';
+
+import { ActionType, ReticleCommand } from '@reticlehq/core';
+
+import { MacDriver, PeerCommands, helperLaunch, servingHelper } from '../../dist/index.js';
+
+if ('linux' !== process.platform) {
+  process.stdout.write('computer atspicheck: skipped, it runs on Linux\n');
+  process.exit(0);
+}
+
+const launch = helperLaunch('linux', fileURLToPath(new URL('../', import.meta.url)));
+const fixture = spawn('python3', [fileURLToPath(new URL('fixture.py', import.meta.url))], {
+  stdio: 'inherit',
+});
+const commands = new PeerCommands({
+  driver: new MacDriver({
+    helper: launch.file,
+    app: 'fixture.py',
+    pid: fixture.pid,
+    run: servingHelper(launch.prefix),
+  }),
+  emit: () => undefined,
+});
+const query = async (filter) => (await commands.answer(ReticleCommand.QUERY, filter)).elements;
+
+let held = 0;
+try {
+  let shown = '';
+  for (let i = 0; i < 30 && !/- window /.test(shown); i += 1) {
+    await sleep(500);
+    shown = (await commands.answer(ReticleCommand.SNAPSHOT, {})).tree;
+  }
+  assert.match(shown, /- window /, `the fixture shows no window:\n${shown}`);
+
+  const field = (await query({ role: 'textbox', name: 'Name' }))[0];
+  assert.ok(field?.ref, `the field has no ref:\n${shown}`);
+  await commands.answer(ReticleCommand.ACT, {
+    ref: field.ref,
+    action: ActionType.FILL,
+    args: { value: 'Reticle on Linux', settleMs: 600 },
+  });
+  assert.equal((await query({ role: 'textbox', name: 'Name' }))[0]?.value, 'Reticle on Linux');
+  held += 1;
+
+  const save = (await query({ role: 'button', name: 'Save' }))[0];
+  const pressed = await commands.answer(ReticleCommand.ACT, {
+    ref: save.ref,
+    action: ActionType.CLICK,
+    args: { settleMs: 600 },
+  });
+  assert.ok(pressed.effect.domMutatedWithin > 0, 'the press on Save changed nothing');
+  const said = await commands.answer(ReticleCommand.SNAPSHOT, {});
+  assert.match(said.tree, /Saved: Reticle on Linux/, 'the status does not say what was saved');
+  held += 1;
+
+  const remember = (await query({ role: 'checkbox', name: 'Remember' }))[0];
+  const clicked = await commands.answer(ReticleCommand.ACT, {
+    ref: remember.ref,
+    action: ActionType.CLICK,
+    args: { foreground: true, settleMs: 600 },
+  });
+  const box = (await query({ role: 'checkbox', name: 'Remember' }))[0];
+  assert.ok(
+    box?.states.includes('checked'),
+    `the box is not checked: ${JSON.stringify(box)} ${JSON.stringify(clicked.effect)}`,
+  );
+  held += 1;
+
+  await assert.rejects(
+    commands.answer(ReticleCommand.ACT, { ref: 'e9999', action: ActionType.CLICK }),
+    /no longer resolves|unknown ref|not found/i,
+  );
+  held += 1;
+
+  const ink = (await query({ name: 'Ink' })).find((e) => 'window' !== e.role);
+  assert.ok(ink?.ref, `the canvas has no ref:\n${shown}`);
+  const drawn = await commands.answer(ReticleCommand.ACT, {
+    ref: ink.ref,
+    action: ActionType.DRAG,
+    args: { foreground: true, settleMs: 400, to: { x: 0.85, y: 0.85 } },
+  });
+  assert.ok(
+    drawn.effect.pixelsChanged > 0,
+    `the stroke showed no pixels: ${JSON.stringify(drawn.effect)}`,
+  );
+  held += 1;
+  const missed = await commands.answer(ReticleCommand.ACT, {
+    ref: ink.ref,
+    action: ActionType.CLICK,
+    args: { foreground: true, settleMs: 400 },
+  });
+  assert.equal(missed.effect.pixelsChanged, 0, `a click drew: ${JSON.stringify(missed.effect)}`);
+  assert.ok(
+    missed.effect.pixelsMovingByItself > 0,
+    `the moving bar was not seen: ${JSON.stringify(missed.effect)}`,
+  );
+  held += 1;
+  process.stdout.write(`computer atspicheck: ${String(held)} of 6 cases held\n`);
+} finally {
+  fixture.kill();
+}
