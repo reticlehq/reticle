@@ -58,6 +58,11 @@ const PACKAGES: Readonly<Record<string, Recorded>> = {
     mutual: 0,
     note: 'was FLAT, and the recorded zero did its job a second time: the first grouping here went red and this baseline was measured. token/ holds the pairing token and where machine state lives.',
   },
+  'adapters/realm/computer': {
+    directories: 4,
+    mutual: 0,
+    note: 'measured when the package was first published: mac/ and win/ are the drivers of each operating system, peer/ answers the bridge, hud/ draws the overlay. Nothing mutual: the drivers do not know the peer.',
+  },
   'adapters/framework/react': {
     directories: 0,
     mutual: 0,
