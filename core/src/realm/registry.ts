@@ -20,7 +20,7 @@
  */
 
 import { type DeterminismProfile, Surface, type SubjectRef } from 'open-verification';
-import { AppRuntime } from '@/telemetry-feedback.js';
+import { AppRuntime, TelemetryRuntime } from '@/telemetry-feedback.js';
 import { PlatformProfile } from '@/wire/platform.js';
 import { RETICLE_URL_PARAM } from '@/wire/constants/constants.js';
 
@@ -225,7 +225,7 @@ export function isPeerRealm(runtime: string | undefined): boolean {
  * The runtime that a computer peer reports: a whole application, read through the operating
  * system, with no SDK in it. A realm of Reticle, so it has no extension prefix.
  */
-export const COMPUTER_RUNTIME = 'computer';
+export const COMPUTER_RUNTIME = TelemetryRuntime.COMPUTER;
 
 /**
  * Realms that reach the bridge as a peer and are not a runtime of the SDK. They are not in

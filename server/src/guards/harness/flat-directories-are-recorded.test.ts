@@ -470,7 +470,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 40 with the product signals: `account-envelope.ts`, `agent-client.ts`, `hud-events.ts`,
   // `platform-linked.ts`, `harness-run.ts`. Flat on purpose: each reaches `getTelemetry`, and a
   // subdirectory of them would be a new directory needing `telemetry` and needed by it.
-  'server/src/telemetry': 40,
+  // 42 with `telemetry-runtime.ts` (the runtime a verdict, a defect and feedback say, as a closed list)
+  // and `report-bugs.ts` (`bug_found`, moved out of `invoke-tool.ts` at its line cap). Both reach
+  // `getTelemetry` and the session metrics, as the files above do.
+  'server/src/telemetry': 42,
   'spec-runner/src': 11,
   // 11 with `start-wiring.ts`: what `start` and `startDaemon` both assemble, split from `index.ts` at
   // its line cap. Beside the entry points it serves; anywhere else it would be a new reach.

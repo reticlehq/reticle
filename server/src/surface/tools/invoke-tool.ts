@@ -27,7 +27,6 @@ import {
   TelemetryEventKind,
   THROTTLED_WARNING,
   TRANSPORT_LIMITS,
-  fingerprintFinding,
 } from '@reticlehq/core';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { getTelemetry } from '@/telemetry/telemetry.js';
@@ -35,12 +34,12 @@ import { takeUpdateNudge } from '@/command/update/update-nudge.js';
 import { takeVersionSkew } from '@/command/version/version-nudge.js';
 import { rewriteClosedAsSkew } from '@/command/version/version-skew.js';
 import { noteToolCall } from '@/command/daemon/lifetime/daemon-usefulness.js';
-import { bugsInResult, routeOf } from '@/telemetry/bug-found.js';
+import { reportBugsFound } from '@/telemetry/report-bugs.js';
 import { noteToolServed, reportToolRefused } from '@/telemetry/tool-refused.js';
 import { buildErrorPayload, classifyRefusal, codedRefusalOf } from './error-recovery.js';
 import { resultIsError } from '@/surface/mcp/faults/mcp-is-error.js';
 import { verificationOf } from '@/telemetry/verification-of.js';
-import { emitBugFoundHook, emitVerdictHook } from '@/hooks/hook-emit.js';
+import { emitVerdictHook } from '@/hooks/hook-emit.js';
 import {
   noteActed,
   noteFirstVerdict,
@@ -95,6 +94,7 @@ function recordVerification(
   brand: BrowserBrand | undefined,
   sessionId: string | undefined,
   sdkVersion: string | undefined,
+  runtime: string | undefined,
 ): boolean {
   const verification = verificationOf(
     toolName,
@@ -103,6 +103,7 @@ function recordVerification(
     brand,
     currentDrivenBy() !== undefined,
     sdkVersion,
+    runtime,
   );
   if (verification === undefined) {
     return false;
@@ -126,51 +127,6 @@ function recordVerification(
   // The FIRST_RUN rung: once per machine + project, not once per verdict.
   noteVerdictProduced(durationMs);
   return true;
-}
-
-/**
- * Emit one `bug_found` per defect in a tool result, and count it into the session.
- *
- * The outcome metric: everything else measures whether Reticle is used, this measures whether it
- * works. Discrete events rather than only a counter, because the KIND distribution is the argument —
- * "we found 4,000 bugs" is a claim, "1,200 were greens that lied" is evidence.
- */
-function reportBugsFound(
-  toolName: string,
-  result: Record<string, unknown>,
-  sessionId: string | undefined,
-): void {
-  const bugs = bugsInResult(toolName, result);
-  if (0 === bugs.length) {
-    return;
-  }
-  const metrics = getSessionMetrics();
-  const route = routeOf(result);
-  for (const bug of bugs) {
-    // `recordBug` answers whether this kind is new to the session, which is the only thing that
-    // separates "another defect" from "the same defect again". Counting instances as defects is how
-    // a published number inflates itself.
-    const first = metrics.recordBug(bug.kind);
-    const identity =
-      route !== undefined
-        ? { kind: bug.kind, source: bug.source, route }
-        : { kind: bug.kind, source: bug.source };
-    const fingerprint = fingerprintFinding(identity);
-    const occurrence = metrics.recordBugOccurrence(fingerprint);
-    void getTelemetry().emit(TelemetryEventKind.BUG_FOUND, {
-      actor: TelemetryActor.AGENT,
-      bug: {
-        ...bug,
-        repeat: !first,
-        fingerprint,
-        ...(occurrence === undefined ? {} : { occurrence }),
-      },
-    });
-    // The same defect, said out loud to whoever is building on Reticle. Inside the loop rather than
-    // after it because the event is PER DEFECT — one event carrying a list would make a consumer
-    // unpack it to answer "what was found", which is the question they are subscribing to ask.
-    emitBugFoundHook(toolName, bug, { repeat: !first, fingerprint, route, sessionId });
-  }
 }
 
 /**
@@ -669,8 +625,9 @@ async function dispatchTool<Ext>(
       session?.brand,
       session?.id,
       session?.sdkVersion,
+      session?.runtime,
     );
-    reportBugsFound(tool.name, raw, session?.id);
+    reportBugsFound(tool.name, raw, session?.id, session?.runtime);
   }
   // The other half of the refusal surface. A top-level `error` string IS this codebase's refusal
   // convention, so half the tools refuse by RETURNING one rather than throwing — and reading only the

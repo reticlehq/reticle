@@ -4,6 +4,7 @@
  * reaches it.
  */
 import * as z from 'zod';
+import { TelemetryRuntime } from './telemetry-feedback.js';
 
 /**
  * How Reticle came to find a defect. Four routes, in descending order of "a human would have missed
@@ -125,5 +126,7 @@ export const BugFoundSchema = z.object({
    * `occurrence: 1` is the distinct defect within a session. Absent on older senders.
    */
   occurrence: z.number().int().positive().optional(),
+  /** The runtime of the session where it was found: the browser, Electron, Tauri or the computer. */
+  runtime: z.nativeEnum(TelemetryRuntime).optional(),
 });
 export type BugFound = z.infer<typeof BugFoundSchema>;

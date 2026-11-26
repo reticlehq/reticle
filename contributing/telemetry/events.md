@@ -284,6 +284,7 @@ The block is `session`, a `SessionSummary`. Every count is windowed: it counts o
 | `uncleanLoss` | `CaptureLoss`, optional | What was lost when `reason` is `unclean_capture`. |
 | `driven` | `VerificationDriver`, optional | `harness` when Reticle's own drive produced the verdict. |
 | `sdkVersion` | string, optional | The page SDK version from its handshake: our release number, or `other`. Compare it with the envelope `version` to find verdicts on a page that is older than the daemon. |
+| `runtime` | `TelemetryRuntime`, optional | Where the verdict was taken: `web`, `electron`, `tauri`, `computer` (an application read through the operating system) or `other` (a realm that a host registered; its name is not sent). |
 
 > **Trap:** split the producers before you count. `browser: headless` with `via: reticle_flow_verify` is the spec runner. `driven: harness` is the Harness. A `reticle_flow_replay` verdict carries a `reason` from this version on (older rows have none, so segment by version), and its `verified` follows the reason: an `ok` replay whose channels disagreed is `no`, and one whose flow asserts nothing is `unknown`. A suite verdict carries no reason. A scripted client can send thousands of verdicts in a day from one machine, so report verdict machines next to verdict rows.
 
@@ -318,6 +319,7 @@ The block is `session`, a `SessionSummary`. Every count is windowed: it counts o
 | `attribution` | `BugAttribution` | `app`, `request`, `reticle` or `unclassified`. Always present. |
 | `fingerprint` | string, optional | An 8-character hash of the kind and route. |
 | `occurrence` | int, optional | Which hit of this `fingerprint` in the session, from 1. Count `occurrence: 1` for distinct defects. |
+| `runtime` | `TelemetryRuntime`, optional | The runtime of the session where it was found, as on `verification_completed`. |
 
 The payload never carries a selector, a URL or a description of the app.
 
@@ -756,7 +758,7 @@ Eligibility is on rows that exist. It needs no field of its own. Deduplicate on 
 | `rating` | int 1 to 5, optional | Human only. |
 | `need`, `impact`, `currentApproach` | string, optional | Why it is wanted, what gets better, and the workaround today. |
 | `model`, `client`, `clientVersion` | string, optional | Self-reported by the agent, and the MCP client. |
-| `stack`, `stackMajor`, `runtime`, `engine`, `driver`, `mcpScope` |  | Where it happened. |
+| `stack`, `stackMajor`, `runtime`, `engine`, `driver`, `mcpScope` |  | Where it happened. `runtime` is a `TelemetryRuntime`: `computer` for a session of Reticle's computer. |
 | `contact` | string, optional | A reply address, sent only when the person gave it for this purpose (`reticle feedback --contact`, or an agent that relays an address the user typed). Checked by core's `isFeedbackContact`. The one personal value that telemetry carries. |
 
 ```json

@@ -78,6 +78,14 @@ export const AppRuntime = {
 } as const;
 export type AppRuntime = (typeof AppRuntime)[keyof typeof AppRuntime];
 
+/**
+ * The runtime of a session as telemetry names it: a runtime of the SDK, Reticle's computer (an
+ * application read through the operating system), or `other` for a realm that a host registered.
+ * The name of a registered realm is never sent.
+ */
+export const TelemetryRuntime = { ...AppRuntime, COMPUTER: 'computer', OTHER: 'other' } as const;
+export type TelemetryRuntime = (typeof TelemetryRuntime)[keyof typeof TelemetryRuntime];
+
 /** The rendering engine behind the connected page — coarse on purpose (three values, not a UA string). */
 export const BrowserEngine = {
   BLINK: 'blink',
@@ -177,7 +185,7 @@ export const FeedbackSchema = z.object({
    * and a full version string is high-cardinality enough to start narrowing down who sent it.
    */
   stackMajor: z.number().int().nonnegative().optional(),
-  runtime: z.nativeEnum(AppRuntime).optional(),
+  runtime: z.nativeEnum(TelemetryRuntime).optional(),
   engine: z.nativeEnum(BrowserEngine).optional(),
   driver: z.nativeEnum(PageDriver).optional(),
   /** The MCP client on the other end (`claude-code`, `cursor`, …) — self-reported at initialize. */
