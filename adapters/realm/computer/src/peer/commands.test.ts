@@ -2254,6 +2254,37 @@ describe('PeerCommands', () => {
 
 // A person arranges windows: puts two side by side, makes one small, fills the screen. The realm
 // had no action for it, so two tabs of Dia could not be put next to each other.
+// The agent said what it was about to do, and a desktop session refused it: "this page does not
+// serve narrate". The person watching the HUD saw each action and never why.
+describe('narrate', () => {
+  it('shows what the agent says in the HUD, and declares that it serves it', async () => {
+    const said: string[] = [];
+    const hud = {
+      app: () => undefined,
+      move: () => undefined,
+      glow: () => undefined,
+      act: (text: string) => {
+        said.push(text);
+      },
+      effect: () => undefined,
+      paused: () => false,
+      stopped: () => false,
+      close: () => undefined,
+    };
+    const commands = new PeerCommands({ driver: fakeDriver(), emit: () => undefined, hud });
+    expect(
+      await commands.answer(ReticleCommand.NARRATE, { text: 'Checking the AWS credits' }),
+    ).toEqual({ ok: true, shown: true });
+    expect(said).toEqual(['Checking the AWS credits']);
+    // With no HUD, nothing is shown, and the answer says so.
+    const blind = new PeerCommands({ driver: fakeDriver(), emit: () => undefined });
+    expect(await blind.answer(ReticleCommand.NARRATE, { text: 'x' })).toEqual({
+      ok: true,
+      shown: false,
+    });
+  });
+});
+
 describe('window', () => {
   const moved = (frame: [number, number, number, number]): UiRead => {
     const before = read('Ready');

@@ -189,6 +189,7 @@ export const PEER_COMMANDS = [
   ReticleCommand.SCROLL,
   ReticleCommand.CAPABILITIES,
   ReticleCommand.CAPTURE,
+  ReticleCommand.NARRATE,
 ] as const;
 
 type Args = Record<string, unknown>;
@@ -349,9 +350,10 @@ export class PeerCommands {
       case ReticleCommand.PRESENTER:
         return this.#presenter(args);
       case ReticleCommand.NARRATE:
-        // What the agent did in a page, in the log the person reads while computer use is live.
+        // What the agent did in a page, or what it is about to do here, in the log the person reads
+        // while computer use is live. It is declared in COMMANDS: the bridge refused it before.
         this.#deps.hud?.act(text(args['text']) ?? '');
-        return { ok: true };
+        return { ok: true, shown: this.#deps.hud !== undefined };
       case ReticleCommand.IMPACT:
       case ReticleCommand.FLOW_PROGRESS:
       case ReticleCommand.PLAN:
