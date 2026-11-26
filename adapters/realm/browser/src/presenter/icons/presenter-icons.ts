@@ -63,7 +63,7 @@ function buildSvg(name: HeroIconBodyKey, sizePx: number): SVGSVGElement {
     throw new Error(`missing heroicon body: ${String(name)}`);
   }
   const parsed = new DOMParser().parseFromString(
-    `<svg xmlns="${SVG_NS}" viewBox="${HERO_VIEWBOX}" fill="none">${body}</svg>`,
+    trustedHtml(`<svg xmlns="${SVG_NS}" viewBox="${HERO_VIEWBOX}" fill="none">${body}</svg>`),
     'image/svg+xml',
   );
   const root = parsed.documentElement;
