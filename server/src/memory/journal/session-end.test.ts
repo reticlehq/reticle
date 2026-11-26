@@ -17,6 +17,7 @@ import {
 import { AmbientStore } from './ambient-store.js';
 import { makeSessionEnd, type SessionEndTarget } from './session-end.js';
 import { DriveFlowSkipReason } from './drive-flow.js';
+import { RunLedger } from '@/judgement/runs/run-ledger.js';
 import { RecordingStore } from '@/language/flows/recording/tape/recordings.js';
 import { NETWORK_MOCK_TOOLS } from '@/portal/input/network-mock-tools.js';
 import type { ToolDeps } from '@/surface/tools/tools.js';
@@ -507,6 +508,35 @@ describe('teardown saves what a session drove as ONE flow per journey', () => {
     expect(await flows.list()).toEqual(['drive-close-an-issue']);
     const saved = await flows.load('drive-close-an-issue');
     expect(saved.ok && saved.value.author).toEqual({ agent: 'claude-code' });
+  });
+
+  it('lists the flow it saved in the run report, as reticle_flow_save does (#2483)', async () => {
+    const ledger = new RunLedger();
+    ledger.begin(0, 'agent-1');
+    const end = makeSessionEnd({
+      fs,
+      reticleRoot: root,
+      enabled: true,
+      flows: new FlowStore(fs, root, { now: () => 1 }),
+      takeAmbientTape: () => ({
+        startPath: '/issues',
+        steps: [
+          {
+            tool: ReticleTool.ACT,
+            args: { by: QueryBy.TESTID, value: 'close', action: 'click', args: {} },
+            stable: true,
+            page: '/issues',
+            intent: 'Close an issue',
+            expect: { kind: PredicateKind.SIGNAL, name: 'issue:closed' },
+          },
+        ],
+      }),
+      flowSaved: (name) => ledger.flowSaved(name),
+    });
+    await end(fakeSession('tab-1', {}));
+    // A second drive of the same journey folds into the first: one flow, named once.
+    await end(fakeSession('tab-2', {}));
+    expect(ledger.take(2, 'agent-1').flows.saved).toEqual(['drive-close-an-issue']);
   });
 
   it("saves in the session's own project, where replay looks, not where the daemon started", async () => {

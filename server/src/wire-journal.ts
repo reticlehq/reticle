@@ -19,6 +19,7 @@ import type { FileSystemPort } from './memory/project/fs/fs-port.js';
 import { makeJournalAttach } from './memory/journal/attach-journal.js';
 import { setEpisodeLogEnabled } from './memory/journal/episode-log.js';
 import { endLiveSessions, makeSessionEnd, recordDriveRun } from './memory/journal/session-end.js';
+import { runLedger } from './judgement/runs/run-ledger.js';
 import { attachDriveRunFlush } from './memory/journal/drive-run-flush.js';
 import type { TapeStep } from './memory/journal/drive-flow.js';
 import type { OnboardingStep } from '@reticlehq/core/telemetry';
@@ -123,6 +124,8 @@ export function attachJournal(
             ),
         }),
     ...(deps.retain === undefined ? {} : { retain: deps.retain }),
+    // A drive flow saved here belongs in the run report like one saved by `reticle_flow_save`.
+    flowSaved: (name) => runLedger.flowSaved(name),
     // Retention runs from teardown, and it must not delete the journal of a session that is still
     // being written. The registry is the only thing that knows which those are.
     liveSessionIds: () => new Set(bridge.sessions.all().map((s) => s.id)),

@@ -107,6 +107,12 @@ interface SessionEndDeps {
    */
   reportStep?: (step: OnboardingStep) => Promise<boolean>;
   /**
+   * Note a flow that teardown saved in the agent's open run, so the run report lists it. Injected
+   * like `reportStep`: an auto-saved drive never passes through `reticle_flow_save`, and the report
+   * said "Flows: none saved" for a run that saved one (#2483).
+   */
+  flowSaved?: (name: string) => void;
+  /**
    * The flow store, so a drive can be saved as a flow at teardown.
    *
    * Optional, like `now`, so every existing construction keeps working — and absent means the
@@ -118,7 +124,7 @@ interface SessionEndDeps {
       program: DriveProgram,
       projectId: ProjectId | undefined,
       prefix: string,
-    ) => Promise<unknown>;
+    ) => Promise<{ ok: true; value: { name: string } } | { ok: false }>;
   };
   /**
    * The flow store for a session's own `.reticle`. Drive flows used to go to `flows` above — the
@@ -384,11 +390,15 @@ async function saveDrivenFlow(
   const author = deps.author?.();
   for (const program of programs) {
     // Folded into any saved copy of the same journey, so each session does not add a near-copy.
-    await flows.saveJourney(
+    const saved = await flows.saveJourney(
       author === undefined ? program : { ...program, author },
       session.projectId,
       DRIVE_FLOW_PREFIX,
     );
+    // The name the journey lives under, which is the earlier copy's when this drive folded into it.
+    if (saved.ok) {
+      deps.flowSaved?.(saved.value.name);
+    }
   }
   // The funnel step that makes the SECOND run cheap.
   //
