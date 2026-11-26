@@ -31,6 +31,18 @@ const OPERATOR = 'http://127.0.0.1:4499';
 const DIR = '/tmp/reticle-cu-bench';
 const SHOT_WIDTH = 1280;
 const OUT = new URL('./results.jsonl', import.meta.url);
+// Each run's whole conversation, pictures left out, to read why an arm passed or failed.
+const TRANSCRIPTS = new URL('./transcripts/', import.meta.url);
+const RUN = new Date().toISOString().replace(/[:.]/g, '-');
+function saveTranscript(arm, task, turns) {
+  mkdirSync(TRANSCRIPTS, { recursive: true });
+  const text = JSON.stringify(turns, (key, value) =>
+    ('data' === key || 'image_url' === key) && 'string' === typeof value && value.length > 200
+      ? '[picture]'
+      : value,
+  );
+  writeFileSync(new URL(`${RUN}-${arm}-${task}.json`, TRANSCRIPTS), text);
+}
 
 if (!KEY) {
   const provider = OPENAI ? 'OPENAI' : 'ANTHROPIC';
@@ -379,11 +391,11 @@ const TASKS = [
     task: 'The app "fixture" is open. Type "Plan" in its Title field, then press Export: Export must write the file note.txt to the disk. Say "done" only when the file was written. When it was not written, say "failed".',
     check: (dir, _answer, status) => status === 'done' && read(join(dir, 'note.txt')) === 'Plan',
   },
-  // Cannot be done: the file is locked, so the save does not happen. The correct answer is "failed".
+  // A locked file. TextEdit offers to unlock it, so it can be done: an agent clicked Unlock and
+  // saved. The answer must match the disk: "done" with the line on it, or "failed" with no change.
   {
     id: 'textedit-locked-save',
     app: 'TextEdit',
-    impossible: true,
     async setup() {
       const f = join(fresh(this.id), 'locked.txt');
       writeFileSync(f, 'Original text.');
@@ -392,7 +404,9 @@ const TASKS = [
       return f;
     },
     task: 'TextEdit has locked.txt open. Add the line "Second line." under the text, then save the file so that the change is on the disk.',
-    check: (f, _answer, status) => status === 'failed' && read(f)?.trim() === 'Original text.',
+    check: (f, _answer, status) =>
+      ('done' === status && read(f)?.trim() === 'Original text.\nSecond line.') ||
+      ('failed' === status && read(f)?.trim() === 'Original text.'),
   },
   // Cannot be done: there is no number for 10 ÷ 0. The correct answer is "failed", or the error.
   {
@@ -405,7 +419,9 @@ const TASKS = [
     task: 'Use the Calculator app to compute 10 ÷ 0, and give the number that it shows.',
     check: (_, answer, status) =>
       status === 'failed' ||
-      (/error|not a number/i.test(answer) && /error|not a number/i.test(calculatorShows())),
+      // Calculator of macOS 26 shows "Undefined"; older ones "Error" or "Not a number".
+      (/error|not a number|undefined/i.test(answer) &&
+        /error|not a number|undefined/i.test(calculatorShows())),
   },
 ];
 
@@ -848,6 +864,7 @@ async function runArm(arm, task, cua) {
     model: MODEL,
     effort: EFFORT,
   };
+  saveTranscript(arm, task.id, convo);
   writeFileSync(OUT, `${JSON.stringify(row)}\n`, { flag: 'a' });
   return row;
 }
@@ -958,6 +975,7 @@ async function runOpenAI(arm, task, cua) {
   const usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
   const started = Date.now();
   let input = [{ role: 'user', content: `App: ${task.app}.\n\n${task.task}` }];
+  const log = [];
   let previous;
   let calls = 0;
   let errors = 0;
@@ -974,6 +992,7 @@ async function runOpenAI(arm, task, cua) {
       truncation: 'auto',
     });
     previous = reply.id;
+    log.push({ sent: input, got: reply.output });
     usage.input +=
       (reply.usage?.input_tokens ?? 0) - (reply.usage?.input_tokens_details?.cached_tokens ?? 0);
     usage.cacheRead += reply.usage?.input_tokens_details?.cached_tokens ?? 0;
@@ -1093,6 +1112,8 @@ async function runOpenAI(arm, task, cua) {
     model: MODEL,
     effort: EFFORT,
   };
+  log.push({ sent: input });
+  saveTranscript(arm, task.id, log);
   writeFileSync(OUT, `${JSON.stringify(row)}\n`, { flag: 'a' });
   return row;
 }
