@@ -161,7 +161,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         .string()
         .optional()
         .describe(
-          'Present when the recording tab disconnected before save (names the fallback folder), or when the recording left a page and returned to it.',
+          'Present when the recording tab disconnected before save (it names the folder used), or when the recording left a page and returned to it. Replay has no navigation steps, so the next click looks for a control on a page the tab is no longer on.',
         ),
       error: z.string().optional(),
       code: z.string().optional(),
