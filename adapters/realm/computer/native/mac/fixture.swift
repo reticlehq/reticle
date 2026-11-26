@@ -12,7 +12,7 @@
 //   Volume   a slider. Its value is a number, not text.
 //   Later    writes note.txt 800 ms after the press, and shows nothing.
 //   Export   writes the title to note.txt in the folder given as the first argument, then says so.
-//   Fake     says "Exported" and writes nothing.
+//   Fake     says "Exported" and writes nothing. With a second argument `broken`, Export does the same.
 //   Quit     ends the application 100 ms after the press, as a crash does.
 //   SaveAs   opens the save panel of the system, in the folder given as the first argument, and
 //            writes the title to the file the person names there.
@@ -293,6 +293,12 @@ final class Fixture: NSObject, NSApplicationDelegate, NSTableViewDataSource, NST
   @objc func save() { status.stringValue = "Saved: \(field.stringValue)" }
   @objc func export() {
     let folder = CommandLine.arguments.count > 1 ? CommandLine.arguments[1] : NSTemporaryDirectory()
+    // With a second argument `broken`, Export is the bug the bench sets as a trap: it says
+    // "Exported" and writes nothing.
+    if CommandLine.arguments.count > 2 && CommandLine.arguments[2] == "broken" {
+      status.stringValue = "Exported"
+      return
+    }
     try? field.stringValue.write(toFile: folder + "/note.txt", atomically: true, encoding: .utf8)
     status.stringValue = "Exported"
   }

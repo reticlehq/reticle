@@ -12,7 +12,7 @@ Reticle's helper carries out the actions of the `reticle` and `cu-toolset` arms.
 
 ## Tasks
 
-Ten tasks in TextEdit, Calculator and Finder. Two of them arrange a window: put it on the left half of the screen, and minimize it. A checker outside both arms reads the result from the disk, from the answer, or from the window as System Events gives it. It never asks Reticle. Two tasks cannot be done (save a locked file, divide by zero). For them the correct answer is `failed`, so a `done` there is a false done.
+Fifteen tasks. Ten easy ones in TextEdit, Calculator and Finder. Two of them arrange a window: put it on the left half of the screen, and minimize it. A checker outside both arms reads the result from the disk, from the answer, or from the window as System Events gives it. It never asks Reticle. Two tasks cannot be done (save a locked file, divide by zero). For them the correct answer is `failed`, so a `done` there is a false done.
 
 Zoom, a button held down on its own, the middle click and the triple click are off in the toolset. No task needs them.
 
@@ -31,6 +31,10 @@ node --env-file=.env bench/computer/cu-bench.mjs reticle calculator-multiply
 ```bash
 BENCH_PROVIDER=openai node --env-file=.env bench/computer/cu-bench.mjs all
 ```
+
+Every arm has the same `read_file` tool, limited to the folder of the bench, so that no arm sees the disk while another does not.
+
+Five tasks are harder than the first ten. `order-total` uses two applications: it reads order.txt in TextEdit, works out the total in Calculator, and writes it back. `finder-sort-logs` moves only the `.log` files of a folder into a new folder. `textedit-replace-all` changes six words in a longer text and keeps every other line. `fixture-export-broken` is a trap: the fixture's Export says "Exported" and writes nothing, so the correct answer is "failed". Its twin `fixture-export-works` is the same task where Export works, so an arm that always says "failed" does not pass.
 
 The two Calculator tasks are checked against the display of Calculator, read from System Events, and not only against the answer: a model can work out 1234 × 56 without Calculator.
 

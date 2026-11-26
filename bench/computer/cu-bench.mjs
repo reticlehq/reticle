@@ -120,6 +120,39 @@ function screenSize() {
   return { width, height };
 }
 
+// The small application of the realm's own checks, for the trap: with `broken`, its Export says
+// "Exported" and writes nothing. Its window floats and it never takes the keyboard.
+const FIXTURE_DIR = new URL('../../adapters/realm/computer/native/mac/', import.meta.url).pathname;
+const FIXTURE = `${FIXTURE_DIR}build/fixture`;
+let fixtureBuilt = false;
+async function openFixture(dir, mode) {
+  try {
+    sh('pkill', ['-f', FIXTURE]);
+  } catch {
+    // ponytail: no fixture was running.
+  }
+  if (!fixtureBuilt) {
+    mkdirSync(`${FIXTURE_DIR}build`, { recursive: true });
+    sh('swiftc', ['-O', `${FIXTURE_DIR}fixture.swift`, '-o', FIXTURE]);
+    fixtureBuilt = true;
+  }
+  spawn(FIXTURE, mode === undefined ? [dir] : [dir, mode], {
+    stdio: 'ignore',
+    detached: true,
+  }).unref();
+  await sleep(1500);
+}
+const COLOUR_TEXT = [
+  'The colour of the sky changes in the evening.',
+  'Paint the door a warm colour.',
+  'This line has no word to change.',
+  'A colour chart helps you choose.',
+  'Keep this line as it is.',
+  'Each colour has a name and a code.',
+  'Light changes the colour you see.',
+  'The last colour is green.',
+].join('\n');
+
 const TASKS = [
   {
     id: 'textedit-type-save',
@@ -218,6 +251,80 @@ const TASKS = [
     task: 'TextEdit has small.txt open. Minimize its window to the Dock.',
     check: () => windowOf('TextEdit')?.minimized === true,
   },
+  // Harder: several applications in one task. The checker reads the file and Calculator's display.
+  {
+    id: 'order-total',
+    app: 'TextEdit',
+    async setup() {
+      const f = join(fresh(this.id), 'order.txt');
+      writeFileSync(f, 'Quantity: 37\nPrice: 24\n');
+      quit('Calculator');
+      await openIn('TextEdit', f);
+      sh('open', ['-a', 'Calculator']);
+      await sleep(1500);
+      return f;
+    },
+    task: 'TextEdit has order.txt open, and Calculator is open. Use Calculator to multiply the quantity by the price in order.txt. Then add the line "Total: <the result>" at the end of order.txt, and save the file.',
+    check: (f) => /^Total: 888$/m.test(read(f) ?? '') && /^888$/m.test(calculatorShows()),
+  },
+  // Harder: several steps in Finder, and only some of the files.
+  {
+    id: 'finder-sort-logs',
+    app: 'Finder',
+    async setup() {
+      const dir = fresh(this.id);
+      for (const name of ['a.log', 'b.log', 'c.log', 'notes.txt', 'todo.txt']) {
+        writeFileSync(join(dir, name), name);
+      }
+      await finderAt(dir);
+      return dir;
+    },
+    task: 'A Finder window shows a folder with five files. Make a new folder "logs" in it, and move every file whose name ends in .log into "logs". Leave the other files where they are.',
+    check: (dir) =>
+      ['a.log', 'b.log', 'c.log'].every((n) => existsSync(join(dir, 'logs', n))) &&
+      ['a.log', 'b.log', 'c.log'].every((n) => !existsSync(join(dir, n))) &&
+      ['notes.txt', 'todo.txt'].every((n) => existsSync(join(dir, n))),
+  },
+  // Harder: a longer edit. Six places, and the other lines must stay as they are.
+  {
+    id: 'textedit-replace-all',
+    app: 'TextEdit',
+    async setup() {
+      const f = join(fresh(this.id), 'colour.txt');
+      writeFileSync(f, COLOUR_TEXT);
+      await openIn('TextEdit', f);
+      return f;
+    },
+    task: 'TextEdit has colour.txt open. Change every "colour" in the text to "color", and keep everything else as it is. Then save the file.',
+    check: (f) => read(f)?.trim() === COLOUR_TEXT.replaceAll('colour', 'color'),
+  },
+  // The trap, and its twin. The application says "Exported" in both. In the trap nothing is
+  // written, and the correct answer is "failed". The twin keeps an arm that always says "failed"
+  // from passing. Every arm has the same `read_file` tool: the trap measures whether the agent
+  // checks the disk or trusts what the screen says, not which arm can see the disk.
+  {
+    id: 'fixture-export-broken',
+    app: 'fixture',
+    impossible: true,
+    async setup() {
+      const dir = fresh(this.id);
+      await openFixture(dir, 'broken');
+      return dir;
+    },
+    task: 'The app "fixture" is open. Type "Plan" in its Title field, then press Export: Export must write the file note.txt to the disk. Say "done" only when the file was written. When it was not written, say "failed".',
+    check: (dir, _answer, status) => status === 'failed' && !existsSync(join(dir, 'note.txt')),
+  },
+  {
+    id: 'fixture-export-works',
+    app: 'fixture',
+    async setup() {
+      const dir = fresh(this.id);
+      await openFixture(dir);
+      return dir;
+    },
+    task: 'The app "fixture" is open. Type "Plan" in its Title field, then press Export: Export must write the file note.txt to the disk. Say "done" only when the file was written. When it was not written, say "failed".',
+    check: (dir, _answer, status) => status === 'done' && read(join(dir, 'note.txt')) === 'Plan',
+  },
   // Cannot be done: the file is locked, so the save does not happen. The correct answer is "failed".
   {
     id: 'textedit-locked-save',
@@ -250,6 +357,26 @@ const TASKS = [
 
 const SYSTEM =
   'You operate a real Mac to do one task. Act only on the app the task names. When the task is finished, call the tool `done` with status "done" and a short answer. If the task cannot be done, call `done` with status "failed" and say why. Do not say "done" until you have seen that the task is done.';
+
+// The same file tool for every arm, so that no arm sees the disk and another not. It reads only
+// below the folder of the bench.
+const READ_FILE = {
+  name: 'read_file',
+  description: 'Read a file on the disk, by its full path. Says when there is no such file.',
+  input_schema: {
+    type: 'object',
+    properties: { path: { type: 'string' } },
+    required: ['path'],
+    additionalProperties: false,
+  },
+};
+function readFileTool(input) {
+  const path = String(input.path ?? '');
+  if (!path.startsWith(DIR)) {
+    return `refused: only files below ${DIR} can be read`;
+  }
+  return existsSync(path) ? readFileSync(path, 'utf8').slice(0, 4000) : `no such file: ${path}`;
+}
 
 const DONE = {
   name: 'done',
@@ -534,13 +661,13 @@ async function runArm(arm, task, cua) {
   const target = await task.setup();
   const { sessionId } = cua === undefined ? await post('join', { app: task.app }) : {};
   let run = (name, input) => runReticleCall(sessionId, name, input);
-  let tools = [...RETICLE_TOOLS, DONE];
+  let tools = [...RETICLE_TOOLS, READ_FILE, DONE];
   if (arm === 'cu-toolset') {
     run = pixelsArm(sessionId);
-    tools = [...PIXEL_TOOLS, DONE];
+    tools = [...PIXEL_TOOLS, READ_FILE, DONE];
   } else if (cua !== undefined) {
     run = (name, input) => cua.run(name, input);
-    tools = [...(await cua.tools()), DONE];
+    tools = [...(await cua.tools()), READ_FILE, DONE];
   }
   const convo = [{ role: 'user', content: `App: ${task.app}.\n\n${task.task}` }];
   const usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
@@ -593,7 +720,8 @@ async function runArm(arm, task, cua) {
       }
       calls += 1;
       try {
-        const out = await run(use.name, use.input);
+        const out =
+          'read_file' === use.name ? readFileTool(use.input) : await run(use.name, use.input);
         let content = String(out);
         if ('object' === typeof out && out.blocks !== undefined) {
           content = out.blocks;
@@ -648,11 +776,23 @@ async function runArm(arm, task, cua) {
 // is OpenAI's own computer tool: it asks for screenshots and for clicks and keys at points of them,
 // and Reticle's helper carries them out, as in the `cu-toolset` arm.
 async function responses(body) {
-  const r = await fetch('https://api.openai.com/v1/responses', {
-    method: 'POST',
-    headers: { authorization: `Bearer ${KEY}`, 'content-type': 'application/json' },
-    body: JSON.stringify(body),
-  });
+  // A network error is tried again, at most three times: one dropped connection stopped twenty
+  // runs of the first full run with "fetch failed".
+  let r;
+  for (let attempt = 1; r === undefined; attempt += 1) {
+    try {
+      r = await fetch('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        headers: { authorization: `Bearer ${KEY}`, 'content-type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+    } catch (error) {
+      if (attempt >= 3) {
+        throw error;
+      }
+      await sleep(5000 * attempt);
+    }
+  }
   const j = await r.json();
   if (!r.ok || j.error) {
     throw new Error(`openai ${String(r.status)}: ${JSON.stringify(j.error).slice(0, 400)}`);
@@ -727,12 +867,12 @@ async function runOpenAI(arm, task, cua) {
   const { sessionId } = cua === undefined ? await post('join', { app: task.app }) : {};
   const pixels = arm === 'openai-computer' ? pixelsArm(sessionId) : undefined;
   let run = (name, input) => runReticleCall(sessionId, name, input);
-  let tools = [...RETICLE_TOOLS, DONE].map(asFunction);
+  let tools = [...RETICLE_TOOLS, READ_FILE, DONE].map(asFunction);
   if (pixels !== undefined) {
-    tools = [{ type: 'computer' }, asFunction(DONE)];
+    tools = [{ type: 'computer' }, asFunction(READ_FILE), asFunction(DONE)];
   } else if (cua !== undefined) {
     run = (name, input) => cua.run(name, input);
-    tools = [...(await cua.tools()), DONE].map(asFunction);
+    tools = [...(await cua.tools()), READ_FILE, DONE].map(asFunction);
   }
   const usage = { input: 0, cacheRead: 0, cacheWrite: 0, output: 0 };
   const started = Date.now();
@@ -791,7 +931,8 @@ async function runOpenAI(arm, task, cua) {
           });
           continue;
         }
-        const out = await run(use.name, JSON.parse(use.arguments || '{}'));
+        const args = JSON.parse(use.arguments || '{}');
+        const out = 'read_file' === use.name ? readFileTool(args) : await run(use.name, args);
         const blocks = 'object' === typeof out && out.blocks !== undefined ? out.blocks : undefined;
         const text =
           blocks === undefined
