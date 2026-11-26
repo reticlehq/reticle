@@ -22,7 +22,7 @@
     "check:pointer": "node native/mac/pointercheck.mjs && node native/mac/keyscheck.mjs && node native/mac/pixelcheck.mjs && node native/mac/dropcheck.mjs",
     "check:photo": "node native/mac/photocheck.mjs && node native/mac/videocheck.mjs && node native/mac/numberscheck.mjs",
     "check:thirdparty": "node native/mac/thirdpartycheck.mjs --front && node native/mac/dictionarycheck.mjs && node native/mac/clockcheck.mjs && node native/mac/sysinfocheck.mjs && node native/mac/browsercheck.mjs",
-    "prepack": "node ../../../scripts/prepare-dist.mjs --clean dist && tsc -b --force && node ../../../scripts/alias-dist.mjs && node ../../../scripts/prepare-dist.mjs dist"
+    "prepack": "node ../../../scripts/prepare-dist.mjs --clean dist && tsc -b --force && node ../../../scripts/alias-dist.mjs && node ../../../scripts/prepare-dist.mjs dist && node native/mac/build-release.mjs"
   },
   "dependencies": {
     "@reticlehq/cli-realm": "workspace:*",
@@ -44,6 +44,9 @@
     "bin",
     "dist",
     "native/mac/reticle-ax.swift",
+    "native/mac/hud.swift",
+    "native/mac/build/reticle-ax",
+    "native/mac/build/reticle-hud",
     "native/win/reticle-uia.ps1",
     "native/linux/reticle-atspi.py",
     "README.md",

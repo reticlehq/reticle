@@ -13,7 +13,7 @@
 // Linux with an X display and the AT-SPI bus only (xvfb-run and dbus-run-session in CI). Build
 // the package first. The fixture is started and closed by the check.
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
@@ -30,11 +30,23 @@ const launch = helperLaunch('linux', fileURLToPath(new URL('../', import.meta.ur
 const fixture = spawn('python3', [fileURLToPath(new URL('fixture.py', import.meta.url))], {
   stdio: 'inherit',
 });
+// The application by the name it gives the accessibility bus, as `reticle-computer --app` finds
+// it. Not by the process that was started: on a CI runner `python3` started a second process, and
+// that one held the window.
+let pid;
+for (let i = 0; i < 30 && pid === undefined; i += 1) {
+  await sleep(500);
+  const listed = JSON.parse(
+    execFileSync(launch.file, [...launch.prefix, 'apps'], { encoding: 'utf8' }),
+  ).apps;
+  pid = listed.find((app) => 'fixture.py' === app.name)?.pid;
+}
+assert.ok(pid, 'the fixture did not join the accessibility bus');
 const commands = new PeerCommands({
   driver: new MacDriver({
     helper: launch.file,
     app: 'fixture.py',
-    pid: fixture.pid,
+    pid,
     run: servingHelper(launch.prefix),
   }),
   emit: () => undefined,

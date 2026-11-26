@@ -89,8 +89,8 @@ const findApp = (app) => {
 /**
  * The helper, built when it is not there or when its source is newer. A helper from before an
  * update would answer in the old way, and nothing would say so.
- * ponytail: built on first use, which needs the Xcode command-line tools. Ship a signed helper
- * when this package is published.
+ * The published package holds both programs, built by `prepack` (native/mac/build-release.mjs),
+ * so a person needs no Swift compiler. In a checkout they are built on first use.
  */
 const hudProgram = `${native}build/reticle-hud`;
 const buildOne = (program, from, stdio) => {
@@ -103,8 +103,8 @@ const buildOne = (program, from, stdio) => {
     return false;
   }
 };
-// Windows has nothing to build: the helper is a script.
-const buildHelper = (stdio) => windows || buildOne(helper, source, stdio);
+// Only macOS builds: the helper of Windows and of Linux is a script.
+const buildHelper = (stdio) => 'darwin' !== process.platform || buildOne(helper, source, stdio);
 const answers = (url) =>
   new Promise((resolve) => {
     const { hostname, port } = new URL(url);
@@ -121,9 +121,7 @@ const answers = (url) =>
 if (LIST) {
   // For an agent: the names it can give to --app. Names only.
   if (launch === undefined || !buildHelper('ignore')) {
-    say(
-      'reticle-computer runs on macOS (it needs the Swift compiler: xcode-select --install) and on Windows.',
-    );
+    say('reticle-computer runs on macOS, Windows and Linux (X, with python3-gi and xdotool).');
     process.exit(2);
   }
   const listed = JSON.parse(ask(['apps']) ?? '{}').apps ?? [];
@@ -171,7 +169,7 @@ if (process.argv.includes('--doctor')) {
 }
 
 if (launch === undefined) {
-  say('reticle-computer runs on macOS and on Windows.');
+  say('reticle-computer runs on macOS, Windows and Linux (X, with python3-gi and xdotool).');
   process.exit(2);
 }
 
@@ -224,7 +222,7 @@ if (!(await answers(plan.url))) {
 }
 // The pointer and the window of the realm. Not having them is no reason to stop.
 const hud =
-  plan.hud && !windows && buildOne(hudProgram, `${native}hud.swift`, 'ignore')
+  plan.hud && 'darwin' === process.platform && buildOne(hudProgram, `${native}hud.swift`, 'ignore')
     ? macHud(hudProgram, () => {
         // Stop in the window: leave the application, as Ctrl-C does.
         // Stop is for good: the file stays until the person removes it, and no join works before.
