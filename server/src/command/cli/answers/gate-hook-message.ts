@@ -39,6 +39,8 @@ interface GateHookInput {
   coverageRegressed?: readonly string[];
   /** Changed files the browser loaded and never ran a function of. */
   unexecuted?: readonly string[];
+  /** Saved flow files that could not be read, each as its flow name and the reason. */
+  unreadable?: readonly string[];
   /** Flows the platform says passed before and are broken now. */
   regressed?: number;
 }
@@ -64,6 +66,9 @@ export function gateHookMessage(exit: number, input: GateHookInput): string | un
     lines.push(
       `  ${String(input.regressed)} flow(s) that passed before are broken now — \`reticle runs regression\` names them`,
     );
+  if (input.unreadable !== undefined && input.unreadable.length > 0) {
+    lines.push(`  saved flows that cannot be read: ${name(input.unreadable)}`);
+  }
   if (input.uncovered.length > 0) lines.push(`  no passing run covers: ${name(input.uncovered)}`);
   if (input.downgraded.length > 0)
     lines.push(

@@ -23,9 +23,11 @@
  * allocates nothing: when no resolver is wired, or it names the root already in use, `deps.flows` is
  * returned unchanged.
  */
+import { FlowErrorCode } from '@reticlehq/core';
 import { dirname } from 'node:path';
 import { FlowStore } from './flows.js';
 import type { NamedFlow } from './change/flow-sources.js';
+import type { UnreadableFlow } from './change/gate.js';
 import {
   otherProjectNote,
   rootForTarget,
@@ -113,19 +115,36 @@ export function flowsForSavedRecording(
   }
 }
 
+/** Every flow in `store` that `projectId` can see, with the ones it could not read listed apart. */
+export async function readFlowsIn(
+  store: FlowStore,
+  projectId: ProjectId | undefined,
+): Promise<{ flows: NamedFlow[]; unreadable: UnreadableFlow[] }> {
+  const flows: NamedFlow[] = [];
+  const unreadable: UnreadableFlow[] = [];
+  for (const name of await store.list(projectId)) {
+    const loaded = await store.load(name, projectId);
+    if (loaded.ok) {
+      flows.push({ name: loaded.value.name, steps: loaded.value.steps });
+    } else if (loaded.code !== FlowErrorCode.NOT_FOUND) {
+      // NOT_FOUND is a file removed since the listing: that one really is gone.
+      const reason = loaded.detail ?? loaded.code;
+      const remedy =
+        loaded.code === FlowErrorCode.WRONG_VERSION
+          ? ' If this CLI is older than the flow file, run `reticle update`.'
+          : '';
+      unreadable.push({ flow: name, error: `${reason}${remedy}` });
+    }
+  }
+  return { flows, unreadable };
+}
+
 /** The {name, steps} of every flow in `store` that `projectId` can see. Unreadable flows are left out. */
 export async function namedFlowsIn(
   store: FlowStore,
   projectId: ProjectId | undefined,
 ): Promise<NamedFlow[]> {
-  const flows: NamedFlow[] = [];
-  for (const name of await store.list(projectId)) {
-    const loaded = await store.load(name, projectId);
-    if (loaded.ok) {
-      flows.push({ name: loaded.value.name, steps: loaded.value.steps });
-    }
-  }
-  return flows;
+  return (await readFlowsIn(store, projectId)).flows;
 }
 
 /**

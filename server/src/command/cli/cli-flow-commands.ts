@@ -21,7 +21,7 @@ import { changedFilesSince, type ChangedFiles } from '@/language/flows/change/gi
 import { isAbsolute, join, sep } from 'node:path';
 import { type ProjectId, ReticleDir } from '@reticlehq/core';
 import { FlowStore } from '@/language/flows/flows.js';
-import { namedFlowsIn } from '@/language/flows/flow-store-for-session.js';
+import { namedFlowsIn, readFlowsIn } from '@/language/flows/flow-store-for-session.js';
 import { RunStore } from '@/judgement/runs/artifact/run-store.js';
 import { createNodeFileSystem, type FileSystemPort } from '@/memory/project/fs/fs-port.js';
 import {
@@ -188,7 +188,10 @@ export async function handleGate(
     const reticleRoot = join(process.cwd(), ReticleDir.ROOT);
     // Same deliberate degradation as the gate: a terminal caller sees git's own error anyway.
     const changed = (await resolveChangedFiles(files, since, process.cwd())).files;
-    const allFlows = await loadNamedFlows(fs, reticleRoot, readProjectId(process.cwd()));
+    const { flows: allFlows, unreadable } = await readFlowsIn(
+      new FlowStore(fs, reticleRoot, { now: () => Date.now() }),
+      readProjectId(process.cwd()),
+    );
     const affected = affectedSavedFlows(allFlows, changed).affected;
     const passing = await currentPassing(fs, reticleRoot, allFlows, affected, changed);
     const flaky = await new FlakeStore(fs, reticleRoot).flakyFlows();
@@ -214,9 +217,16 @@ export async function handleGate(
     // and it can never appear in `affected` (that is derived from flows that still exist), so it must be
     // matched against the baseline's own recorded sources. Missing this made deleting a flow turn the
     // gate green, which is precisely the gaming move exists to stop.
+    // A flow file that is there and cannot be read is not deleted; it blocks under its own name.
+    const unreadableNames = new Set(unreadable.map((u) => u.flow));
     const changedSet = new Set(changed);
     const deleted = Object.entries(baseline)
-      .filter(([name, entry]) => !byName.has(name) && entry.sources.some((f) => changedSet.has(f)))
+      .filter(
+        ([name, entry]) =>
+          !byName.has(name) &&
+          !unreadableNames.has(name) &&
+          entry.sources.some((f) => changedSet.has(f)),
+      )
       .map(([name]) => name);
     // Only against a suite that exists: a project with no flows yet is NOTHING_TO_CHECK, and
     // demanding a flow per edited component on its first day would block every stop.
@@ -253,6 +263,7 @@ export async function handleGate(
       unflowed,
       coverageRegressed: regressions(ledger),
       unexecuted,
+      unreadable,
     });
     // Verified-surface coverage over flows: how much of the saved suite this run actually exercised.
     const coverage = computeCoverage(
@@ -283,6 +294,7 @@ export async function handleGate(
       quarantined: result.quarantined,
       ...(result.downgraded.length > 0 ? { downgraded: result.downgraded } : {}),
       ...(result.deleted.length > 0 ? { deletedCoverage: result.deleted } : {}),
+      ...(result.unreadable.length > 0 ? { unreadableFlows: result.unreadable } : {}),
       ...(result.unflowed.length > 0 ? { unflowed: result.unflowed } : {}),
       ...(result.unflowed.length > 0 && flowsWithoutSources ? { flowsWithoutSources } : {}),
       ...(result.coverageRegressed.length > 0
@@ -330,6 +342,7 @@ export async function handleGate(
           // A downgrade is reported per flow with its step indices; the hook names the flow.
           downgraded: result.downgraded.map((d) => d.flow),
           deleted: result.deleted,
+          unreadable: result.unreadable.map((u) => `${u.flow} (${u.error})`),
           unflowed: result.unflowed,
           flowsWithoutSources,
           coverageRegressed: result.coverageRegressed.map(
