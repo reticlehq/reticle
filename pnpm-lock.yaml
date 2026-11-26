@@ -258,7 +258,7 @@ importers:
         specifier: workspace:*
         version: link:../../../open-verification
 
-  adapters/realm/computer-use:
+  adapters/realm/computer:
     dependencies:
       '@reticlehq/cli-realm':
         specifier: workspace:*
@@ -799,9 +799,9 @@ importers:
         specifier: ^4.6.6
         version: 4.6.7
     devDependencies:
-      '@reticlehq/computer-use':
+      '@reticlehq/computer':
         specifier: workspace:*
-        version: link:../adapters/realm/computer-use
+        version: link:../adapters/realm/computer
       '@types/pngjs':
         specifier: ^6.0.5
         version: 6.0.5

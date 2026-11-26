@@ -1,4 +1,4 @@
-import { COMPUTER_USE_RUNTIME } from '@reticlehq/core';
+import { COMPUTER_RUNTIME } from '@reticlehq/core';
 import { describe, expect, it } from 'vitest';
 
 import { tellDesktops } from './session-mirror.js';
@@ -21,7 +21,7 @@ function tab(id: string, runtime: string | undefined) {
 describe('tellDesktops', () => {
   it('tells each desktop session what was done in a page, and no page', () => {
     const page = tab('s1', 'web');
-    const desktop = tab('cu-dia', COMPUTER_USE_RUNTIME);
+    const desktop = tab('cu-dia', COMPUTER_RUNTIME);
     const other = tab('s2', 'web');
     tellDesktops(page, [desktop, other], { action: 'click', role: 'button', name: 'Save' });
     expect(desktop.told).toEqual(['s1 → click button "Save"']);
@@ -29,14 +29,14 @@ describe('tellDesktops', () => {
   });
 
   it('says nothing for an act of a desktop session, which shows its own', () => {
-    const desktop = tab('cu-dia', COMPUTER_USE_RUNTIME);
-    const second = tab('cu-finder', COMPUTER_USE_RUNTIME);
+    const desktop = tab('cu-dia', COMPUTER_RUNTIME);
+    const second = tab('cu-finder', COMPUTER_RUNTIME);
     tellDesktops(desktop, [second], { action: 'click', role: 'button', name: 'Save' });
     expect(second.told).toEqual([]);
   });
 
   it('says the action alone when the reply names no element', () => {
-    const desktop = tab('cu-dia', COMPUTER_USE_RUNTIME);
+    const desktop = tab('cu-dia', COMPUTER_RUNTIME);
     tellDesktops(tab('s1', 'web'), [desktop], { action: 'press' });
     expect(desktop.told).toEqual(['s1 → press']);
   });

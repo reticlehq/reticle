@@ -10,7 +10,7 @@
 import { describe, it, expect } from 'vitest';
 import type { WebSocket } from 'ws';
 import {
-  COMPUTER_USE_RUNTIME,
+  COMPUTER_RUNTIME,
   MessageKind,
   RETICLE_PROTOCOL_VERSION,
   ReticleCommand,
@@ -72,7 +72,7 @@ describe('a headless driven session mirrors its HUD feed to the tabs a human can
     const manager = new SessionManager();
     const [page] = open('s1', 'https://github.com/', 'web-tab');
     const [desktop, told] = open('cu-dia', 'app://Dia/', 'desk');
-    desktop.applyHealth(false, true, COMPUTER_USE_RUNTIME);
+    desktop.applyHealth(false, true, COMPUTER_RUNTIME);
     manager.add(page);
     manager.add(desktop);
 

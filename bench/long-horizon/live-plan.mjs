@@ -21,7 +21,7 @@ import { fileURLToPath } from 'node:url';
 const repo = fileURLToPath(new URL('../../', import.meta.url));
 const harness = join(repo, '../../../../reticle-harness/dist/index.js');
 const { Ledger, PlanRunner, fileStore, toolPorts } = await import(harness);
-const { MacDriver, connectPeer } = await import(`${repo}adapters/realm/computer-use/dist/index.js`);
+const { MacDriver, connectPeer } = await import(`${repo}adapters/realm/computer/dist/index.js`);
 const { Bridge } = await import(`${repo}server/dist/portal/bridge/bridge.js`);
 const { TOOLS } = await import(`${repo}server/dist/surface/tools/tools.js`);
 const { LIVE_CONTROL_TOOLS } = await import(
@@ -42,10 +42,10 @@ const token = 'long-horizon-live';
 const bridge = new Bridge({ port: 14460, token });
 const port = await bridge.ready;
 const deps = makeDeps(bridge);
-const helper = `${repo}adapters/realm/computer-use/native/mac/build/reticle-ax`;
+const helper = `${repo}adapters/realm/computer/native/mac/build/reticle-ax`;
 execFileSync(
   'swiftc',
-  ['-O', `${repo}adapters/realm/computer-use/native/mac/reticle-ax.swift`, '-o', helper],
+  ['-O', `${repo}adapters/realm/computer/native/mac/reticle-ax.swift`, '-o', helper],
   {
     stdio: 'ignore',
   },

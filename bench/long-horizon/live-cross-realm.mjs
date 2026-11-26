@@ -25,7 +25,7 @@ const repo = fileURLToPath(new URL('../../', import.meta.url));
 const { Ledger, PlanRunner, driveStepWith, fileStore, openAiDriver, toolPorts } = await import(
   join(repo, '../../../../reticle-harness/dist/index.js')
 );
-const { MacDriver, connectPeer } = await import(`${repo}adapters/realm/computer-use/dist/index.js`);
+const { MacDriver, connectPeer } = await import(`${repo}adapters/realm/computer/dist/index.js`);
 const { Bridge } = await import(`${repo}server/dist/portal/bridge/bridge.js`);
 const { TOOLS } = await import(`${repo}server/dist/surface/tools/tools.js`);
 const { LIVE_CONTROL_TOOLS } = await import(
@@ -65,7 +65,7 @@ const tabId = `tab-sheet-${String(process.pid)}`;
 const lease = await pool.acquire(appendReticleParams(PAGE_URL, tabId), { sessionId: tabId });
 await lease.injectReader();
 
-const helper = `${repo}adapters/realm/computer-use/native/mac/build/reticle-ax`;
+const helper = `${repo}adapters/realm/computer/native/mac/build/reticle-ax`;
 const opened = spawnSync('pgrep', ['-x', 'Calculator']).status !== 0;
 if (opened) {
   execFileSync('open', ['-g', '-a', 'Calculator']);

@@ -1,4 +1,4 @@
-import { COMPUTER_USE_RUNTIME, ReticleTool } from '@reticlehq/core';
+import { COMPUTER_RUNTIME, ReticleTool } from '@reticlehq/core';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -13,7 +13,7 @@ import type { ToolDeps } from '../tool-kit.js';
 import { TOOLS } from '../tools.js';
 
 const page = { sessionId: 'tab-1', url: 'http://localhost:3000/' };
-const desktop = { sessionId: 'cu-Finder-7', url: 'app://Finder/', runtime: COMPUTER_USE_RUNTIME };
+const desktop = { sessionId: 'cu-Finder-7', url: 'app://Finder/', runtime: COMPUTER_RUNTIME };
 
 describe('realmsOf', () => {
   it('says nothing when only one kind of session is connected', () => {
@@ -39,7 +39,7 @@ describe('capabilitiesOf', () => {
     const slack = {
       sessionId: 'cu-Slack-9',
       url: 'app://Google%20Chrome/',
-      runtime: COMPUTER_USE_RUNTIME,
+      runtime: COMPUTER_RUNTIME,
     };
     expect(capabilitiesOf([sheet, slack], 'darwin')).toEqual([
       { sessionId: 'tab-2', realm: CapabilityRealm.BROWSER, url: sheet.url },

@@ -222,11 +222,10 @@ export function isPeerRealm(runtime: string | undefined): boolean {
 }
 
 /**
- * The runtime that a computer-use peer reports: a whole application, read through the operating
- * system, with no SDK in it. It has the extension prefix while `@reticlehq/computer-use` is
- * private.
+ * The runtime that a computer peer reports: a whole application, read through the operating
+ * system, with no SDK in it. A realm of Reticle, so it has no extension prefix.
  */
-export const COMPUTER_USE_RUNTIME = 'x-computer-use';
+export const COMPUTER_RUNTIME = 'computer';
 
 /**
  * Realms that reach the bridge as a peer and are not a runtime of the SDK. They are not in
@@ -234,7 +233,7 @@ export const COMPUTER_USE_RUNTIME = 'x-computer-use';
  */
 const PEER_REALMS: Readonly<Record<string, RealmTraits>> = {
   // Not a web view in a shell: there is no page, no IPC between halves and no rendering engine.
-  [COMPUTER_USE_RUNTIME]: {
+  [COMPUTER_RUNTIME]: {
     surface: Surface.DESKTOP,
     isDesktopShell: false,
     usesWebKit: false,

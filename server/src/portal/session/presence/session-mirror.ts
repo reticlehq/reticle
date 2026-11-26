@@ -6,7 +6,7 @@
  * cap; the cap did its job, because these two had no reason to share a file beyond history.
  */
 
-import { COMPUTER_USE_RUNTIME, ReticleCommand } from '@reticlehq/core';
+import { COMPUTER_RUNTIME, ReticleCommand } from '@reticlehq/core';
 
 /**
  * How a mirrored row is introduced on a tab that is only WATCHING.
@@ -52,7 +52,7 @@ export interface Told {
  * to a page, which shows its own act. An act of a desktop session tells nobody: its HUD has it.
  */
 export function tellDesktops(from: Told, viewers: readonly Told[], reply: unknown): void {
-  if (from.runtime === COMPUTER_USE_RUNTIME) {
+  if (from.runtime === COMPUTER_RUNTIME) {
     return;
   }
   const r = 'object' === typeof reply && null !== reply ? (reply as Record<string, unknown>) : {};
@@ -63,7 +63,7 @@ export function tellDesktops(from: Told, viewers: readonly Told[], reply: unknow
   const target =
     'string' === typeof role && 'string' === typeof name && name !== '' ? ` ${role} "${name}"` : '';
   for (const viewer of viewers) {
-    if (viewer.runtime === COMPUTER_USE_RUNTIME) {
+    if (viewer.runtime === COMPUTER_RUNTIME) {
       viewer.pushNarration(mirroredNarration(from.id, `${action}${target}`), false);
     }
   }
@@ -80,6 +80,6 @@ export function withDesktops<T extends { readonly runtime: string | undefined }>
   driven: T,
 ): T[] {
   const sameApp = sameAppOf([...all]);
-  const desktops = all.filter((s) => s.runtime === COMPUTER_USE_RUNTIME && !sameApp.includes(s));
+  const desktops = all.filter((s) => s.runtime === COMPUTER_RUNTIME && !sameApp.includes(s));
   return [...sameApp, ...desktops].filter((s) => s !== driven);
 }

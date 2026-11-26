@@ -4,7 +4,7 @@ import {
   CLIPBOARD_CHANGED_SIGNAL,
   DISK_WROTE_SIGNAL,
   SETTINGS_CHANGED_SIGNAL,
-} from '@reticlehq/computer-use';
+} from '@reticlehq/computer';
 import {
   FINISH_TOOL,
   MSG_OPENED_IN_PLACE,

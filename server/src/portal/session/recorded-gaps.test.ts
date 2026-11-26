@@ -247,11 +247,11 @@ describe('engineBlindSpotsField and the claims it judges', () => {
 
 /**
  * The rule that a signal is evidence was given to any session that sent the runtime name of the
- * computer-use realm. The name is a word the connected side says about itself, so a web page
+ * computer realm. The name is a word the connected side says about itself, so a web page
  * could say it and have its own signals taken for things an observer saw.
  */
 describe('a session with no SDK', () => {
-  const session = (id: string) => ({ id, hasCapabilities: false, runtime: 'x-computer-use' });
+  const session = (id: string) => ({ id, hasCapabilities: false, runtime: 'computer' });
 
   it('is one that a program dialled: its socket had no Origin', () => {
     noteDial('cu-program', undefined);

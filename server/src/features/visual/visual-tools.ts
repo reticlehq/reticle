@@ -311,7 +311,7 @@ function rectsFrom(value: unknown): VisualRect[] | undefined {
  */
 /** Said when `screen: true` is asked of a session that cannot take the screen. */
 const SCREEN_NEEDS_DESKTOP =
-  'screen: true needs a desktop session (reticle-computer-use). Join the application, or leave out screen.';
+  'screen: true needs a desktop session (reticle-computer). Join the application, or leave out screen.';
 
 export const VISUAL_TOOLS: ToolDef[] = [
   {

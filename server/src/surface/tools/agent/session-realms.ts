@@ -1,12 +1,12 @@
 /**
  * Which session to use for what, when a desktop application and a page are both connected.
  *
- * A computer-use session reads an application through the operating system. An SDK session is
+ * A computer session reads an application through the operating system. An SDK session is
  * inside its app. One agent can hold both, and the list said nothing about the difference: an
  * agent then drove a page through the desktop session, which sees no network, no state and no
  * source file, or it looked in the page for a dialog that belongs to the system.
  */
-import { COMPUTER_USE_RUNTIME } from '@reticlehq/core';
+import { COMPUTER_RUNTIME } from '@reticlehq/core';
 import { z } from 'zod';
 
 export const REALMS_FIELD = 'realms';
@@ -80,7 +80,7 @@ export function capabilitiesOf(
   platform?: string;
 }[] {
   return sessions.map((s) => {
-    if (COMPUTER_USE_RUNTIME !== s.runtime) {
+    if (COMPUTER_RUNTIME !== s.runtime) {
       return {
         sessionId: s.sessionId,
         realm: CapabilityRealm.BROWSER,
@@ -110,11 +110,9 @@ export const REALMS_RULE =
 export function realmsOf(
   sessions: readonly { sessionId: string; runtime?: string }[],
 ): { desktop: string[]; insideTheApp: string[]; rule: string } | undefined {
-  const desktop = sessions
-    .filter((s) => COMPUTER_USE_RUNTIME === s.runtime)
-    .map((s) => s.sessionId);
+  const desktop = sessions.filter((s) => COMPUTER_RUNTIME === s.runtime).map((s) => s.sessionId);
   const insideTheApp = sessions
-    .filter((s) => COMPUTER_USE_RUNTIME !== s.runtime)
+    .filter((s) => COMPUTER_RUNTIME !== s.runtime)
     .map((s) => s.sessionId);
   if (0 === desktop.length || 0 === insideTheApp.length) {
     return undefined;

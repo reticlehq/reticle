@@ -141,7 +141,7 @@ describe('every shipped integration is covered by an app AND a gate', () => {
       'cli',
       // The realm for a whole application, read through the operating system. Like `cli`, it
       // watches from outside, so there is nothing for a user to wire into an app.
-      'computer-use',
+      'computer',
       'server',
       'spec-runner',
       // The suite that scores an implementation of the specification. It teaches Reticle nothing
