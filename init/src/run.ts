@@ -70,7 +70,7 @@ function resolvedStatus(
 const MCP_CLIENT_TITLE_PREFIX = 'MCP server (';
 const INSTALL_PROGRESS_PREFIX = 'Installing Reticle dependencies with';
 const INSTALL_PROGRESS_SUFFIX = '(this can take a few minutes).';
-const INSTALL_COMPLETION_PREFIX = 'Reticle dependency install finished in';
+const INSTALL_COMPLETION_PREFIX = 'Reticle dependency install attempt ended in';
 
 const STATUS_SYMBOL: Record<StepStatus, string> = {
   [StepStatus.APPLY]: '✓',

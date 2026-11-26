@@ -763,7 +763,7 @@ describe('runInit', () => {
     );
     const installIndex = events.findIndex((event) => event.startsWith('exec:pnpm add -D'));
     const completedIndex = events.findIndex((event) =>
-      event.includes('Reticle dependency install finished'),
+      event.includes('Reticle dependency install attempt ended'),
     );
     expect(progressIndex).toBeGreaterThanOrEqual(0);
     expect(progressIndex).toBeLessThan(installIndex);
