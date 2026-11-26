@@ -368,6 +368,25 @@ def window_state(arranged):
     return state
 
 
+def key_to_window(pid, el, value):
+    if no_real_input() is not None:
+        return False
+    found = subprocess.run(['xdotool', 'search', '--onlyvisible', '--pid', str(pid)],
+                           capture_output=True, text=True, timeout=10).stdout.split()
+    if not found:
+        return False
+    # Only when it does not have it: GTK chooses all the text of a field that takes the focus,
+    # and a Backspace then cleared the whole field.
+    component = safe(el.get_component_iface) if el is not None else None
+    if component is not None and not has(el, Atspi.StateType.FOCUSED):
+        safe(lambda: Atspi.Component.grab_focus(component))
+    parts = value.split('+')
+    key = parts[-1]
+    name = KEY_OF.get(key.lower(), key if len(key) == 1 else key.capitalize())
+    xdo('key', '--window', found[0], '+'.join([*mods_of(parts[:-1]), name]))
+    return True
+
+
 def mods_of(words):
     return [MOD_KEY[m.lower()] for m in words if m.lower() in MOD_KEY]
 
@@ -564,9 +583,14 @@ def act(words):
             component = safe(target.get_component_iface) if target is not None else None
             delivered = component is not None and bool(safe(lambda: Atspi.Component.grab_focus(component), False))
         elif kind in ('type', 'key'):
-            if not foreground:
-                # A key in the background goes to a field as its value: X has no key for one window.
-                delivered = kind == 'type' and set_value(el, value)
+            if not foreground and kind == 'type':
+                # Text in the background goes to the field as its value.
+                delivered = set_value(el, value)
+            elif not foreground:
+                # A key in the background goes to the window of the application alone, as an X
+                # event sent to that window: the pointer and the keyboard of the person are not used.
+                # The element takes the focus of its window first, as a click in it does.
+                delivered = key_to_window(pid, el, value)
             elif front_pid() not in (None, pid):
                 return {'refused': 'no-keyboard'}
             elif kind == 'type':

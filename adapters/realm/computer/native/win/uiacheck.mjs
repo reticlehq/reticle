@@ -2,6 +2,7 @@
 // (reticle-uia.ps1) and the same driver and reader that macOS uses:
 //   - the helper reads Notepad as a window with a text area that has a ref;
 //   - a value set in the text area is read back from the application, not from the answer;
+//   - keys in the background reach the text area, and the person's keyboard is not used;
 //   - a press on a menu item of the window is delivered and changes what is on the screen;
 //   - an element that is not there any more is refused as stale, never acted on;
 //   - a drag on a canvas (ink.ps1) draws a line that no element shows: the realm reports the
@@ -82,6 +83,21 @@ try {
   const again = (await commands.answer(ReticleCommand.QUERY, { role: 'textbox' })).elements[0];
   assert.equal(again?.value, 'Reticle on Windows', 'the value was not read back from Notepad');
 
+  // Keys in the background: posted to the window of the text area alone, without the foreground.
+  for (const key of ['End', 'Backspace']) {
+    await commands.answer(ReticleCommand.ACT, {
+      ref: (await commands.answer(ReticleCommand.QUERY, { role: 'textbox' })).elements[0].ref,
+      action: ActionType.PRESS,
+      args: { text: key, settleMs: 400 },
+    });
+  }
+  const keyed = (await commands.answer(ReticleCommand.QUERY, { role: 'textbox' })).elements[0];
+  assert.equal(
+    keyed?.value,
+    'Reticle on Window',
+    'two keys in the background did not reach Notepad',
+  );
+
   const file = (await commands.answer(ReticleCommand.QUERY, { role: 'menuitem', name: 'File' }))
     .elements[0];
   if (file?.ref !== undefined) {
@@ -107,7 +123,7 @@ try {
   const { x, y, width, height } = placed.window ?? {};
   assert.deepEqual({ x, y, width, height }, { x: 200, y: 150, width: 640, height: 420 });
   await checkInk();
-  process.stdout.write('computer uiacheck: 7 of 7 cases held\n');
+  process.stdout.write('computer uiacheck: 8 of 8 cases held\n');
 } finally {
   notepad.kill();
 }

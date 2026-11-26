@@ -3,6 +3,7 @@
 //   - the helper reads the application as a window with a field that has a ref;
 //   - a value set in the field is read back from the application, not from the answer;
 //   - a press on the Save button is delivered, and the status text then says what was saved;
+//   - keys in the background reach the field, and the person's keyboard is not used;
 //   - a click on the check box with the real pointer checks it;
 //   - an element that is not there any more is refused as stale, never acted on;
 //   - a drag on the canvas draws a line that no element shows: the realm reports the pixels that
@@ -84,6 +85,21 @@ try {
   assert.match(said.tree, /Saved: Reticle on Linux/, 'the status does not say what was saved');
   held += 1;
 
+  // Keys in the background: to the window of the application alone, without the foreground.
+  for (const key of ['End', 'Backspace']) {
+    await commands.answer(ReticleCommand.ACT, {
+      ref: (await query({ role: 'textbox', name: 'Name' }))[0].ref,
+      action: ActionType.PRESS,
+      args: { text: key, settleMs: 400 },
+    });
+  }
+  assert.equal(
+    (await query({ role: 'textbox', name: 'Name' }))[0]?.value,
+    'Reticle on Linu',
+    'two keys in the background did not reach the field',
+  );
+  held += 1;
+
   const remember = (await query({ role: 'checkbox', name: 'Remember' }))[0];
   const clicked = await commands.answer(ReticleCommand.ACT, {
     ref: remember.ref,
@@ -152,7 +168,7 @@ try {
     `the left half is not half: ${JSON.stringify(half.window)}`,
   );
   held += 1;
-  process.stdout.write(`computer atspicheck: ${String(held)} of 7 cases held\n`);
+  process.stdout.write(`computer atspicheck: ${String(held)} of 8 cases held\n`);
 } finally {
   fixture.kill();
 }

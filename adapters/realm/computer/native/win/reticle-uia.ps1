@@ -46,6 +46,7 @@ public static class ReticleWin32 {
   [DllImport("user32.dll")] public static extern void keybd_event(byte vk, byte scan, uint flags, UIntPtr extra);
   [DllImport("user32.dll")] public static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
   [DllImport("user32.dll", CharSet = CharSet.Unicode)] public static extern IntPtr SendMessage(IntPtr h, uint msg, IntPtr w, string l);
+  [DllImport("user32.dll")] public static extern bool PostMessage(IntPtr h, uint msg, IntPtr w, IntPtr l);
   [StructLayout(LayoutKind.Sequential)] public struct POINT { public int X; public int Y; }
   [StructLayout(LayoutKind.Sequential)] public struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
   public static uint IdleMs() {
@@ -335,6 +336,31 @@ function Key-Words([string]$value) {
   return $mods + $word
 }
 
+# The virtual keys of the key names the realm uses, for a key in the background.
+$VkOfKey = @{ 'return' = 0x0D; 'enter' = 0x0D; 'escape' = 0x1B; 'tab' = 0x09; 'backspace' = 0x08; 'delete' = 0x2E
+  'arrowup' = 0x26; 'arrowdown' = 0x28; 'arrowleft' = 0x25; 'arrowright' = 0x27; 'home' = 0x24; 'end' = 0x23
+  'pageup' = 0x21; 'pagedown' = 0x22; 'space' = 0x20 }
+# A key in the background: posted to the window of the control alone, as its own messages. The
+# pointer and the keyboard of the person are not used, and the window does not come to the front.
+# ponytail: one key with no modifier. A modifier is in the state of the keyboard, which a message
+# does not carry; a key with one is not delivered.
+function Send-KeyToWindow($el, [string]$value) {
+  $parts = $value.Split('+')
+  if ($parts.Count -gt 1) { return $false }
+  $name = $parts[0].ToLower()
+  $vk = $VkOfKey[$name]
+  if ($null -eq $vk -and $name -match '^f([1-9]|1[0-2])$') { $vk = 0x6F + [int]$Matches[1] }
+  if ($null -eq $vk -and $name.Length -eq 1) { $vk = [int][char]$name.ToUpper() }
+  if ($null -eq $vk) { return $false }
+  $at = $el
+  while ($null -ne $at -and $at.Current.NativeWindowHandle -eq 0) { $at = $Walker.GetParent($at) }
+  if ($null -eq $at) { return $false }
+  $handle = [IntPtr]$at.Current.NativeWindowHandle
+  [ReticleWin32]::PostMessage($handle, 0x0100, [IntPtr]$vk, [IntPtr]1) | Out-Null
+  [ReticleWin32]::PostMessage($handle, 0x0101, [IntPtr]$vk, [IntPtr]0xC0000001L) | Out-Null
+  return $true
+}
+
 function Invoke-Act($words) {
   $procId = [int]$words[1]; $path = $words[2]; $role = $words[3]; $name = $words[4]; $kind = $words[5]
   $value = $words[6]; $budgetMs = [int]$words[7]; $how = $words[8].Split(':')
@@ -438,9 +464,9 @@ function Invoke-Act($words) {
         $front = [IntPtr]::Zero; [uint32]$owner = 0
         $front = [ReticleWin32]::GetForegroundWindow(); [ReticleWin32]::GetWindowThreadProcessId($front, [ref]$owner) | Out-Null
         if (-not $foreground) {
-          # A key in the background goes to a field as its value: Windows has no key for one window alone.
+          # Text in the background goes to a field as its value. A key goes to the window of the control.
           if ($kind -eq 'type') { (Get-Pattern $el ([System.Windows.Automation.ValuePattern]::Pattern)).SetValue($value) }
-          else { $delivered = $false }
+          else { $delivered = Send-KeyToWindow $el $value }
         } elseif ($owner -ne $procId) { return @{ refused = 'no-keyboard' } }
         elseif ($kind -eq 'type') { [System.Windows.Forms.SendKeys]::SendWait(($value -replace '([+^%~(){}\[\]])', '{$1}')) }
         else { [System.Windows.Forms.SendKeys]::SendWait((Key-Words $value)) }

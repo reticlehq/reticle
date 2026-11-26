@@ -298,6 +298,29 @@ const TASKS = [
     task: 'TextEdit has colour.txt open. Change every "colour" in the text to "color", and keep everything else as it is. Then save the file.',
     check: (f) => read(f)?.trim() === COLOUR_TEXT.replaceAll('colour', 'color'),
   },
+  // No accessibility tree: Boxes draws its three boxes as pixels only, in a new order each run. Only
+  // a picture says where box B is. The checker reads the file that the click on a box writes.
+  {
+    id: 'canvas-click-box',
+    app: 'boxes',
+    async setup() {
+      const dir = fresh(this.id);
+      try {
+        sh('pkill', ['-x', 'boxes']);
+      } catch {
+        // ponytail: Boxes was not running.
+      }
+      const boxes = join(DIR, 'boxes');
+      if (!existsSync(boxes)) {
+        sh('swiftc', ['-O', new URL('./boxes.swift', import.meta.url).pathname, '-o', boxes]);
+      }
+      spawn(boxes, [dir], { stdio: 'ignore', detached: true }).unref();
+      await sleep(2000);
+      return dir;
+    },
+    task: 'The app "boxes" shows three boxes with the letters A, B and C. Click the box with the letter B.',
+    check: (dir) => read(join(dir, 'clicked.txt')) === 'B',
+  },
   // The trap, and its twin. The application says "Exported" in both. In the trap nothing is
   // written, and the correct answer is "failed". The twin keeps an arm that always says "failed"
   // from passing. Every arm has the same `read_file` tool: the trap measures whether the agent
@@ -395,6 +418,11 @@ const DONE = {
 // --- The reticle arm -------------------------------------------------------------------------
 const RETICLE_TOOLS = [
   {
+    name: 'screenshot',
+    description: 'A picture of the window of the app.',
+    input_schema: { type: 'object', properties: {}, additionalProperties: false },
+  },
+  {
     name: 'look',
     description:
       'The accessibility tree of the app: each element with its role, name, value and state, and a ref to act on.',
@@ -403,7 +431,7 @@ const RETICLE_TOOLS = [
   {
     name: 'act',
     description:
-      'Do an action on an element by its ref: click, dblclick, fill (args.value), type (args.text), press (a key in args.text, such as "Return" or "s" with args.modifiers ["Meta"]), focus, select (args.value). The answer says what changed on the screen. To send a key to the app, act on the ref of the application element.',
+      'Do an action on an element by its ref: click, dblclick, fill (args.value), type (args.text), press (a key in args.text, such as "Return" or "s" with args.modifiers ["Meta"]), focus, select (args.value). The answer says what changed on the screen. To send a key to the app, act on the ref of the application element. For a canvas with no elements, click a point of the last screenshot: the ref of the window, and args.point { x, y } in the pixels of that screenshot.',
     input_schema: {
       type: 'object',
       properties: {
@@ -417,12 +445,34 @@ const RETICLE_TOOLS = [
   },
 ];
 
+// How much larger the realm's last picture is than the screenshot the model saw, for each session.
+const shotFactor = new Map();
 async function runReticleCall(sessionId, name, input) {
   if (name === 'look') {
     const r = await tool('reticle_snapshot', { sessionId });
     return r.tree ?? JSON.stringify(r).slice(0, 4000);
   }
+  if (name === 'screenshot') {
+    // The product's own picture of the window, made smaller for the model as in the other arms.
+    const r = await tool('reticle_screenshot', {
+      sessionId,
+      name: `cu-bench-${String(Date.now())}`,
+    });
+    if (r.ok !== true) {
+      throw new Error(JSON.stringify(r).slice(0, 300));
+    }
+    const width = Number(sh('sips', ['-g', 'pixelWidth', r.path]).split(':').pop());
+    const shown = Math.min(width, SHOT_WIDTH);
+    shotFactor.set(sessionId, width / shown);
+    const small = `${r.path}.jpg`;
+    sh('sips', ['-s', 'format', 'jpeg', '--resampleWidth', String(shown), r.path, '--out', small]);
+    return { image: readFileSync(small).toString('base64') };
+  }
   const args = { foreground: true, ...(input.args ?? {}) };
+  const factor = shotFactor.get(sessionId) ?? 1;
+  if (args.point !== undefined) {
+    args.point = { x: Math.round(args.point.x * factor), y: Math.round(args.point.y * factor) };
+  }
   const r = await tool('reticle_act', { sessionId, ref: input.ref, action: input.action, args });
   const { screenshot: _shot, ...rest } = r;
   return JSON.stringify(rest).slice(0, 6000);
@@ -933,7 +983,17 @@ async function runOpenAI(arm, task, cua) {
         }
         const args = JSON.parse(use.arguments || '{}');
         const out = 'read_file' === use.name ? readFileTool(args) : await run(use.name, args);
-        const blocks = 'object' === typeof out && out.blocks !== undefined ? out.blocks : undefined;
+        // cua-driver answers with blocks; the reticle arm's screenshot with one image.
+        let blocks = 'object' === typeof out && out.blocks !== undefined ? out.blocks : undefined;
+        if ('object' === typeof out && out.image !== undefined) {
+          blocks = [
+            { type: 'text', text: 'The screenshot is below.' },
+            {
+              type: 'image',
+              source: { type: 'base64', media_type: 'image/jpeg', data: out.image },
+            },
+          ];
+        }
         const text =
           blocks === undefined
             ? String(out)
