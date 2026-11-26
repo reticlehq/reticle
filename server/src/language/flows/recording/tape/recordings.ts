@@ -179,6 +179,8 @@ const CARRY_CAP = 32;
 export class RecordingStore {
   readonly #active = new Map<string, ActiveRecording>();
   readonly #compiled = new Map<string, CompiledProgram>();
+  /** Why a compiled program was discarded, until a new one takes its name. */
+  readonly #discarded = new Map<string, string>();
   /** A navigation came after the last captured step — see markNavigated. */
   #navigatedSinceStep = false;
   /** Tabs with network mocks installed now, keyed by session ('' for none named). See markMocked. */
@@ -440,6 +442,17 @@ export class RecordingStore {
 
   saveCompiled(program: CompiledProgram): void {
     this.#compiled.set(program.name, program);
+    this.#discarded.delete(program.name);
+  }
+
+  /** Drop a compiled program that a newer drive replaced with nothing worth keeping. */
+  discardCompiled(name: string, reason: string): void {
+    this.#compiled.delete(name);
+    this.#discarded.set(name, reason);
+  }
+
+  discardReason(name: string): string | undefined {
+    return this.#discarded.get(name);
   }
 
   getCompiled(name: string): CompiledProgram | undefined {

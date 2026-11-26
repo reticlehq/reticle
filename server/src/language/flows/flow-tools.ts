@@ -175,6 +175,10 @@ export const FLOW_TOOLS: ToolDef[] = [
       const name = resolveAnnotateTarget(explicitName, deps.recordings.compiled());
       const program = deps.recordings.getCompiled(name);
       if (program === undefined) {
+        const discarded = deps.recordings.discardReason(name);
+        if (discarded !== undefined) {
+          return Promise.resolve({ error: discarded, code: FlowErrorCode.NO_RECORDING });
+        }
         /*
          * Name what DOES exist.
          *

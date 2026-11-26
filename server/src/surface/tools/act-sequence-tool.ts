@@ -601,6 +601,12 @@ export const ACT_SEQUENCE_TOOL: ToolDef = {
           session: session.id,
           ...(pageBefore === undefined ? {} : { startPath: pageBefore }),
         });
+      } else {
+        // An older journey left under this name would be saved as if it were this one.
+        deps.recordings.discardCompiled(
+          JOURNEY_RECORDING,
+          'the last journey did not verify yes; nothing to keep',
+        );
       }
       const tailStart =
         DeviationMode.HALT === onDeviation && stoppedAt !== undefined

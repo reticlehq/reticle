@@ -230,6 +230,22 @@ describe('a journey whose claims held keeps every claim when it is saved', () =>
     expect(saved.assertions?.consequenceSteps).toBe(4);
   });
 
+  it('refuses to save an older journey when the newest one did not verify yes', async () => {
+    const { result, deps, flows } = await driveAndKeep([signalled(1), signalled(2)]);
+    expect(result.verified).toBe(Verified.YES);
+    const failed = (await tool(ReticleTool.ACT_SEQUENCE).handler(deps, {
+      steps: [signalled(3), { ...click(4), expect: { kind: 'signal', name: 'never' } }, click(5)],
+      timeout_ms: 500,
+    })) as { verified?: string; keep?: string };
+    expect(failed.verified).not.toBe(Verified.YES);
+    const saved = (await tool(ReticleTool.FLOW_SAVE).handler(deps, {
+      flowName: JOURNEY_RECORDING,
+      saveAs: SAVED_AS,
+    })) as Saved;
+    expect(saved.error).toBe('the last journey did not verify yes; nothing to keep');
+    expect((await flows.load(SAVED_AS)).ok).toBe(false);
+  });
+
   it('saves every claim from a recording the agent opened', async () => {
     const recordings = new RecordingStore();
     const flows = freshFlows();
