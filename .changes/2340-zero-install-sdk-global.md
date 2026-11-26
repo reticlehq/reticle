@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — a zero-install lease read no stores from an app with an opt-in bridge.** Some apps register their stores only when they find the Reticle SDK on the page as `ReticleSdk`, the name the single-file build gives it. The lease evaluated the SDK inside its own function, so the page did not have that name, the app registered nothing, and `reticle_look { action: "state" }` returned no stores. The lease now gives the page the SDK it supplies as `ReticleSdk`, unless the page already has that name. A bridge that checks only once, when the page starts, finds it from the next page load of the lease. Closes [#2340](https://github.com/reticlehq/reticle/issues/2340).

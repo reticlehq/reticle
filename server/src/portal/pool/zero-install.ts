@@ -34,6 +34,22 @@ export function injectedConnectArgs(opts: InjectedConnect): Record<string, unkno
   };
 }
 
+/**
+ * The name the single-file build declares the SDK under (`globalName` in `bundle-inject.mjs`), and
+ * the name the reader gives the page.
+ */
+export const READER_GLOBAL = 'ReticleSdk';
+
+/*
+ * Give the page the SDK the reader supplied (#2340). The reader evaluates the bundle inside its own
+ * function, so the name the bundle declares stays local. An app with an opt-in bridge registers its
+ * stores only when it finds the SDK on the page, so it found nothing and the lease read no stores.
+ * A name the page already has stays as it is.
+ */
+const EXPOSE_SDK =
+  `if ('undefined' !== typeof ${READER_GLOBAL}) ` +
+  `globalThis.${READER_GLOBAL} ??= ${READER_GLOBAL};`;
+
 /** What the reader script returns when it did nothing, because the page is not an HTML document. */
 export const READER_NOT_HTML = 'reticle:not-html-document';
 
@@ -146,7 +162,7 @@ const ZOD_JITLESS = `(${ZOD_CONFIG} ??= {}).jitless ??= true;`;
  */
 export function zeroInstallScript(bundle: string, opts: InjectedConnect): string {
   const args = JSON.stringify(injectedConnectArgs(opts));
-  return `(() => {\n${TOP_FRAME_ONLY}\n${NOT_HTML_GUARD}\nif (!globalThis.__reticleInstance) {\n${EARLY_KEEP}\n${ZOD_JITLESS}\n${bundle}\n}\n${CONNECT_WHEN_DOM_READY(args)}\n})();`;
+  return `(() => {\n${TOP_FRAME_ONLY}\n${NOT_HTML_GUARD}\nif (!globalThis.__reticleInstance) {\n${EARLY_KEEP}\n${ZOD_JITLESS}\n${bundle}\n${EXPOSE_SDK}\n}\n${CONNECT_WHEN_DOM_READY(args)}\n})();`;
 }
 
 /** The page is not an HTML document, so the lease did not give it the zero-install reader. */

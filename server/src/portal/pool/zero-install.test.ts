@@ -3,7 +3,12 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { runInNewContext } from 'node:vm';
-import { READER_NOT_HTML, readReaderBundle, zeroInstallScript } from './zero-install.js';
+import {
+  READER_GLOBAL,
+  READER_NOT_HTML,
+  readReaderBundle,
+  zeroInstallScript,
+} from './zero-install.js';
 
 /** A stand-in for the SDK bundle: evaluating it creates the singleton, exactly as the real one does. */
 const FAKE_BUNDLE =
@@ -45,6 +50,27 @@ describe('zeroInstallScript — the reader a page with no SDK is given', () => {
       token: 'tok',
       url: OPTS.url,
     });
+  });
+
+  // #2340: an app with an opt-in bridge registers its stores only when it finds the SDK on the page,
+  // as `ReticleSdk` (the name the single-file build gives it). The reader evaluated the bundle inside
+  // its own function, so the name stayed local, the app found nothing, and the lease had no stores.
+  it('gives the page the SDK it supplied, under the name the single-file build uses', () => {
+    const sdk = { registerStore: 'fn' };
+    const bundle = `var ${READER_GLOBAL} = globalThis.__sdk; ${FAKE_BUNDLE}`;
+    const page: Record<string, unknown> = { __sdk: sdk };
+    page['globalThis'] = page;
+    runInNewContext(zeroInstallScript(bundle, OPTS), page);
+    expect(page[READER_GLOBAL]).toBe(sdk);
+  });
+
+  it('keeps an SDK global the page already has', () => {
+    const own = { own: true };
+    const bundle = `var ${READER_GLOBAL} = { own: false }; ${FAKE_BUNDLE}`;
+    const page: Record<string, unknown> = { [READER_GLOBAL]: own };
+    page['globalThis'] = page;
+    runInNewContext(zeroInstallScript(bundle, OPTS), page);
+    expect(page[READER_GLOBAL]).toBe(own);
   });
 
   // Playwright runs an init script in EVERY frame. A rich-text editor's editing area is an iframe whose
@@ -250,6 +276,16 @@ describe('the single-file build — one copy for the reader and for webpack 4', 
     expect(join(dirname(pkgPath), pkg.module ?? '')).toBe(
       require.resolve('@reticlehq/browser/inject'),
     );
+  });
+
+  // The reader gives the page the SDK under READER_GLOBAL (#2340). A build under another name would
+  // leave an opt-in bridge with nothing to find again, with no error.
+  it('declares the SDK under the name the reader gives the page', () => {
+    const page: Record<string, unknown> = {};
+    runInNewContext(readReaderBundle() ?? '', page);
+    expect(
+      typeof (page[READER_GLOBAL] as { registerStore?: unknown } | undefined)?.registerStore,
+    ).toBe('function');
   });
 
   it('loads as CommonJS and exports the SDK, so a webpack 4 import still resolves', () => {
