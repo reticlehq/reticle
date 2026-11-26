@@ -742,6 +742,41 @@ describe('runInit', () => {
     expect(call?.args[3]).toMatch(/^@reticlehq\/vite-plugin@\d+\.\d+\.\d+/);
   });
 
+  it('prints the install progress before the package manager runs and reports when it ends', () => {
+    const io = memoryIo({ ...VITE_FILES, 'pnpm-lock.yaml': '' }, { mcpExists: true });
+    const events: string[] = [];
+    const print = io.print.bind(io);
+    const exec = io.exec.bind(io);
+    io.print = (line) => {
+      events.push(`print:${line}`);
+      print(line);
+    };
+    io.exec = (command, args) => {
+      events.push(`exec:${command} ${args.join(' ')}`);
+      return exec(command, args);
+    };
+
+    runInit({ ...OPTS, install: true }, io);
+
+    const progressIndex = events.findIndex((event) =>
+      event.includes('Installing Reticle dependencies'),
+    );
+    const installIndex = events.findIndex((event) => event.startsWith('exec:pnpm add -D'));
+    const completedIndex = events.findIndex((event) =>
+      event.includes('Reticle dependency install attempt ended'),
+    );
+    expect(progressIndex).toBeGreaterThanOrEqual(0);
+    expect(progressIndex).toBeLessThan(installIndex);
+    expect(events[progressIndex]).toContain('pnpm add -D');
+    expect(completedIndex).toBeGreaterThan(installIndex);
+  });
+
+  it('does not print install progress when no install step runs', () => {
+    const io = memoryIo(VITE_FILES);
+    runInit(OPTS, io);
+    expect(io.lines.join('\n')).not.toContain('Installing Reticle dependencies');
+  });
+
   it('downgrades a failed step to manual with its fallback command', () => {
     const io = memoryIo(VITE_FILES, { execOk: false, mcpExists: true });
     const r = runInit({ ...OPTS, install: true }, io);

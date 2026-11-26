@@ -68,6 +68,9 @@ function resolvedStatus(
 
 /** Every client registration row is titled `MCP server (<client>)`; the closing hint names the unfinished ones. */
 const MCP_CLIENT_TITLE_PREFIX = 'MCP server (';
+const INSTALL_PROGRESS_PREFIX = 'Installing Reticle dependencies with';
+const INSTALL_PROGRESS_SUFFIX = '(this can take a few minutes).';
+const INSTALL_COMPLETION_PREFIX = 'Reticle dependency install attempt ended in';
 
 const STATUS_SYMBOL: Record<StepStatus, string> = {
   [StepStatus.APPLY]: '✓',
@@ -228,6 +231,26 @@ function applyEffects(plan: Plan, io: InitIo, packageManager: PackageManager): E
   const skipped = new Set<string>();
   const degraded = new Map<string, string>();
   let installFailed = false;
+  const runCommand = (
+    target: string,
+    command: string,
+    args: readonly string[],
+    spanName = 'init.exec',
+  ): boolean => {
+    const isInstall = target === DEPS_TARGET;
+    const startedAt = Date.now();
+    if (isInstall) {
+      io.print(
+        `${INSTALL_PROGRESS_PREFIX} ${[command, ...args].join(' ')} ${INSTALL_PROGRESS_SUFFIX}`,
+      );
+    }
+    const succeeded = io.host.span(spanName, { target, command }, () => io.exec(command, args));
+    if (isInstall) {
+      const elapsedSeconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+      io.print(`${INSTALL_COMPLETION_PREFIX} ${elapsedSeconds} seconds.`);
+    }
+    return succeeded;
+  };
   for (const s of plan.steps) {
     if (s.status !== StepStatus.APPLY) {
       continue;
@@ -276,12 +299,7 @@ function applyEffects(plan: Plan, io: InitIo, packageManager: PackageManager): E
     // Per-step, because the interesting part of init's wall-clock is WHICH step spent it: a
     // package-manager install and a `claude mcp add` are both subprocesses, and one of them being
     // slow is a completely different problem from the other.
-    if (
-      exec !== undefined &&
-      !io.host.span('init.exec', { target: s.target, command: exec.command }, () =>
-        io.exec(exec.command, exec.args),
-      )
-    ) {
+    if (exec !== undefined && !runCommand(s.target, exec.command, exec.args)) {
       // A weaker second attempt beats no install at all — but only when it is REPORTED, because the
       // thing it gives up is the version pin that keeps SDK and daemon in step.
       //
@@ -292,9 +310,7 @@ function applyEffects(plan: Plan, io: InitIo, packageManager: PackageManager): E
       // Walked in order, cheapest concession first, and STOPS at the first success — a later,
       // weaker attempt must never run once an earlier one has already produced a working tree.
       const succeeded = (s.retries ?? []).find((retry) =>
-        io.host.span('init.exec.retry', { target: s.target, command: retry.command }, () =>
-          io.exec(retry.command, retry.args),
-        ),
+        runCommand(s.target, retry.command, retry.args, 'init.exec.retry'),
       );
       if (succeeded !== undefined) {
         degraded.set(s.target, succeeded.note);
