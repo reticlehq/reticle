@@ -8,7 +8,7 @@ import {
   VerdictStatus,
   YIELD_WITHOUT_SESSION_NOTE,
 } from '@reticlehq/core';
-import { ReticleTool } from '@reticlehq/core';
+import { ActionType, ReticleCommand, ReticleTool } from '@reticlehq/core';
 import { sessionIdShape } from '@/surface/tools/tool-kit.js';
 import { asString } from '@reticlehq/core';
 import type { ToolDef } from '@/surface/tools/tool-kit.js';
@@ -137,7 +137,203 @@ function claimOf(value: unknown): VerdictStatus | undefined {
   return claims.includes(value) ? (value as VerdictStatus) : undefined;
 }
 
+/*
+ * `reticle_board`: named values that every session and every agent on this bridge can read and
+ * write. A desktop session reads a number in Calculator, a browser session puts it in a form, and
+ * a second agent, or a plan of the Harness that runs in another process, reads it here. The board
+ * lives as long as the bridge; it is not saved.
+ */
+/** The most keys on a board, and the longest value. A value past it is refused, never cut. */
+export const BOARD_MAX_KEYS = 200;
+export const BOARD_MAX_VALUE = 4000;
+
+interface Entry {
+  value: string;
+  /** The session that wrote it, when the writer named one. */
+  from?: string;
+  at: number;
+}
+
+/** One board for each bridge: the session manager of the bridge is its key. */
+const boards = new WeakMap<object, Map<string, Entry>>();
+function boardOf(owner: object): Map<string, Entry> {
+  let board = boards.get(owner);
+  if (board === undefined) {
+    board = new Map();
+    boards.set(owner, board);
+  }
+  return board;
+}
+
+const EntrySchema = z.object({
+  key: z.string(),
+  value: z.string(),
+  from: z.string().optional(),
+  at: z.number(),
+});
+
+/** One end of a carry: an element in a session, by its ref. */
+const EndSchema = z.object({ sessionId: z.string().min(1), ref: z.string().min(1) });
+type End = z.infer<typeof EndSchema>;
+
+/**
+ * What an element of a session shows: its value when it has one, else its name. Read from the
+ * snapshot line, the one format that the browser and the computer both write.
+ */
+async function shownBy(
+  deps: Parameters<ToolDef['handler']>[0],
+  end: End,
+): Promise<string | undefined> {
+  const answer = await deps.sessions.resolve(end.sessionId).command(ReticleCommand.SNAPSHOT, {});
+  const tree = answer.ok ? (answer.result as { tree?: unknown } | undefined)?.tree : undefined;
+  const line = ('string' === typeof tree ? tree : '')
+    .split('\n')
+    .find((one) => one.includes(`(ref=${end.ref})`));
+  if (line === undefined) {
+    return undefined;
+  }
+  const unquote = (text: string): string =>
+    text.replace(/\\(["\\n])/g, (_, c: string) => ('n' === c ? '\n' : c));
+  const value = /\[value="((?:\\.|[^"\\])*)"\]/.exec(line)?.[1];
+  if (value !== undefined) {
+    return unquote(value);
+  }
+  // A field with no value is empty: its name is its label, not what it holds.
+  if (/^\s*- (textbox|searchbox|combobox|spinbutton)\b/.test(line)) {
+    return '';
+  }
+  return unquote(/^\s*- [^"(]*"((?:\\.|[^"\\])*)"/.exec(line)?.[1] ?? '');
+}
+
+/**
+ * A carry: the value of an element in one session, written into an element of another, and read
+ * back from it. The agent copies nothing by hand, and the answer says whether the value arrived.
+ */
+async function carry(
+  deps: Parameters<ToolDef['handler']>[0],
+  board: Map<string, Entry>,
+  key: string,
+  from: End,
+  to: End,
+): Promise<Record<string, unknown>> {
+  const value = await shownBy(deps, from);
+  if (value === undefined) {
+    return {
+      ok: false,
+      error: `ref ${from.ref} is not in session ${from.sessionId}. Look at that session again for the ref of the value.`,
+    };
+  }
+  const entry: Entry = { value, at: deps.now(), from: from.sessionId };
+  board.set(key, entry);
+  // Inside an attribution window, as every action is: what the fill changes is the action's
+  // effect, and the settle check must not learn it as background change.
+  const target = deps.sessions.resolve(to.sessionId);
+  target.beginAction(ReticleTool.BOARD, { ref: to.ref });
+  let acted;
+  try {
+    acted = await target.command(ReticleCommand.ACT, {
+      ref: to.ref,
+      action: ActionType.FILL,
+      args: { value },
+    });
+  } finally {
+    target.finishAction();
+  }
+  const shows = await shownBy(deps, to);
+  const arrived = acted.ok && shows === value;
+  return {
+    ok: true,
+    entries: [{ key, ...entry }],
+    carried: value,
+    arrived,
+    ...(arrived ? {} : { shows: shows ?? '', ...(acted.ok ? {} : { error: acted.error }) }),
+  };
+}
+
+export const BOARD_TOOL: ToolDef = {
+  name: ReticleTool.BOARD,
+  description:
+    'Named values that every session and agent on this bridge shares. { key, value } writes; { key } reads one; {} reads all. Use it to pass a value from one realm to another: read it in a desktop application, write it here, read it in a browser session or another agent. Give sessionId to say which session wrote it.',
+  inputSchema: {
+    key: z
+      .string()
+      .min(1)
+      .max(200)
+      .optional()
+      .describe('The name of the value. With no value: read it. Absent: read every value.'),
+    value: z
+      .string()
+      .optional()
+      .describe('The value to keep under the key, at most 4000 characters. Absent: read.'),
+    sessionId: z.string().optional().describe('The session that writes the value, kept with it.'),
+    carry: z
+      .object({ from: EndSchema, to: EndSchema })
+      .optional()
+      .describe(
+        'Carry a value from an element of one session into an element of another: { from: { sessionId, ref }, to: { sessionId, ref } }, with a key. The value is read from the element, kept under the key, filled into the target, and read back: `arrived` says whether the target shows it.',
+      ),
+  },
+  outputSchema: {
+    ok: z.boolean(),
+    entries: z.array(EntrySchema).optional(),
+    error: z.string().optional(),
+    carried: z.string().optional(),
+    arrived: z.boolean().optional(),
+    shows: z.string().optional(),
+  },
+  handler: (deps, args) => {
+    const board = boardOf(deps.sessions);
+    const key = asString(args['key']);
+    const value = asString(args['value']);
+    const from = asString(args['sessionId']);
+    const carried = z.object({ from: EndSchema, to: EndSchema }).safeParse(args['carry']);
+    if (args['carry'] !== undefined) {
+      if (key === undefined || !carried.success) {
+        return Promise.resolve({
+          ok: false,
+          error: 'a carry needs a key and { from: { sessionId, ref }, to: { sessionId, ref } }',
+        });
+      }
+      return carry(deps, board, key, carried.data.from, carried.data.to);
+    }
+    if (value !== undefined) {
+      if (key === undefined) {
+        return Promise.resolve({ ok: false, error: 'a value needs a key: { key, value }' });
+      }
+      if (value.length > BOARD_MAX_VALUE) {
+        return Promise.resolve({
+          ok: false,
+          error: `the value has ${String(value.length)} characters; the board keeps at most ${String(BOARD_MAX_VALUE)}. Write a shorter value, or a path to a file that holds it.`,
+        });
+      }
+      if (!board.has(key) && board.size >= BOARD_MAX_KEYS) {
+        return Promise.resolve({
+          ok: false,
+          error: `the board has ${String(BOARD_MAX_KEYS)} keys, the most it keeps. Write to a key that is there.`,
+        });
+      }
+      const entry: Entry = { value, at: deps.now(), ...(from === undefined ? {} : { from }) };
+      board.set(key, entry);
+      return Promise.resolve({ ok: true, entries: [{ key, ...entry }] });
+    }
+    const all = [...board].map(([k, e]) => ({ key: k, ...e }));
+    if (key === undefined) {
+      return Promise.resolve({ ok: true, entries: all });
+    }
+    const one = all.filter((e) => e.key === key);
+    return Promise.resolve(
+      0 === one.length
+        ? {
+            ok: false,
+            error: `no value has the key "${key}" yet. Keys on the board: ${all.map((e) => e.key).join(', ') || 'none'}.`,
+          }
+        : { ok: true, entries: one },
+    );
+  },
+};
+
 export const LIVE_CONTROL_TOOLS: ToolDef[] = [
+  BOARD_TOOL,
   {
     name: ReticleTool.END_SESSION,
     description:

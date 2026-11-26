@@ -20,6 +20,9 @@
     },
     {
       "path": "../open-verification"
+    },
+    {
+      "path": "../adapters/realm/computer"
     }
   ]
 }

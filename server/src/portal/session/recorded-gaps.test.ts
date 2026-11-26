@@ -12,6 +12,8 @@ import {
   probeMarkers,
   recordGaps,
   recordedGaps,
+  noteDial,
+  sdkView,
 } from './recorded-gaps.js';
 
 const gap = (missing: string) => ({ kind: 'no-source-mapping', missing, fix: 'add the plugin' });
@@ -240,5 +242,37 @@ describe('engineBlindSpotsField and the claims it judges', () => {
   it("judges the run's open intents when the call names none", () => {
     const field = engineBlindSpotsField('s-1938-b', undefined, undefined, EARLIER);
     expect(field.engineBlindSpots.map((spot) => spot.detail).join(' ')).toContain('100 percent');
+  });
+});
+
+/**
+ * The rule that a signal is evidence was given to any session that sent the runtime name of the
+ * computer realm. The name is a word the connected side says about itself, so a web page
+ * could say it and have its own signals taken for things an observer saw.
+ */
+describe('a session with no SDK', () => {
+  const session = (id: string) => ({ id, hasCapabilities: false, runtime: 'computer' });
+
+  it('is one that a program dialled: its socket had no Origin', () => {
+    noteDial('cu-program', undefined);
+    expect(sdkView(session('cu-program')).signals).toEqual({ signalsAreObserved: true });
+    expect(sdkView(session('cu-program')).facts.noSdk).toBe(true);
+  });
+
+  it('is not a page that says the name: a browser always sends an Origin', () => {
+    noteDial('cu-page', 'http://localhost:5173');
+    expect(sdkView(session('cu-page')).signals).toEqual({});
+    expect(sdkView(session('cu-page')).facts.noSdk).toBeUndefined();
+  });
+
+  it('is not a session the bridge never noted', () => {
+    expect(sdkView(session('cu-unknown')).signals).toEqual({});
+  });
+
+  it('is not a program that dialled and does not say the name', () => {
+    noteDial('other-program', undefined);
+    expect(
+      sdkView({ id: 'other-program', hasCapabilities: false, runtime: 'web' }).signals,
+    ).toEqual({});
   });
 });

@@ -1,0 +1,254 @@
+#!/usr/bin/env node
+// Drives the fixture application through the realm and checks what it must never get wrong:
+//   an effect is reported; a late effect is waited for; an action that does nothing is reported
+//   as nothing; a control a person cannot reach is refused; an element that moved is refused;
+//   and a claim gets a `yes` only when the file system agrees, whatever the application says.
+//
+//   node native/mac/selfcheck.mjs      (macOS, with Accessibility permission for the terminal)
+//
+// A small window opens for a few seconds. It does not take the keyboard.
+import assert from 'node:assert/strict';
+import { execFileSync, spawn } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { fileURLToPath } from 'node:url';
+
+import { nodeWorkspace } from '@reticlehq/cli-realm';
+import { Declaration, adjudicate, assertionsHeldUnder } from 'open-verification';
+
+import {
+  ActKind,
+  ComputerRealm,
+  CuChannel,
+  CuSummary,
+  Delivery,
+  MacDriver,
+} from '../../dist/index.js';
+
+const here = fileURLToPath(new URL('.', import.meta.url));
+const build = `${here}build`;
+mkdirSync(build, { recursive: true });
+for (const name of ['reticle-ax', 'fixture']) {
+  execFileSync('swiftc', ['-O', `${here}${name}.swift`, '-o', `${build}/${name}`], {
+    stdio: ['ignore', 'ignore', 'ignore'],
+  });
+}
+
+// A clipboard for this check alone. The fixture and the helper both read the name.
+process.env.RETICLE_AX_PASTEBOARD = `reticle-selfcheck-${String(process.pid)}`;
+const folder = mkdtempSync(join(tmpdir(), 'reticle-cu-'));
+const fixture = spawn(`${build}/fixture`, [folder], { stdio: 'ignore' });
+const helper = `${build}/reticle-ax`;
+const realm = new ComputerRealm({
+  driver: new MacDriver({ helper, app: 'fixture', pid: fixture.pid }),
+  workspace: nodeWorkspace([folder], { exclude: [] }),
+  now: () => Date.now(),
+});
+
+const report = [];
+let actionSeq = 0;
+
+/** One action in its own window: what the realm answered, saw and could not see. */
+async function step(name, kind, parameters = {}) {
+  const started = Date.now();
+  const window = realm.openWindow(1000);
+  const [handle] = await realm.locate({ name });
+  assert.ok(handle, `no element named ${name}`);
+  actionSeq += 1;
+  const receipt = await realm.perform({
+    id: `a${String(actionSeq)}`,
+    actor: 'selfcheck',
+    capability: kind,
+    target: handle.ref,
+    parameters,
+    at: Date.now(),
+  });
+  const closed = realm.closeWindow(window);
+  const observed = await realm.observe(closed);
+  const coverage = await realm.coverage(closed);
+  const ms = Date.now() - started;
+  // What the tree and the watched folders showed. The count of bytes on disk is asked for by name.
+  const QUIET = [CuChannel.DISK, CuChannel.SETTINGS, CuChannel.CLIPBOARD];
+  const summaries = observed.filter((o) => !QUIET.includes(o.channel)).map((o) => o.summary);
+  const disk = observed.filter((o) => CuChannel.DISK === o.channel).map((o) => o.summary);
+  report.push(
+    `${name.padEnd(8)} ${String(ms).padStart(5)} ms  ${summaries.join(', ') || receipt.refused?.detail}  [closed by ${closed.closedBy}]`,
+  );
+  return { receipt, closed, observed, coverage, summaries, disk };
+}
+
+const noteWritten = {
+  id: 'c1',
+  statement: 'the note is saved to a file',
+  declaredAt: Declaration.BEFORE_ACTION,
+  assertions: [
+    {
+      id: 'a1',
+      predicate: {
+        kind: 'present',
+        match: {
+          channel: CuChannel.FILES,
+          summary: CuSummary.FS_WRITTEN,
+          valueContains: 'note.txt',
+        },
+      },
+      reads: 'note.txt was written',
+      channels: [CuChannel.FILES],
+    },
+  ],
+};
+
+/** The verdict on the claim, from what the realm saw in one step. No model is asked. */
+function judge({ closed, observed, coverage }) {
+  return adjudicate({
+    claim: noteWritten,
+    window: closed,
+    channels: realm.channels(),
+    evidence: observed
+      .filter((o) => o.channel === CuChannel.FILES)
+      .map((o) => ({
+        observation: o,
+        provenance: {
+          class: 'observed',
+          source: '@reticlehq/computer',
+          method: 'file snapshot, before and after',
+          subject: realm.identity(),
+          at: Date.now(),
+        },
+        independence: 'independent',
+        grade: 'consequence',
+      })),
+    coverage,
+    anomalies: [],
+    assertionsHeld: assertionsHeldUnder(noteWritten.assertions, observed, coverage),
+    consequenceHeldBefore: undefined,
+  });
+}
+
+try {
+  await sleep(1500);
+  assert.equal((await realm.describe()).unread, 0);
+
+  const typed = await step('Title', ActKind.SET, { value: 'Plan' });
+  assert.deepEqual(typed.summaries, [CuSummary.UI_CHANGED]);
+
+  // Key events, not a value put in the field: the Return key runs the field's own action.
+  const keyed = await step('Title', ActKind.TYPE, { value: 'Plan B' });
+  // Two things change: the text in the field, and where the keyboard is. A field that takes the
+  // keyboard selects its text, so the typed text replaces it: the realm reports what the field
+  // holds after it, which is what a caller must read and not assume.
+  assert.ok(
+    keyed.observed.some(
+      (o) => 'textbox "Title"' === o.value.element && o.value.detail.includes('"Plan" -> "Plan B"'),
+    ),
+  );
+  const entered = await step('Title', ActKind.KEY, { value: 'Return' });
+  assert.deepEqual(entered.summaries, [CuSummary.UI_GONE, CuSummary.UI_APPEARED]);
+  assert.ok(entered.observed.some((o) => 'text "Entered: Plan B"' === o.value.element));
+
+  // A row of a table has no press of its own. A press chooses it, as a click does.
+  const rows = await realm.locate({ role: 'row' });
+  assert.equal(rows.length, 3);
+  const window = realm.openWindow(1000);
+  const chose = await realm.perform({
+    id: 'row',
+    actor: 'selfcheck',
+    capability: ActKind.PRESS,
+    target: rows[1].ref,
+    at: Date.now(),
+  });
+  assert.equal(chose.dispatched, true);
+  const afterRow = await realm.observe(realm.closeWindow(window));
+  assert.ok(afterRow.some((o) => 'text "Chosen: Beta"' === o.value.element));
+
+  // A menu: its items are not on the screen until it is open, so they are not targets until then.
+  assert.deepEqual(await realm.locate({ name: 'Mark done' }), []);
+  const opened = await step('Actions', ActKind.PRESS);
+  assert.deepEqual(opened.summaries, [CuSummary.UI_APPEARED]);
+  const chosen = await step('Mark done', ActKind.PRESS);
+  assert.ok(chosen.observed.some((o) => 'text "Marked done"' === o.value.element));
+  assert.deepEqual(await realm.locate({ name: 'Mark done' }), []);
+
+  // A button that puts the title on the clipboard and changes nothing on the screen. The check
+  // uses a clipboard of its own, so the clipboard of the person at the machine is not touched.
+  const copied = await step('Copy', ActKind.PRESS);
+  assert.ok(copied.observed.some((o) => CuSummary.CLIPBOARD_CHANGED === o.summary));
+  assert.ok(!typed.observed.some((o) => CuSummary.CLIPBOARD_CHANGED === o.summary));
+
+  // A checkbox that changes one setting of the application. The setting is in no watched file.
+  const remembered = await step('Remember', ActKind.PRESS);
+  const setting = remembered.observed.find((o) => CuChannel.SETTINGS === o.channel);
+  assert.equal(setting?.value.key, 'remember');
+  assert.equal(setting?.value.new, '1');
+
+  // A slider takes a number. The same path moves a scroll bar, which is how this realm scrolls.
+  const slid = await step('Volume', ActKind.SET, { value: '0.5' });
+  // Two elements change: the slider, and the mark on it that shows the value.
+  assert.deepEqual(slid.summaries, [CuSummary.UI_CHANGED, CuSummary.UI_CHANGED]);
+  // The value itself, and not only "two elements changed".
+  assert.ok(slid.observed.some((o) => String(o.value.detail).includes('0.5')));
+
+  const saved = await step('Save', ActKind.PRESS);
+  assert.deepEqual(saved.summaries, [CuSummary.UI_GONE, CuSummary.UI_APPEARED]);
+  assert.ok(saved.observed.some((o) => String(o.value.element).startsWith('text "Saved:')));
+
+  const slow = await step('Slow', ActKind.PRESS);
+  assert.deepEqual(slow.summaries, [CuSummary.UI_GONE, CuSummary.UI_APPEARED]);
+  assert.ok(slow.observed.some((o) => 'text "Slow done"' === o.value.element));
+
+  // An effect in two steps with a pause between them. The action is finished after the second.
+  // This case holds the quiet time: with 100 ms the realm stops at "Working".
+  const twice = await step('Steps', ActKind.PRESS);
+  assert.ok(twice.observed.some((o) => 'text "Steps done"' === o.value.element));
+
+  const dead = await step('Dead', ActKind.PRESS);
+  assert.deepEqual(dead.summaries, [CuSummary.UI_NO_EFFECT]);
+
+  const blocked = await step('Covered', ActKind.PRESS);
+  assert.equal(blocked.receipt.dispatched, false);
+  const covered = await step('Covered', ActKind.PRESS, { delivery: Delivery.DIRECT });
+  assert.ok(covered.summaries.includes(CuSummary.ACT_NOT_REACHABLE));
+
+  const stale = JSON.parse(
+    execFileSync(helper, ['act', String(fixture.pid), '0.2', 'AXButton', 'Dead', 'press'], {
+      encoding: 'utf8',
+    }),
+  );
+  assert.equal(stale.refused, 'stale');
+
+  // The application says "Exported" both times. Only one of them wrote the file.
+  const fake = await step('Fake', ActKind.PRESS);
+  assert.ok(fake.summaries.includes(CuSummary.UI_APPEARED), 'the false success shows in the tree');
+  // The operating system counted the bytes the process wrote: none. That is a fact that was seen.
+  assert.deepEqual(fake.disk, [CuSummary.DISK_WROTE_NOTHING]);
+  const lied = judge(fake);
+  assert.notEqual(lied.verdict, 'yes');
+
+  const exported = await step('Export', ActKind.PRESS);
+  assert.deepEqual(exported.disk, [CuSummary.DISK_WROTE]);
+  const proved = judge(exported);
+  assert.equal(
+    proved.verdict,
+    'yes',
+    `Export: ${proved.ground}; closed by ${exported.closed.closedBy}; saw ${exported.summaries.join(', ')}`,
+  );
+
+  report.push(
+    `Fake   -> verdict ${lied.verdict} (${lied.ground})`,
+    `Export -> verdict ${proved.verdict} (${proved.ground})`,
+    'computer selfcheck: 18 of 18 cases held',
+    '',
+  );
+  process.stdout.write(report.join('\n'));
+} catch (error) {
+  // What each step saw up to the failure: the first thing to read when this check is not steady.
+  process.stderr.write(`${report.join('\n')}\n`);
+  throw error;
+} finally {
+  fixture.kill();
+  // The fixture keeps one setting. Remove it, so that the next run starts with none.
+  spawn('defaults', ['delete', 'fixture'], { stdio: 'ignore' });
+  rmSync(folder, { recursive: true, force: true });
+}

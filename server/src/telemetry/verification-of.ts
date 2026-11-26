@@ -22,6 +22,7 @@ import {
 } from '@reticlehq/core';
 import { VERDICT_TOOLS } from '@/surface/tools/feedback-tools.js';
 import { getBrowserMode } from './browser-mode.js';
+import { telemetryRuntimeOf } from './telemetry-runtime.js';
 import { releaseVersionOf } from '@/command/update/version-seen.js';
 
 /**
@@ -171,6 +172,8 @@ export function verificationOf(
   drivenByHarness = false,
   /** The page SDK version the session announced on HELLO. */
   pageSdkVersion?: string,
+  /** The runtime the session said on HELLO: a page, a desktop shell or the computer. */
+  sessionRuntime?: string,
 ): Verification | undefined {
   if (!VERDICT_TOOLS.has(toolName)) {
     return undefined;
@@ -202,6 +205,7 @@ export function verificationOf(
   const reason = reasonOf(result);
   const uncleanLoss = uncleanLossOf(result, reason);
   const sdkVersion = releaseVersionOf(pageSdkVersion);
+  const runtime = telemetryRuntimeOf(sessionRuntime);
   return {
     via: toolName,
     verified: verified ?? (true === passed ? 'yes' : 'no'),
@@ -242,5 +246,7 @@ export function verificationOf(
     ...(drivenByHarness ? { driven: VerificationDriver.HARNESS } : {}),
     // WHICH page SDK the verdict was judged on. A page older than the daemon misses newer fixes.
     ...(sdkVersion === undefined ? {} : { sdkVersion }),
+    // WHERE: a page, a desktop shell or Reticle's computer.
+    ...(runtime === undefined ? {} : { runtime }),
   };
 }

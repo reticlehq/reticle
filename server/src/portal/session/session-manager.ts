@@ -11,6 +11,7 @@ import {
   declareDrivenRedactionKeys,
   forgetDrivenRedactionKeys,
 } from '@/portal/input/driven-redaction.js';
+import { withDesktops } from './presence/session-mirror.js';
 import { Session, type SessionInfo } from './session.js';
 import { AttachmentHistory } from './presence/attachment-history.js';
 import type { NoSessionNextAction } from './no-session-next-action.js';
@@ -288,16 +289,15 @@ export class SessionManager {
   }
 
   /**
-   * The other tabs of the same app as `driven`.
-   *
-   * Scoped the same way auto-selection is: by the stable projectId when the driven tab stamped one,
-   * else by origin. A drive session is frequently a headless pooled context (see Session.#viewers),
-   * so without this the human's own tab is the one place the report never reaches.
+   * The other tabs of the same app as `driven`, and every desktop session (see `withDesktops`).
+   * Scoped as auto-selection is: by the stable projectId when the driven tab stamped one, else by
+   * origin. A drive session is often a headless pooled context (see Session.#viewers), so without
+   * this the human's own tab is the one place the report never reaches.
    */
   #viewersFor(driven: Session): Session[] {
     const scope: ResolveScope =
       driven.projectId === undefined ? { url: driven.url } : { projectId: driven.projectId };
-    return scopeSessions([...this.#sessions.values()], scope).filter((s) => s !== driven);
+    return withDesktops([...this.#sessions.values()], (all) => scopeSessions(all, scope), driven);
   }
 
   /**

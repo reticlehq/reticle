@@ -29,7 +29,7 @@ import { SessionNonces } from './session-nonces.js';
 import { FollowRefusal, OriginFollower, normalizeOrigin } from './origin/origin-follow.js';
 import type { FollowNavigation } from './origin/origin-follow.js';
 import { admitHello } from '@/portal/production/production-hello.js';
-import { forgetRecordedGaps } from '@/portal/session/recorded-gaps.js';
+import { forgetRecordedGaps, noteNewPage } from '@/portal/session/recorded-gaps.js';
 import { tokensMatch } from './token-auth.js';
 import { noteWrongPathUpgrades, wrongPathReason } from './wrong-path.js';
 import {
@@ -653,7 +653,7 @@ export class Bridge {
             session.onEvent((event) => drive.noteEvent(event));
           }
           // A reload keeps the session id. Its gaps describe the old page, not this one (#1655).
-          forgetRecordedGaps(session.id);
+          noteNewPage(session.id, origin);
           // Recorded on ACCEPTANCE, so it is evidence of what this daemon really serves.
           if (parsed.projectId !== undefined) {
             this.#servedProjects.add(parsed.projectId);

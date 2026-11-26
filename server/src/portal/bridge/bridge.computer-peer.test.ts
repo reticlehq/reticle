@@ -1,0 +1,345 @@
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { ElementState, RETICLE_WS_PATH, LOOPBACK_HOST } from '@reticlehq/core';
+import { UiRole, connectPeer } from '@reticlehq/computer';
+import type { ActRequest, Peer, UiDriver, UiNode, UiRead } from '@reticlehq/computer';
+import { Bridge } from './bridge.js';
+import type { ToolDeps } from '@/surface/tools/tools.js';
+import { callTool, makeDeps, waitUntil } from './bridge.test-harness.js';
+import { FINISH_TOOL, type ModelDriver, type ModelTurn } from '@/features/harness/harness.js';
+import { exploreApp } from '@/surface/tools/harness-explore.js';
+
+/**
+ * A desktop application reaches the same tools as a web page, with no change in the server: the
+ * computer realm joins the bridge as a peer. The application here is not a real one. It has a
+ * Save button that changes the status text, and a Dead button that changes nothing.
+ */
+function node(role: UiRole, name: string, more: Partial<UiNode> = {}): UiNode {
+  return { role, name, states: [], children: [], ...more };
+}
+
+class FakeApp implements UiDriver {
+  status = 'Ready';
+  readonly pressed: string[] = [];
+  readonly files = new Map<
+    string,
+    { hash: string; size: number; mode: number; linkTo: undefined }
+  >();
+
+  subject(): { app: string; pid: number } {
+    return { app: 'Notes', pid: 7 };
+  }
+
+  #now(): UiRead {
+    const root = node(UiRole.WINDOW, 'Notes', {
+      frame: [0, 0, 400, 300],
+      children: [
+        node(UiRole.BUTTON, 'Save', { frame: [10, 10, 80, 30] }),
+        node(UiRole.BUTTON, 'Dead', { frame: [100, 10, 80, 30] }),
+        node(UiRole.BUTTON, 'Export', { frame: [10, 50, 80, 30] }),
+        node(UiRole.BUTTON, 'Fake', { frame: [100, 50, 80, 30] }),
+        node(UiRole.BUTTON, 'Later', { frame: [190, 50, 80, 30] }),
+        node(UiRole.TEXT, this.status, { frame: [10, 90, 200, 20] }),
+      ],
+    });
+    return { root, unread: 0, unmapped: [] };
+  }
+
+  read(): Promise<UiRead> {
+    return Promise.resolve(this.#now());
+  }
+
+  /** True while a window of another application is over this one. */
+  covered = false;
+
+  /** True for an application whose Save stopped working: a press on it changes nothing. */
+  saveIsBroken = false;
+
+  reach() {
+    return Promise.resolve(
+      this.covered
+        ? { reach: 'no' as const, detail: 'window "Mail" of Mail' }
+        : { reach: 'yes' as const },
+    );
+  }
+
+  act(request: ActRequest) {
+    const before = this.#now();
+    this.pressed.push(request.target.node.name);
+    if ('Save' === request.target.node.name && !this.saveIsBroken) {
+      this.status = 'Saved';
+    }
+    // Both say "Exported". Only Export writes the file.
+    if ('Export' === request.target.node.name) {
+      this.files.set('/out/note.txt', { hash: 'h', size: 4, mode: 0o644, linkTo: undefined });
+      this.status = 'Exported';
+    }
+    if ('Fake' === request.target.node.name) {
+      this.status = 'Exported';
+    }
+    // The file comes after the action is finished, as it does when an application saves in the
+    // background.
+    if ('Later' === request.target.node.name) {
+      setTimeout(() => {
+        this.files.set('/out/late.txt', { hash: 'h', size: 4, mode: 0o644, linkTo: undefined });
+      }, 300);
+    }
+    return Promise.resolve({
+      delivered: true,
+      reachable: true,
+      settled: true,
+      before,
+      after: this.#now(),
+    });
+  }
+}
+
+interface Verdict {
+  effect: { ok: boolean };
+  verdict: { pass: boolean; failureReason?: string };
+  verified?: string;
+}
+
+describe('a computer peer on the bridge', () => {
+  let bridge: Bridge;
+  let deps: ToolDeps;
+  let peer: Peer;
+  const app = new FakeApp();
+
+  beforeAll(async () => {
+    // With a token, as the daemon has: the peer then dials with no Origin, and only such a
+    // session gets the rule that a signal is a thing an observer saw.
+    bridge = new Bridge({ port: 0, token: 'peer-test-token' });
+    const port = await bridge.ready;
+    deps = makeDeps(bridge);
+    peer = connectPeer({
+      url: `ws://${LOOPBACK_HOST}:${String(port)}${RETICLE_WS_PATH}`,
+      token: 'peer-test-token',
+      sessionId: 'cu-notes',
+      projectId: 'notes-app',
+      driver: app,
+      workspace: {
+        roots: ['/out'],
+        excluded: [],
+        snapshot: () => ({ files: new Map(app.files), unreadable: [] }),
+      },
+      filesEveryMs: 100,
+      now: () => Date.now(),
+    });
+    await peer.ready;
+    await waitUntil(() => 1 === bridge.sessions.count());
+  });
+
+  afterAll(async () => {
+    peer.close();
+    await bridge.close();
+  });
+
+  it('is a session with no version skew, and says what kind of application it is', async () => {
+    await waitUntil(() => undefined !== bridge.sessions.get('cu-notes')?.runtime);
+    const listed = (await callTool(deps, 'reticle_sessions', {})) as {
+      sessions: { sessionId: string; versionSkew?: string; runtime?: string }[];
+    };
+    const mine = listed.sessions.find((s) => 'cu-notes' === s.sessionId);
+    expect(mine).toBeDefined();
+    expect(mine?.versionSkew).toBeUndefined();
+    expect(mine?.runtime).toBe('computer');
+  });
+
+  it('gives the application as a tree the tools can act on', async () => {
+    const page = (await callTool(deps, 'reticle_snapshot', {})) as { tree: string };
+    expect(page.tree).toContain('- button "Save" (ref=e2)');
+  });
+
+  // The server ran the page's check for every session: a desktop session could not minimize its
+  // window or click a point of a picture. An agent pressed the minimize button instead, which did
+  // nothing, and said "done". The realm answers these; the server must not refuse them first.
+  it('passes the window action and the points of a picture to the application', async () => {
+    const said = async (args: Record<string, unknown>): Promise<string> => {
+      try {
+        return JSON.stringify(await callTool(deps, 'reticle_act', args));
+      } catch (error) {
+        return String(error);
+      }
+    };
+    const window = await said({ ref: 'e1', action: 'window', args: { arrange: 'minimize' } });
+    expect(window).not.toMatch(/a page cannot/);
+    const point = await said({ ref: 'e1', action: 'click', args: { point: { x: 5, y: 5 } } });
+    expect(point).not.toMatch(/is for a desktop session/);
+    // The application is shared by the tests that follow.
+    app.pressed.length = 0;
+  });
+
+  it('proves an action by what the application showed after it', async () => {
+    const result = (await callTool(deps, 'reticle_act_and_wait', {
+      ref: 'e2',
+      action: 'click',
+      timeout_ms: 2000,
+      until: { kind: 'element', query: { text: 'Saved' }, state: ElementState.VISIBLE },
+    })) as Verdict;
+    expect(app.pressed).toEqual(['Save']);
+    expect(result.effect.ok).toBe(true);
+    expect(result.verdict.pass, result.verdict.failureReason).toBe(true);
+  });
+
+  it('does not pass an action that changed nothing', async () => {
+    app.status = 'Ready';
+    const result = (await callTool(deps, 'reticle_act_and_wait', {
+      ref: 'e3',
+      action: 'click',
+      timeout_ms: 600,
+      until: { kind: 'element', query: { text: 'Saved' }, state: ElementState.VISIBLE },
+    })) as Verdict;
+    expect(app.pressed).toEqual(['Save', 'Dead']);
+    expect(result.verdict.pass).toBe(false);
+    // A red verdict on a web page says: add a build plugin, fire a signal. There is no SDK in a
+    // desktop application, so that advice is not given.
+    const gaps = (result as { instrumentationGaps?: { kind: string }[] }).instrumentationGaps ?? [];
+    expect(
+      gaps.map((gap) => gap.kind).filter((kind) => /source-mapping|signal|store/.test(kind)),
+    ).toEqual([]);
+  });
+
+  it('tells a file that was written from words that say so', async () => {
+    const page = (await callTool(deps, 'reticle_snapshot', {})) as { tree: string };
+    const refOf = (name: string): string =>
+      new RegExp(`button "${name}" \\(ref=(e\\d+)\\)`).exec(page.tree)?.[1] ?? '';
+    const fileWritten = {
+      kind: 'signal',
+      name: 'file.written',
+      dataMatches: { file: 'note.txt' },
+    };
+    const fake = (await callTool(deps, 'reticle_act_and_wait', {
+      ref: refOf('Fake'),
+      action: 'click',
+      timeout_ms: 600,
+      until: fileWritten,
+    })) as Verdict;
+    expect(app.status).toBe('Exported');
+    expect(fake.verdict.pass).toBe(false);
+
+    const real = (await callTool(deps, 'reticle_act_and_wait', {
+      ref: refOf('Export'),
+      action: 'click',
+      timeout_ms: 2000,
+      until: fileWritten,
+    })) as Verdict;
+    expect(real.verdict.pass, real.verdict.failureReason).toBe(true);
+    // The status text was "Exported" before the press, so the file is the only thing that changed.
+    // The signal is the realm's own observation, and the verdict is `yes`, not "not known".
+    expect((real as { verified?: string }).verified).toBe('yes');
+  });
+
+  it('does not prove a text that a window of another application covers', async () => {
+    const page = (await callTool(deps, 'reticle_snapshot', {})) as { tree: string };
+    const save = /button "Save" \(ref=(e\d+)\)/.exec(page.tree)?.[1] ?? '';
+    app.status = 'Ready';
+    app.covered = true;
+    const result = (await callTool(deps, 'reticle_act_and_wait', {
+      ref: save,
+      action: 'click',
+      timeout_ms: 600,
+      until: { kind: 'element', query: { text: 'Saved' }, state: ElementState.VISIBLE },
+    })) as Verdict;
+    app.covered = false;
+    // The text is in the tree. Nobody could see it.
+    expect(app.status).toBe('Saved');
+    expect(result.verdict.pass).toBe(false);
+  });
+
+  /**
+   * The Harness on a desktop application, from its own entry point, with a model that is a script.
+   * Its survey and its goal search were written for a web page and they go to an address. This
+   * holds that a run still starts, drives and ends when there is no address to go to.
+   */
+  it('is driven by the Harness, with the prompt for a desktop application', async () => {
+    app.status = 'Ready';
+    const systems: string[] = [];
+    const turns: ((tree: string) => ModelTurn['calls'])[] = [
+      () => [{ id: '1', name: 'reticle_snapshot', args: {} }],
+      (tree) => [
+        {
+          id: '2',
+          name: 'reticle_act_and_wait',
+          args: {
+            ref: /button "Save" \(ref=(e\d+)\)/.exec(tree)?.[1] ?? '',
+            action: 'click',
+            timeout_ms: 2000,
+            until: { kind: 'element', query: { text: 'Saved' }, state: ElementState.VISIBLE },
+          },
+        },
+      ],
+      () => [{ id: '3', name: FINISH_TOOL.name, args: { summary: 'saved a note', goalMet: true } }],
+    ];
+    let tree = '';
+    const scripted: ModelDriver = {
+      turn: (input): Promise<ModelTurn> => {
+        systems.push(input.system);
+        const last = JSON.stringify(input.history.at(-1) ?? {});
+        tree = /- application|- window/.test(last) ? last.replaceAll('\\"', '"') : tree;
+        const next = turns.shift() ?? (() => []);
+        return Promise.resolve({ text: '', calls: next(tree) });
+      },
+    };
+    const result = await exploreApp(
+      deps,
+      {},
+      { driver: scripted, skipPlatformConfig: true, sessionId: 'cu-notes', focus: 'save a note' },
+    );
+    expect(systems[0]).toContain('a real desktop application');
+    const acted = result.drive.toolCalls.find((call) => 'reticle_act_and_wait' === call.name);
+    expect(acted?.isError, JSON.stringify(acted?.result).slice(0, 400)).toBe(false);
+    expect(JSON.stringify(acted?.result)).toContain('"verified":"yes"');
+    expect(app.status).toBe('Saved');
+  }, 60_000);
+
+  it('proves a file that the application writes after the action is finished', async () => {
+    const page = (await callTool(deps, 'reticle_snapshot', {})) as { tree: string };
+    const later = /button "Later" \(ref=(e\d+)\)/.exec(page.tree)?.[1] ?? '';
+    const result = (await callTool(deps, 'reticle_act_and_wait', {
+      ref: later,
+      action: 'click',
+      timeout_ms: 3000,
+      until: { kind: 'signal', name: 'file.written', dataMatches: { file: 'late.txt' } },
+    })) as Verdict;
+    expect(result.verdict.pass, result.verdict.failureReason).toBe(true);
+  });
+
+  /**
+   * A drive by a model is not the same on each run. A flow that was recorded once replays with
+   * no model, and a flow that goes red names a change in the application. The step is saved by
+   * role and name, so it finds the button again without the ref of the first run.
+   */
+  it('replays a recorded flow with no model, and goes red when the application breaks', async () => {
+    app.status = 'Ready';
+    const page = (await callTool(deps, 'reticle_snapshot', {})) as { tree: string };
+    const save = /button "Save" \(ref=(e\d+)\)/.exec(page.tree)?.[1] ?? '';
+    await callTool(deps, 'reticle_record', { action: 'start' });
+    await callTool(deps, 'reticle_act_and_wait', {
+      ref: save,
+      action: 'click',
+      timeout_ms: 2000,
+      until: { kind: 'element', query: { text: 'Saved' }, state: ElementState.VISIBLE },
+    });
+    const recorded = (await callTool(deps, 'reticle_record', { action: 'stop' })) as {
+      recordingName: string;
+    };
+    await callTool(deps, 'reticle_flow_save', { flowName: recorded.recordingName });
+
+    app.status = 'Ready';
+    const presses = app.pressed.length;
+    const replayed = (await callTool(deps, 'reticle_flow_replay', {
+      flowName: recorded.recordingName,
+    })) as { status: string };
+    expect(replayed.status).toBe('ok');
+    expect(app.pressed.slice(presses)).toEqual(['Save']);
+    expect(app.status).toBe('Saved');
+
+    app.status = 'Ready';
+    app.saveIsBroken = true;
+    const broken = (await callTool(deps, 'reticle_flow_replay', {
+      flowName: recorded.recordingName,
+    })) as { status: string };
+    app.saveIsBroken = false;
+    expect(broken.status).not.toBe('ok');
+  }, 30_000);
+});

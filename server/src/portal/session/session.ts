@@ -14,7 +14,7 @@ import { LastAct } from './last-act.js';
 import { GapLedger } from '@reticlehq/engine/evidence/gap-ledger.js';
 import { commandTimeoutMessage, type PageRuntime } from './timing/command-timeout.js';
 import { readHealthEvent, healthNotices, type SessionHealth } from './session-health.js';
-import { MIRRORED_COMMANDS, mirroredNarration } from './presence/session-mirror.js';
+import { MIRRORED_COMMANDS, mirroredArgs, tellDesktops } from './presence/session-mirror.js';
 
 export type { SessionHealth };
 
@@ -25,7 +25,7 @@ import { PendingCommands, CommandTimeoutError } from './page-commands/pending-co
 import { span } from '@/trace.js';
 import { keepCallerContextInDaemon, noteToDaemonLog } from './daemon-answers.js';
 import {
-  isKnownRealm,
+  isRealmName,
   EventType,
   HumanControlDataSchema,
   HumanControlKind,
@@ -241,7 +241,7 @@ export class Session implements HandshakeFacts {
     // Asked of the table, not listed again here. A realm missing from a repeated list is not
     // rejected loudly -- its name is dropped, and every later question about this session answers as
     // though the page never said what it was.
-    if (isKnownRealm(runtime)) {
+    if (isRealmName(runtime)) {
       this.#runtime = runtime;
     }
     if (engine !== undefined) this.#engine = engine;
@@ -448,6 +448,7 @@ export class Session implements HandshakeFacts {
    */
   private recordActedLabelFrom(result: CommandResult): void {
     for (const label of controlLabelsOf(result.result)) this.#observed.recordActedLabel(label);
+    if (result.ok) tellDesktops(this, this.#viewers?.() ?? [], result.result);
   }
 
   /** A control whose action PROVED its declared consequence — the coverage ledger's `proved`. */
@@ -966,15 +967,8 @@ export class Session implements HandshakeFacts {
     for (const viewer of this.#viewers?.() ?? []) {
       if (viewer === this) continue;
       // Straight to the raw send, so a mirrored row is never mirrored again.
-      viewer.#send(name, name === ReticleCommand.NARRATE ? this.#labelled(args) : args);
+      viewer.#send(name, name === ReticleCommand.NARRATE ? mirroredArgs(this.id, args) : args);
     }
-  }
-
-  /** A narration row re-addressed to a tab that is watching rather than being driven. */
-  #labelled(args: Record<string, unknown>): Record<string, unknown> {
-    const text = args['text'];
-    if ('string' !== typeof text) return args;
-    return { ...args, text: mirroredNarration(this.id, text) };
   }
 
   #send(name: string, args: Record<string, unknown>): void {

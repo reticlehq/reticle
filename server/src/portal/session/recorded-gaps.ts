@@ -6,6 +6,7 @@
  *
  * Deduped by kind + missing, newest first, bounded per session.
  */
+import type { ActionInstrumentationFacts } from '@reticlehq/engine/evidence/instrumentation-gaps.js';
 import { withRunningDrive } from '@/features/harness/drive-runs.js';
 import { agentLinkOf } from './agent-link.js';
 import type { InboxMessage } from './human/live-control.js';
@@ -15,6 +16,7 @@ import {
   LINK_APP_GAPS_MAX,
   ReticleCommand,
   agentPromptFor,
+  isPeerRealm,
   coverageOf,
   coveragePercent,
   type Coverage,
@@ -250,6 +252,7 @@ export function forgetRecordedGaps(sessionId: string): void {
 /** Forget everything, apps included. For tests. */
 export function forgetAllRecordedGaps(): void {
   bySession.clear();
+  dialledByProgram.clear();
   sourceSeen.clear();
   testidSeen.clear();
   sourceNotApplicable.clear();
@@ -348,4 +351,69 @@ export function withInstrumentation(
     agent: agentLinkOf(tab.inboxHistory?.() ?? []),
   };
   return withRunningDrive(pushed, tab.id) ?? pushed;
+}
+
+/**
+ * What a session says about the SDK in its application, for the two things that judge a window.
+ *
+ * `facts` is in the shape `gapsForAction` reads. `signals` is for `findContradictions`: see
+ * `ContradictionOptions.signalsAreObserved`. One function for the two places that build a verdict,
+ * so they cannot disagree about the same session.
+ */
+/** The sessions whose socket was dialled with no Origin header. */
+const dialledByProgram = new Set<string>();
+
+/**
+ * Notes how a session's socket was dialled. A browser sends an Origin header on every WebSocket
+ * dial, and a page cannot leave it out. A dial with no Origin is a program on this machine, and
+ * the bridge admits it only with the pairing token.
+ *
+ * `forgetRecordedGaps` does not remove the note: the bridge calls it for each new page of a
+ * session, right after this. Each new dial writes the note again.
+ */
+export function noteDial(sessionId: string, origin: string | undefined): void {
+  if (origin === undefined) {
+    dialledByProgram.add(sessionId);
+  } else {
+    dialledByProgram.delete(sessionId);
+  }
+}
+
+/**
+ * A new page of a session: its old gaps are forgotten, and how its socket was dialled is noted.
+ * One call, so that the bridge, which is at its limit of lines, needs one line for both.
+ */
+export function noteNewPage(sessionId: string, origin: string | undefined): void {
+  forgetRecordedGaps(sessionId);
+  noteDial(sessionId, origin);
+}
+
+interface SdkSession {
+  readonly id: string;
+  readonly hasCapabilities: boolean;
+  readonly sourceMapping?: boolean | undefined;
+  readonly runtime?: string | undefined;
+}
+
+export function sdkView(session: SdkSession): {
+  facts: Pick<ActionInstrumentationFacts, 'hasCapabilities' | 'sourceMappingDisabled' | 'noSdk'>;
+  signals: { signalsAreObserved?: true };
+} {
+  // A realm with no SDK in the application: advice to instrument it does not apply, and the
+  // application cannot send a signal, so each signal is a thing an observer saw.
+  // The runtime name is a word the connected side says about itself. A page could say it, and its
+  // own signals would then count as things an observer saw. So the name counts only for a socket
+  // that a program dialled, which is a thing a page cannot do.
+  const noSdk = isPeerRealm(session.runtime) && dialledByProgram.has(session.id);
+  return {
+    facts: {
+      // What the app DECLARED, so an under-instrumented one is told without having to be asked.
+      hasCapabilities: session.hasCapabilities,
+      // Whether the build TURNED the source stamp off, so a red with no file:line prescribes the
+      // right fix. `false` from the page is the only value that means anything; absent is unknown.
+      ...(false === session.sourceMapping ? { sourceMappingDisabled: true } : {}),
+      ...(noSdk ? { noSdk: true } : {}),
+    },
+    signals: noSdk ? { signalsAreObserved: true } : {},
+  };
 }

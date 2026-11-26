@@ -48,7 +48,7 @@ describe('createFakeSession', () => {
   it('overrides a getter-only accessor, which a plain assignment cannot', () => {
     // `runtime` is fed by `applyHealth` on a live session, which a fake has no events for.
     // Assigning to it throws "has only a getter"; the helper redefines it instead.
-    const session = createFakeSession({ runtime: 'electron-renderer' as never });
+    const session = createFakeSession({ runtime: 'electron-renderer' });
     expect(session.runtime).toBe('electron-renderer');
   });
 

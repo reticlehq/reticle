@@ -201,7 +201,16 @@ describe('tool allowlists are complete', () => {
      * drives nothing (ACTION), mints no ref, and gives no verdict (VERDICT: counting a read would
      * inflate the headline metric). On no surface list: it is reached as an action of `reticle_lease`.
      */
-    const PINNED_RAW_TOOL_COUNT = 68;
+    /*
+     * 69 since `reticle_session { action: "board" }` (`reticle_board`): named values that every
+     * session and agent on the bridge shares. It must answer with no tab (two agents share a value
+     * before any tab is open): it does, through its facade, which SESSION_EXEMPT_TOOLS already
+     * holds, as for `account` (a member is not a name in TOOLS of its own). Every other set no: it
+     * acts on no page (ACTION, CDP), mints no ref, and gives no verdict about the app (VERDICT:
+     * counting a write to a board would inflate the headline metric). On no surface list: it is
+     * reached as an action of `reticle_session`.
+     */
+    const PINNED_RAW_TOOL_COUNT = 69;
 
     expect(
       RAW_TOOLS.length,

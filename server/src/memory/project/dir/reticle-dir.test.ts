@@ -8,6 +8,7 @@ import {
   ContractReadError,
   type CapabilitiesContract,
   asSessionId,
+  COMPUTER_RUNTIME,
 } from '@reticlehq/core';
 import {
   baselinePath,
@@ -254,5 +255,13 @@ describe('visual baselines are scoped to the runtime that produced them', () => 
   it('names the directory a write has to create', () => {
     expect(visualDir('/p/.reticle', 'electron')).toBe(join('/p/.reticle', 'visual', 'electron'));
     expect(visualDir('/p/.reticle')).toBe(join('/p/.reticle', 'visual'));
+  });
+
+  it('keeps a picture of the desktop apart from a picture of a page', () => {
+    // A desktop baseline was saved in the folder of the web pages, so a desktop `home` and a page
+    // `home` were one file, and a diff compared a screen with a page.
+    expect(visualDir('/p/.reticle', COMPUTER_RUNTIME)).toBe(
+      join('/p/.reticle', 'visual', COMPUTER_RUNTIME),
+    );
   });
 });

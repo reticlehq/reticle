@@ -1,0 +1,330 @@
+/**
+ * Turns the tree that `reticle-ax` reads from the macOS Accessibility API into `UiNode`.
+ *
+ * It keeps every element, in order. The helper finds an element by its child index at each level,
+ * so an element dropped here would move every index after it.
+ */
+import { ElementState } from '@reticlehq/core';
+import { z } from 'zod';
+
+import { UiRole } from '../ui-node.js';
+import type { UiNode } from '../ui-node.js';
+
+export interface AxNode {
+  role: string;
+  subrole?: string | undefined;
+  title?: string | undefined;
+  description?: string | undefined;
+  value?: string | undefined;
+  enabled?: boolean | undefined;
+  focused?: boolean | undefined;
+  selected?: boolean | undefined;
+  id?: string | undefined;
+  help?: string | undefined;
+  frame?: number[] | undefined;
+  /** The place among all the children of the parent, when the helper left some out. */
+  i?: number | undefined;
+  /** Children the helper left out. */
+  notShown?: number | undefined;
+  children: AxNode[];
+}
+
+export const AxNodeSchema: z.ZodType<AxNode> = z.lazy(() =>
+  z.object({
+    role: z.string(),
+    subrole: z.string().optional(),
+    title: z.string().optional(),
+    description: z.string().optional(),
+    value: z.string().optional(),
+    enabled: z.boolean().optional(),
+    focused: z.boolean().optional(),
+    selected: z.boolean().optional(),
+    id: z.string().optional(),
+    help: z.string().optional(),
+    frame: z.array(z.number()).optional(),
+    i: z.number().optional(),
+    notShown: z.number().optional(),
+    children: z.array(AxNodeSchema),
+  }),
+);
+
+const AxRole = {
+  SCROLL_AREA: 'AXScrollArea',
+  STATIC_TEXT: 'AXStaticText',
+  TEXT_FIELD: 'AXTextField',
+  CHECKBOX: 'AXCheckBox',
+  RADIO: 'AXRadioButton',
+  MENU_ITEM: 'AXMenuItem',
+  ROW: 'AXRow',
+  DISCLOSURE: 'AXDisclosureTriangle',
+} as const;
+const AX_ON = '1';
+/** The roles whose value 1 says "on": a ticked box, the current tab, the current profile. */
+const ON_ROLES: ReadonlySet<string> = new Set([AxRole.CHECKBOX, AxRole.RADIO, AxRole.MENU_ITEM]);
+const SELECTED = 'selected';
+
+const ROLE_OF: Readonly<Record<string, UiRole>> = {
+  AXApplication: UiRole.APPLICATION,
+  AXWindow: UiRole.WINDOW,
+  AXSheet: UiRole.DIALOG,
+  AXDialog: UiRole.DIALOG,
+  AXButton: UiRole.BUTTON,
+  [AxRole.CHECKBOX]: UiRole.CHECKBOX,
+  AXRadioButton: UiRole.RADIO,
+  AXTextField: UiRole.TEXTBOX,
+  AXTextArea: UiRole.TEXTBOX,
+  AXSearchField: UiRole.TEXTBOX,
+  AXComboBox: UiRole.COMBOBOX,
+  AXPopUpButton: UiRole.COMBOBOX,
+  AXSlider: UiRole.SLIDER,
+  AXScrollBar: UiRole.SCROLLBAR,
+  AXLink: UiRole.LINK,
+  AXMenu: UiRole.MENU,
+  AXMenuBar: UiRole.MENU,
+  AXMenuItem: UiRole.MENUITEM,
+  AXMenuBarItem: UiRole.MENUITEM,
+  AXMenuButton: UiRole.MENUITEM,
+  AXRow: UiRole.ROW,
+  // The arrow that opens a row. A press on it opens or closes the row.
+  [AxRole.DISCLOSURE]: UiRole.BUTTON,
+  AXSplitter: UiRole.GROUP,
+  AXCell: UiRole.CELL,
+  AXList: UiRole.LIST,
+  AXTable: UiRole.LIST,
+  AXOutline: UiRole.LIST,
+  AXImage: UiRole.IMAGE,
+  [AxRole.STATIC_TEXT]: UiRole.TEXT,
+  AXHeading: UiRole.HEADING,
+  // The bullet or the number before a list item in a web view.
+  AXListMarker: UiRole.GROUP,
+  AXWebArea: UiRole.DOCUMENT,
+  AXGroup: UiRole.GROUP,
+  AXScrollArea: UiRole.GROUP,
+  AXSplitGroup: UiRole.GROUP,
+  AXTabGroup: UiRole.GROUP,
+  AXRadioGroup: UiRole.GROUP,
+  AXValueIndicator: UiRole.GROUP,
+  AXToolbar: UiRole.GROUP,
+  AXUnknown: UiRole.GROUP,
+};
+
+export interface FromAx {
+  root: UiNode;
+  /** The macOS roles this reader does not know. Each such element is kept, as a `group`. */
+  unmapped: string[];
+}
+
+function statesOf(ax: AxNode): ElementState[] {
+  const states: ElementState[] = [];
+  if (false === ax.enabled) {
+    states.push(ElementState.DISABLED);
+  }
+  if (ON_ROLES.has(ax.role) && ax.value === AX_ON) {
+    states.push(ElementState.CHECKED);
+  }
+  if (ax.role === AxRole.DISCLOSURE && ax.value === AX_ON) {
+    states.push(ElementState.EXPANDED);
+  }
+  if (true === ax.focused) {
+    states.push(ElementState.FOCUSED);
+  }
+  return states;
+}
+
+/** The start of an identifier that AppKit makes by itself. It changes when the window is built again. */
+const MADE_BY_APPKIT = '_NS:';
+/**
+ * An identifier that a web framework makes by itself. It is another one after the next change to
+ * the page, so a saved flow that finds an element by it does not find the element again.
+ * ponytail: a list of the makers that are known. An identifier of another maker is kept, and a
+ * flow that is saved by it then goes "not found", which is a failure a person can see.
+ */
+const MADE_BY_A_FRAMEWORK = new RegExp(
+  [
+    // React: a colon, the letter r and a count, in small letters in the browser and in capital
+    // letters from the server. React 19 puts the same between « and ».
+    ':r[0-9a-z]+:',
+    '«r[0-9a-z]+»',
+    // A count that a library puts after its own name: Angular Material and its CDK, Ember,
+    // Headless UI, React Aria.
+    '^(mat|cdk|headlessui|react-aria)-.*\\d+$',
+    '^ember\\d+$',
+  ].join('|'),
+  'i',
+);
+
+/** The identifier, when a person gave it. One that a toolkit made is not a name for anything. */
+function givenId(id: string | undefined): string | undefined {
+  if (id === undefined || 0 === id.length) {
+    return undefined;
+  }
+  return id.startsWith(MADE_BY_APPKIT) || MADE_BY_A_FRAMEWORK.test(id) ? undefined : id;
+}
+
+/**
+ * A name for an element that has none, from its subrole. The buttons at the top of a window are
+ * the case: the system says what each one is, and gives it no title.
+ */
+const NAME_OF_SUBROLE: Readonly<Partial<Record<string, string>>> = {
+  AXCloseButton: 'Close window',
+  AXMinimizeButton: 'Minimize window',
+  AXZoomButton: 'Zoom window',
+  AXFullScreenButton: 'Full screen',
+};
+
+/** The name of the arrow that opens a row. The system gives it none. */
+const DISCLOSURE_NAME = 'Show or hide rows';
+
+/**
+ * The first words inside an element: the value of a text or of a field, in the order of the
+ * tree. A row of an outline or of a table has no title, and a person names it by these words.
+ */
+function wordsIn(node: AxNode): string {
+  for (const child of node.children) {
+    const holdsWords = AxRole.STATIC_TEXT === child.role || AxRole.TEXT_FIELD === child.role;
+    const own = holdsWords ? (child.value ?? '') : '';
+    const found = 0 === own.length ? wordsIn(child) : own;
+    if (found.length > 0) {
+      return found;
+    }
+  }
+  return '';
+}
+
+/** The controls that are named by what is beside them, when the application gives no name. */
+const WORD_OF_ROLE: Readonly<Partial<Record<UiRole, string>>> = {
+  [UiRole.COMBOBOX]: 'Menu',
+  [UiRole.BUTTON]: 'Button',
+  [UiRole.CHECKBOX]: 'Box',
+  [UiRole.RADIO]: 'Choice',
+  [UiRole.LINK]: 'Link',
+};
+/** The roles whose name can name a neighbour: what a person reads beside a control. */
+const NAMING_ROLES: ReadonlySet<UiRole> = new Set([
+  UiRole.BUTTON,
+  UiRole.TEXT,
+  UiRole.CHECKBOX,
+  UiRole.LINK,
+  UiRole.HEADING,
+  UiRole.COMBOBOX,
+  UiRole.RADIO,
+]);
+/** How many parents up a name is looked for. Farther up, it is the name of the whole list. */
+const NEIGHBOUR_LEVELS = 4;
+
+/** True when the child at `at` is a row of a list: a group with no name, with a twin of its shape. */
+function isRowOfList(kids: readonly UiNode[], at: number): boolean {
+  const row = kids[at];
+  const shape = (n: UiNode) => n.children.map((c) => c.role).join(' ');
+  const isGroup = (n: UiNode) => n.role === UiRole.GROUP && 0 === n.name.length;
+  return (
+    row !== undefined &&
+    isGroup(row) &&
+    kids.some((other, i) => i !== at && isGroup(other) && shape(other) === shape(row))
+  );
+}
+
+/** The first name in an element, in the order of the tree, or from its end. */
+function nameIn(node: UiNode, fromEnd: boolean): string {
+  if (node.name.length > 0 && NAMING_ROLES.has(node.role)) {
+    return node.name;
+  }
+  const order = fromEnd ? [...node.children].reverse() : node.children;
+  for (const child of order) {
+    const found = nameIn(child, fromEnd);
+    if (found.length > 0) {
+      return found;
+    }
+  }
+  return '';
+}
+
+/**
+ * A name for each control that has none, from the nearest named thing beside it: first what comes
+ * before it, nearest first, then what comes after it, then the same one parent up. Granola gives
+ * the menu of each meeting with no name, no text and no tip, and a person tells them apart by the
+ * meeting beside each one. Not farther than a few parents: the name of the whole list would give
+ * every menu in it the same name. A control with nothing named near it keeps no name.
+ */
+function nameByNeighbours(
+  node: UiNode,
+  chain: readonly UiNode[] = [],
+  at: readonly number[] = [],
+): UiNode {
+  const word = WORD_OF_ROLE[node.role];
+  let name = node.name;
+  let guessed = false;
+  if (0 === name.length && word !== undefined) {
+    for (let up = chain.length - 1; up >= 0 && chain.length - up <= NEIGHBOUR_LEVELS; up -= 1) {
+      const kids = chain[up]?.children ?? [];
+      const i = at[up] ?? 0;
+      // Not into another row of the same list: a row with nothing named in it would take the
+      // name of the row above, and an agent would open the menu of another meeting.
+      if (isRowOfList(kids, i)) {
+        break;
+      }
+      const before = kids
+        .slice(0, i)
+        .reverse()
+        .map((s) => nameIn(s, true));
+      const after = kids.slice(i + 1).map((s) => nameIn(s, false));
+      const found = [...before, ...after].find((one) => one.length > 0);
+      if (found !== undefined) {
+        name = `${word} by ${found}`;
+        guessed = true;
+        break;
+      }
+    }
+  }
+  return {
+    ...node,
+    name,
+    ...(guessed ? { nameGuessed: true } : {}),
+    children: node.children.map((child, index) =>
+      nameByNeighbours(child, [...chain, node], [...at, index]),
+    ),
+  };
+}
+
+export function fromAx(ax: AxNode): FromAx {
+  const unmapped = new Set<string>();
+  const convert = (node: AxNode): UiNode => {
+    const role = ROLE_OF[node.role];
+    if (role === undefined && node.role.length > 0) {
+      unmapped.add(node.role);
+    }
+    // A static text has no title: its words are its value, and they are what a person reads.
+    const isText = node.role === AxRole.STATIC_TEXT;
+    const said = (isText ? node.value : undefined) ?? node.title ?? node.description ?? '';
+    const fromRow = 0 === said.length && AxRole.ROW === node.role ? wordsIn(node) : '';
+    const fromRole = AxRole.DISCLOSURE === node.role ? DISCLOSURE_NAME : fromRow;
+    const name = 0 === said.length ? (NAME_OF_SUBROLE[node.subrole ?? ''] ?? fromRole) : said;
+    // ponytail: the wire has no "selected" state, so a chosen row says it in its value. Add the
+    // state to `ElementState` in core when a second realm needs it.
+    const chosen = true === node.selected ? SELECTED : undefined;
+    // The value of a checkbox and of the arrow of a row is said as a state, and not twice.
+    const asState = AxRole.CHECKBOX === node.role || AxRole.DISCLOSURE === node.role;
+    const value = isText || asState ? undefined : (chosen ?? node.value);
+    const id = givenId(node.id);
+    const [x, y, w, h] = node.frame ?? [];
+    const frame =
+      x === undefined || y === undefined || w === undefined || h === undefined
+        ? undefined
+        : ([x, y, w, h] as const);
+    return {
+      role: role ?? UiRole.GROUP,
+      name,
+      ...(value === undefined ? {} : { value }),
+      states: statesOf(node),
+      ...(frame === undefined ? {} : { frame }),
+      ...(node.i === undefined ? {} : { index: node.i }),
+      ...(id === undefined ? {} : { id }),
+      ...(node.help === undefined ? {} : { help: node.help }),
+      ...(node.notShown === undefined || 0 === node.notShown ? {} : { notShown: node.notShown }),
+      ...(AxRole.SCROLL_AREA === node.role ? { clips: true as const } : {}),
+      children: node.children.map(convert),
+    };
+  };
+  const root = nameByNeighbours(convert(ax));
+  return { root, unmapped: [...unmapped].sort() };
+}

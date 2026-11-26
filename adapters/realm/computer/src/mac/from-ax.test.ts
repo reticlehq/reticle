@@ -1,0 +1,247 @@
+import { readFileSync } from 'node:fs';
+
+import { ElementState } from '@reticlehq/core';
+import { describe, expect, it } from 'vitest';
+
+import { RefTable, writeLines } from '../lines.js';
+import { AxNodeSchema, fromAx } from './from-ax.js';
+
+/** Read from `native/mac/fixture.swift` by `reticle-ax tree` on macOS 26. */
+const recorded: unknown = JSON.parse(
+  readFileSync(new URL('recorded/fixture-app.json', import.meta.url), 'utf8'),
+);
+
+describe('fromAx', () => {
+  it('reads a recorded macOS tree into the lines an agent reads', () => {
+    const { root, unmapped } = fromAx(AxNodeSchema.parse(recorded));
+    expect(unmapped).toEqual([]);
+    expect(writeLines(root, new RefTable()).split('\n')).toEqual([
+      '- application "fixture" (ref=e1)',
+      '  - window "Reticle Fixture" (ref=e2)',
+      '    - textbox "Title" (ref=e3) [focused]',
+      '    - text "Ready" (ref=e4)',
+      '    - button "Save" (ref=e5)',
+      '    - button "Slow" (ref=e6)',
+      '    - button "Dead" (ref=e7)',
+      '    - button "Covered" (ref=e8)',
+      '    - text "Reticle Fixture" (ref=e9)',
+    ]);
+  });
+
+  // The three buttons at the top of a window have no title. An agent saw three buttons with no
+  // name, and a press on one to find out what it does closes the window.
+  it('names the buttons of a window from what the system says they are', () => {
+    const window = AxNodeSchema.parse({
+      role: 'AXWindow',
+      title: 'Clock',
+      children: [
+        { role: 'AXButton', subrole: 'AXCloseButton', children: [] },
+        { role: 'AXButton', subrole: 'AXMinimizeButton', children: [] },
+        { role: 'AXButton', subrole: 'AXZoomButton', children: [] },
+        { role: 'AXButton', subrole: 'AXCloseButton', title: 'Done', children: [] },
+      ],
+    });
+    expect(fromAx(window).root.children.map((c) => c.name)).toEqual([
+      'Close window',
+      'Minimize window',
+      'Zoom window',
+      'Done',
+    ]);
+  });
+
+  // A row of an outline has no title: its words are in a field inside it. An agent could not
+  // ask for "the row Memory", and it saw thirty rows with no name.
+  it('names a row with no title from the first words inside it', () => {
+    const outline = AxNodeSchema.parse({
+      role: 'AXOutline',
+      children: [
+        {
+          role: 'AXRow',
+          children: [
+            {
+              role: 'AXGroup',
+              children: [{ role: 'AXDisclosureTriangle', value: '1', children: [] }],
+            },
+            { role: 'AXTextField', value: 'Hardware', children: [] },
+          ],
+        },
+        { role: 'AXRow', children: [{ role: 'AXStaticText', value: 'Memory', children: [] }] },
+        {
+          role: 'AXRow',
+          title: 'Named',
+          children: [{ role: 'AXStaticText', value: 'x', children: [] }],
+        },
+        { role: 'AXRow', children: [] },
+      ],
+    });
+    expect(fromAx(outline).root.children.map((c) => c.name)).toEqual([
+      'Hardware',
+      'Memory',
+      'Named',
+      '',
+    ]);
+  });
+
+  // The small arrow that opens a row of an outline. It was a group with the value 1, so an agent
+  // could not know that the row opens, or that it is open.
+  it('reads the arrow that opens a row as a button, and says when the row is open', () => {
+    const row = AxNodeSchema.parse({
+      role: 'AXRow',
+      children: [
+        { role: 'AXDisclosureTriangle', value: '1', children: [] },
+        { role: 'AXDisclosureTriangle', value: '0', children: [] },
+        { role: 'AXSplitter', children: [] },
+      ],
+    });
+    const { root, unmapped } = fromAx(row);
+    expect(unmapped).toEqual([]);
+    expect(root.children.map((c) => [c.role, c.name, c.value, c.states])).toEqual([
+      ['button', 'Show or hide rows', undefined, [ElementState.EXPANDED]],
+      ['button', 'Show or hide rows', undefined, []],
+      ['group', '', undefined, []],
+    ]);
+  });
+
+  // Granola gives the menu of a meeting with no name, no text and no tip. A person tells such a
+  // control apart by what is beside it. An agent saw thirty-six menus with no name.
+  it('names a control that has no name by the nearest named thing beside it', () => {
+    const list = AxNodeSchema.parse({
+      role: 'AXList',
+      title: 'Meetings',
+      children: [
+        {
+          role: 'AXGroup',
+          children: [
+            { role: 'AXCheckBox', title: 'Select Weekly sync', children: [] },
+            { role: 'AXButton', title: 'Weekly sync', children: [] },
+            {
+              role: 'AXGroup',
+              children: [
+                { role: 'AXGroup', children: [] },
+                { role: 'AXPopUpButton', children: [] },
+              ],
+            },
+          ],
+        },
+        { role: 'AXPopUpButton', children: [] },
+      ],
+    });
+    const row = fromAx(list).root.children[0];
+    expect(row?.children[2]?.children[1]?.name).toBe('Menu by Weekly sync');
+    // Beside the row: the named thing nearest to it in the order of the tree is the meeting.
+    expect(fromAx(list).root.children[1]?.name).toBe('Menu by Weekly sync');
+  });
+
+  // A row of a list with nothing named in it must not take the name of the row above: an agent
+  // would open the menu of another meeting, and could rename or delete the wrong note.
+  it('takes no name from another row of the same list, and marks a name it guessed', () => {
+    const row = (title: string) => ({
+      role: 'AXGroup',
+      children: [
+        { role: 'AXButton', title, children: [] },
+        { role: 'AXGroup', children: [{ role: 'AXPopUpButton', children: [] }] },
+      ],
+    });
+    const list = AxNodeSchema.parse({
+      role: 'AXList',
+      title: 'Meetings',
+      children: [row('Weekly sync'), row('')],
+    });
+    const { root } = fromAx(list);
+    const first = root.children[0]?.children[1]?.children[0];
+    const second = root.children[1]?.children[1]?.children[0];
+    expect(first?.name).toBe('Menu by Weekly sync');
+    expect(first?.nameGuessed).toBe(true);
+    expect(second?.name).toBe('');
+    expect(writeLines(root, new RefTable())).toContain(
+      '"Menu by Weekly sync" (ref=e3) [name from neighbour]',
+    );
+  });
+
+  it('names each role it does not know, and keeps the element', () => {
+    const { root, unmapped } = fromAx({
+      role: 'AXWindow',
+      title: 'W',
+      children: [{ role: 'AXLevelIndicator', children: [] }],
+    });
+    expect(unmapped).toEqual(['AXLevelIndicator']);
+    expect(root.children).toHaveLength(1);
+  });
+
+  it('reads the states an agent must know before it acts', () => {
+    const { root } = fromAx({
+      role: 'AXWindow',
+      children: [
+        { role: 'AXButton', title: 'Pay', enabled: false, children: [] },
+        { role: 'AXCheckBox', title: 'Agree', value: '1', focused: true, children: [] },
+      ],
+    });
+    expect(root.children.map((c) => c.states)).toEqual([
+      [ElementState.DISABLED],
+      [ElementState.CHECKED, ElementState.FOCUSED],
+    ]);
+  });
+
+  // Dia gives each tab of its sidebar as a radio button, and each profile of its switcher as a
+  // menu item. The current one has the value 1. Without a state, no tab and no profile read as
+  // the current one, and the agent lost the tab the person was on.
+  it('says which radio button and which menu item is the current one', () => {
+    const { root } = fromAx({
+      role: 'AXWindow',
+      children: [
+        { role: 'AXRadioButton', title: 'Mail', value: '0', children: [] },
+        { role: 'AXRadioButton', title: 'Docs', value: '1', children: [] },
+        { role: 'AXMenuItem', title: 'Work', value: '1', children: [] },
+      ],
+    });
+    expect(root.children.map((c) => c.states)).toEqual([
+      [],
+      [ElementState.CHECKED],
+      [ElementState.CHECKED],
+    ]);
+  });
+
+  // A saved flow finds an element by the identifier its maker gave it. An identifier that AppKit
+  // made by itself ("_NS:8") is another one the next time the window is built.
+  it('keeps the identifier a person gave, and not one the toolkit made', () => {
+    const { root } = fromAx({
+      role: 'AXWindow',
+      children: [
+        { role: 'AXButton', title: 'Delete', id: 'delete-beta', children: [] },
+        { role: 'AXButton', title: 'Delete', id: '_NS:8', children: [] },
+        { role: 'AXButton', title: 'Delete', children: [] },
+      ],
+    });
+    expect(root.children.map((child) => child.id)).toEqual(['delete-beta', undefined, undefined]);
+
+    const web = fromAx({
+      role: 'AXWebArea',
+      children: [
+        ':r1:',
+        ':R5d:',
+        'radix-:r3:',
+        '«r2»',
+        'mat-input-0',
+        'cdk-overlay-12',
+        'ember123',
+        'headlessui-menu-button-4',
+        'add',
+        'row:3',
+        'material-list',
+        'embers',
+      ].map((id) => ({
+        role: 'AXButton',
+        title: 'Open',
+        id,
+        children: [],
+      })),
+    });
+    expect(web.root.children.map((child) => child.id)).toEqual([
+      ...Array.from({ length: 8 }, () => undefined),
+      'add',
+      'row:3',
+      'material-list',
+      'embers',
+    ]);
+  });
+});

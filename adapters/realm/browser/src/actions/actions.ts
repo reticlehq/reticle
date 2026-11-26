@@ -1,5 +1,6 @@
 import {
   ACT_POINT_ARG,
+  DRAG_TO_REF_ARG,
   ActionType,
   ActionWarning,
   actPointProblem,
@@ -136,7 +137,7 @@ const CLICK_LIKE = new Set<string>([
  * silently-target-less drags; the description now documents `toRef` as well.
  */
 function dragTargetRef(args: Record<string, unknown>): string {
-  const named = asString(args['toRef']);
+  const named = asString(args[DRAG_TO_REF_ARG]);
   return '' !== named ? named : asString(args['target']);
 }
 

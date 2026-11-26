@@ -24,6 +24,7 @@ import { ReticleTool } from '@reticlehq/core';
 import { asNumber, asString } from '@reticlehq/core';
 import { submitFeedback, feedbackDisabled } from '@/telemetry/feedback.js';
 import { getTelemetry } from '@/telemetry/telemetry.js';
+import { telemetryRuntimeOf } from '@/telemetry/telemetry-runtime.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
 import { dirname } from 'node:path';
 import { sessionRoot } from '@/memory/project/session-root.js';
@@ -68,8 +69,9 @@ function sessionFacts(
   const driven = deps.realInput !== undefined;
   try {
     const session = deps.sessions.resolve(sessionId);
+    const runtime = telemetryRuntimeOf(session.runtime);
     return {
-      ...(session.runtime !== undefined ? { runtime: session.runtime } : {}),
+      ...(runtime !== undefined ? { runtime } : {}),
       ...(session.engine !== undefined ? { engine: session.engine } : {}),
       // The app's own account of what it is. Without this the reported stack came from the daemon's
       // working directory, so feedback from one app was filed against another's framework.

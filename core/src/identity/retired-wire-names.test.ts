@@ -104,6 +104,7 @@ const SHIPPED: readonly string[] = [
   'tap',
   'zoom',
   'insertText',
+  'window',
   'webmcp',
 ];
 

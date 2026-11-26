@@ -253,3 +253,12 @@ describe('zoom refuses rather than faking it', () => {
     expect(document.documentElement.style.zoom, 'nothing may be faked on the way out').toBe('');
   });
 });
+
+describe('window refuses in a page', () => {
+  it('says that a page cannot arrange its own window, and where to do it', async () => {
+    const el = mount('<div>page</div>');
+    await expect(act(el, ActionType.WINDOW, { arrange: 'left' })).rejects.toThrow(
+      /cannot move, resize.*desktop session/,
+    );
+  });
+});

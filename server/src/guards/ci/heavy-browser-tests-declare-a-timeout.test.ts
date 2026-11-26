@@ -250,7 +250,9 @@ function loopBody(text: string, headOpen: number): string | null {
 // against. It declares GIT_REPO_TIMEOUT_MS.
 // 25: a replay on fake time that gives the real flow-file read a turn between ticks (#2155). It
 // declares REPLAY_TIMEOUT_MS.
-const EXPECTED_IO_LOOP_FILES = 25;
+// 26: the program of the desktop HUD, which ends and is started again; the test reads the lines
+// a real program wrote until they are there. It declares HUD_PROGRAM_TIMEOUT_MS.
+const EXPECTED_IO_LOOP_FILES = 26;
 
 function testFiles(dir: string): string[] {
   const out: string[] = [];

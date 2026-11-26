@@ -1,0 +1,296 @@
+import { ElementState, parseInteractive } from '@reticlehq/core';
+import { describe, expect, it } from 'vitest';
+
+import { RefTable, writeLines, writeWindows } from './lines.js';
+import { UiRole } from './ui-node.js';
+import type { UiNode } from './ui-node.js';
+
+function node(role: UiRole, name: string, more: Partial<UiNode> = {}): UiNode {
+  return { role, name, states: [], children: [], ...more };
+}
+
+const WINDOW = node(UiRole.WINDOW, 'Notes', {
+  children: [
+    node(UiRole.BUTTON, 'Save', { states: [ElementState.DISABLED] }),
+    node(UiRole.TEXTBOX, 'Title', { value: 'He said "hi"' }),
+    node(UiRole.GROUP, ''),
+  ],
+});
+
+describe('writeLines', () => {
+  it('writes the line format that the tree parser in core reads', () => {
+    const tree = writeLines(WINDOW, new RefTable());
+    expect(tree.split('\n')).toEqual([
+      '- window "Notes" (ref=e1)',
+      '  - button "Save" (ref=e2) [disabled]',
+      '  - textbox "Title" (ref=e3) [value="He said \\"hi\\""]',
+      '  - group',
+    ]);
+    expect(parseInteractive(tree).map((item) => item.ref)).toEqual(['e1', 'e2', 'e3']);
+  });
+
+  it('keeps the ref of an element that is still there, and never gives it to another', () => {
+    const refs = new RefTable();
+    writeLines(WINDOW, refs);
+    const after = node(UiRole.WINDOW, 'Notes', {
+      children: [node(UiRole.BUTTON, 'Delete'), node(UiRole.BUTTON, 'Save')],
+    });
+    expect(writeLines(after, refs).split('\n')).toEqual([
+      '- window "Notes" (ref=e1)',
+      '  - button "Delete" (ref=e4)',
+      '  - button "Save" (ref=e2)',
+    ]);
+  });
+
+  // A new row of a sheet in Numbers has an empty cell, and that cell is where a person types.
+  // With no name it had no ref, so no agent could click it.
+  // The value of a text area kept its words and lost its lines: each line break was a space. An
+  // agent filled the text back on one line, saved, and the file lost every line break.
+  it('shows the line breaks of a value, on one line of the tree', () => {
+    const area = node(UiRole.WINDOW, 'Notes', {
+      children: [node(UiRole.TEXTBOX, 'Body', { value: 'first line\nsecond line' })],
+    });
+    expect(writeLines(area, new RefTable()).split('\n')).toEqual([
+      '- window "Notes" (ref=e1)',
+      '  - textbox "Body" (ref=e2) [value="first line\\nsecond line"]',
+    ]);
+  });
+
+  it('gives a ref to an empty cell', () => {
+    const sheet = node(UiRole.WINDOW, 'Costs', {
+      children: [
+        node(UiRole.ROW, '', { children: [node(UiRole.CELL, 'Total'), node(UiRole.CELL, '')] }),
+      ],
+    });
+    expect(writeLines(sheet, new RefTable()).split('\n')).toEqual([
+      '- window "Costs" (ref=e1)',
+      '  - row (ref=e2)',
+      '    - cell "Total" (ref=e3)',
+      '    - cell (ref=e4)',
+    ]);
+  });
+
+  it('tells two siblings with the same role and name apart', () => {
+    const twins = node(UiRole.WINDOW, 'List', {
+      children: [node(UiRole.BUTTON, 'Open'), node(UiRole.BUTTON, 'Open')],
+    });
+    const refs = parseInteractive(writeLines(twins, new RefTable())).map((item) => item.ref);
+    expect(new Set(refs).size).toBe(3);
+  });
+
+  it('leaves out what has no place on the screen, and says how many', () => {
+    const closed = { frame: [0, 900, 0, 0] as const };
+    const app = node(UiRole.APPLICATION, 'Notes', {
+      children: [
+        node(UiRole.MENU, '', {
+          frame: [0, 0, 800, 30],
+          children: [
+            node(UiRole.MENUITEM, 'File', {
+              frame: [10, 0, 40, 30],
+              children: [
+                node(UiRole.MENU, '', {
+                  ...closed,
+                  children: [node(UiRole.MENUITEM, 'New Note', closed)],
+                }),
+              ],
+            }),
+            // An open menu: its item has a size, so a person can see it and click it.
+            node(UiRole.MENUITEM, 'Edit', {
+              frame: [50, 0, 40, 30],
+              children: [
+                node(UiRole.MENU, '', {
+                  frame: [50, 30, 200, 60],
+                  children: [node(UiRole.MENUITEM, 'Undo', { frame: [50, 30, 200, 20] })],
+                }),
+              ],
+            }),
+          ],
+        }),
+        node(UiRole.WINDOW, 'Notes'),
+      ],
+    });
+    const written = writeWindows(app, new RefTable());
+    expect(written.omitted).toBe(2);
+    expect(written.tree.split('\n')).toEqual([
+      '- application "Notes" (ref=e1)',
+      '  - menu',
+      '    - menuitem "File" (ref=e2)',
+      '    - menuitem "Edit" (ref=e3)',
+      '      - menu',
+      '        - menuitem "Undo" (ref=e4)',
+      '  - window "Notes" (ref=e5)',
+    ]);
+  });
+
+  // The Dock gives its application element the frame 0,0,0,0, and has no window. That size hid
+  // every item of the Dock, so the realm could not see the Dock that a person sees.
+  it('shows the items of an application with no window, whatever size the application gives', () => {
+    const dock = node(UiRole.APPLICATION, 'Dock', {
+      frame: [0, 0, 0, 0],
+      children: [
+        node(UiRole.LIST, '', {
+          frame: [43, 899, 1426, 73],
+          children: [node(UiRole.BUTTON, 'Finder', { frame: [51, 899, 57, 73] })],
+        }),
+      ],
+    });
+    const written = writeWindows(dock, new RefTable());
+    expect(written.omitted).toBe(0);
+    expect(written.tree).toContain('button "Finder"');
+  });
+
+  // The Downloads stack of the Dock, open: its list gives 0,0,0,0 and its files have real places
+  // above the Dock. The list hid every file, so no file of the stack could be opened.
+  it('shows what is inside a list that gives no place at all, when it has a place of its own', () => {
+    const dock = node(UiRole.APPLICATION, 'Dock', {
+      frame: [0, 0, 0, 0],
+      children: [
+        node(UiRole.LIST, '', {
+          frame: [43, 899, 1426, 73],
+          children: [
+            node(UiRole.GROUP, 'Downloads', {
+              frame: [1354, 901, 54, 70],
+              children: [
+                node(UiRole.LIST, '', {
+                  frame: [0, 0, 0, 0],
+                  children: [
+                    node(UiRole.IMAGE, 'report.pdf', { frame: [1349, 839, 65, 65] }),
+                    node(UiRole.IMAGE, 'gone.zip', { frame: [1349, 839, 0, 0] }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        }),
+      ],
+    });
+    const written = writeWindows(dock, new RefTable());
+    expect(written.tree).toContain('img "report.pdf"');
+    expect(written.tree).not.toContain('gone.zip');
+  });
+
+  it('says how many rows of a table are not shown, and keeps a ref with its row after a scroll', () => {
+    const table = (first: number): UiNode =>
+      node(UiRole.LIST, 'Files', {
+        notShown: 4998,
+        children: [
+          node(UiRole.ROW, '', {
+            index: first,
+            children: [node(UiRole.TEXT, `file ${String(first)}`)],
+          }),
+          node(UiRole.ROW, '', { index: first + 1 }),
+        ],
+      });
+    const refs = new RefTable();
+    const before = writeLines(table(0), refs).split('\n');
+    expect(before[0]).toBe('- list "Files" (ref=e1) [not shown: 4998]');
+    expect(before[3]).toBe('  - row (ref=e4)');
+
+    // The table scrolled by one row. Row 1 is now the first row that shows.
+    const after = writeLines(table(1), refs).split('\n');
+    expect(after[1]).toBe('  - row (ref=e4)');
+    expect(after[3]).toBe('  - row (ref=e6)');
+  });
+});
+
+// The column view of Finder lays out a column for each folder of the way, and the column of the
+// folder that was opened was right of the window, out of view. The realm gave a ref to a file in
+// it, and a click on it failed with "could not tell if a person can reach" it.
+describe('an element outside the scroll area that holds it', () => {
+  it('is out of view, and the list it is in says so', () => {
+    const files = (x: number) =>
+      node(UiRole.LIST, '', {
+        frame: [x, 50, 240, 300],
+        children: ['a.txt', 'b.txt'].map((name, i) =>
+          node(UiRole.TEXTBOX, '', { frame: [x + 10, 60 + 20 * i, 200, 18], value: name }),
+        ),
+      });
+    const window = node(UiRole.WINDOW, 'Downloads', {
+      frame: [300, 0, 900, 400],
+      children: [
+        node(UiRole.GROUP, '', {
+          frame: [300, 40, 900, 360],
+          clips: true,
+          children: [files(310), files(2500)],
+        }),
+      ],
+    });
+    const written = writeWindows(window, new RefTable());
+    expect(written.tree.match(/a\.txt/g)).toHaveLength(1);
+    expect(written.tree).toContain('group [not shown: 1]');
+  });
+});
+
+// Chrome gives the text of a page that is scrolled out as a strip one pixel high at the edge of
+// the window. The realm said those posts were on the screen.
+describe('an element one pixel thin', () => {
+  it('is not on the screen', () => {
+    const page = node(UiRole.WINDOW, 'Feed', {
+      frame: [0, 0, 400, 300],
+      children: [
+        node(UiRole.TEXT, 'Post 1', { frame: [10, 0, 50, 1] }),
+        node(UiRole.TEXT, 'Post 2', { frame: [10, 40, 50, 24] }),
+      ],
+    });
+    const written = writeWindows(page, new RefTable());
+    expect(written.omitted).toBe(1);
+    expect(written.tree).not.toContain('Post 1');
+    expect(written.tree).toContain('Post 2');
+  });
+});
+
+// Safari gives the text of a page that is below the window with its true place. The realm said
+// that ten posts were on the screen when a person could see three.
+describe('an element of a page that is outside the window', () => {
+  const page = (menuFrame: readonly [number, number, number, number]): UiNode =>
+    node(UiRole.WINDOW, 'Feed', {
+      frame: [0, 0, 400, 300],
+      children: [
+        node(UiRole.DOCUMENT, 'Feed', {
+          frame: [0, 0, 400, 2200],
+          children: [
+            node(UiRole.TEXT, 'Post 1', { frame: [10, 40, 50, 24] }),
+            node(UiRole.TEXT, 'Post 2', { frame: [10, 290, 50, 24] }),
+            node(UiRole.TEXT, 'Post 3', { frame: [10, 500, 50, 24] }),
+          ],
+        }),
+        // Not in a page: a menu of the application can open past the edge of its window.
+        node(UiRole.MENU, 'Font', { frame: menuFrame }),
+      ],
+    });
+
+  it('is not on the screen, and one that the edge cuts is', () => {
+    const written = writeWindows(page([0, 320, 100, 80]), new RefTable());
+    expect(written.tree).toContain('Post 1');
+    expect(written.tree).toContain('Post 2');
+    expect(written.tree).not.toContain('Post 3');
+    expect(written.tree).toContain('menu "Font"');
+    expect(written.omitted).toBe(1);
+  });
+
+  // The channels of Discord: the list showed ten of its 300 items and said nothing, so an agent
+  // took the ten for the whole list. The line of the list says how many items are out of view.
+  it('says on the line of a list how many of its items are out of view', () => {
+    // Safari gives an item below the window its true place; Chrome gives a strip one pixel high.
+    const items = [40, 70, 400, 299].map((y, i) =>
+      node(UiRole.LINK, `channel ${String(i)}`, {
+        frame: [10, y, 100, 299 === y ? 1 : 24],
+        children: [
+          node(UiRole.TEXT, `channel ${String(i)}`, { frame: [10, y, 100, 299 === y ? 1 : 24] }),
+        ],
+      }),
+    );
+    const window = node(UiRole.WINDOW, 'Discord', {
+      frame: [0, 0, 400, 300],
+      children: [
+        node(UiRole.DOCUMENT, 'Discord', {
+          frame: [0, 0, 400, 300],
+          children: [node(UiRole.LIST, 'Channels', { frame: [0, 30, 200, 240], children: items })],
+        }),
+      ],
+    });
+    const written = writeWindows(window, new RefTable());
+    expect(written.tree).toContain('list "Channels" (ref=e3) [not shown: 2]');
+    expect(written.tree).not.toContain('channel 2');
+  });
+});

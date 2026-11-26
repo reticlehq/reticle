@@ -58,6 +58,8 @@ export {
   ACT_POINT_ARG,
   ClickButton,
   DRAG_TO_POINT_ARG,
+  desktopArgProblem,
+  DRAG_TO_REF_ARG,
   actPointProblem,
   boxFractionFromArgs,
   clickButtonFromArgs,
@@ -103,6 +105,7 @@ export {
 } from './wire/constants/constants.js';
 export { DETERMINISM_GLOBAL_KEY } from './wire/constants/determinism.js';
 export { DIALOG_CONSENT_ARG } from './wire/constants/dialog-consent.js';
+export { WINDOW_NEEDS_DESKTOP_MSG } from './wire/constants/window-arrangement.js';
 export { DISCOVERY_CALL_URL, FOUNDER_EMAIL, FOUNDER_MAILTO } from './wire/constants/discovery.js';
 export {
   CanvasTrigger,

@@ -1,0 +1,26 @@
+<!doctype html><meta charset="utf-8" /><title>Feed</title>
+<style>
+  article {
+    height: 220px;
+    border-bottom: 1px solid #ccc;
+    font: 20px system-ui;
+    padding: 20px;
+  }
+</style>
+<main id="feed"></main>
+<script>
+  let n = 0;
+  const more = () => {
+    for (let i = 0; i < 10; i += 1) {
+      n += 1;
+      const a = document.createElement('article');
+      a.textContent = 'Post ' + n;
+      feed.append(a);
+    }
+    document.title = 'Feed ' + n;
+  };
+  more();
+  addEventListener('scroll', () => {
+    if (innerHeight + scrollY > document.body.scrollHeight - 300) more();
+  });
+</script>

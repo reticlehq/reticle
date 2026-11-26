@@ -276,6 +276,34 @@ jobs:
           node apps/e2e/specs/mcp-survives-test.mjs
         env:
           RETICLE_TELEMETRY: '0'
+      # Computer use on Windows: the UI Automation helper reads and drives Notepad through the same
+      # driver and reader as macOS. No other job runs on Windows, so this is its only proof.
+      - name: Computer use on Windows (UI Automation)
+        run: node adapters/realm/computer/native/win/uiacheck.mjs
+
+  # Computer use on Linux: the AT-SPI helper reads and drives a GTK application through the same
+  # driver and reader as macOS and Windows, on an X screen in memory. The X screen starts inside
+  # the session bus: the bus then starts the accessibility bus for the application.
+  computer-linux:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: pnpm/action-setup@73e46992e05b19abd31f2f3c20e0e7370d762115 # v6.1.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          check-latest: true
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: AT-SPI, GTK, an X screen and xdotool
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends python3-gi python3-gi-cairo \
+            gir1.2-atspi-2.0 gir1.2-gtk-3.0 at-spi2-core libatk-adaptor xvfb xdotool xprintidle dbus-x11
+      - run: pnpm --filter @reticlehq/computer... build
+      - name: Computer use on Linux (AT-SPI)
+        run: dbus-run-session -- xvfb-run -a -s "-screen 0 1280x800x24" node adapters/realm/computer/native/linux/atspicheck.mjs
 
   # macOS runs what LINUX CANNOT SEE, and nothing else.
   #
@@ -1705,6 +1733,7 @@ jobs:
         install-gate,
         matrix-records,
         windows,
+        computer-linux,
         macos,
         rust,
         rust-audit,

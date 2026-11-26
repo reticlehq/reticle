@@ -812,6 +812,15 @@ export const ActionType = {
    * merely looks like zoom would report it caught while the layout viewport never changed.
    */
   ZOOM: 'zoom',
+  /**
+   * Arrange the window that holds the element: `args.arrange` is one of `WindowArrangement`, or
+   * `args.frame` is `{ x, y, width, height }` in screen points from the top left of the main
+   * display. The answer gives the frame of the window after the change.
+   *
+   * Only a desktop realm can do it. A page cannot move or resize its own window, so the browser
+   * SDK refuses it and does not pretend.
+   */
+  WINDOW: 'window',
 } as const;
 export type ActionType = (typeof ActionType)[keyof typeof ActionType];
 

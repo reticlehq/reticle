@@ -6,6 +6,7 @@ import {
   NEXT_STEP_FIELD,
   nextStepBesideLiveSessions,
 } from './empty-session-list.js';
+import { SESSION_LIST_EXTRAS_OUTPUT, sessionListExtras } from './agent/session-realms.js';
 import {
   AttrNamesSchema,
   NearestTargetSchema,
@@ -177,6 +178,7 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
           'Connected browser sessions with health state. `projectId` groups sessions by app (stable across port changes); `leased` marks a pool-managed headless context vs a human tab.',
         ),
       ...EMPTY_SESSION_LIST_OUTPUT,
+      ...SESSION_LIST_EXTRAS_OUTPUT,
     },
     handler: async (deps) => {
       const provider = deps.realInput;
@@ -197,7 +199,13 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
       }
       // Another project's tab is up. This caller's project may still never have been wired.
       const nextStep = nextStepBesideLiveSessions(deps, sessions);
-      return nextStep === undefined ? { sessions } : { sessions, [NEXT_STEP_FIELD]: nextStep };
+      return {
+        sessions,
+        ...(nextStep === undefined ? {} : { [NEXT_STEP_FIELD]: nextStep }),
+        ...(await sessionListExtras(sessions, (id, query) =>
+          commandOrThrow(deps, id, ReticleCommand.QUERY, query),
+        )),
+      };
     },
   },
   {
@@ -697,13 +705,14 @@ export const MERGE_PLANS: MergePlan[] = [
       // The first sentence is all a lean surface shows (160 characters), so it carries the
       // obligation and the HUD control; the rest is the detail for a full one.
       'By action: "yield" is MANDATORY before you stop driving; "tune" hides or moves the HUD, or sets the idle window; "account" says the plan, credits and Harness state. ' +
-      'In full: "yield" hands control back to the human (mode: waiting|ask, between turns); "tune" takes `hud` (hidden, shown, removed until reload, or a corner) for when the HUD covers a control you must test, and `idleEndMs`; "end" terminates the session for good; "resume" clears a human pause; "messages" drains the human→agent inbox; "review" lists/resolves the mistakes a human pinned to elements; "narrate" states your intent on the presenter HUD.',
+      'In full: "yield" hands control back to the human (mode: waiting|ask, between turns); "tune" takes `hud` (hidden, shown, removed until reload, or a corner) for when the HUD covers a control you must test, and `idleEndMs`; "end" terminates the session for good; "resume" clears a human pause; "messages" drains the human→agent inbox; "review" lists/resolves the mistakes a human pinned to elements; "narrate" states your intent on the presenter HUD; "board" reads and writes named values that every session and agent on this bridge shares, and with `carry` moves a value from an element of one session into an element of another and says whether it arrived.',
     members: {
       tune: ReticleTool.SESSION_TUNE,
       yield: ReticleTool.YIELD,
       end: ReticleTool.END_SESSION,
       resume: ReticleTool.RESUME,
       messages: ReticleTool.MESSAGES,
+      board: ReticleTool.BOARD,
       review: ReticleTool.REVIEW,
       narrate: ReticleTool.NARRATE,
       account: ReticleTool.ACCOUNT,

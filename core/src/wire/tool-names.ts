@@ -119,6 +119,11 @@ export const ReticleTool = {
   RESUME: 'reticle_resume',
   /** Live-control: drain the human→agent inbox (explicit poll). */
   MESSAGES: 'reticle_messages',
+  /**
+   * A board of named values that every session and agent on this bridge can read and write: how a
+   * desktop session, a browser session and a plan of the Harness pass a value to each other.
+   */
+  BOARD: 'reticle_board',
   /** Human review: list the mistakes the human pinned to elements, and resolve them once fixed. */
   REVIEW: 'reticle_review',
   /** First-run readiness: block briefly until the app's SDK connects (smooths the init→connect race). */

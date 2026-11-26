@@ -157,6 +157,76 @@ describe('visual tools — temp dir, never touches the repo', () => {
     });
   });
 
+  // A desktop realm can take the whole screen: an overlay of another application, a dialog of the
+  // system. The tool asked only for the window, so none of that could be seen.
+  it('asks a desktop session for the whole screen, and says what to do where there is none', async () => {
+    const captureDir = await mkdtemp(join(tmpdir(), RETICLE_CAPTURE_FILE_PREFIX));
+    const capturePath = join(captureDir, `${RETICLE_CAPTURE_FILE_PREFIX}screen.png`);
+    try {
+      await writeFile(capturePath, solidPng([0, 0, 0]));
+      const command = vi.fn(() =>
+        Promise.resolve({ ok: true, result: { ok: true, path: capturePath, screen: true } }),
+      );
+      const d = deps();
+      d.sessions = sessionsOf({
+        ...fakeSession(AppRuntime.ELECTRON),
+        command,
+      } as unknown as Session);
+      const result = await tool(ReticleTool.SCREENSHOT).handler(d, {
+        name: 'screen',
+        sessionId: 'demo',
+        screen: true,
+      });
+      expect(result).toMatchObject({ ok: true, saved: true });
+      expect(command).toHaveBeenCalledWith(ReticleCommand.CAPTURE, {
+        fullPage: false,
+        screen: true,
+      });
+      // A session with no desktop capture: no picture of a page in place of the screen.
+      const web = (await tool(ReticleTool.SCREENSHOT).handler(deps(), {
+        name: 'screen',
+        screen: true,
+      })) as { ok: boolean; recommendation?: string };
+      expect(web.ok).toBe(false);
+      expect(web.recommendation).toContain('desktop session');
+    } finally {
+      await removeTempDir(captureDir);
+    }
+  });
+
+  // A canvas has no elements, and the words the realm read in its picture stayed in the realm:
+  // the tool kept the file and dropped them, so an agent had only pixels to guess a click from.
+  it('gives the words of a desktop picture with their boxes, and drops a malformed list', async () => {
+    const captureDir = await mkdtemp(join(tmpdir(), RETICLE_CAPTURE_FILE_PREFIX));
+    const capturePath = join(captureDir, `${RETICLE_CAPTURE_FILE_PREFIX}words.png`);
+    try {
+      await writeFile(capturePath, solidPng([0, 0, 0]));
+      const answerWith = (texts: unknown) => {
+        const d = deps();
+        d.sessions = sessionsOf({
+          ...fakeSession(AppRuntime.ELECTRON),
+          command: () =>
+            Promise.resolve({
+              ok: true,
+              result: { ok: true, path: capturePath, texts, textsCut: 3 },
+            }),
+        } as unknown as Session);
+        return tool(ReticleTool.SCREENSHOT).handler(d, { name: 'words', sessionId: 'demo' });
+      };
+      expect(await answerWith([{ text: 'B', box: [660, 198, 38, 44] }])).toMatchObject({
+        ok: true,
+        texts: [{ text: 'B', box: [660, 198, 38, 44] }],
+        textsCut: 3,
+      });
+      await writeFile(capturePath, solidPng([0, 0, 0]));
+      const bad = (await answerWith([{ text: 'B', box: [1, 2] }])) as Record<string, unknown>;
+      expect(bad['ok']).toBe(true);
+      expect(bad['texts']).toBeUndefined();
+    } finally {
+      await removeTempDir(captureDir);
+    }
+  });
+
   it.each(['clip', 'ref'])('keeps browser %s cropping for a desktop session', async (scope) => {
     const clip = { x: 1, y: 1, width: 2, height: 2 };
     const png = solidPng([255, 255, 255]);

@@ -23,6 +23,7 @@ import {
   ACT_POINT_ARG,
   ActionType,
   actPointProblem,
+  isPeerRealm,
   boxFractionFromArgs,
   clickInputProblem,
   DRAG_TO_POINT_ARG,
@@ -631,7 +632,8 @@ export async function tryRealInput(
   const inner = asRecord(args['args']);
   const askedForNative = true === inner[NATIVE_INPUT_ARG];
   // The page refuses the same point on the synthetic path, with the same sentence.
-  const pointProblem = actPointProblem(action, inner);
+  // A desktop session takes the window action and the points of a picture; a page refuses them.
+  const pointProblem = actPointProblem(action, inner, isPeerRealm(session.runtime));
   if (pointProblem !== undefined) {
     throw new Error(`cannot ${action}: ${pointProblem}`);
   }

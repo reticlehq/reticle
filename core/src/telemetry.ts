@@ -44,7 +44,7 @@ import {
   ProjectProfileSchema,
   SessionSummarySchema,
 } from './telemetry-session.js';
-import { FeedbackSchema } from './telemetry-feedback.js';
+import { FeedbackSchema, TelemetryRuntime } from './telemetry-feedback.js';
 import { BrowserBrand } from './browser-brand.js';
 import { CaptureLoss, VerifiedReason } from './verdict/verified-constants.js';
 import { IdentitySchema } from './telemetry-feedback.js';
@@ -408,6 +408,11 @@ export const VerificationSchema = z.object({
    */
   driven: z.nativeEnum(VerificationDriver).optional(),
   /** The page SDK version from its HELLO: our own release number, or `other`. Absent if unsaid. */
+  /**
+   * The runtime of the session: a page (`web`), a desktop shell, or Reticle's computer. Without it a
+   * verdict on a desktop application could not be told from one on a page.
+   */
+  runtime: z.nativeEnum(TelemetryRuntime).optional(),
   sdkVersion: z.string().min(1).max(32).optional(),
 });
 export type Verification = z.infer<typeof VerificationSchema>;

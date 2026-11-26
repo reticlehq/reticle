@@ -294,3 +294,35 @@ describe('a green verdict that leaves an intent undischarged', () => {
     expect(kinds).not.toContain(InstrumentationGapKind.INTENT_UNDISCHARGED);
   });
 });
+
+describe('a subject with no SDK in it', () => {
+  // A desktop application that is read through the operating system has no build plugin, no store
+  // to register and no signal to fire. Advice to add them is advice nobody can act on.
+  const noisy: Partial<ActionInstrumentationFacts> = {
+    pass: false,
+    source: undefined,
+    stateUnwatched: true,
+    stateAsked: true,
+    hasCapabilities: false,
+    domMutated: true,
+    signalsFired: 0,
+    changeUndeclared: true,
+  };
+
+  it('gets the advice to instrument it when it has an SDK', () => {
+    expect(kinds(noisy)).toEqual(
+      expect.arrayContaining([
+        InstrumentationGapKind.NO_SOURCE_MAPPING,
+        InstrumentationGapKind.NO_SIGNAL_ON_MUTATION,
+      ]),
+    );
+  });
+
+  it('gets only what the run owes when it has none', () => {
+    const without = kinds({ ...noisy, noSdk: true });
+    expect(without).not.toContain(InstrumentationGapKind.NO_SOURCE_MAPPING);
+    expect(without).not.toContain(InstrumentationGapKind.NO_SIGNAL_ON_MUTATION);
+    expect(without).not.toContain(InstrumentationGapKind.NO_STORE_REGISTERED);
+    expect(without).toEqual(kinds({ changeUndeclared: true }));
+  });
+});
