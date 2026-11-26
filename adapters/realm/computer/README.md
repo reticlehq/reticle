@@ -143,6 +143,15 @@ A canvas, a game and some custom controls give nothing to read. For those:
 
 A picture proves little by itself. Name a file, a setting or the clipboard in `until` where the action has such an effect.
 
+## A desktop of its own for the agent
+
+On your own machine the agent and you share one screen: a step that needs the real pointer takes yours. Two ways keep them apart.
+
+- **Background only.** Put `{ "backgroundOnly": true }` in `~/.reticle/computer.json`. The agent never uses your pointer or keyboard. It presses, fills and chooses through the accessibility interface, and on macOS it sends keys to the application's process. A step that needs the real pointer (a drag, a point of a picture, a hover) is refused with the reason. The windows of its applications are still on your screen.
+- **A Linux sandbox.** `reticle-computer --sandbox linux --app <name> --open "<command>"` starts a container with an X screen in memory, starts the application there, and joins the daemon of your machine. The agent works on that screen, with its own pointer and keys; your screen does not change. `reticle-computer --sandbox stop` ends it. It needs Docker. The image is built once from `native/linux/Dockerfile`; start your own image `FROM` it to add applications.
+
+To join a daemon on another machine yourself, for example from a virtual machine, give `--host <address>` (or `RETICLE_HOST`) and the pairing token in `RETICLE_TOKEN`.
+
 ## Limits
 
 Read these before you rely on a result.

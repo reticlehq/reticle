@@ -6,6 +6,8 @@
 //
 //   reticle-computer --app <name> [--project <folder>] [--port <port>] [--host <host>] [--watch <folder>]...
 //                        [--no-electron-switch] [--background-only] [--no-hud] [--open]
+//   reticle-computer --sandbox linux --app <name> --open "<command>"   (a Linux desktop of its own)
+//   reticle-computer --sandbox stop
 //   reticle-computer --list                   (the applications that are open, as JSON)
 //   reticle-computer --app <name> --doctor     (checks that it can work, and says what to do)
 //
@@ -37,6 +39,12 @@ import {
 
 const say = (line) => process.stderr.write(`${line}\n`);
 const read = (path) => (existsSync(path) ? readFileSync(path, 'utf8') : undefined);
+
+// A Linux desktop of its own for the agent, in a container: native/linux/sandbox.mjs.
+if (process.argv.includes('--sandbox')) {
+  const { sandbox } = await import('../native/linux/sandbox.mjs');
+  process.exit(await sandbox(process.argv.slice(2)));
+}
 
 // The limits of the person at the machine, from files of their own. No flag lifts them.
 const ownerDir = `${homedir()}/.reticle`;

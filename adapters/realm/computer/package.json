@@ -49,6 +49,8 @@
     "native/mac/build/reticle-hud",
     "native/win/reticle-uia.ps1",
     "native/linux/reticle-atspi.py",
+    "native/linux/sandbox.mjs",
+    "native/linux/Dockerfile",
     "README.md",
     "NOTICE"
   ],
