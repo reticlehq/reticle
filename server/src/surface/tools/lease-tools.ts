@@ -172,6 +172,7 @@ import {
   scrubSeedFromError,
   serverAcceptedAfterTimeout,
 } from './lease-seed.js';
+import { ATTACH_TAB_TOOL } from './attach-tab-tool.js';
 
 /** A fresh, collision-resistant lease id. Uses crypto at the I/O boundary (not pure logic). */
 function newLeaseId(): string {
@@ -940,4 +941,10 @@ function tellWatchers(deps: ToolDeps, projectId: string | undefined, text: strin
   }
 }
 
-export const LEASE_TOOLS: ToolDef[] = [LEASE_ACQUIRE_TOOL, LEASE_RELEASE_TOOL, LEASE_COVERAGE_TOOL];
+// The attach joins a tab of the person's own browser, as a lease joins one Reticle opened.
+export const LEASE_TOOLS: ToolDef[] = [
+  LEASE_ACQUIRE_TOOL,
+  LEASE_RELEASE_TOOL,
+  LEASE_COVERAGE_TOOL,
+  ATTACH_TAB_TOOL,
+];
