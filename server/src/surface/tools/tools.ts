@@ -8,6 +8,11 @@ import {
 } from './empty-session-list.js';
 import { SESSION_LIST_EXTRAS_OUTPUT, sessionListExtras } from './agent/session-realms.js';
 import {
+  OUTSIDE_PROJECT_FIELD,
+  OUTSIDE_PROJECT_OUTPUT,
+  outsideProjectSection,
+} from './outside-project-sessions.js';
+import {
   AttrNamesSchema,
   NearestTargetSchema,
   QueryBy,
@@ -178,6 +183,7 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
           'Connected browser sessions with health state. `projectId` groups sessions by app (stable across port changes); `leased` marks a pool-managed headless context vs a human tab.',
         ),
       ...EMPTY_SESSION_LIST_OUTPUT,
+      ...OUTSIDE_PROJECT_OUTPUT,
       ...SESSION_LIST_EXTRAS_OUTPUT,
     },
     handler: async (deps) => {
@@ -199,8 +205,11 @@ export const RAW_TOOLS: ToolDef[] = withCompactEnvelope([
       }
       // Another project's tab is up. This caller's project may still never have been wired.
       const nextStep = nextStepBesideLiveSessions(deps, sessions);
+      // Other projects stay in `sessions`. This names them. `all` is optional on a list-only double.
+      const outside = outsideProjectSection(deps.sessions.all?.() ?? []);
       return {
         sessions,
+        ...(outside === undefined ? {} : { [OUTSIDE_PROJECT_FIELD]: outside }),
         ...(nextStep === undefined ? {} : { [NEXT_STEP_FIELD]: nextStep }),
         ...(await sessionListExtras(sessions, (id, query) =>
           commandOrThrow(deps, id, ReticleCommand.QUERY, query),

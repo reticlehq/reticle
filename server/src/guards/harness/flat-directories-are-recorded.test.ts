@@ -322,7 +322,9 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // `lease-tools.ts`, which is near the 1000-line cap; and `type-spelling.ts`, the fill spelling
   // mapped onto the type action (#2126).
   // 60: `lease-url-identity.ts`, the lease URL params, split out of lease-tools.ts at the 1000-line cap.
-  'server/src/surface/tools': 60,
+  // 61: `outside-project-sessions.ts`, the outside-project section of the session list.
+  // tools.ts is at the line cap, so the section lives beside it (#2492).
+  'server/src/surface/tools': 61,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it

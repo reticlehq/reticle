@@ -62,18 +62,16 @@ import {
 } from './protocol-skew.js';
 import { SERVER_VERSION } from '@/command/version/identity/server-version.js';
 
-/**
- * Take the mutable half of a session's identity from a repeat HELLO; the caller has established the
- * hello belongs to this session. Capabilities and stores register AFTER connect() by design, so
- * `hasCapabilities` and `channels` come again here. A late project id is taken by `adoptProject`.
- * The page announced itself again, so gaps that earlier verdicts recorded are dropped (#1655).
- */
+/** A repeat HELLO refreshes identity, takes a late project root, and drops recorded gaps (#1655). */
 function refreshIdentity(session: Session, hello: HelloMessage): void {
   session.url = hello.url;
   session.title = hello.title;
   session.adapters = hello.adapters;
   session.hasCapabilities = hello.hasCapabilities ?? false;
   session.channels = hello.channels;
+  if (session.projectRoot === undefined) {
+    session.projectRoot = hello.root;
+  }
   forgetRecordedGaps(session.id);
 }
 
