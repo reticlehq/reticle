@@ -3,6 +3,7 @@
  * the contradiction hunter and the tools that report them.
  */
 
+import { z } from 'zod';
 import { ChannelId, disagreementCanConvict } from '@/wire/channel.js';
 
 /**
@@ -35,7 +36,38 @@ export interface Contradiction {
   counter: string;
   /** Concrete evidence, so the agent can go straight to the call or the control. */
   detail: string;
+  /**
+   * How many entries `detail` does not name, when it lists only some of them. Absent when the
+   * list is whole.
+   */
+  omitted?: number;
+  /**
+   * `true` when `detail` lists only some of the entries, or shortens one. Absent when the list is
+   * whole.
+   */
+  truncated?: true;
 }
+
+/**
+ * The wire shape of a `Contradiction`, for a tool's output schema. A validating client removes a
+ * field that the schema does not list, so `omitted` and `truncated` must be listed here (#2496).
+ */
+export const ContradictionSchema = z.object({
+  kind: z.string(),
+  claim: z.string(),
+  counter: z.string(),
+  detail: z.string(),
+  omitted: z
+    .number()
+    .optional()
+    .describe('How many entries `detail` does not name. Absent when the list is whole.'),
+  truncated: z
+    .literal(true)
+    .optional()
+    .describe(
+      'true when `detail` lists only some entries, or shortens one. Absent when the list is whole.',
+    ),
+});
 
 export const ContradictionKind = {
   /** The screen moved forward while a request in the same window failed — the swallowed rejection. */
