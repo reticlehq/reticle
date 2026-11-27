@@ -266,6 +266,31 @@ describe('probing the page', () => {
     }
   });
 
+  it('does not read a 426 Upgrade Required answer as HTML (#2288)', async () => {
+    const server = http.createServer((_req, res) => {
+      res.statusCode = 426;
+      res.setHeader('content-type', 'text/html');
+      res.end('<html>upgrade required</html>');
+    });
+    const port = await new Promise<number>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen(0, '127.0.0.1', () => {
+        const addr = server.address();
+        if (null === addr || 'string' === typeof addr) {
+          reject(new Error('no port'));
+        } else {
+          resolve(addr.port);
+        }
+      });
+    });
+    try {
+      const probe = await probePage(`http://127.0.0.1:${String(port)}/`);
+      expect(probe).toMatchObject({ served: true, html: false });
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+
   it('finds an IPv6-only listener when the announcement was IPv4 (#884)', async ({ skip }) => {
     const canBind = await new Promise<boolean>((resolve) => {
       const probe = net.createServer();

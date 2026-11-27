@@ -52,6 +52,8 @@ const WINDOWS = 'win32' === process.platform;
 const ASTRO_DEV_BACKGROUND_ENV = 'ASTRO_DEV_BACKGROUND';
 /** A page fetch that is slow is a page fetch that failed, for our purposes. */
 const PROBE_TIMEOUT_MS = 5_000;
+/** A WebSocket-only listener's answer to an ordinary GET. It is never the app's page (#2288). */
+const HTTP_UPGRADE_REQUIRED = 426;
 
 /** The supervisor that owns the server's output and keeps its log bounded. */
 const LOG_CAP_SCRIPT = fileURLToPath(new URL('./bringup/dev-server-log-cap.js', import.meta.url));
@@ -362,8 +364,9 @@ export async function probePage(url: string, timeoutMs = PROBE_TIMEOUT_MS): Prom
       const body = await res.text();
       const sdkInPage = /@reticlehq|@reticle-connect|reticle-dev/.test(body);
       const html =
-        /text\/html/i.test(res.headers.get('content-type') ?? '') ||
-        /^\s*<(?:!doctype|html)/i.test(body);
+        HTTP_UPGRADE_REQUIRED !== res.status &&
+        (/text\/html/i.test(res.headers.get('content-type') ?? '') ||
+          /^\s*<(?:!doctype|html)/i.test(body));
       // Only stamp reachedUrl when we had to leave the announcement — callers that already have
       // the working URL should not rewrite it for a no-op.
       return candidate === url

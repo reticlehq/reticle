@@ -14,11 +14,17 @@
 
 /** Statuses that mean "I will not serve you", which no local dev server does for its own app root. */
 const REFUSES = new Set([401, 403, 407]);
+/** A WebSocket-only listener's answer to an ordinary GET. It is never the app's page (#2288). */
+const HTTP_UPGRADE_REQUIRED = 426;
 
 export function looksLikeDevServer(status: number, contentType: string | undefined): boolean {
-  if (REFUSES.has(status)) return false;
+  if (HTTP_UPGRADE_REQUIRED === status || REFUSES.has(status)) {
+    return false;
+  }
   // A redirect IS a server routing: a dev server on a base path answers `/` with one.
-  if (status >= 300 && status < 400) return true;
+  if (status >= 300 && status < 400) {
+    return true;
+  }
   // Otherwise it has to be serving a document. A 404 that renders HTML is still a dev server — the
   // server is there, only the route is missing.
   return contentType !== undefined && contentType.toLowerCase().includes('text/html');

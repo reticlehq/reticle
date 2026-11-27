@@ -2066,11 +2066,6 @@
       "count": 1
     }
   },
-  "src/memory/recall/looks-like-dev-server.ts": {
-    "curly": {
-      "count": 2
-    }
-  },
   "src/memory/recall/memory-tools.ts": {
     "curly": {
       "count": 6

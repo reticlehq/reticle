@@ -189,6 +189,51 @@ describe('a root dev script that starts the app and an API', () => {
   });
 });
 
+/**
+ * Express can host Vite in middleware mode on one port while Vite's HMR WebSocket listens on
+ * another (#2288). Both ports belong to the process tree, and the HMR port can be observed first.
+ * It answers an ordinary GET with 426 Upgrade Required, so it is never the page setup may open.
+ */
+describe('a dev server that binds an HMR port beside the app', () => {
+  it('chooses the observed port that serves HTML', async () => {
+    const fx = world({
+      devServerOutput: () => 'vite middleware ready',
+      observedPorts: () => [24678, 5173],
+      probePage: (u: string): Promise<PageProbe> =>
+        Promise.resolve(
+          u.endsWith(':24678')
+            ? { served: true, sdkInPage: false, html: false }
+            : { served: true, sdkInPage: true, html: true },
+        ),
+      listSessions: (): Promise<CandidateSession[]> =>
+        Promise.resolve([{ sessionId: 'new', url: 'http://localhost:5173' }]),
+    });
+    const r = await runSetupPhases(INPUT, fx);
+    expect(r.url).toBe('http://localhost:5173');
+    expect(fx.opened).toEqual(['http://localhost:5173']);
+  });
+
+  it('does not become ready when the only observed port answers no page', async () => {
+    let clock = 0;
+    const fx = world({
+      devServerOutput: () => 'vite middleware ready',
+      observedPorts: () => [24678],
+      probePage: (): Promise<PageProbe> =>
+        Promise.resolve({ served: true, sdkInPage: false, html: false }),
+      listSessions: (): Promise<CandidateSession[]> => Promise.resolve([]),
+      now: () => clock,
+      sleep: (ms) => {
+        clock += ms;
+        return Promise.resolve();
+      },
+    });
+    const r = await runSetupPhases({ ...INPUT, startupBudgetMs: 50, pollMs: 10 }, fx);
+    expect(r.ok).toBe(false);
+    expect(r.reachedPhase).toBe(SetupPhase.DEV_SERVER);
+    expect(fx.opened).toEqual([]);
+  });
+});
+
 describe('it never starts a second server for this project', () => {
   const EXISTING = 'http://localhost:5173';
 

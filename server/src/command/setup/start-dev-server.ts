@@ -6,8 +6,10 @@
  * also reports progress and hands the server over; this one stops the server when the caller is done.
  */
 import { OwnedDevServer, probePage } from './node-effects.js';
+import { firstPageCandidate } from './probe/page-probe.js';
 import {
   WaitVerdict,
+  candidateUrls,
   devServerDiedMessage,
   judgeWait,
   portBusyMessage,
@@ -29,8 +31,12 @@ export async function startDevServerAndWait(
   server.start(command, dir, {});
   const startedAt = Date.now();
   for (;;) {
-    const watching = urlToWatch(server.output(), server.listeningPorts());
-    const probe = watching === undefined ? undefined : await probePage(watching);
+    const pagePick = await firstPageCandidate(
+      candidateUrls(server.output(), server.listeningPorts()),
+      probePage,
+    );
+    const watching = pagePick?.url ?? urlToWatch(server.output(), server.listeningPorts());
+    const probe = pagePick?.probe;
     const verdict = judgeWait({
       output: server.output(),
       launcherExited: server.exited(),

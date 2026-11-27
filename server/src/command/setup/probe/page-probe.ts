@@ -109,6 +109,25 @@ export function describePage(finding: PageFinding, url: string, daemonSpoke = fa
 }
 
 /**
+ * The first candidate that serves an HTML page, with its probe. An API that answers first with
+ * JSON is skipped, so its url is never taken for the app's. A WebSocket-only port, such as Vite's
+ * separate HMR listener, is skipped the same way: its 426 answer is not a page a browser can open.
+ * A probe that does not say whether it read HTML counts as a page, as every probe did before.
+ */
+export async function firstPageCandidate(
+  urls: readonly string[],
+  probePage: (url: string) => Promise<PageProbe>,
+): Promise<{ url: string; probe: PageProbe } | undefined> {
+  for (const url of urls) {
+    const probe = await probePage(url);
+    if (probe.served && false !== probe.html) {
+      return { url, probe };
+    }
+  }
+  return undefined;
+}
+
+/**
  * What the page looks like once it has had its short chance to come up.
  *
  * The wait before opening a browser used to retry on `SDK_MISSING` and on nothing else, so a
