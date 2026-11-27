@@ -59,6 +59,8 @@ interface SlowPageOptions {
   hydratesOnRead?: number;
   /** How many store reads time out first, as on a main thread busy loading a bundle. */
   busyReads?: number;
+  /** The store read from which every read times out, as on a page that said pending and got busy. */
+  busyFromRead?: number;
   /** The click after which the page hydrates, as a page does while a failed step waits. */
   hydratesAfterAct?: number;
   /** The click after which every store read times out, as on a main thread that got busy. */
@@ -110,7 +112,9 @@ class SlowPage {
           this.reads += 1;
           const busyNow =
             this.options.busyAfterAct !== undefined && this.acts >= this.options.busyAfterAct;
-          if (busyNow || this.busy > 0) {
+          const busyLate =
+            this.options.busyFromRead !== undefined && this.reads >= this.options.busyFromRead;
+          if (busyNow || busyLate || this.busy > 0) {
             this.busy -= 1;
             return Promise.reject(new CommandTimeoutError(BUSY));
           }
@@ -292,6 +296,19 @@ describe('awaitHydration', () => {
     const wait = await awaitHydration(page.session(), clock, HYDRATION_WAIT_MS);
 
     expect(wait?.stillPending).toBe(false);
+    expect(wait?.budgetMs).toBe(HYDRATION_WAIT_MS);
+  });
+
+  // The last read before the bound gets only the time that is left, which can be 1 ms. When it timed
+  // out, the earlier `pending` answers were lost, and a step on a page that never hydrated was
+  // reported as a real failure. Seen in CI as a flaky replay-hydration e2e spec.
+  it('says pending at the bound when the page said pending and then stopped answering', async () => {
+    const page = new SlowPage({ busyFromRead: 2 });
+    const clock = fakeClock();
+
+    const wait = await awaitHydration(page.session(), clock, HYDRATION_WAIT_MS);
+
+    expect(wait?.stillPending).toBe(true);
     expect(wait?.budgetMs).toBe(HYDRATION_WAIT_MS);
   });
 

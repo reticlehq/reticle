@@ -147,9 +147,14 @@ export async function awaitHydration(
       return { waitedMs, budgetMs, stillPending: HydrationRead.PENDING === last };
     }
     // No read gets more time than the bound has left, so a busy page cannot stretch the wait.
-    last = await readHydration(session, Math.max(1, budgetMs - waitedMs));
-    if (HydrationRead.NO_WAIT === last) {
+    const read = await readHydration(session, Math.max(1, budgetMs - waitedMs));
+    if (HydrationRead.NO_WAIT === read) {
       return undefined;
+    }
+    // A read that timed out is no answer. The last read gets only the time that is left, so it
+    // times out more often, and it must not replace a `pending` that the page already said.
+    if (HydrationRead.UNANSWERED !== read || last === undefined) {
+      last = read;
     }
     const after = clock.now() - started;
     if (after < budgetMs) {
