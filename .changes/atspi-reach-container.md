@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/computer` — on Linux, clicks on menus, dialog controls and list rows were refused.** Before a click, the realm asks the accessibility bus what is at the point. LibreOffice dialogs and the sidebar of Files stop the answer at a container that holds the element, and the realm then said "could not tell if a person can reach" it. In the OSWorld benchmark this refused about two of every three refused actions. A hit on a container that holds the element now counts as a reach. An element that is not showing (a hidden page, the hidden menu bar of Thunderbird) is refused, and the refusal says that it is not showing.

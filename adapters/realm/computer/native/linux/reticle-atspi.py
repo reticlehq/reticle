@@ -311,7 +311,21 @@ def point_child(el, x, y):
     return safe(lambda: Atspi.Component.get_accessible_at_point(component, x, y, Atspi.CoordType.SCREEN))
 
 
+def holds(outer, el):
+    """True if `el` is `outer` or inside it, by its parents."""
+    at = el
+    for _ in range(80):
+        if at is None:
+            return False
+        if same(at, outer):
+            return True
+        at = safe(at.get_parent)
+    return False
+
+
 def reach(el, pid):
+    if not has(el, Atspi.StateType.SHOWING):
+        return {'reach': 'unknown', 'detail': 'the element is not showing: it is on a hidden page, in a closed menu or in a hidden bar'}
     frame = frame_of(el)
     if frame is None:
         return {'reach': 'unknown', 'detail': 'the element has no place on the screen'}
@@ -333,6 +347,10 @@ def reach(el, pid):
         hit = frame_of(at) if at is not None else None
         if hit is not None and frame[0] <= hit[0] and frame[1] <= hit[1] and \
                 hit[0] + hit[2] <= frame[0] + frame[2] and hit[1] + hit[3] <= frame[1] + frame[3]:
+            return {'reach': 'yes'}
+        # The toolkit stopped answering at a container that holds the element (a dialog of
+        # LibreOffice, the sidebar of Files): no other element of the application is at the point.
+        if at is not None and holds(at, el):
             return {'reach': 'yes'}
     return {'reach': 'unknown', 'detail': 'the hit test did not find the element'}
 

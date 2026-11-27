@@ -10,7 +10,8 @@
 //     changed, and a bar that moves by itself is not counted as an effect;
 //   - the window takes a frame and a half of the screen, and the answer is its new frame;
 //   - a table of 600,000 cells (bigtable.py) is read in the time an act has: the cells on the
-//     screen, with how many it left out, and a click on one of them reaches it.
+//     screen, with how many it left out, and a click on one of them reaches it;
+//   - a button on a page that is not shown has no place, and a click on it is refused.
 //
 //   node native/linux/atspicheck.mjs
 //
@@ -201,7 +202,25 @@ try {
   assert.doesNotMatch(closed, /Export 7/, `Escape did not close the menu:\n${closed}`);
   held += 1;
   held += await bigTable();
-  process.stdout.write(`computer atspicheck: ${String(held)} of 11 cases held\n`);
+  // A button on a page that is not shown is in the tree, and has no place on the screen: a
+  // click on it is refused, and the refusal says why. Thunderbird hides its menu bar this way,
+  // and the realm gave its menus a place a person cannot click.
+  const behind = (await query({ role: 'button', name: 'Behind' }))[0];
+  assert.ok(behind?.ref, 'the button on the second page is not in the tree');
+  assert.ok(
+    !behind.states.includes('visible'),
+    `a button not on the screen is visible: ${JSON.stringify(behind)}`,
+  );
+  await assert.rejects(
+    commands.answer(ReticleCommand.ACT, {
+      ref: behind.ref,
+      action: ActionType.CLICK,
+      args: { foreground: true },
+    }),
+    /not showing/,
+  );
+  held += 1;
+  process.stdout.write(`computer atspicheck: ${String(held)} of 12 cases held\n`);
 } finally {
   fixture.kill();
 }

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # A small GTK application for atspicheck.mjs: a menu bar, a field, a button that writes what it
-# saved, a check box, a paragraph without a name, and a canvas ("Ink") where a drag draws a line
+# saved, a check box, a paragraph without a name, a notebook with a second page, and a canvas ("Ink") where a drag draws a line
 # that no element shows. A red bar beside the canvas moves by itself all the time, as a video
 # does: its pixels must not count as an effect.
 #
@@ -40,6 +40,12 @@ words.get_accessible().set_role(Atk.Role.PARAGRAPH)
 for widget in (field, save, remember, status, words):
     box.pack_start(widget, False, False, 0)
 
+# A notebook: the button on its second page is in the tree, and not on the screen, as the hidden
+# menu bar of Thunderbird is.
+pages = Gtk.Notebook()
+pages.append_page(Gtk.Label(label='First page'), Gtk.Label(label='One'))
+pages.append_page(Gtk.Button(label='Behind'), Gtk.Label(label='Two'))
+
 row = Gtk.Box(spacing=6)
 box.pack_start(row, True, True, 0)
 ink = Gtk.DrawingArea()
@@ -49,6 +55,7 @@ row.pack_start(ink, False, False, 0)
 bar = Gtk.DrawingArea()
 bar.set_size_request(100, 160)
 row.pack_start(bar, False, False, 0)
+row.pack_start(pages, False, False, 0)
 
 lines = []
 last = {'at': None}
