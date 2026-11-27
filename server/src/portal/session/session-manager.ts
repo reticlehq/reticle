@@ -14,7 +14,7 @@ import {
 import { withDesktops } from './presence/session-mirror.js';
 import { Session, type SessionInfo } from './session.js';
 import { AttachmentHistory } from './presence/attachment-history.js';
-import type { NoSessionNextAction } from './no-session-next-action.js';
+import { leaseEndedReason, type NoSessionNextAction } from './no-session-next-action.js';
 import {
   claimedSessionOf,
   openedBeforeDeparture,
@@ -709,9 +709,7 @@ export class SessionManager {
     // A leased tab belongs to whoever holds the lease: naming it, and the page it is on, told one
     // agent what every other agent on this daemon was doing. Only the app's own tabs are offered.
     const own = live.filter((s) => claimedSessionOf(s.url) === undefined);
-    const ended = sessionId.startsWith(LEASE_ID_PREFIX)
-      ? ` Lease '${sessionId}' has ended (it expired or was released); lease a new tab to go on.`
-      : '';
+    const ended = sessionId.startsWith(LEASE_ID_PREFIX) ? ` ${leaseEndedReason(sessionId)}` : '';
     if (0 === own.length) {
       return (
         `no connected session with id '${sessionId}'.${ended} ` +
