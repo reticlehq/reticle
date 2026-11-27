@@ -14,6 +14,7 @@ import {
   MARK_PLACEHOLDER,
   MARK_SUBMIT,
 } from './annotator-styles.js';
+import { trustedHtml } from '../dom/trusted-html.js';
 
 /** The cursor must rest this long before the outline boxes the element under it - calm, not jumpy. */
 const HIGHLIGHT_REST_MS = 130;
@@ -157,7 +158,7 @@ export class Annotator {
 
     const root = document.createElement('div');
     root.setAttribute(MARK_ATTR, 'root');
-    root.innerHTML = ANNOTATOR_ROOT_HTML;
+    root.innerHTML = trustedHtml(ANNOTATOR_ROOT_HTML);
     document.body.appendChild(root);
     this.#root = root;
     this.#hi = root.querySelector<HTMLElement>(sel('hi')) ?? undefined;
@@ -457,12 +458,12 @@ export class Annotator {
     pop.setAttribute(MARK_ATTR, 'pop');
     pop.setAttribute('role', 'dialog');
     pop.setAttribute('aria-label', MARK_PLACEHOLDER);
-    pop.innerHTML = `<div class="reticle-mark-where"></div>
+    pop.innerHTML = trustedHtml(`<div class="reticle-mark-where"></div>
       <textarea rows="2" placeholder="${MARK_PLACEHOLDER}"></textarea>
       <div class="reticle-mark-row">
         <button type="button" data-cancel data-reticle-mark-cancel>${MARK_CANCEL}</button>
         <button type="button" data-send data-reticle-mark-send disabled>${MARK_SUBMIT}</button>
-      </div>`;
+      </div>`);
     const whereEl = pop.querySelector('.reticle-mark-where');
     if (whereEl !== null) whereEl.textContent = where;
     const pos = clampPop(x, y);
@@ -597,7 +598,9 @@ export class Annotator {
     pin.setAttribute(MARK_ATTR, 'pin');
     pin.setAttribute('aria-label', resolved.label);
     const n = this.#marks.length + 1;
-    pin.innerHTML = `<span>${String(n)}</span><span ${MARK_ATTR}="tip"><span ${MARK_ATTR}="tipq"></span><span ${MARK_ATTR}="tipn"></span></span>`;
+    pin.innerHTML = trustedHtml(
+      `<span>${String(n)}</span><span ${MARK_ATTR}="tip"><span ${MARK_ATTR}="tipq"></span><span ${MARK_ATTR}="tipn"></span></span>`,
+    );
     const q = pin.querySelector(sel('tipq'));
     const tn = pin.querySelector(sel('tipn'));
     if (q !== null) q.textContent = resolved.label;

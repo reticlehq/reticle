@@ -11,6 +11,7 @@
  */
 
 import { ReticleStorageKey } from '@/storage-keys.js';
+import { trustedHtml } from '../../dom/trusted-html.js';
 
 /** Root of the carousel — the one element the log keeps above its rows. */
 export const CAROUSEL_ATTR = 'data-reticle-carousel';
@@ -125,7 +126,7 @@ export function paintCarousel(
   if (dismissed(storage)) return;
   const html = carouselHtml(slides, active);
   if ('' === html) return;
-  log.insertAdjacentHTML('afterbegin', html);
+  log.insertAdjacentHTML('afterbegin', trustedHtml(html));
   const root = log.firstElementChild;
   if (!(root instanceof HTMLElement)) return;
 
