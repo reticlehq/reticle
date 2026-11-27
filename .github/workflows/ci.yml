@@ -603,6 +603,9 @@ jobs:
             sudo pkill -9 -x apt-get || true
             sudo pkill -9 -x dpkg || true
             sudo dpkg --configure -a || true
+            # The runner image ships an apt source for packages.microsoft.com, which Playwright does not
+            # need. When it answers 403, every `apt-get update` fails, so the retry drops it first.
+            grep -l packages.microsoft.com /etc/apt/sources.list.d/* 2>/dev/null | xargs -r sudo rm -f || true
             echo 'DPkg::Lock::Timeout "300";' | sudo tee /etc/apt/apt.conf.d/99-dpkg-lock-timeout > /dev/null
           fi
           pnpm exec playwright install --with-deps chromium
@@ -995,6 +998,9 @@ jobs:
             sudo pkill -9 -x apt-get || true
             sudo pkill -9 -x dpkg || true
             sudo dpkg --configure -a || true
+            # The runner image ships an apt source for packages.microsoft.com, which Playwright does not
+            # need. When it answers 403, every `apt-get update` fails, so the retry drops it first.
+            grep -l packages.microsoft.com /etc/apt/sources.list.d/* 2>/dev/null | xargs -r sudo rm -f || true
             echo 'DPkg::Lock::Timeout "300";' | sudo tee /etc/apt/apt.conf.d/99-dpkg-lock-timeout > /dev/null
           fi
           pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
@@ -1117,6 +1123,9 @@ jobs:
             sudo pkill -9 -x apt-get || true
             sudo pkill -9 -x dpkg || true
             sudo dpkg --configure -a || true
+            # The runner image ships an apt source for packages.microsoft.com, which Playwright does not
+            # need. When it answers 403, every `apt-get update` fails, so the retry drops it first.
+            grep -l packages.microsoft.com /etc/apt/sources.list.d/* 2>/dev/null | xargs -r sudo rm -f || true
             echo 'DPkg::Lock::Timeout "300";' | sudo tee /etc/apt/apt.conf.d/99-dpkg-lock-timeout > /dev/null
           fi
           pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
@@ -1330,6 +1339,9 @@ jobs:
             sudo pkill -9 -x apt-get || true
             sudo pkill -9 -x dpkg || true
             sudo dpkg --configure -a || true
+            # The runner image ships an apt source for packages.microsoft.com, which Playwright does not
+            # need. When it answers 403, every `apt-get update` fails, so the retry drops it first.
+            grep -l packages.microsoft.com /etc/apt/sources.list.d/* 2>/dev/null | xargs -r sudo rm -f || true
             echo 'DPkg::Lock::Timeout "300";' | sudo tee /etc/apt/apt.conf.d/99-dpkg-lock-timeout > /dev/null
           fi
           pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
@@ -1407,6 +1419,9 @@ jobs:
             sudo pkill -9 -x apt-get || true
             sudo pkill -9 -x dpkg || true
             sudo dpkg --configure -a || true
+            # The runner image ships an apt source for packages.microsoft.com, which Playwright does not
+            # need. When it answers 403, every `apt-get update` fails, so the retry drops it first.
+            grep -l packages.microsoft.com /etc/apt/sources.list.d/* 2>/dev/null | xargs -r sudo rm -f || true
             echo 'DPkg::Lock::Timeout "300";' | sudo tee /etc/apt/apt.conf.d/99-dpkg-lock-timeout > /dev/null
           fi
           pnpm --filter @reticlehq/e2e --fail-if-no-match exec playwright install --with-deps chromium
