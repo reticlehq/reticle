@@ -166,7 +166,7 @@ A journey in one call: `reticle_act { steps: [{ target, action, args?, expect? }
 
 ## Outside the page: Reticle's computer
 
-The browser sees the page: its network, state and source. The computer sees the rest: a native app, a system dialog, a file panel, a popup the page opened. Join one with `npx -p @reticlehq/computer reticle-computer --app "<name>"`. Joined a browser? `reticle_run({ tool: "reticle_attach_tab", args: { match } })` joins its page too. Act in one, prove it in the other.
+The browser sees the page: network, state, source. The computer sees the rest: a native app, an OS dialog, a popup. Join one with `npx -p @reticlehq/computer reticle-computer --app "<name>"`. Joined a browser? `reticle_run({ tool: "reticle_attach_tab", args: { match } })` joins its page too. Act in one; prove in the other.
 
 ## When it goes wrong
 
