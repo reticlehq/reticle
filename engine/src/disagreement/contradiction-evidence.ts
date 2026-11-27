@@ -20,9 +20,7 @@ import {
   FieldChangeField,
   FieldChangeKind,
   MUTATING_METHODS,
-  NEXT_ACTION_FIELD,
   PredicateKind,
-  REQUEST_SHAPE_FIELD,
   ROUTE_CHANGE_HOW_FIELD,
   RouteChangeHow,
   asNumber,
@@ -456,57 +454,8 @@ export function isSteadyCadence(times: readonly number[]): boolean {
   return gaps.every((gap) => Math.abs(gap - median) <= median * POLL_JITTER_RATIO);
 }
 
-/**
- * What this request CARRIED, as far as the record knows — `undefined` when it does not know.
- *
- * The page's shape fingerprint first: it is present on every request from an instrumented page,
- * including the overwhelming majority where body capture is off. A captured body is the fallback for
- * a realm that records one without a fingerprint (desktop IPC). Neither means the record does not
- * say what this request carried — a body the page could not read as text, or an SDK too old to
- * compute a fingerprint — and that is an ABSENCE of identity, not an identity shared with every
- * other silent request.
- *
- * A Server Action's action id joins both halves, and it is the half that survives a `FormData`
- * body: several actions POST to the page's own URL, so without it every call is an unknown identity
- * pooled with all the others, and no fingerprint can separate two that share a shape. The id alone
- * SPLITS two different actions; it cannot say that two runs of one action carried the same thing,
- * and `carried` keeps that limit on the record for the finding to say.
- */
-export interface WriteIdentity {
-  /** The value the grouping compares. */
-  readonly key: string;
-  /** Whether the key also describes WHAT the request carried, not only which action ran. */
-  readonly carried: boolean;
-}
-
-const nonEmpty = (text: string | undefined): string | undefined =>
-  text === undefined || 0 === text.length ? undefined : text;
-
-export function identityOf(event: ReticleEvent): WriteIdentity | undefined {
-  const action = asString(event.data[NEXT_ACTION_FIELD]);
-  const shape = asString(event.data[REQUEST_SHAPE_FIELD]);
-  const body = asString(event.data['requestBody']);
-  const carried = nonEmpty(shape) ?? nonEmpty(body);
-  if (action === undefined || 0 === action.length) {
-    return carried === undefined ? undefined : { key: carried, carried: true };
-  }
-  return carried === undefined
-    ? { key: action, carried: false }
-    : { key: `${action}:${carried}`, carried: true };
-}
-
-/** Split calls to one endpoint into the sets that sent the same thing. Callers check first that
- * every identity is known; an unknown one would otherwise pool with every other unknown. */
-export function groupByIdentity<T extends { identity: WriteIdentity | undefined }>(
-  calls: readonly T[],
-): T[][] {
-  const byIdentity = new Map<string, T[]>();
-  for (const call of calls) {
-    const key = call.identity?.key ?? '';
-    byIdentity.set(key, [...(byIdentity.get(key) ?? []), call]);
-  }
-  return [...byIdentity.values()];
-}
+// Split out to `../write-identity.ts` at the line cap; re-exported so the published path does not move.
+export { groupByIdentity, identityOf, type WriteIdentity } from '../write-identity.js';
 
 /**
  * The `net` clause that declares each of these failures, worded as a condition.
@@ -710,9 +659,10 @@ interface Change {
   now: string;
 }
 
-/** The attribute or text change this event made to `ref`, or undefined. No-op writes are skipped. */
-function changeOf(event: ReticleEvent, ref: string): Change | undefined {
-  if (event.ref !== ref) {
+/** The attribute or text change this event made to `ref` — or, when `deep`, to a descendant of it via `inside` (#2318). No-op writes are skipped. */
+function changeOf(event: ReticleEvent, ref: string, deep = false): Change | undefined {
+  const inside = event.data['inside'];
+  if (event.ref !== ref && !(deep && Array.isArray(inside) && inside.includes(ref))) {
     return undefined;
   }
   let key: string;
@@ -728,6 +678,17 @@ function changeOf(event: ReticleEvent, ref: string): Change | undefined {
   }
   const old = asString(event.data['old']) ?? ABSENT;
   return old === now ? undefined : { key, t: event.t, old, now };
+}
+
+/** The state attributes a real press flips — `data-pressed`-style furniture moves on every tap and proves nothing (#2387). */
+const EFFECT_ATTR = /^(?:aria-(?:pressed|expanded|checked|selected)|disabled)$/;
+
+/** An effect of the action on `ref` or a descendant: text, or a state-attribute flip — press furniture does not count (#2387). */
+function effectOn(event: ReticleEvent, ref: string): boolean {
+  if (event.type === EventType.DOM_ATTR && !EFFECT_ATTR.test(asString(event.data['attr']) ?? '')) {
+    return false;
+  }
+  return changeOf(event, ref, true) !== undefined;
 }
 
 export function targetFate(
@@ -938,11 +899,12 @@ export const RETICLE_SIGNAL_NAMESPACE = 'reticle:';
  * stream, a polling store, a perf sample and a scroll position all move on their own. What counts:
  *
  *  - a mutation inside the target's own subtree (what the target itself did),
+ *  - a change to the target's own text, possibly inside a child element — "Copy code" becoming
+ *    "Copied" (#2318) — or a state-attribute flip; press furniture does not count,
  *  - a request (the action asked the server for something),
  *  - a navigation, or a dialog/live region appearing — the two ways a real reaction legitimately
  *    lands OUTSIDE the target, e.g. a modal portalled to the body,
- *  - a store change or an app signal tied to the action (#1531): see
- *    `tiedReaction`.
+ *  - a store change or an app signal tied to the action (#1531): see `tiedReaction`.
  *
  * The last two clauses are what keep this from manufacturing noise: a button that opens a modal
  * mutates nothing within itself, and a Pause button whose store updates on the media `pause` event
@@ -962,7 +924,11 @@ export function didNothing(
   }
   const tied = tiedAppReaction(options);
   return !events.some(
-    (e) => e.type === EventType.ROUTE_CHANGE || e.type === EventType.VISIBLE_SHOWN || tied(e),
+    (e) =>
+      e.type === EventType.ROUTE_CHANGE ||
+      e.type === EventType.VISIBLE_SHOWN ||
+      tied(e) ||
+      (options.ref !== undefined && effectOn(e, options.ref)),
   );
 }
 

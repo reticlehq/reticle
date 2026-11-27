@@ -130,4 +130,23 @@ describe('targetFate', () => {
     const events = broken();
     expect(targetFate(events, undefined, failedAt(events))).toBeUndefined();
   });
+
+  it("a descendant's churn on the same attribute does not rewrite the control's fate (#2387)", () => {
+    // A ripple child's `class` would share the control's `attr:class` key if `inside` were
+    // honoured here, and the child settling after the failure would read as the control moving
+    // on. targetFate reads the control's own ref only.
+    const events = [
+      ev(EventType.DOM_ATTR, { attr: 'disabled', value: '' }, BUTTON),
+      ev(EventType.NET_REQUEST, {
+        id: 'n1',
+        method: 'POST',
+        url: '/api/fail',
+        status: 500,
+        ok: false,
+      }),
+      ev(EventType.DOM_ATTR, { attr: 'disabled', old: '' }, BUTTON),
+      ev(EventType.DOM_ATTR, { attr: 'class', value: 'rippling', inside: [BUTTON] }, 'ripple7'),
+    ];
+    expect(targetFate(events, BUTTON, failedAt(events))).toBe(TargetFate.REVERTED);
+  });
 });

@@ -85,7 +85,16 @@ import { fileURLToPath } from 'node:url';
  * the symbol ceiling does not move. Importing them through `contradiction-evidence.ts` would keep
  * this number flat, and that is the laundering this guard exists to catch.
  */
-const MAX_FILES_IMPORTING_CORE = 46;
+/*
+ * 46 -> 47 for `write-identity.ts`, and it is a SPLIT like `write-answer.ts`.
+ *
+ * `contradiction-evidence.ts` sat at the 1000-line cap when the review of #2387 asked for doc
+ * comments back that the cap had squeezed out. Rule 6 says split, so the write-identity cluster
+ * moved out whole. It imports `NEXT_ACTION_FIELD`, `REQUEST_SHAPE_FIELD`, `asString` and
+ * `ReticleEvent`, which the file it left already imported, so the symbol ceiling does not move —
+ * and the first two leave that file's import list with the cluster, so its own count drops.
+ */
+const MAX_FILES_IMPORTING_CORE = 47;
 /**
  * Raised by one, deliberately, and this is the argument for it.
  *

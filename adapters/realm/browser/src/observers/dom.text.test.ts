@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { EventType, LivePoliteness } from '@reticlehq/core';
 import { installDom } from './dom.js';
+import { refs } from '@/dom/addressing/refs.js';
 
 interface Captured {
   type: EventType;
@@ -175,5 +176,63 @@ describe('a text change inside a live region carries its level', () => {
   it('marks nothing for aria-live="off" or for a plain element', async () => {
     expect(await liveOf('<div aria-live="off"></div>', 'div')).toBeUndefined();
     expect(await liveOf('<p></p>', 'p')).toBeUndefined();
+  });
+});
+
+/**
+ * A control's label usually lives in a child element (`<button><span>Copy code</span></button>`),
+ * and a change there reports the CHILD's ref. `inside` carries the minted ancestor refs, the only
+ * way "inside the control the agent acted on" survives the wire (#2318). Minted-only: an ancestor
+ * nobody named has no ref to report, and minting one would spend the bookkeeping on an element the
+ * agent never saw.
+ */
+describe('a change names the minted ancestors it landed inside', () => {
+  it('a label in a child span of the acted control carries the control in `inside`', async () => {
+    document.body.innerHTML = '<button><span>Copy code</span></button>';
+    const button = document.querySelector('button') as HTMLElement;
+    const span = document.querySelector('span') as HTMLElement;
+    const buttonRef = refs.refFor(button); // minted when the agent surfaced and acted on it
+    const events = await record(() => {
+      span.textContent = 'Copied';
+    });
+    expect(textEvents(events)[0]?.data).toMatchObject({
+      text: 'Copied',
+      old: 'Copy code',
+      inside: [buttonRef],
+    });
+  });
+
+  it('unminted wrappers are skipped, deeper minted ancestors are still found', async () => {
+    document.body.innerHTML = '<main><div><button><b>Save</b></button></div></main>';
+    const button = document.querySelector('button') as HTMLElement;
+    const main = document.querySelector('main') as HTMLElement;
+    const b = document.querySelector('b') as HTMLElement;
+    const buttonRef = refs.refFor(button);
+    const mainRef = refs.refFor(main); // the div between them stays unminted
+    const events = await record(() => {
+      b.textContent = 'Saved';
+    });
+    expect(textEvents(events)[0]?.data['inside']).toEqual([buttonRef, mainRef]);
+  });
+
+  it('an attribute change on a descendant carries `inside` too', async () => {
+    document.body.innerHTML = '<button><i aria-hidden="false"></i></button>';
+    const button = document.querySelector('button') as HTMLElement;
+    const icon = document.querySelector('i') as HTMLElement;
+    const buttonRef = refs.refFor(button);
+    const events = await record(() => {
+      icon.setAttribute('aria-hidden', 'true');
+    });
+    const attrs = events.filter((e) => e.type === EventType.DOM_ATTR);
+    expect(attrs[0]?.data).toMatchObject({ attr: 'aria-hidden', inside: [buttonRef] });
+  });
+
+  it('no minted ancestors means no `inside` field at all', async () => {
+    document.body.innerHTML = '<p>never surfaced</p>';
+    const p = document.querySelector('p') as HTMLElement;
+    const events = await record(() => {
+      p.textContent = 'changed';
+    });
+    expect(textEvents(events)[0]?.data['inside']).toBeUndefined();
   });
 });

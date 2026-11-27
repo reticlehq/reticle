@@ -195,6 +195,17 @@ export class RefRegistry {
     return Number.isSafeInteger(n) && n > 0 && n <= this.#editedAtSeq;
   }
 
+  /**
+   * The ref this element ALREADY HAS, or undefined — never mints one.
+   *
+   * Read-only callers (the DOM observer naming a change's ancestors) must not mint: a ref exists
+   * only where an element was surfaced to the agent, and minting one for every walked ancestor
+   * would spend the bookkeeping on elements nobody can act on.
+   */
+  existing(el: Element): Ref | undefined {
+    return this.#toRef.get(el);
+  }
+
   /** Get the existing ref for an element, or mint a new one. */
   refFor(el: Element): Ref {
     const existing = this.#toRef.get(el);
