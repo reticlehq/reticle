@@ -7,7 +7,7 @@ import {
   type FlowStep,
   type FlowStepResult,
 } from '@reticlehq/core';
-import { crossStepOnly, declaredIn, stepContradictions } from './flow-cross-step.js';
+import { attributeLate, crossStepOnly, declaredIn, stepContradictions } from './flow-cross-step.js';
 
 /**
  * The contradictions no per-step window can see, by construction.
@@ -134,5 +134,49 @@ describe('a request still running when a step ends', () => {
 
   it('is still reported by the whole-span pass when it never came back', () => {
     expect(crossStepOnly([inFlight], [step(0, []), step(1, [])])).toEqual([inFlight]);
+  });
+});
+
+describe('a finding whose evidence came in after its step closed', () => {
+  const late: Contradiction = {
+    kind: ContradictionKind.READ_SERVER_FAULT,
+    claim: 'the page shows what the assertion read',
+    counter: '1 read(s) failed with a server error',
+    detail: 'GET /api/broken/500 500',
+  };
+  function timed(n: number, since: number, until: number): FlowStepResult {
+    return { step: n, ok: true, window: { since, until } } as FlowStepResult;
+  }
+
+  it('goes to the one step whose window, run on to the next step, finds it', () => {
+    const steps = [timed(0, 0, 10), timed(1, 12, 20)];
+    const rest = attributeLate([late], steps, 30, (w) => (12 === w.since ? [late] : []));
+    expect(rest).toEqual([]);
+    expect(steps[1]?.contradictions).toEqual([late]);
+  });
+
+  it('runs the last step on to the end of the replay', () => {
+    const windows: Array<{ since: number; until: number }> = [];
+    attributeLate([late], [timed(0, 0, 10), timed(1, 12, 20)], 30, (w) => {
+      windows.push(w);
+      return [];
+    });
+    expect(windows).toEqual([
+      { since: 0, until: 12 },
+      { since: 12, until: 30 },
+    ]);
+  });
+
+  it('stays cross-step when no step, or more than one, finds it', () => {
+    const steps = [timed(0, 0, 10), timed(1, 12, 20)];
+    expect(attributeLate([late], steps, 30, () => [])).toEqual([late]);
+    expect(attributeLate([late], steps, 30, () => [late])).toEqual([late]);
+    expect(steps.every((s) => s.contradictions === undefined)).toBe(true);
+  });
+
+  it('leaves a finding only the end of the replay can decide as cross-step', () => {
+    const neverSettled = { ...late, kind: ContradictionKind.REQUEST_NEVER_SETTLED };
+    const steps = [timed(0, 0, 10)];
+    expect(attributeLate([neverSettled], steps, 30, () => [neverSettled])).toEqual([neverSettled]);
   });
 });

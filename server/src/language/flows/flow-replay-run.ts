@@ -65,7 +65,7 @@ import { replayStepShooter } from '@/features/visual/step-shots.js';
 import type { ToolDeps } from '@/surface/tools/tool-kit.js';
 import { flowsForSession } from './flow-store-for-session.js';
 import { projectForRoot } from '@/memory/project/project-for-root.js';
-import { CROSS_STEP_INDEX, crossStepOnly, declaredIn } from './flow-cross-step.js';
+import { attributeLate, CROSS_STEP_INDEX, crossStepOnly, declaredIn } from './flow-cross-step.js';
 import {
   arriveAtStartPath,
   loadingLostHint,
@@ -661,7 +661,18 @@ async function replayOnce(
       const span = { since: liveFloor, until: live.elapsed() };
       const events = live.eventsSince(liveFloor).filter((e) => e.t >= liveFloor);
       const scope = { ...appScope(live), declared: declaredIn(loaded.value.steps) };
-      return crossStepOnly(stepEffect(events, span, scope).contradictions ?? [], steps);
+      const cross = crossStepOnly(stepEffect(events, span, scope).contradictions ?? [], steps);
+      // The same scope a step's own window gets, with the reads that finished before it.
+      const inStep = (window: { since: number; until: number }): readonly Contradiction[] =>
+        stepEffect(
+          events.filter((e) => e.t >= window.since && e.t < window.until),
+          window,
+          {
+            ...scope,
+            before: events.filter((e) => e.t < window.since && e.type === EventType.NET_REQUEST),
+          },
+        ).contradictions ?? [];
+      return attributeLate(cross, steps, span.until, inStep);
     } catch {
       return [];
     }
