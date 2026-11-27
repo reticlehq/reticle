@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MutationKind, MutationOutcome } from 'open-verification';
+import { ReplayStatus } from '@reticlehq/core';
 import { mutationTest } from './mutation-run.js';
 
 /**
@@ -19,7 +20,7 @@ import { mutationTest } from './mutation-run.js';
 const BREAK = { kind: MutationKind.REQUEST_FAILS, target: '/api/orders' };
 
 function harness(
-  replays: ('pass' | 'fail' | Error)[],
+  replays: ('pass' | 'fail' | typeof ReplayStatus.UNVERIFIABLE | Error)[],
   over: { mutate?: () => Promise<{ mutation: string }> } = {},
 ) {
   const log: string[] = [];
@@ -27,7 +28,7 @@ function harness(
   return {
     log,
     deps: {
-      replay: (): Promise<'pass' | 'fail'> => {
+      replay: (): Promise<'pass' | 'fail' | typeof ReplayStatus.UNVERIFIABLE> => {
         const next = replays[call] ?? 'pass';
         call += 1;
         log.push('replay');
@@ -97,6 +98,20 @@ describe('putting the page back', () => {
     // demote a flow for an error in the harness.
     const { deps } = harness(['pass', new Error('boom')]);
     expect(await mutationTest(deps, BREAK)).toBe(MutationOutcome.INCONCLUSIVE);
+  });
+
+  it('is inconclusive, not killed, when the replay with the break could not be graded', async () => {
+    // A step that failed on a page that was still hydrating proves nothing about the app (#1654).
+    // Counted as red, a slow hydration would grade the flow KILLED: a claim that it is a real test.
+    const { deps, log } = harness(['pass', ReplayStatus.UNVERIFIABLE]);
+    expect(await mutationTest(deps, BREAK)).toBe(MutationOutcome.INCONCLUSIVE);
+    expect(log).toEqual(['replay', 'mutate', 'replay', 'revert']);
+  });
+
+  it('never breaks the page when the first replay could not be graded', async () => {
+    const { deps, log } = harness([ReplayStatus.UNVERIFIABLE]);
+    expect(await mutationTest(deps, BREAK)).toBe(MutationOutcome.INCONCLUSIVE);
+    expect(log).toEqual(['replay']);
   });
 
   it('still answers when the revert itself fails, having tried', async () => {

@@ -1,5 +1,6 @@
 import { CALL_SECRETS_ARG, callSecretsArg } from './fields/flow-secret-field.js';
 import { REPLAYABILITY_OUTPUT, SKIP_WRITES_ARG } from './flow-replayable.js';
+import { HYDRATION_WAIT_OUTPUT, SUITE_HYDRATION_WAITS_OUTPUT } from './steps/hydration-wait.js';
 import { flowAuthor } from './flow-author.js';
 import { FLOW_MUTATE_TOOL } from './flow-mutate-tools.js';
 import { seedSchema, workerCountSchema } from '@/surface/tools/args/numeric-bounds.js';
@@ -10,7 +11,6 @@ import { aliasParam, aliasUsed } from '@/surface/tools/args/alias-args.js';
 import { REPLAY_TRUST_OUTPUT, stillRecording, stillRecordingMessage } from './flow-result.js';
 import { resolveAnnotateTarget } from './annotate-notes/annotate-target.js';
 import {
-  type ProjectId,
   FlowErrorCode,
   RecordedSaveError,
   type FlowReplayResult,
@@ -28,7 +28,8 @@ import { withShotRun, defaultRunId } from '@/judgement/runs/default-run-id.js';
 import { resolveProjectCloud } from '@/memory/cloud/cloud-config.js';
 import { buildSuiteVerdict } from './decision.js';
 import * as Bounded from './suite/sequential-run.js';
-import { FLOW_ASSERTIONS_OUTPUT, classifyFlowAssertions, flattenSteps } from './flow-classify.js';
+import { FLOW_ASSERTIONS_OUTPUT, classifyFlowAssertions } from './flow-classify.js';
+import { loadInvoked } from './flow-invoked.js';
 import { recordingBacktrackWarning } from './recording/recording-backtrack.js';
 import { isValidFlowName, flowPath } from '@/memory/project/dir/reticle-dir.js';
 import { type FlowAnnotations } from './flows.js';
@@ -493,6 +494,7 @@ export const FLOW_TOOLS: ToolDef[] = [
         .describe(
           'Set when replay waited past the step budget because the start page was still loading. stillLoading is what the tab said the last time replay asked. Absent means the wait stayed inside the budget.',
         ),
+      hydrationWait: HYDRATION_WAIT_OUTPUT,
       // Declared here or a validating profile strips it -- the same way `name` was stripped once.
       // A field the handler sets and the schema omits arrives as nothing, silently.
       /*
@@ -648,6 +650,7 @@ export const FLOW_TOOLS: ToolDef[] = [
           'Flows whose prerequisite is not in this run — filtered out by a label, quarantined, or never saved. They did NOT run, because failing them would report the wrong thing.',
         ),
       replayability: REPLAYABILITY_OUTPUT,
+      hydrationWaits: SUITE_HYDRATION_WAITS_OUTPUT,
       skippedWrites: z.array(z.string()).optional().describe('Flows held back by skipWrites.'),
       // Session-EXEMPT, so it does not inherit `sessionEnvelopeShape` — declare the one-shot human
       // feedback ask here or a validating profile strips it off the suite verdict.
@@ -955,45 +958,3 @@ export const FLOW_TOOLS: ToolDef[] = [
       healFlow(deps, args).then(({ name, ...rest }) => ({ flowName: name, ...rest })),
   },
 ];
-
-/**
- * Every flow reachable from this one by `invoke`, loaded once.
- *
- * Breadth-first with a `seen` set so a cycle terminates: typecheck refuses those at rest, and this
- * runs at SAVE, which is exactly where a bad composite arrives before anything has checked it.
- *
- * A sub-flow that fails to load is simply absent from the map. The classifier then declines to
- * credit it, which is the conservative direction — a composite graded on a flow nobody could read
- * would be graded on a promise.
- */
-async function loadInvoked(
-  flows: {
-    load: (name: string, projectId?: ProjectId) => Promise<{ ok: boolean; value?: FlowFile }>;
-  },
-  flow: FlowFile,
-  projectId?: ProjectId,
-): Promise<Map<string, FlowFile>> {
-  const out = new Map<string, FlowFile>();
-  const queue = [flow];
-  const seen = new Set<string>([flow.name]);
-  while (queue.length > 0) {
-    const current = queue.shift();
-    if (current === undefined) {
-      continue;
-    }
-    for (const step of flattenSteps(current.steps)) {
-      const name = step.invoke;
-      if (name === undefined || seen.has(name)) {
-        continue;
-      }
-      seen.add(name);
-      const sub = await flows.load(name, projectId);
-      if (!sub.ok || sub.value === undefined) {
-        continue;
-      }
-      out.set(name, sub.value);
-      queue.push(sub.value);
-    }
-  }
-  return out;
-}

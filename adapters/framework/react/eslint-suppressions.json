@@ -14,11 +14,6 @@
       "count": 2
     }
   },
-  "src/auto-stores.ts": {
-    "curly": {
-      "count": 18
-    }
-  },
   "src/cdp-reader.test.ts": {
     "curly": {
       "count": 1
@@ -49,19 +44,9 @@
       "count": 4
     }
   },
-  "src/hydration.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
   "src/index.test.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/index.ts": {
-    "curly": {
-      "count": 25
     }
   },
   "src/relative-to-root.test.ts": {
@@ -72,11 +57,6 @@
   "src/render-meter.test.ts": {
     "curly": {
       "count": 1
-    }
-  },
-  "src/render-meter.ts": {
-    "curly": {
-      "count": 4
     }
   },
   "src/source-seam.test.ts": {

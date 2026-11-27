@@ -283,6 +283,12 @@ export interface SuiteVerdict {
    */
   unverifiable?: { flow: string; reason: string }[];
   /**
+   * Flows whose replay stopped waiting for a page that was not hydrated (`FlowReplayResult`
+   * `hydrationWait`), from every run, passed or not. A step on such a page ran before React
+   * attached its handlers. Omitted when no wait reached its bound.
+   */
+  hydrationWaits?: ({ flow: string } & HydrationWait)[];
+  /**
    * Flows that have both passed AND failed on UNCHANGED code — intermittent, not regressions.
    *
    * A flake and a regression demand opposite responses: one is chased, the other is quarantined. The
@@ -406,6 +412,12 @@ export interface FlowReplayResult {
    */
   startPageWait?: StartPageWait;
   /**
+   * Set when replay stopped waiting for a page that was not hydrated, at the bound. The steps on
+   * that page then ran before React attached all of its event handlers (#1654). The most recent
+   * such wait when the flow opened more than one page.
+   */
+  hydrationWait?: HydrationWait;
+  /**
    * Set on an `ok` replay whose flow cannot fail: it asserts no observable consequence, or has no
    * steps at all. The replay genuinely completed, so the status stays `ok` — but a bare `ok` read
    * as proof the feature works is exactly the false confidence `flow-risk.ts` argues against, and
@@ -453,6 +465,19 @@ export interface StartPageWait {
   budgetMs: number;
   /** What the tab said the last time replay asked. True when replay gave up means it gave up at the cap. */
   stillLoading: boolean;
+}
+
+/** How long replay waited for a page that did not hydrate inside the bound. */
+export interface HydrationWait {
+  /** From the start of the wait to replay giving up. */
+  waitedMs: number;
+  /** The bound the wait reached. */
+  budgetMs: number;
+  /**
+   * True when the page said `pending` the last time replay asked. False when the page did not
+   * answer in time, so replay could not tell.
+   */
+  stillPending: boolean;
 }
 
 /** A concrete, confidence-scored rebind proposed for one drifted step. */
