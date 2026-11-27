@@ -164,6 +164,9 @@ export function localizeInstructions(instructions: string, appHere: boolean): st
  */
 const reachFor = (v: SurfaceVocabulary): string => {
   const lines = [
+    // Only in the connected state: the unwired state is at the client's limit, and its one move is
+    // to wire the app. The computer realm is in SKILL.md for both.
+    `Desktop app or OS dialog: \`npx -p @reticlehq/computer reticle-computer --app <name>\`.`,
     `${v.observe} is the evidence channel: everything the page did since a cursor, in one read. Take it BEFORE you call a build broken. ${v.settle} settles a page that is changing without you; ${v.inspect} maps an element to its source file:line, which turns a finding into an edit${v.yield.length > 0 ? `; ${v.yield} hands the tab back to the human` : ''}.`,
   ];
   // Said ONLY when both halves are advertised. A catalogue with no way to invoke what it lists sends

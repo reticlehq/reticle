@@ -869,6 +869,9 @@ describe('a consequence handed to another browsing context', () => {
     expect(found).toHaveLength(1);
     expect(found[0]?.kind).toBe(ContradictionKind.CONSEQUENCE_ELSEWHERE);
     expect(found[0]?.counter).toContain('another browsing context');
+    // The SDK cannot follow the popup, and the computer realm can: the finding names it, so an
+    // agent follows the consequence instead of stopping at "cannot observe".
+    expect(found[0]?.counter).toContain('@reticlehq/computer');
   });
 
   it('keeps response-ignored when nothing opened', () => {

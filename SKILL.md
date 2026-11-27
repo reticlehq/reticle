@@ -155,7 +155,7 @@ A journey in one call: `reticle_act { steps: [{ target, action, args?, expect? }
 
 ## Outside the page: Reticle's computer
 
-The browser sees the page you build: its network, state and source. For anything else on the desktop (a native app, a system dialog, a file panel), join it with `npx -p @reticlehq/computer reticle-computer --app "<name>"` and send its `sessionId` on each call. A journey across the edge: act in one, prove it in the other.
+The browser sees the page: network, state, source. The computer sees the rest: a native app, an OS dialog, a popup. Join one with `npx -p @reticlehq/computer reticle-computer --app "<name>"`. Joined a browser? `reticle_run({ tool: "reticle_attach_tab", args: { match } })` joins its page too. Act in one; prove in the other.
 
 ## When it goes wrong
 
