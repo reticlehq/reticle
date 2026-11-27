@@ -28,6 +28,7 @@ import { asNumber, asString } from '@reticlehq/core';
 import { sessionIdShape, commandOrThrow } from './tool-kit.js';
 import { timeoutMsSchema } from './args/numeric-bounds.js';
 import { assertNotPaymentNavigation } from './act/act-danger.js';
+import { leaseEndedRefusal } from '@/portal/session/no-session-next-action.js';
 import type { ToolDef, ToolDeps } from './tool-kit.js';
 
 /** Said when a lease's page now has no Reticle SDK: only the browser can still act on it. */
@@ -48,24 +49,37 @@ async function navigateLease(
     return { ok: false, url, reason: 'the leased page did not navigate' };
   }
   const back = await waitForSession(deps, sessionId, timeoutMs);
-  return back
+  if (LeaseWait.ENDED === back) {
+    return { ok: false, url, reason: leaseEndedRefusal(sessionId) };
+  }
+  return LeaseWait.BACK === back
     ? { ok: true, url, confirmed: true, sessionId }
     : { ok: true, url, confirmed: false, waitedMs: timeoutMs, note: MSG_LEASE_WITHOUT_SDK };
 }
 
-/** Whether the session reconnects within the budget. */
+/** How the wait for a lease's SDK ended. */
+const LeaseWait = { BACK: 'back', ENDED: 'ended', TIMED_OUT: 'timed-out' } as const;
+type LeaseWait = (typeof LeaseWait)[keyof typeof LeaseWait];
+
+/**
+ * Wait for the lease's session to reconnect within the budget. Stops when the lease ends during the
+ * wait (released, or taken by the reaper): its page is gone, so the SDK can never come back (#2482).
+ */
 async function waitForSession(
   deps: ToolDeps,
   sessionId: string,
   timeoutMs: number,
-): Promise<boolean> {
+): Promise<LeaseWait> {
   const start = deps.now();
   for (;;) {
     if (deps.sessions.get(sessionId) !== undefined) {
-      return true;
+      return LeaseWait.BACK;
+    }
+    if (deps.pool?.leaseUrl(sessionId) === undefined) {
+      return LeaseWait.ENDED;
     }
     if (deps.now() - start >= timeoutMs) {
-      return false;
+      return LeaseWait.TIMED_OUT;
     }
     await new Promise((resolve) => setTimeout(resolve, LEASE_POLL_MS));
   }

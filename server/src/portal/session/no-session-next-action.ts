@@ -13,7 +13,13 @@
  * Pure. The facts arrive from the watch; nothing here touches the disk or the clock.
  */
 
-import { NoSessionAction, RETICLE_URL_PARAM, ReticleEnv, redactUrl } from '@reticlehq/core';
+import {
+  NoSessionAction,
+  RETICLE_URL_PARAM,
+  ReticleEnv,
+  ReticleTool,
+  redactUrl,
+} from '@reticlehq/core';
 import { detectNonJsEcosystem, noPackageJsonMessage } from '@reticlehq/init';
 import type { DevCommand } from './dev-server/dev-command.js';
 
@@ -577,4 +583,23 @@ export function renderNextAction(next: NoSessionNextAction): string {
   return command === undefined || NoSessionAction.RUN_INIT === next.action
     ? `NEXT ACTION: ${next.reason}`
     : `NEXT ACTION: run \`${command}\` — ${next.reason}`;
+}
+
+const LeaseAction = { ACQUIRE: 'acquire' } as const;
+
+/**
+ * One sentence for a call on a lease that has ended, so every path that finds one says the same.
+ * `reticle_navigate` waited for an ended lease's SDK and then said "the lease is kept", while the
+ * screenshot in the same answer said the lease had ended (#2482).
+ */
+export function leaseEndedReason(sessionId: string): string {
+  return `Lease '${sessionId}' has ended (it expired or was released); lease a new tab to go on.`;
+}
+
+/** The ended-lease sentence, and the call that leases a new tab. */
+export function leaseEndedRefusal(sessionId: string): string {
+  return (
+    `${leaseEndedReason(sessionId)} ` +
+    `Call ${ReticleTool.LEASE} { action: "${LeaseAction.ACQUIRE}" } for a new one.`
+  );
 }
