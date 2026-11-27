@@ -2,6 +2,7 @@
  * The macOS driver: it runs the `reticle-ax` helper and turns its answers into the driver port.
  */
 import { spawn } from 'node:child_process';
+import { rmSync } from 'node:fs';
 import type { ChildProcessWithoutNullStreams } from 'node:child_process';
 import { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -233,6 +234,17 @@ function refused(reason: ActRefusal, read: UiRead, detail?: string): ActOutcome 
   };
 }
 
+/** The pictures this process wrote. The daemon deletes a picture it reads; this removes the rest. */
+const written = new Set<string>();
+
+/** Removes every picture this process wrote. It runs when the process ends. */
+export function removeCaptures(): void {
+  for (const path of written) {
+    rmSync(path, { force: true });
+  }
+  written.clear();
+}
+
 const NOTHING: UiRead = { root: fromAx({ role: '', children: [] }).root, unread: 0, unmapped: [] };
 
 export class MacDriver implements UiDriver {
@@ -314,6 +326,10 @@ export class MacDriver implements UiDriver {
       tmpdir(),
       `${RETICLE_CAPTURE_FILE_PREFIX}cu-${String(this.#input.pid)}-${String(this.#captures)}.png`,
     );
+    if (0 === written.size) {
+      process.once('exit', removeCaptures);
+    }
+    written.add(path);
     const answer = CaptureSchema.safeParse(
       await this.#ask([
         Command.CAPTURE,

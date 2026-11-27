@@ -1,10 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 import { describe, expect, it } from 'vitest';
 
 import { ActKind, ActRefusal, Delivery } from '../driver.js';
 import { place } from '../ui-node.js';
-import { MacDriver } from './mac-driver.js';
+import { MacDriver, removeCaptures } from './mac-driver.js';
 
 const tree: unknown = JSON.parse(
   readFileSync(new URL('recorded/fixture-app.json', import.meta.url), 'utf8'),
@@ -26,6 +26,29 @@ function driverAnswering(act: unknown): { driver: MacDriver; calls: string[][] }
 }
 
 describe('MacDriver', () => {
+  // The daemon deletes a picture after it reads it. A picture it never read (a command that timed
+  // out, a read that failed) stayed in the temporary folder: 25 pictures of a person's screen were
+  // found there after two days of work. The driver removes every picture it wrote when it stops.
+  it('removes the pictures it wrote when it stops', async () => {
+    const driver = new MacDriver({
+      helper: 'reticle-ax',
+      app: 'fixture',
+      pid: 7,
+      run: (_file, args) => {
+        if ('tree' === args[0]) {
+          return Promise.resolve(JSON.stringify({ tree, unread: 0 }));
+        }
+        writeFileSync(args[2] ?? '', 'png');
+        return Promise.resolve(JSON.stringify({ ok: true, window: [0, 0, 10, 10], scale: 1 }));
+      },
+    });
+    const taken = await driver.capture();
+    const path = taken.ok ? taken.path : '';
+    expect(existsSync(path)).toBe(true);
+    removeCaptures();
+    expect(existsSync(path)).toBe(false);
+  });
+
   // Numbers gives its sheet only to a screen reader. Under Stage Manager an application opened in
   // the background has no window on the screen, so a test of the switch at join time saw nothing
   // to compare. The driver tries the switch at the first read that has a window, and once.
