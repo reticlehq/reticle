@@ -17,9 +17,11 @@
  * outcome an agent cannot distinguish from "still working".
  */
 
+import { ReticleTool } from '@reticlehq/core';
 import { describe, expect, it } from 'vitest';
 import { PendingRequests, streamLossReplies } from './mcp-proxy.js';
-import { MSG_DRIVE_MAY_BE_RUNNING } from './proxy/drive-calls.js';
+import { MSG_DRIVE_MAY_BE_RUNNING, transportLossReply } from './proxy/drive-calls.js';
+import { postFailureCompletionKind } from './proxy/mcp-post-transport.js';
 
 describe('streamLossReplies', () => {
   it('answers every unanswered request, under its own id', () => {
@@ -89,6 +91,33 @@ describe('a lost connection under a Harness drive', () => {
       expect(byId.get(id)).toContain(MSG_DRIVE_MAY_BE_RUNNING);
       expect(byId.get(id)).not.toContain('did NOT');
     }
-    expect(byId.get(3)).toContain('did NOT');
+    expect(byId.get(3)).toContain('outcome is unknown');
+    expect(byId.get(3)).toContain('may have run');
+    expect(byId.get(3)).toContain(ReticleTool.LOOK);
+    expect(byId.get(3)).not.toContain('did NOT');
+  });
+});
+
+describe('POST failure replies', () => {
+  it.each([
+    { reason: 'post failed: refused', code: 'ECONNREFUSED', expected: 'did NOT complete' },
+    { reason: 'post failed: reset', code: 'ECONNRESET', expected: 'outcome is unknown' },
+    {
+      reason: 'daemon rejected the call with HTTP 500',
+      code: undefined,
+      expected: 'outcome is unknown',
+    },
+  ])('reports $expected for $reason', ({ reason, code, expected }) => {
+    const failure = { reason, code, transport: true, attempts: 1 };
+    const reply = JSON.parse(
+      transportLossReply(1, reason, undefined, false, postFailureCompletionKind(failure)),
+    ) as { error: { code: number; message: string } };
+
+    expect(reply.error.code).toBe(-32001);
+    expect(reply.error.message).toContain(expected);
+    if (code !== 'ECONNREFUSED') {
+      expect(reply.error.message).not.toContain('did NOT');
+      expect(reply.error.message).toContain(ReticleTool.LOOK);
+    }
   });
 });

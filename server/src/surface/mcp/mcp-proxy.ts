@@ -85,7 +85,7 @@ export {
 } from './proxy/proxy-log.js';
 import { proxyLog } from './proxy/proxy-log.js';
 import { OutageReason, OutageStage, reportMcpOutage, type DropCause } from './faults/mcp-outage.js';
-import { postToSession } from './proxy/mcp-post-transport.js';
+import { postFailureCompletionKind, postToSession } from './proxy/mcp-post-transport.js';
 import { PendingRequests, streamLossReplies, transportLossReply } from './proxy/drive-calls.js';
 export { PendingRequests, streamLossReplies } from './proxy/drive-calls.js';
 import { reconnectDelayMs } from './proxy/proxy-backoff.js';
@@ -95,6 +95,7 @@ export { reconnectDelayMs } from './proxy/proxy-backoff.js';
 export {
   MCP_PROXY_HTTP_AGENT_OPTIONS,
   postToSession,
+  postFailureCompletionKind,
   shouldRetryUnsentPost,
   type PostFailure,
 } from './proxy/mcp-post-transport.js';
@@ -450,7 +451,15 @@ export function startMcpProxy(
           reason: failure.reason,
           note: 'the stream is still up, so nothing else would ever have answered this call',
         });
-        emit(transportLossReply(msg.id, failure.reason, undefined, drive));
+        emit(
+          transportLossReply(
+            msg.id,
+            failure.reason,
+            undefined,
+            drive,
+            postFailureCompletionKind(failure),
+          ),
+        );
       });
     };
 
