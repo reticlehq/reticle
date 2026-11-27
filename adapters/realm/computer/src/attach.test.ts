@@ -181,6 +181,20 @@ describe('attachPlan', () => {
     expect(JSON.stringify(alone['next'])).toContain('sessionId: \\"cu-Notes-7\\"');
   });
 
+  // The computer reads the window of a browser: tabs, the address bar, a dialog of the browser.
+  // The page inside has its network, state and source, and only the browser realm reads them. An
+  // agent that joined Chrome as an application did not know that the page can be joined too.
+  it('tells an agent that joined a browser how to join its page', () => {
+    const chrome = JSON.stringify(
+      joinedAnswer({ app: 'Google Chrome', foreground: true }, 'cu-Chrome-7', 7)['next'],
+    );
+    expect(chrome).toContain('reticle_attach_tab');
+    const notes = JSON.stringify(
+      joinedAnswer({ app: 'Notes', foreground: true }, 'cu-Notes-7', 7)['next'],
+    );
+    expect(notes).not.toContain('reticle_attach_tab');
+  });
+
   // The Harness tells its model not to send, pay or delete unless asked. An agent that drives the
   // realm itself reads this answer and nothing else, and it got no such rule.
   it('tells the agent not to send, pay or delete unless the person asked for it', () => {

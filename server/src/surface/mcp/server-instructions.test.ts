@@ -252,6 +252,16 @@ describe('buildServerInstructions', () => {
   });
 });
 
+// The computer realm shipped, and an agent heard of it only from SKILL.md. An agent that reached
+// Reticle through a plugin or a config block reads these instructions and nothing else, so it
+// wrote a script or gave up at a file panel, a system dialog or a native application. Only in the
+// connected state: the unwired state is at the client's limit.
+describe('the page is not the edge', () => {
+  it('names the computer realm once an app has connected', () => {
+    expect(buildServerInstructions({ previouslyConnected: true })).toContain('@reticlehq/computer');
+  });
+});
+
 describe('diagnosis starts in the source, not in the browser', () => {
   it('says so in both states, and names the order', () => {
     for (const previouslyConnected of [true, false]) {

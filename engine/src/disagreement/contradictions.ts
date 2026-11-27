@@ -646,7 +646,7 @@ function findWindowContradictions(
               kind: ContradictionKind.CONSEQUENCE_ELSEWHERE,
               claim: `${String(ignoredWrites.length)} write(s) succeeded on the server`,
               counter:
-                'this document never changed because the page opened another browsing context during this window (e.g. an OAuth popup), where the in-page SDK cannot observe the result',
+                'this document never changed because the page opened another browsing context during this window (e.g. an OAuth popup), where the in-page SDK cannot observe the result. Follow it with the computer realm: npx -p @reticlehq/computer reticle-computer --app "<the browser>"',
               detail: ignoredWrites.map(describe).join('; '),
             }
           : {

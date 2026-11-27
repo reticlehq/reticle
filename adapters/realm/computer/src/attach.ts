@@ -180,6 +180,22 @@ export function electronWarning(
 }
 
 /**
+ * The Chromium browsers whose page `reticle_attach_tab` can join, by the name a person sees. The
+ * computer reads the window of the browser; the browser realm reads the page in it.
+ */
+const CHROMIUM_BROWSER = /\b(chrome|chromium|edge|brave|arc|dia|opera|vivaldi)\b/i;
+
+/** What to say to an agent that joined a browser: the page in it can be joined as well. */
+function pageOf(app: string): string[] {
+  if (!CHROMIUM_BROWSER.test(app)) {
+    return [];
+  }
+  return [
+    `${app} is a web browser. This session reads its window: the tabs, the address bar and the dialogs of the browser. For the network, state, console and source of a page, also join its tab: reticle_run { tool: "reticle_attach_tab", args: { match: "<part of its address>" } }. The browser must run with --remote-debugging-port. Use both: the page to prove what the app did, the computer for what is outside the page.`,
+  ];
+}
+
+/**
  * What the command says on standard output when it has joined: one line of JSON, for an agent
  * that started it. `sessionId` is needed on a tool call only when the session is in no project:
  * a session in the project of the folder is found without it.
@@ -215,6 +231,7 @@ export function joinedAnswer(
       'Actions: click, fill, type, press, clear, check, uncheck, select, submit, scroll. With args.foreground: true also dblclick, hover, drag, focus and a real click.',
       'Prefer a signal for `until` when the action writes a file or changes a setting: file.written, disk.wrote, settings.changed, clipboard.changed.',
       `${plan.app} is on the computer of a person, with their real mail, money and files. Do not press a control that sends, pays, buys, posts or deletes unless the person asked for it.`,
+      ...pageOf(plan.app),
     ],
   };
 }
