@@ -15,6 +15,8 @@ export interface FlowSources {
 export interface AffectedResult {
   /** Flows to re-verify: those touching a changed file, plus all unknown-provenance flows. */
   affected: string[];
+  /** Flows whose sources explicitly match one of the changed files. */
+  covering?: string[];
   /** Of the affected, which were included only because their provenance is unknown (fail-safe). */
   unknownProvenance: string[];
 }
@@ -54,17 +56,22 @@ export function affectedFlows(
 ): AffectedResult {
   const matchesChange = (source: string): boolean => sourceMatchesChange(source, changedFiles);
 
-  const affected: string[] = [];
+  const covering: string[] = [];
   const unknownProvenance: string[] = [];
   for (const flow of flows) {
     if (flow.sources === undefined || 0 === flow.sources.length) {
-      affected.push(flow.name);
       unknownProvenance.push(flow.name);
       continue;
     }
-    if (flow.sources.some(matchesChange)) affected.push(flow.name);
+    if (flow.sources.some(matchesChange)) {
+      covering.push(flow.name);
+    }
   }
-  return { affected, unknownProvenance };
+  return {
+    affected: [...covering, ...unknownProvenance],
+    covering,
+    unknownProvenance,
+  };
 }
 
 /** A file a source stamper can put on an element — the only files a flow's manifest can ever name. */
@@ -102,8 +109,12 @@ export function unflowedFiles(
   const sources = flows.flatMap((flow) => (flow.sources ?? []).map(normalize));
   return changedFiles.filter((file) => {
     const c = normalize(file);
-    if (!COMPONENT_FILE.test(c) || TEST_FILE.test(c)) return false;
-    if (sources.some((s) => c === s || c.endsWith(`/${s}`) || s.endsWith(`/${c}`))) return false;
+    if (!COMPONENT_FILE.test(c) || TEST_FILE.test(c)) {
+      return false;
+    }
+    if (sources.some((s) => c === s || c.endsWith(`/${s}`) || s.endsWith(`/${c}`))) {
+      return false;
+    }
     return isInteractive(file);
   });
 }

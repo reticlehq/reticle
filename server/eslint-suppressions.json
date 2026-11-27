@@ -1288,11 +1288,6 @@
       "count": 9
     }
   },
-  "src/language/flows/change/affected.ts": {
-    "curly": {
-      "count": 3
-    }
-  },
   "src/language/flows/change/flow-sources.ts": {
     "curly": {
       "count": 3
@@ -1627,11 +1622,6 @@
   "src/language/flows/tools.flows.test.ts": {
     "curly": {
       "count": 2
-    }
-  },
-  "src/language/flows/verify-change-tools.ts": {
-    "no-nested-ternary": {
-      "count": 1
     }
   },
   "src/launch-chromium.test.ts": {
