@@ -13,8 +13,11 @@ host), which runs Reticle's computer realm on the guest's applications.
     ReticleGPT54Agent   mm_agents.gpt54_agent.GPT54Agent (OpenAI GPT-5.4, Responses API)
     ReticleAgent        mm_agents.anthropic.AnthropicAgent (Claude)
 
-One model turn is one step, as for the other arm. A turn with only a Reticle call runs it here and
-gives OSWorld a WAIT, so the environment takes its screenshot as after any step.
+A step is one action on the screen: a computer action or reticle_act. A turn that only reads (the
+tree, a query) asks the model again in the same step, up to FREE_READS times, as the screenshot of
+each step costs the screenshot arm no step. Both tool arms (Reticle, and OSWorld's tree) have this
+rule. A step with only a Reticle action gives OSWorld a WAIT, so the environment takes its
+screenshot as after any step.
 """
 import json
 import logging
@@ -24,6 +27,9 @@ import urllib.request
 logger = logging.getLogger('desktopenv.agent.reticle')
 OPERATOR = os.environ.get('RETICLE_OPERATOR', 'http://127.0.0.1:4498')
 RESULT_LIMIT = 15000
+# The reads the model can make in one step before it must act. RETICLE_FREE_READS=0 keeps
+# OSWorld's own rule (every model turn is a step), for a strict comparison with the screenshot arm.
+FREE_READS = int(os.environ.get('RETICLE_FREE_READS', '4'))
 
 APP = {'type': 'string', 'description': 'The application, as reticle_apps names it, e.g. "soffice".'}
 TOOLS = [
@@ -82,7 +88,10 @@ PROMPT = (
     '(LibreOffice, Thunderbird, VS Code, GIMP, VLC, the file manager): exact names, values and '
     'states, which a screenshot can only guess. Prefer them to read a value or to find a control, '
     'and act on an element by its ref. Give reticle_act an until_text when you know the result to '
-    'expect. Use the computer tool for web pages and for what the tree does not show.'
+    'expect. Use the computer tool for web pages and for what the tree does not show. A read '
+    '(reticle_apps, reticle_look, reticle_find) costs no step; an action does. If reticle_act '
+    'refuses an action, do it with the computer tool from the screenshot, and do not send the '
+    'same reticle_act again.'
 )
 
 
@@ -184,7 +193,7 @@ TREE_TOOL = {
 }
 TREE_PROMPT = (
     '\n* You also have read_tree: the accessibility tree of the screen. Use it to read a value or '
-    'to find a control that a screenshot shows badly.'
+    'to find a control that a screenshot shows badly. A read costs no step.'
 )
 
 
@@ -230,22 +239,35 @@ def gpt54_agent():
             return self.last_response
 
         def predict(self, instruction, obs):
-            info, actions = super().predict(instruction, obs)
-            ran = False
-            for item in _get_field(self.last_response, 'output', []) or []:
-                if _get_field(item, 'type') != 'function_call':
-                    continue
-                given = json.loads(_get_field(item, 'arguments') or '{}')
-                said = self.reticle.run(_get_field(item, 'name'), given)
-                self.pending_input_items.append(
-                    {'type': 'function_call_output', 'call_id': _get_field(item, 'call_id'), 'output': said})
-                info['response'] = (info.get('response') or '') + f'\n[{_get_field(item, "name")}] {said[:500]}'
-                ran = True
+            # A turn that only reads (the tree, a query) asks the model again in the same step: a
+            # read is not an action on the screen, as the screenshot of each step is not. Only a
+            # computer action or reticle_act counts as a step. The same rule for both tool arms.
+            said_before = ''
+            for _ in range(FREE_READS + 1):
+                info, actions = super().predict(instruction, obs)
+                ran, acted = self.run_calls(info)
+                info['response'] = said_before + (info.get('response') or '')
+                if actions or acted or not ran or info.get('infeasible_message'):
+                    break
+                said_before = info['response'] + '\n'
             if ran and not actions:
                 # The run loop ends the task on a turn without an action: a Reticle turn is a step.
                 actions = [{'action_space': 'pyautogui', 'action': 'WAIT', 'batch_last': False}]
                 info['state_correct'] = not info.get('infeasible_message')
             return info, actions
+
+        def run_calls(self, info):
+            ran = acted = False
+            for item in _get_field(self.last_response, 'output', []) or []:
+                if _get_field(item, 'type') != 'function_call':
+                    continue
+                name = _get_field(item, 'name')
+                said = self.reticle.run(name, json.loads(_get_field(item, 'arguments') or '{}'))
+                self.pending_input_items.append(
+                    {'type': 'function_call_output', 'call_id': _get_field(item, 'call_id'), 'output': said})
+                info['response'] = (info.get('response') or '') + f'\n[{name}] {said[:500]}'
+                ran, acted = True, acted or name == 'reticle_act'
+            return ran, acted
 
     return ReticleGPT54Agent
 
