@@ -9,6 +9,7 @@ describe('affectedFlows', () => {
     ];
     const result = affectedFlows(flows, ['src/cart.ts']);
     expect(result.affected).toEqual(['checkout']);
+    expect(result.covering).toEqual(['checkout']);
     expect(result.unknownProvenance).toEqual([]);
   });
 
@@ -19,6 +20,7 @@ describe('affectedFlows', () => {
     ];
     const result = affectedFlows(flows, ['src/unrelated.ts']);
     expect(result.affected).toEqual(['legacy']);
+    expect(result.covering).toEqual([]);
     expect(result.unknownProvenance).toEqual(['legacy']);
   });
 

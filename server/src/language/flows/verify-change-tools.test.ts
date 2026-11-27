@@ -209,6 +209,51 @@ describe('reticle_verify_change — it delegates rather than reimplements', () =
     expect(result['verified']).toBe(Verified.YES);
     spy.mockRestore();
   });
+
+  it('does not let an unknown-provenance flow failure change the verdict of a passing covering flow', async () => {
+    const verify = FLOW_TOOLS.find((t) => t.name === ReticleTool.FLOW_VERIFY);
+    if (verify === undefined) {
+      throw new Error('flow_verify missing');
+    }
+    const verifySpy = vi.spyOn(verify, 'handler').mockImplementation((_deps, args) => {
+      const names = (args as { names: string[] }).names;
+      if (names.includes('checkout')) {
+        return Promise.resolve({ status: 'pass', total: 1, passed: 1, failed: 0 });
+      }
+      return Promise.resolve({
+        status: 'fail',
+        total: 1,
+        passed: 0,
+        failed: 1,
+        failures: [{ flow: 'legacy' }],
+      });
+    });
+    const spy = vi
+      .spyOn(await import('./change/flow-sources.js'), 'affectedSavedFlows')
+      .mockReturnValue({
+        affected: ['checkout', 'legacy'],
+        covering: ['checkout'],
+        unknownProvenance: ['legacy'],
+      });
+
+    const deps = depsWithNoFlows();
+    const result = (await tool.handler(deps, { files: ['src/Checkout.tsx'] })) as Record<
+      string,
+      unknown
+    >;
+    expect(result['verified']).toBe(Verified.YES);
+    expect(result['flowsRun']).toEqual(['checkout']);
+    expect(result['unknownProvenance']).toEqual(['legacy']);
+    expect(result['unknownProvenanceSuite']).toEqual(
+      expect.objectContaining({ status: 'fail', failed: 1 }),
+    );
+    expect(String(result['because'])).toContain('legacy');
+    expect(String(result['because'])).toContain(
+      '1 flow(s) with unknown sources failed apart from this verdict: legacy. They may cover the change; replay them to see.',
+    );
+    spy.mockRestore();
+    verifySpy.mockRestore();
+  });
 });
 
 /**

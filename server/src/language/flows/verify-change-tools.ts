@@ -81,6 +81,12 @@ const VERIFY_CHANGE: ToolDef = {
     changedFiles: z.array(z.string()),
     flowsRun: z.array(z.string()),
     suite: z.unknown().optional(),
+    unknownProvenanceSuite: z
+      .unknown()
+      .optional()
+      .describe(
+        'Replay results for unknown-provenance flows that ran apart from the change verdict.',
+      ),
     // Session-EXEMPT: declare the one-shot human feedback ask or a validating profile strips it.
     feedback_prompt: z.unknown().optional(),
     unknownProvenance: z.array(z.string()),
@@ -120,7 +126,13 @@ const VERIFY_CHANGE: ToolDef = {
     const { flows, projectDir } = await namedFlowsForSession(deps, asString(args['sessionId']));
     const changed = await resolveChangedFiles(files, since, projectDir);
     const changedFiles = changed.files;
-    const { affected, unknownProvenance } = affectedSavedFlows(flows, changedFiles);
+    const {
+      affected,
+      covering: coveringFlows,
+      unknownProvenance,
+    } = affectedSavedFlows(flows, changedFiles);
+    const covering = coveringFlows ?? affected.filter((name) => !unknownProvenance.includes(name));
+    const toRun = covering.length > 0 ? covering : affected;
 
     if (0 === changedFiles.length) {
       return {
@@ -179,7 +191,7 @@ const VERIFY_CHANGE: ToolDef = {
     }
     const suite = asRecord(
       await verify.handler(deps, {
-        names: affected,
+        names: toRun,
         ...(asNumber(args['parallel']) === undefined ? {} : { parallel: args['parallel'] }),
         ...(asNumber(args['budgetMs']) === undefined ? {} : { budgetMs: args['budgetMs'] }),
         ...('boolean' === typeof args['ignoreHTTPSErrors']
@@ -188,6 +200,21 @@ const VERIFY_CHANGE: ToolDef = {
         ...(asString(args['sessionId']) === undefined ? {} : { sessionId: args['sessionId'] }),
       }),
     ) as SuiteResult;
+
+    let unknownProvenanceSuite: SuiteResult | undefined;
+    if (covering.length > 0 && unknownProvenance.length > 0) {
+      unknownProvenanceSuite = asRecord(
+        await verify.handler(deps, {
+          names: unknownProvenance,
+          ...(asNumber(args['parallel']) === undefined ? {} : { parallel: args['parallel'] }),
+          ...(asNumber(args['budgetMs']) === undefined ? {} : { budgetMs: args['budgetMs'] }),
+          ...('boolean' === typeof args['ignoreHTTPSErrors']
+            ? { ignoreHTTPSErrors: args['ignoreHTTPSErrors'] }
+            : {}),
+          ...(asString(args['sessionId']) === undefined ? {} : { sessionId: args['sessionId'] }),
+        }),
+      );
+    }
 
     const failed = suite.failed ?? 0;
     const passed = suite.passed ?? 0;
@@ -208,21 +235,26 @@ const VERIFY_CHANGE: ToolDef = {
           .filter((n): n is string => n !== undefined)
       : // No per-failure detail: the failure is somewhere in the set that ran, so ask the question
         // of all of them rather than guessing which.
-        affected;
+        toRun;
     const attributed = attributedFailures(failingNames, unknownProvenance);
     const earnedNo = verdict === Verified.NO && attributed.length > 0;
     const reported = verdict === Verified.NO && !earnedNo ? Verified.UNKNOWN : verdict;
     if (reported !== Verified.YES) {
+      let becauseReason: string;
+      if (earnedNo) {
+        becauseReason = `${String(failed)} of ${String(suite.total ?? toRun.length)} covering flows failed, including ${attributed.join(', ')}, which cover the changed files${provenanceNote}`;
+      } else if (verdict === Verified.NO) {
+        becauseReason = `flows failed, but Reticle cannot tell which sources any of them cover (${failingNames.join(', ')}) — so this says nothing about the files you changed. Re-record them so their sources are stamped, or read the replay yourself`;
+      } else {
+        becauseReason = `the covering flows ran but proved nothing (${String(suite.status)}) — they assert no observable consequence, so a green from them would not have meant your change is safe${provenanceNote}`;
+      }
       return {
         verified: reported,
-        because: earnedNo
-          ? `${String(failed)} of ${String(suite.total ?? affected.length)} covering flows failed, including ${attributed.join(', ')}, which cover the changed files${provenanceNote}`
-          : verdict === Verified.NO
-            ? `flows failed, but Reticle cannot tell which sources any of them cover (${failingNames.join(', ')}) — so this says nothing about the files you changed. Re-record them so their sources are stamped, or read the replay yourself`
-            : `the covering flows ran but proved nothing (${String(suite.status)}) — they assert no observable consequence, so a green from them would not have meant your change is safe${provenanceNote}`,
+        because: becauseReason,
         changedFiles,
-        flowsRun: affected,
+        flowsRun: toRun,
         suite,
+        ...(unknownProvenanceSuite === undefined ? {} : { unknownProvenanceSuite }),
         unknownProvenance,
         measured: ['flows'],
       };
@@ -234,15 +266,16 @@ const VERIFY_CHANGE: ToolDef = {
     const decidingContradictions = extra.contradictions.filter((c) => !isAdvisory(c.kind));
     if (decidingContradictions.length > 0) {
       const kinds = decidingContradictions.map((c) => c.kind).join(', ');
-      const earned = attributedFailures(affected, unknownProvenance).length > 0;
+      const earned = attributedFailures(toRun, unknownProvenance).length > 0;
       return {
         verified: earned ? Verified.NO : Verified.UNKNOWN,
         because: earned
           ? `every covering flow passed, but channels disagreed during the replay (${kinds}) — a green suite over a failed write is the false green worth looking at${provenanceNote}`
-          : `channels disagreed during the replay (${kinds}), but Reticle cannot tell which sources any of the flows that ran cover (${affected.join(', ')}), so this says nothing about the files you changed. Drive the change directly; the drive is saved as a flow with its sources stamped`,
+          : `channels disagreed during the replay (${kinds}), but Reticle cannot tell which sources any of the flows that ran cover (${toRun.join(', ')}), so this says nothing about the files you changed. Drive the change directly; the drive is saved as a flow with its sources stamped`,
         changedFiles,
-        flowsRun: affected,
+        flowsRun: toRun,
         suite,
+        ...(unknownProvenanceSuite === undefined ? {} : { unknownProvenanceSuite }),
         unknownProvenance,
         contradictions: extra.contradictions,
         ...(extra.untouched === undefined ? {} : { untouched: extra.untouched }),
@@ -252,25 +285,45 @@ const VERIFY_CHANGE: ToolDef = {
 
     // The mirror of `earnedNo`: a green from flows that ran only because their sources are unknown
     // says nothing about these files either. At least one attributed flow has to have passed.
-    if (0 === attributedFailures(affected, unknownProvenance).length) {
+    if (0 === attributedFailures(toRun, unknownProvenance).length) {
       return {
         verified: Verified.UNKNOWN,
-        because: `the flows that ran passed, but Reticle cannot tell which sources any of them cover (${affected.join(', ')}), so this says nothing about the files you changed. Drive the change directly; the drive is saved as a flow with its sources stamped`,
+        because: `the flows that ran passed, but Reticle cannot tell which sources any of them cover (${toRun.join(', ')}), so this says nothing about the files you changed. Drive the change directly; the drive is saved as a flow with its sources stamped`,
         changedFiles,
-        flowsRun: affected,
+        flowsRun: toRun,
         suite,
+        ...(unknownProvenanceSuite === undefined ? {} : { unknownProvenanceSuite }),
         unknownProvenance,
         ...(0 === extra.contradictions.length ? {} : { contradictions: extra.contradictions }),
         measured: extra.measured,
       };
     }
 
+    const unknownFailures = Array.isArray(unknownProvenanceSuite?.failures)
+      ? unknownProvenanceSuite.failures
+          .map((f) =>
+            'object' === typeof f && f !== null ? asString(asRecord(f)['flow']) : undefined,
+          )
+          .filter((n): n is string => n !== undefined)
+      : [];
+    let unknownFailedNames: string[] = [];
+    if (unknownFailures.length > 0) {
+      unknownFailedNames = unknownFailures;
+    } else if ((unknownProvenanceSuite?.failed ?? 0) > 0) {
+      unknownFailedNames = unknownProvenance;
+    }
+    let because = `all ${String(passed)} flows covering these files passed${provenanceNote}${extra.untouched === undefined ? '' : `, with ${String(extra.untouched.length)} controls left undriven`}`;
+    if (unknownFailedNames.length > 0) {
+      because += `. ${String(unknownFailedNames.length)} flow(s) with unknown sources failed apart from this verdict: ${unknownFailedNames.join(', ')}. They may cover the change; replay them to see.`;
+    }
+
     return {
       verified: Verified.YES,
-      because: `all ${String(passed)} flows covering these files passed${provenanceNote}${extra.untouched === undefined ? '' : `, with ${String(extra.untouched.length)} controls left undriven`}`,
+      because,
       changedFiles,
-      flowsRun: affected,
+      flowsRun: toRun,
       suite,
+      ...(unknownProvenanceSuite === undefined ? {} : { unknownProvenanceSuite }),
       unknownProvenance,
       ...(0 === extra.contradictions.length ? {} : { contradictions: extra.contradictions }),
       ...(extra.untouched === undefined ? {} : { untouched: extra.untouched }),
