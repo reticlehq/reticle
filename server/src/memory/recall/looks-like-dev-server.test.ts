@@ -45,6 +45,10 @@ describe('what counts as a dev server', () => {
     expect(looksLikeDevServer(200, undefined)).toBe(false);
   });
 
+  it('rejects a WebSocket-only listener even when its 426 answer is labelled HTML (#2288)', () => {
+    expect(looksLikeDevServer(426, 'text/html')).toBe(false);
+  });
+
   it('accepts a redirect, which a dev server behind a base path does', () => {
     expect(looksLikeDevServer(302, undefined)).toBe(true);
   });

@@ -40,6 +40,7 @@ import {
   describePage,
   findingBeforeOpen,
   PageFinding,
+  firstPageCandidate,
   type PageProbe,
 } from './probe/page-probe.js';
 import { pendingViteConfigCause, remainingSteps, type Progress } from './remaining-steps.js';
@@ -261,24 +262,6 @@ export interface SetupInput {
   readonly pollMs: number;
 }
 
-/**
- * For a root dev script: the first candidate that serves an HTML page, with its probe. An API that
- * answers first with JSON is skipped, so its url is never taken for the app's. A probe that does
- * not say whether it read HTML counts as a page, as every probe did before.
- */
-async function firstPageCandidate(
-  urls: readonly string[],
-  probePage: (url: string) => Promise<PageProbe>,
-): Promise<{ url: string; probe: PageProbe } | undefined> {
-  for (const url of urls) {
-    const probe = await probePage(url);
-    if (probe.served && false !== probe.html) {
-      return { url, probe };
-    }
-  }
-  return undefined;
-}
-
 const asProgress = (input: SetupInput, o: Partial<SetupOutcome>): Progress => ({
   initDone: true,
   devServerUp: undefined !== o.url,
@@ -402,16 +385,14 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
       let spokeAtMs: number | undefined;
       for (;;) {
         const hint = { port: input.devPort, names: input.appNames };
-        // A root script starts the app and its siblings (an API): wait for the one that serves a page.
-        const rootPick =
-          undefined === input.devCommandDir
-            ? undefined
-            : await firstPageCandidate(
-                candidateUrls(fx.devServerOutput(), fx.observedPorts(), hint),
-                fx.probePage,
-              );
+        // One dev command can bind sibling listeners (an API, or Vite's WebSocket-only HMR port).
+        // Wait for the one that serves a page; a port that answers only an upgrade is never opened.
+        const pagePick = await firstPageCandidate(
+          candidateUrls(fx.devServerOutput(), fx.observedPorts(), hint),
+          fx.probePage,
+        );
         const watching =
-          rootPick?.url ?? urlToWatch(fx.devServerOutput(), fx.observedPorts(), hint);
+          pagePick?.url ?? urlToWatch(fx.devServerOutput(), fx.observedPorts(), hint);
         const waitedMs = fx.now() - startedAt;
         const progress = waitProgressLine(waitedMs, watching, spokeAtMs);
         if (progress !== undefined) {
@@ -419,12 +400,10 @@ export async function runSetupPhases(input: SetupInput, fx: SetupEffects): Promi
           spokeAtMs = waitedMs;
         }
         let probe: PageProbe;
-        if (undefined !== rootPick) {
-          probe = rootPick.probe;
-        } else if (undefined === watching || undefined !== input.devCommandDir) {
-          probe = { served: false, sdkInPage: false };
+        if (undefined !== pagePick) {
+          probe = pagePick.probe;
         } else {
-          probe = await fx.probePage(watching);
+          probe = { served: false, sdkInPage: false };
         }
         const serving = probe.served;
         const verdict = judgeWait({
