@@ -32,6 +32,9 @@ from gi.repository import Atspi, Gdk  # noqa: E402
 
 READ_LIMIT = 20000
 SHORT_LIST = 200
+# A container with more children than this is not read child by child: a sheet of Calc has a child
+# for each cell, and to read them took minutes.
+LONG_TABLE = 5000
 QUIET_MS = 150
 PICTURE_WIDTH = 240
 STEP = 24
@@ -134,6 +137,46 @@ def children_of(el):
     return [c for c in (safe(lambda k=k: el.get_child_at_index(k)) for k in range(safe(el.get_child_count, 0))) if c is not None]
 
 
+def child_at(el, k):
+    return safe(lambda: el.get_child_at_index(k))
+
+
+def on_screen_cells(el):
+    """The places of the cells of a long table that are on the screen, or None if it cannot tell.
+
+    The cells at two corners of the table's box give the first and the last row and column.
+    """
+    table, component = safe(el.get_table_iface), safe(el.get_component_iface)
+    box = frame_of(el)
+    if table is None or component is None or box is None:
+        return None
+    x, y, width, height = box
+
+    def cell_at(px, py):
+        cell = safe(lambda: Atspi.Component.get_accessible_at_point(component, px, py, Atspi.CoordType.SCREEN))
+        return safe(cell.get_index_in_parent, -1) if cell is not None else -1
+
+    # A column header has no cell under it: step down from the top, and up from the bottom.
+    first = next((k for k in (cell_at(x + 2, y + 2 + STEP * j) for j in range(8)) if k >= 0), -1)
+    last = next((k for k in (cell_at(x + width - 3, y + height - 3 - STEP * j) for j in range(8)) if k >= 0), -1)
+    at = [first, last]
+    if min(at) < 0:
+        return None
+    # A point on a column header is in no row: the rows start at the first one.
+    rows = [max(0, safe(lambda i=i: Atspi.Table.get_row_at_index(table, i), 0)) for i in at]
+    columns = [max(0, safe(lambda i=i: Atspi.Table.get_column_at_index(table, i), 0)) for i in at]
+    places = []
+    for r in range(rows[0], rows[1] + 1):
+        for c in range(columns[0], columns[1] + 1):
+            cell = safe(lambda r=r, c=c: Atspi.Table.get_accessible_at(table, r, c))
+            place = safe(cell.get_index_in_parent, -1) if cell is not None else -1
+            if place >= 0:
+                places.append(place)
+            if len(places) >= LONG_TABLE:
+                return places
+    return places
+
+
 def value_of(el, role, held=None):
     if has(el, Atspi.StateType.CHECKABLE, held) or role in ('AXCheckBox', 'AXRadioButton'):
         return '1' if has(el, Atspi.StateType.CHECKED, held) else '0'
@@ -176,6 +219,16 @@ class Reader:
             node['value'] = value
         if has(el, Atspi.StateType.SELECTED, held):
             node['selected'] = True
+        count = safe(el.get_child_count, 0) if depth < 80 else 0
+        if count > LONG_TABLE:
+            # ponytail: no table interface or no cell at a corner, so the first children stand for the
+            # rest. GTK says every cell is showing, so their states tell nothing.
+            places = on_screen_cells(el)
+            if places is None:
+                places = list(range(SHORT_LIST))
+            node['notShown'] = count - len(places)
+            kids = [child_at(el, k) for k in places]
+            return self.fill(node, kids, places, depth)
         kids = children_of(el) if depth < 80 else []
         places = None
         # A long list gives the items on the screen, with their places, and says how many it left out.
@@ -189,6 +242,9 @@ class Reader:
                 kids = [kids[k] for k in places]
             else:
                 places = None
+        return self.fill(node, kids, places, depth)
+
+    def fill(self, node, kids, places, depth):
         if self.budget <= 0 and kids:
             node['notShown'] = node.get('notShown', 0) + len(kids)
             node['children'] = []
@@ -234,10 +290,12 @@ def find(pid, path):
         return None
     el = shown[places[0]]
     for place in places[1:]:
-        kids = children_of(el)
-        if place >= len(kids):
+        # One child by its place: a sheet of Calc has a child for each cell.
+        if place >= safe(el.get_child_count, 0):
             return None
-        el = kids[place]
+        el = child_at(el, place)
+        if el is None:
+            return None
     return {'el': el}
 
 

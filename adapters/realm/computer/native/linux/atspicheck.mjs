@@ -8,7 +8,9 @@
 //   - an element that is not there any more is refused as stale, never acted on;
 //   - a drag on the canvas draws a line that no element shows: the realm reports the pixels that
 //     changed, and a bar that moves by itself is not counted as an effect;
-//   - the window takes a frame and a half of the screen, and the answer is its new frame.
+//   - the window takes a frame and a half of the screen, and the answer is its new frame;
+//   - a table of 600,000 cells (bigtable.py) is read in the time an act has: the cells on the
+//     screen, with how many it left out, and a click on one of them reaches it.
 //
 //   node native/linux/atspicheck.mjs
 //
@@ -198,7 +200,60 @@ try {
   const closed = (await commands.answer(ReticleCommand.SNAPSHOT, {})).tree;
   assert.doesNotMatch(closed, /Export 7/, `Escape did not close the menu:\n${closed}`);
   held += 1;
-  process.stdout.write(`computer atspicheck: ${String(held)} of 10 cases held\n`);
+  held += await bigTable();
+  process.stdout.write(`computer atspicheck: ${String(held)} of 11 cases held\n`);
 } finally {
   fixture.kill();
+}
+
+// A sheet of LibreOffice Calc gives a child for each cell. The helper read every child of a long
+// table to keep the ones on the screen, and a read of Calc took more than two minutes.
+async function bigTable() {
+  const app = spawn('python3', [fileURLToPath(new URL('bigtable.py', import.meta.url))], {
+    stdio: 'inherit',
+  });
+  try {
+    let table;
+    for (let i = 0; i < 60 && table === undefined; i += 1) {
+      await sleep(500);
+      const listed = JSON.parse(
+        execFileSync(launch.file, [...launch.prefix, 'apps'], { encoding: 'utf8' }),
+      ).apps;
+      table = listed.find((one) => 'bigtable.py' === one.name)?.pid;
+    }
+    assert.ok(table, 'the big table did not join the accessibility bus');
+    // The bridge waits 8 seconds for a command; a read that takes longer is no read.
+    const read = JSON.stringify(
+      JSON.parse(
+        execFileSync(launch.file, [...launch.prefix, 'tree', String(table)], {
+          encoding: 'utf8',
+          timeout: 8000,
+        }),
+      ).tree,
+    );
+    assert.match(read, /r0c0/, 'the cells on the screen were not read');
+    assert.doesNotMatch(read, /r150000c0/, 'a cell far below the screen was read');
+    assert.match(read, /"notShown":[0-9]{6}/, 'the table does not say how many cells it left out');
+    const peer = new PeerCommands({
+      driver: new MacDriver({
+        helper: launch.file,
+        app: 'bigtable.py',
+        pid: table,
+        run: servingHelper(launch.prefix),
+      }),
+      emit: () => undefined,
+    });
+    await peer.answer(ReticleCommand.SNAPSHOT, {});
+    const cell = (await peer.answer(ReticleCommand.QUERY, { name: 'r3c1' })).elements[0];
+    assert.ok(cell?.ref, 'the cell r3c1 has no ref');
+    const clicked = await peer.answer(ReticleCommand.ACT, {
+      ref: cell.ref,
+      action: ActionType.CLICK,
+      args: { foreground: true, settleMs: 400 },
+    });
+    assert.ok(clicked.ok !== false, `the click on a cell failed: ${JSON.stringify(clicked)}`);
+    return 1;
+  } finally {
+    app.kill();
+  }
 }
