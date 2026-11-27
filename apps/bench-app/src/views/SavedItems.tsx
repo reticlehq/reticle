@@ -14,8 +14,10 @@ import { Ambient, ambientEnabled, STRICT_DUP_MOUNT_LABEL } from '../reticle-ambi
  *      between "response landed" and "DOM moved" that response-ignored measures.
  *
  * This means one control covers both test polarities:
- *   - ?renderDelay=0   → correct app: must NOT be accused (false-accusation gate)
- *   - ?renderDelay=600 → broken app:  must be caught     (missed-catch gate)
+ *   - ?renderDelay=0     → correct app: must NOT be accused (false-accusation gate)
+ *   - ?renderDelay=10000 → broken app:  must be caught     (missed-catch gate) — 10s because the
+ *     observe chain in the spec is unbounded, and a margin a loaded runner can cross is a flake
+ *     (#2525). The spec never waits on the render, so the wide margin costs no test time.
  *
  * The `broken=1` query flag exercises the dropped-response variant: the server returns 200 OK but
  * no `id`, so the client has nothing to render — the write is silently lost.

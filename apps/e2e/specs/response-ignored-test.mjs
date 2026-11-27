@@ -19,8 +19,17 @@ import { TEST_BRIDGE_PORT } from '../gate-harness.mjs';
 //      lands, so one control produces both polarities from one page.
 //
 // What is pinned here:
-//   polarity A (correct, renderDelay=0):  write succeeds, UI updates, must NOT be accused.
-//   polarity B (broken, renderDelay=800): write succeeds, UI update trails by 800ms, must be caught.
+//   polarity A (correct, renderDelay=0):    write succeeds, UI updates, must NOT be accused.
+//   polarity B (broken, renderDelay=10000): write succeeds, UI update trails by 10s, must be caught.
+//
+// Why 10s (#2525): the render must trail the observe, and the gap between the response landing and
+// the observe snapshot is the flake window. That chain is short — wait_for's resolution, one 50ms
+// sleep, one in-process tool call, all on loopback — but it is unbounded, and a loaded CI runner
+// stalled it past the old 800ms margin once: the late render landed inside the window, read as an
+// answer, and a correct PR left the merge queue red. 10s is ~50x the loaded chain, and it costs
+// nothing: the spec never waits on the render, so the page closes with the timer still pending.
+// A runner sick enough to stall 10s inside this ~100ms window fails the battery's own 3-5s waits
+// all over, so that run is already red for reasons that do not read as a detector failure.
 //
 // Both checks are equally important. Passing only A proves the detector is liberal (never fires).
 // Passing only B proves it is aggressive (always fires). Both passing proves it fires exactly when
@@ -134,8 +143,8 @@ async function runPolarity(label, url, sessionId) {
   //
   // For polarity A (renderDelay=0): state change fires synchronously with the POST callback —
   // it's in the window AFTER the POST, uiAdvanced()=true → no response-ignored.
-  // For polarity B (renderDelay=800): nothing moves after the POST for 800ms. We observe at
-  // ~150ms (well before 800ms), see the POST but no state change → response-ignored fires.
+  // For polarity B (renderDelay=10000): nothing moves after the POST for 10s. We observe at
+  // ~150ms (well before 10s), see the POST but no state change → response-ignored fires.
 
   // Step 1: click — returns quickly, don't wait for the POST here.
   const clicked = await T(sessionId, 'reticle_act', { ref: submitRef, action: 'click' });
@@ -152,7 +161,7 @@ async function runPolarity(label, url, sessionId) {
 
   // Step 4: observe from immediately after the POST settled. At this point:
   //   - Polarity A: the store already updated (same microtask as fetch callback) → state change present
-  //   - Polarity B: the 800ms timer has NOT fired → no state change present
+  //   - Polarity B: the 10s timer has NOT fired → no state change present
   // Sleep 50ms for polarity A's React re-render to flush into the DOM event buffer.
   await sleep(50);
 
@@ -234,12 +243,12 @@ if (correctResult !== null) {
   );
 }
 
-// ── Polarity B: broken app — render is delayed 800ms after the response. ─────────────────────
+// ── Polarity B: broken app — render is delayed 10s after the response. ──────────────────────
 // The response has landed by the time reticle_assert runs; the DOM has not moved yet.
 // Must be caught as response-ignored (no missed detection).
 const brokenRun = await runPolarity(
   'broken',
-  'http://localhost:4310/?session=resp-ignored-broken&renderDelay=800',
+  'http://localhost:4310/?session=resp-ignored-broken&renderDelay=10000',
   'resp-ignored-broken',
 );
 const brokenResult = brokenRun?.result ?? null;
@@ -256,7 +265,7 @@ if (brokenResult !== null) {
   );
   const contradictionKinds = (brokenResult.contradictions ?? []).map((c) => c.kind);
   chk(
-    '[broken] an app that renders 800ms after the response IS flagged as response-ignored',
+    '[broken] an app that renders 10s after the response IS flagged as response-ignored',
     contradictionKinds.includes('response-ignored'),
     `verified=${String(brokenResult.verified)} contradictions=[${contradictionKinds.join(', ')}] because=${String(brokenResult.because ?? '').slice(0, 120)}`,
   );
