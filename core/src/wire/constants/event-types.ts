@@ -219,6 +219,17 @@ export type RouteChangeHow = (typeof RouteChangeHow)[keyof typeof RouteChangeHow
 export const ROUTE_CHANGE_HOW_FIELD = 'how';
 
 /**
+ * Wire field on `dom.attr` and `dom.text` carrying the minted refs of the changed element's
+ * ancestors, nearest first.
+ *
+ * A change on a descendant of the acted control — a label living in a child span of the clicked
+ * button (#2318) — reports the descendant's ref. Without this field the wire carries no way to
+ * tell "inside the control the action touched" from churn on an unrelated element. Only refs the
+ * agent was already shown are collected; the field never mints one.
+ */
+export const INSIDE_FIELD = 'inside';
+
+/**
  * Why a `field.change` was emitted.
  *
  * `input` is a burst of keystrokes and `change` is the commit that ends one — both are the user's

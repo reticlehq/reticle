@@ -112,6 +112,7 @@ export {
   EventType,
   FieldChangeField,
   FieldChangeKind,
+  INSIDE_FIELD,
   LivePoliteness,
   MediaEvent,
   ROUTE_CHANGE_HOW_FIELD,

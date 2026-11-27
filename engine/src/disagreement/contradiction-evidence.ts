@@ -19,6 +19,7 @@ import {
   EventType,
   FieldChangeField,
   FieldChangeKind,
+  INSIDE_FIELD,
   MUTATING_METHODS,
   PredicateKind,
   ROUTE_CHANGE_HOW_FIELD,
@@ -661,7 +662,7 @@ interface Change {
 
 /** The attribute or text change this event made to `ref` — or, when `deep`, to a descendant of it via `inside` (#2318). No-op writes are skipped. */
 function changeOf(event: ReticleEvent, ref: string, deep = false): Change | undefined {
-  const inside = event.data['inside'];
+  const inside = event.data[INSIDE_FIELD];
   if (event.ref !== ref && !(deep && Array.isArray(inside) && inside.includes(ref))) {
     return undefined;
   }
