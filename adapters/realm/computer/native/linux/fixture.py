@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-# A small GTK application for atspicheck.mjs: a field, a button that writes what it saved, a check
-# box, and a canvas ("Ink") where a drag draws a line that no element shows. A red bar beside the
-# canvas moves by itself all the time, as a video does: its pixels must not count as an effect.
+# A small GTK application for atspicheck.mjs: a menu bar, a field, a button that writes what it
+# saved, a check box, a paragraph without a name, and a canvas ("Ink") where a drag draws a line
+# that no element shows. A red bar beside the canvas moves by itself all the time, as a video
+# does: its pixels must not count as an effect.
 #
 #   python3 native/linux/fixture.py
 import gi
 
 gi.require_version('Gtk', '3.0')
-from gi.repository import GLib, Gtk  # noqa: E402
+gi.require_version('Atk', '1.0')
+from gi.repository import Atk, GLib, Gtk  # noqa: E402
 
 window = Gtk.Window(title='Reticle fixture')
 window.set_default_size(460, 320)
@@ -15,13 +17,27 @@ window.move(80, 80)
 box = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=6)
 window.add(box)
 
+# A menu bar with a closed menu of many items, as LibreOffice has hundreds.
+menus = Gtk.MenuBar()
+file_item = Gtk.MenuItem(label='File')
+file_menu = Gtk.Menu()
+for k in range(40):
+    file_menu.append(Gtk.MenuItem(label=f'Export {k}'))
+file_item.set_submenu(file_menu)
+menus.append(file_item)
+box.pack_start(menus, False, False, 0)
+
 field = Gtk.Entry()
 field.get_accessible().set_name('Name')
 status = Gtk.Label(label='Ready')
 save = Gtk.Button(label='Save')
 save.connect('clicked', lambda _b: status.set_text(f'Saved: {field.get_text()}'))
 remember = Gtk.CheckButton(label='Remember')
-for widget in (field, save, remember, status):
+# A paragraph as LibreOffice gives one: words, and no name.
+words = Gtk.Label(label='Words without a name')
+words.get_accessible().set_name('')
+words.get_accessible().set_role(Atk.Role.PARAGRAPH)
+for widget in (field, save, remember, status, words):
     box.pack_start(widget, False, False, 0)
 
 row = Gtk.Box(spacing=6)
