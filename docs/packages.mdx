@@ -245,6 +245,22 @@ A lint rule makes the signal layer self-enforcing, which is the only way a conve
 
 ---
 
+## @reticlehq/computer
+
+**Reads a desktop application from the outside, through the operating system.**
+
+**Why it exists:** many applications have no SDK and no web page to put one in: a native Mac app, a browser's own window, a Windows tool. This package joins such an application to Reticle as a session. It reads the accessibility tree, acts on one element at a time, and reports what each action changed. It refuses a click that a person could not make, and it says when the windows are on another Space.
+
+```bash
+npx @reticlehq/computer --app Notes
+```
+
+macOS has the deepest support. Windows (UI Automation) and Linux (AT-SPI) have helpers too. The application needs no change.
+
+**Depends on:** `@reticlehq/core`.
+
+---
+
 ## reticle-tauri
 
 **The Rust crate**, on crates.io. Versioned in lockstep with the npm packages, so `3.8` here and `3.8` there mean the same release.

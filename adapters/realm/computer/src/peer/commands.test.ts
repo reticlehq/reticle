@@ -2254,6 +2254,79 @@ describe('PeerCommands', () => {
 
 // A person arranges windows: puts two side by side, makes one small, fills the screen. The realm
 // had no action for it, so two tabs of Dia could not be put next to each other.
+// The agent said what it was about to do, and a desktop session refused it: "this page does not
+// serve narrate". The person watching the HUD saw each action and never why.
+// Dia was on another Space, and the page look answered with no window and no reason. The reason
+// rode in `next`, and the server says a `next` line only once in a session, so the second look
+// read as an application with no window.
+describe('a window on another Space', () => {
+  it('says on every look that the application cannot be read, and why', async () => {
+    const driver: UiDriver = {
+      ...fakeDriver(),
+      read: () =>
+        Promise.resolve({
+          root: { role: UiRole.APPLICATION, name: 'Dia', states: [], children: [] },
+          unread: 0,
+          windowsNotOnScreen: 2,
+        } as unknown as UiRead),
+    };
+    const commands = new PeerCommands({ driver, emit: () => undefined });
+    for (const _ of [1, 2]) {
+      const answer = (await commands.answer(ReticleCommand.SNAPSHOT, {})) as Record<
+        string,
+        unknown
+      >;
+      expect(answer['readable']).toBe(false);
+      expect(String(answer['why'])).toContain('another Space');
+      expect(answer['next']).toBeUndefined();
+    }
+  });
+});
+
+// The server sends a document key (Escape, a shortcut) with no ref: its own message says the key
+// needs none. The computer realm then failed with "ref '' no longer resolves to an element".
+describe('a key with no ref', () => {
+  it('goes to the window, as a person types into the application in front', async () => {
+    const { commands, asked } = peer();
+    await commands.answer(ReticleCommand.ACT, {
+      action: ActionType.PRESS,
+      args: { text: 'g', modifiers: ['Meta'] },
+    });
+    expect(asked[0]?.kind).toBe(ActKind.KEY);
+    expect(asked[0]?.value).toBe('Meta+g');
+    expect(asked[0]?.target.node.role).toBe(UiRole.WINDOW);
+  });
+});
+
+describe('narrate', () => {
+  it('shows what the agent says in the HUD, and declares that it serves it', async () => {
+    const said: string[] = [];
+    const hud = {
+      app: () => undefined,
+      move: () => undefined,
+      glow: () => undefined,
+      act: (text: string) => {
+        said.push(text);
+      },
+      effect: () => undefined,
+      paused: () => false,
+      stopped: () => false,
+      close: () => undefined,
+    };
+    const commands = new PeerCommands({ driver: fakeDriver(), emit: () => undefined, hud });
+    expect(
+      await commands.answer(ReticleCommand.NARRATE, { text: 'Checking the AWS credits' }),
+    ).toEqual({ ok: true, shown: true });
+    expect(said).toEqual(['Checking the AWS credits']);
+    // With no HUD, nothing is shown, and the answer says so.
+    const blind = new PeerCommands({ driver: fakeDriver(), emit: () => undefined });
+    expect(await blind.answer(ReticleCommand.NARRATE, { text: 'x' })).toEqual({
+      ok: true,
+      shown: false,
+    });
+  });
+});
+
 describe('window', () => {
   const moved = (frame: [number, number, number, number]): UiRead => {
     const before = read('Ready');

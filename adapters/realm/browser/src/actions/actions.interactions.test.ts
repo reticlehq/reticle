@@ -291,6 +291,18 @@ describe('a contenteditable target is refused legibly', () => {
   });
 
   /**
+   * Slack's search box is a contenteditable. `type` was refused with "use insertText", and the
+   * search dialog had closed before the agent sent it. `type` appends, and so does `insertText`
+   * through the browser's editing path, so `type` now takes that path on a contenteditable.
+   */
+  it('types into a contenteditable through the editing path, at the end', async () => {
+    document.body.innerHTML = '<div id="rt" contenteditable="true">hello</div>';
+    const el = document.getElementById('rt') as HTMLElement;
+    await executeAction(refs.refFor(el), 'type', { text: '!' });
+    expect(el.textContent).toBe('hello!');
+  });
+
+  /**
    * Monaco and CodeMirror 6 do not set `contenteditable`. They expose a `role="textbox"` div and
    * keep the document in the EditContext API, so `type` fell through to "cannot type into a <div>".
    * That sentence sends the agent looking for a different element. There is not one.

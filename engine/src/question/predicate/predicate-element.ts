@@ -639,6 +639,19 @@ export async function evalElement(
         },
       };
     }
+    // Nothing matches it in any state: it was removed. The role-only list below named other,
+    // unrelated elements of that role (a "Huddle" dialog for a removed "Search" dialog).
+    if (ElementState.HIDDEN === state) {
+      return {
+        pass: false,
+        failureReason:
+          `nothing matching ${subject} is on the page: it was removed, not hidden. ` +
+          'To assert that it is gone, use `absent: true`',
+        observed: `no element matching ${subject}, in any state`,
+        expected: `an element matching ${subject} in state '${state}'`,
+        assertion: 'element.state',
+      };
+    }
   }
   if (query.role !== undefined && query.name !== undefined) {
     // The diagnosis looks where the check looked. A check scoped to one cell must not list the
@@ -934,8 +947,10 @@ async function nearestByName(
     { label: name, ...within },
     { placeholder: name, ...within },
   ]) {
-    const found = await matchOnce(session, query, state);
-    if (found.matched) {
+    // A diagnosis only. A realm that has no such field (the computer realm has no placeholders)
+    // refuses the query; that must not take the verdict with it, so the next locator is tried.
+    const found = await matchOnce(session, query, state).catch(() => undefined);
+    if (true === found?.matched) {
       return found.elements.slice(0, MAX_BY_NAME);
     }
   }

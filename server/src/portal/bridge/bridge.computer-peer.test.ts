@@ -165,6 +165,10 @@ describe('a computer peer on the bridge', () => {
     expect(window).not.toMatch(/a page cannot/);
     const point = await said({ ref: 'e1', action: 'click', args: { point: { x: 5, y: 5 } } });
     expect(point).not.toMatch(/is for a desktop session/);
+    // A hover went to the page's real-input route, which a desktop session does not have: "cannot
+    // hover without a real pointer". The realm moves its own pointer; the server must pass it on.
+    const hover = await said({ ref: 'e1', action: 'hover', args: { foreground: true } });
+    expect(hover).not.toMatch(/cannot hover without a real pointer/);
     // The application is shared by the tests that follow.
     app.pressed.length = 0;
   });

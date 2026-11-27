@@ -46,7 +46,7 @@ import {
   testidOf,
 } from './form.js';
 import type { ActResult } from './form.js';
-import { READ_STATE, see } from './seen.js';
+import { keyTarget, READ_STATE, see } from './seen.js';
 import { arrangeWindow } from './window.js';
 import { refusalOf } from './link-switch.js';
 import {
@@ -189,6 +189,7 @@ export const PEER_COMMANDS = [
   ReticleCommand.SCROLL,
   ReticleCommand.CAPABILITIES,
   ReticleCommand.CAPTURE,
+  ReticleCommand.NARRATE,
 ] as const;
 
 type Args = Record<string, unknown>;
@@ -349,9 +350,10 @@ export class PeerCommands {
       case ReticleCommand.PRESENTER:
         return this.#presenter(args);
       case ReticleCommand.NARRATE:
-        // What the agent did in a page, in the log the person reads while computer use is live.
+        // What the agent did in a page, or what it is about to do here, in the log the person reads
+        // while computer use is live. It is declared in COMMANDS: the bridge refused it before.
         this.#deps.hud?.act(text(args['text']) ?? '');
-        return { ok: true };
+        return { ok: true, shown: this.#deps.hud !== undefined };
       case ReticleCommand.IMPACT:
       case ReticleCommand.FLOW_PROGRESS:
       case ReticleCommand.PLAN:
@@ -377,7 +379,9 @@ export class PeerCommands {
       ...(read.windowsNotOnScreen === undefined || 0 === read.windowsNotOnScreen
         ? {}
         : {
-            next: `${String(read.windowsNotOnScreen)} window(s) of this application are on another Space or made small. They cannot be read from here. Ask the person to bring the application to this Space.`,
+            // Not `next`: the server says a `next` line once in a session, and this is a state.
+            readable: false,
+            why: `${String(read.windowsNotOnScreen)} window(s) of this application are on another Space or made small. They cannot be read from here. Ask the person to bring the application to this Space.`,
           }),
       unread: read.unread,
     };
@@ -844,7 +848,9 @@ export class PeerCommands {
         `the computer realm does not have the action ${action}. It has: ${PEER_ACTIONS.join(', ')}.`,
       );
     }
-    let target = await this.#resolve(ref);
+    const keyed = '' === ref && kind === ActKind.KEY;
+    const typed = keyed ? keyTarget(see((await this.#deps.driver.read()).root)) : undefined;
+    let target = typed ?? (await this.#resolve(ref));
     const refused = refusalOf(target, action, more, allowed);
     if (refused !== undefined) {
       throw new Error(refused);

@@ -1,5 +1,5 @@
 import type { ActionTarget } from '@/dom/realm.js';
-import { isRichText } from './value-input.js';
+import { assertNotRichText, isRichText } from './value-input.js';
 
 /**
  * The `insertText` action: check the arguments and the surface, then perform the edit.
@@ -24,6 +24,28 @@ export function insertText(el: ActionTarget, text: unknown): boolean {
     );
   }
   return insertTextInto(el, text);
+}
+
+/**
+ * `type` on a target that is not an input or a textarea. A contenteditable takes it as `insertText`
+ * at the end of its text: both append, and that path updates the editor's model. Slack's search box
+ * is one, and `type` was refused there. A code editor (role="textbox", EditContext) and any other
+ * element are still refused.
+ */
+export function typeIntoNonField(el: ActionTarget, text: unknown): boolean {
+  const flag = el.getAttribute('contenteditable');
+  if (null === flag || 'false' === flag) {
+    assertNotRichText(el, 'type into');
+    throw new Error(`cannot type into a <${el.tagName.toLowerCase()}>`);
+  }
+  // `type` appends: the caret goes to the end, also when a focus put it at the start.
+  el.focus();
+  const end = el.ownerDocument.createRange();
+  end.selectNodeContents(el);
+  end.collapse(false);
+  window.getSelection()?.removeAllRanges();
+  window.getSelection()?.addRange(end);
+  return insertText(el, text);
 }
 
 /** True when the surface keeps its text in an EditContext object instead of the DOM. */

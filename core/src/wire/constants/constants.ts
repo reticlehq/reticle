@@ -691,6 +691,8 @@ export const InputModeReason = {
   /** A production drive presses only in the page. A native key goes to whatever holds focus, so
    * the production policy could not judge the control it pressed. */
   PRODUCTION_PRESS_IN_PAGE: 'production-drive-presses-in-page',
+  // A desktop realm (Reticle's computer) moves its own pointer and keys: the page's route is not its.
+  REALM_OWN_INPUT: 'the-realm-drives-its-own-input',
 } as const;
 export type InputModeReason = (typeof InputModeReason)[keyof typeof InputModeReason];
 
