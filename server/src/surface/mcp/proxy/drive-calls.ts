@@ -8,6 +8,15 @@ import { parseLine as parseJsonRpc } from './proxy-handshake.js';
 const TOOLS_CALL = 'tools/call';
 const EXPLORE_ACTION = 'explore';
 
+export type CompletionKind = 'unknown' | 'not-completed';
+
+const MSG_OUTCOME_UNKNOWN =
+  `The outcome is unknown. The action may have run. Check the app with ${ReticleTool.LOOK} ` +
+  'before retrying a non-idempotent action.';
+const MSG_NOT_COMPLETED = 'The call did NOT complete.';
+const MSG_CONNECTION_DROPPED = (reason: string): string =>
+  `The daemon connection dropped (${reason}) before this call was answered. `;
+
 /** A `tools/call` of reticle_verify explore, directly or through the reticle_run hatch. */
 export function isHarnessDriveCall(msg: { method?: unknown; params?: unknown }): boolean {
   if (TOOLS_CALL !== msg.method) {
@@ -130,8 +139,7 @@ export function streamLossReplies(
 
 /**
  * -32001: a server-defined error. Not -32603 (internal): nothing went wrong INSIDE the call, the
- * transport under it went away, and the distinction is what tells a caller the action may be safe
- * to retry.
+ * transport under it went away. The reply states whether the outcome is known.
  */
 const TRANSPORT_LOSS_CODE = -32001;
 
@@ -146,17 +154,22 @@ export function transportLossReply(
   reason: string,
   nextStep?: string,
   drive = false,
+  completionKind: CompletionKind = 'unknown',
 ): string {
+  let outcomeMessage = MSG_OUTCOME_UNKNOWN;
+  if (drive) {
+    outcomeMessage = MSG_DRIVE_MAY_BE_RUNNING;
+  } else if ('not-completed' === completionKind) {
+    outcomeMessage = MSG_NOT_COMPLETED;
+  }
   return JSON.stringify({
     jsonrpc: '2.0',
     id,
     error: {
       code: TRANSPORT_LOSS_CODE,
       message:
-        (drive
-          ? `the daemon connection dropped (${reason}) before this call was answered. ${MSG_DRIVE_MAY_BE_RUNNING}`
-          : `the daemon connection dropped (${reason}) before this call was answered — it did NOT ` +
-            'complete. Reticle is recovering the connection; retry if the action is safe to repeat.') +
+        MSG_CONNECTION_DROPPED(reason) +
+        outcomeMessage +
         (nextStep === undefined ? '' : ` ${nextStep}`),
     },
   });

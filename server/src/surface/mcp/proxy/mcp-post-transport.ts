@@ -12,6 +12,7 @@ import { MCP_CLIENT_DIRECTORY_HEADER } from '@reticlehq/core';
 import { log } from '@/log.js';
 import { getSessionMetrics } from '@/telemetry/session-metrics.js';
 import { reconnectDelayMs } from '@/surface/mcp/proxy/proxy-backoff.js';
+import type { CompletionKind } from './drive-calls.js';
 
 /** One bounded pool for the short-lived POST side of each MCP SSE session. */
 export const MCP_PROXY_HTTP_AGENT_OPTIONS = {
@@ -25,13 +26,13 @@ const MCP_PROXY_HTTP_AGENT = new http.Agent(MCP_PROXY_HTTP_AGENT_OPTIONS);
 
 /**
  * POST one JSON-RPC line into the daemon's session. Resolves null on success, or a structured
- * failure when the request never reached a server that will answer it.
+ * failure when the POST does not receive a successful response.
  *
  * It used to resolve `void` in every case, logging the failure and moving on. That is the THIRD way
  * a call goes unanswered, and the only one neither `streamLossReplies` nor the queue timer can see:
  * the SSE stream is healthy (so nothing drops) and the request was forwarded (so nothing is queued),
- * but the POST leg is its own TCP connection and an ECONNRESET on it means the daemon never received
- * the call. Nobody was ever going to reply, and the caller waited for its own timeout.
+ * but the POST leg is its own TCP connection. The daemon may have received the call even if that
+ * connection fails. The caller otherwise waits for its own timeout.
  */
 const RETRYABLE_UNSENT_POST_ERRORS = new Set(['ENOBUFS', 'ERR_NO_BUFFER_SPACE', 'EADDRNOTAVAIL']);
 
@@ -46,8 +47,13 @@ export function shouldRetryUnsentPost(
 
 export interface PostFailure {
   reason: string;
+  code?: string | undefined;
   transport: boolean;
   attempts: number;
+}
+
+export function postFailureCompletionKind(failure: PostFailure): CompletionKind {
+  return 'ECONNREFUSED' === failure.code ? 'not-completed' : 'unknown';
 }
 
 type HttpRequest = (
@@ -129,6 +135,7 @@ export function postToSession(
         log('reticle_mcp_proxy_post_error', { error: err.message });
         resolve({
           reason: `post failed: ${err.message}`,
+          code: (err as NodeJS.ErrnoException).code,
           transport: true,
           attempts: retryCount + 1,
         });

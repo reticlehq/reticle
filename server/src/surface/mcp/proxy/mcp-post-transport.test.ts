@@ -129,6 +129,7 @@ describe('MCP POST transport', () => {
 
     await expect(postToSession('http://127.0.0.1:4400/session', '{}', request)).resolves.toEqual({
       reason: 'post failed: connect refused',
+      code: 'ECONNREFUSED',
       transport: true,
       attempts: 1,
     });
