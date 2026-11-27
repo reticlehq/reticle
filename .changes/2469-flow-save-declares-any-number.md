@@ -1,3 +1,0 @@
-### Fixed
-
-- A saved flow now says when a text check no longer checks its number. Flow save keeps the words of a live count ("Open 336") and accepts any number, so the flow does not drift when the count changes. Before, it did this without a word, and a replay passed after a real count changed. The save result and every suite verdict now name each such step in `replayability.relaxed`, and the suite summary names each passing flow that has one. To keep a number exact, save the expect with `satisfies: { property: "matchesPattern" }`. Part of [#2469](https://github.com/reticlehq/reticle/issues/2469).

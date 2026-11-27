@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/browser` — the in-page screenshot left out a modal dialog.** When Reticle did not launch the browser, the SDK draws the step screenshot itself. A full-screen fixed overlay came out as a thin band at the top of the picture, because the picture was offset with a transform, and a transform on the root makes a fixed element only as tall as the content. A dialog opened with `showModal()` and an open popover were drawn where they sit in the page: not centred, with no backdrop, and under any overlay that stacked above their parents. The picture now uses the viewport for fixed elements, and draws each top-layer element above everything with its backdrop, as the browser does. Closes [#2433](https://github.com/reticlehq/reticle/issues/2433).

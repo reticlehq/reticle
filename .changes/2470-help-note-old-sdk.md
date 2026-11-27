@@ -1,3 +1,0 @@
-### Fixed
-
-- **`@reticlehq/server` — `--help` now names a command that an older project SDK accepts.** The version-match note told an agent to run `npx @reticlehq/server@<version> <command> --help` when a project's SDK was older than the CLI. SDK releases before 3.1.0 accept `--help` only in the first position. The command exited 1 with `unknown argument '--help'`, and the agent had to try again to find that version's help. The note now names global help (`npx @reticlehq/server@<version> --help`) for SDKs older than 3.1.0. For 3.1.0 and later, it keeps the command-specific help. Closes [#2470](https://github.com/reticlehq/reticle/issues/2470).

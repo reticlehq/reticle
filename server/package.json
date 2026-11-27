@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/server",
-  "version": "3.10.11",
+  "version": "3.11.0",
   "mcpName": "io.github.reticlehq/reticle",
   "description": "Reticle CLI, bridge and MCP server: a coding agent drives your running web app from the inside and gets a verdict with evidence, for change verification, access control, accessibility, performance and SEO checks.",
   "type": "module",
@@ -76,7 +76,7 @@
     "cli"
   ],
   "reticle": {
-    "changelog": "3.10.11 refuses a click on a target that a modal or other element covers, so a click a person could not make is never sent; the refusal names the cover. A drive whose write request was blocked is no longer auto-saved as a flow that sends the write for real.",
+    "changelog": "3.11.0 \"Aperture\" adds @reticlehq/computer: an agent can read and act on a desktop application through the operating system's accessibility tree, with no SDK in the application. It runs on macOS, Windows and Linux, and gives the same verdicts as a web page. This release also fixes more than 50 false or unclear verdicts in the browser, the server and the engine, and escapes two values in the Impact report (a security fix). See CHANGELOG.md.",
     "breakingChanges": []
   },
   "publishConfig": {
