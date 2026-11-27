@@ -9,11 +9,13 @@ import {
   ARRIVAL_TIMEOUT_MS,
 } from './act/navigation/navigate-arrival.js';
 import { HardReload, hardReloadOf, reloadResult } from './act/navigation/reload-result.js';
+import { navigateHistory } from './act/navigation/history-navigate.js';
 import {
   waitForReconnect,
   RELOAD_RECONNECT_TIMEOUT_MS,
 } from '@/portal/session/session-reconnect.js';
 import {
+  NavigateHistory,
   NO_SESSION_CONNECTED_ERROR,
   ReticleCommand,
   SESSION_STARTED_NOTE,
@@ -138,20 +140,21 @@ export const BROWSER_TOOLS: ToolDef[] = [
     name: ReticleTool.NAVIGATE,
     example: { url: '/settings' },
     description:
-      'Navigate the connected browser tab to a URL, or reload it in place with { reload: true } (add { hard: true } to bypass the cache). `ok` means the navigation was DISPATCHED — the SDK is torn down by the navigation, so the old page cannot report on it. The daemon then waits up to `timeout_ms` (default 5000) for the SDK to reconnect. `confirmed:true` with a `sessionId` means the requested page arrived and you can act immediately. `confirmed:false` with `landedOn` means the navigation arrived but the app landed at another URL, such as an authentication or route-guard redirect; use `landedOn` to understand where the browser actually ended up. `confirmed:false` without `landedOn` means the target was not observed within the wait window; a slow app may still be on its way, so increase `timeout_ms` when appropriate. With no session connected, an absolute URL opens a leased tab on it and the result carries `sessionStarted`.',
+      'Navigate the connected browser tab to a URL, or reload it in place with { reload: true } (add { hard: true } to bypass the cache). `ok` means the navigation was DISPATCHED — the SDK is torn down by the navigation, so the old page cannot report on it. The daemon then waits up to `timeout_ms` (default 5000) for the SDK to reconnect. `confirmed:true` with a `sessionId` means the requested page arrived and you can act immediately. `confirmed:false` with `landedOn` means the navigation arrived but the app landed at another URL, such as an authentication or route-guard redirect; use `landedOn` to understand where the browser actually ended up. `confirmed:false` without `landedOn` means the target was not observed within the wait window; a slow app may still be on its way, so increase `timeout_ms` when appropriate. With no session connected, an absolute URL opens a leased tab on it and the result carries `sessionStarted`. To press the browser Back or Forward button, give { history: "back" } or { history: "forward" } instead of a url: `url` is then where the tab arrived, and `confirmed:true` means it was seen to stop there.',
     inputSchema: {
       url: z.string().optional().describe('The URL to navigate to. Omit when using reload.'),
-      reload: z
-        .boolean()
-        .optional()
-        .describe(
-          'Reload the current page instead of navigating (replaces the former standalone refresh tool).',
-        ),
+      reload: z.boolean().optional().describe('Reload the current page instead of navigating.'),
       hard: z
         .boolean()
         .optional()
         .describe(
-          'With reload:true, bypass the browser cache (Cmd+Shift+R) on a leased tab. On a tab Reticle does not drive, only the document is fetched again; scripts and modules can still come from the cache. Default: false.',
+          'With reload:true, bypass the browser cache on a leased tab. On a tab Reticle does not drive, only the document is fetched again; scripts and modules can still come from the cache. Default: false.',
+        ),
+      history: z
+        .nativeEnum(NavigateHistory)
+        .optional()
+        .describe(
+          'Press Back or Forward. Move one entry in the tab history. Give it without url and reload. ok:false with a reason when the tab has no entry in that direction on this origin: it does not leave the app this way.',
         ),
       timeout_ms: timeoutMsSchema
         .optional()
@@ -183,8 +186,36 @@ export const BROWSER_TOOLS: ToolDef[] = [
       note: z.string().optional(),
       /** On a `hard` reload: whether the browser ignored its cache, or only the document was fetched again. */
       hardReload: z.nativeEnum(HardReload).optional(),
+      /** On a history move: the direction it was sent. `url` is then where the tab arrived. */
+      history: z.nativeEnum(NavigateHistory).optional(),
     },
     handler: async (deps, args) => {
+      // Before reload: `history` with `reload` is refused there, not read as a reload.
+      if (args['history'] !== undefined) {
+        const pool = deps.pool;
+        return navigateHistory(
+          {
+            sessions: deps.sessions,
+            sendHistory: (sessionId, historyArgs) =>
+              commandOrThrow(deps, sessionId, ReticleCommand.HISTORY, historyArgs),
+            markRecordingsNavigated: () => {
+              deps.recordings.markNavigated();
+            },
+            ...(pool === undefined
+              ? {}
+              : {
+                  lease: {
+                    isLease: (sessionId) => pool.leaseUrl(sessionId) !== undefined,
+                    move: (sessionId, direction, timeoutMs) =>
+                      pool.historyLease(sessionId, direction, timeoutMs),
+                    pageUrl: (sessionId) => pool.leasePageUrl(sessionId),
+                    isGuarded: (sessionId) => pool.leaseGuarded(sessionId),
+                  },
+                }),
+          },
+          args,
+        );
+      }
       // reload:true is the absorbed reticle_refresh — same command, one fewer advertised tool.
       if (true === args['reload']) {
         // The reload branch has its own default, sized for a cold dev-server rebuild; the caller's

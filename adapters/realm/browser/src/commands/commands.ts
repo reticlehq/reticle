@@ -2,6 +2,7 @@ import { type ComponentStateResult, type ElementQuery, type ElementState } from 
 import {
   ANIMATION_TARGET_ARG,
   ComponentStateReason,
+  HISTORY_DIRECTION_ARG,
   INSPECT_IN_VIEWPORT_FIELD,
   INSPECT_REVEAL_ARG,
   MatchArg,
@@ -33,6 +34,7 @@ import { sanitizeWithReport } from '@/security/serialization.js';
 import { getCapabilities } from '@/registry/capabilities.js';
 import { freezeClock, advanceClock, resetClock, isClockFrozen } from '@/timers/clock.js';
 import { scrollContainer } from '@/actions/scroll.js';
+import { moveThroughHistory } from './history-move.js';
 import { isOffViewport, scrollIntoViewNow } from '@/actions/actions-dom.js';
 
 export type CommandHandler = (args: Record<string, unknown>) => unknown;
@@ -530,6 +532,7 @@ export function createCommandRegistry(): Map<string, CommandHandler> {
     window.location.assign(url);
     return { ok: true, url };
   });
+  reg.set(ReticleCommand.HISTORY, (args) => moveThroughHistory(args[HISTORY_DIRECTION_ARG]));
   reg.set(ReticleCommand.REFRESH, (args) => {
     if (true === args['hard']) {
       // Hard reload: navigate to self with a cache-busting param then replace history.

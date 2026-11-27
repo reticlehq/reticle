@@ -50,6 +50,7 @@ export * from './wire/platform-link.js'; // daemon <-> platform: capabilities, d
 export * from './wire/constants/match-args.js'; // the arguments of the `match` command
 export * from './wire/constants/dialog-consent.js'; // the positive yes to an action's confirm()
 export * from './wire/constants/render-stats.js'; // the fields of the React adapter's render store
+export * from './wire/constants/navigate-history.js'; // reticle_navigate { history } and the `history` command (#1844)
 export * from './wire/constants/discovery.js'; // the call-the-founder invitation, one link for every surface
 export * from './wire/constants/determinism.js'; // the clock and random source of a deterministic lease
 export * from './identity/document-identity.js'; // which document an observation belongs to

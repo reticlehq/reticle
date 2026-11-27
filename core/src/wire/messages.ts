@@ -321,6 +321,16 @@ export const CommandResultSchema = z.object({
 });
 export type CommandResult = z.infer<typeof CommandResultSchema>;
 
+/**
+ * The `result` of the page's reply to the `history` command (#1844). `ok: true` means the page sent
+ * the move, not that the tab arrived. `ok: false` means the page refused it, and `reason` says why.
+ */
+export const HistoryReplySchema = z.discriminatedUnion('ok', [
+  z.object({ ok: z.literal(true) }),
+  z.object({ ok: z.literal(false), reason: z.string().optional() }),
+]);
+export type HistoryReply = z.infer<typeof HistoryReplySchema>;
+
 /** Browser -> bridge streamed observation. */
 export const EventMessageSchema = z.object({
   kind: z.literal(MessageKind.EVENT),

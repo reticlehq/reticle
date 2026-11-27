@@ -3,7 +3,9 @@ import { RECOVERY, recoveryFor } from '@/surface/tools/error-recovery.js';
 import {
   ActionType,
   EventType,
+  HISTORY_DIRECTION_ARG,
   HelloScope,
+  NavigateHistory,
   PRODUCTION_REFUSAL_PREFIX,
   ProductionRule,
   productionRefusal,
@@ -132,6 +134,23 @@ describe('the production action policy', () => {
     expect(
       await d.refuseCommand(ReticleCommand.NAVIGATE, { url: `${ORIGIN}/settings` }, plain),
     ).toBeUndefined();
+  });
+
+  it('refuses a move through the tab history, whatever the scope or intent (#1844)', async () => {
+    // A URL navigation names its target, so the origin is checked first. Back and Forward land on
+    // whatever entry the browser has, which can be another origin, and nothing can check it first.
+    const plain = showing({});
+    const back = { [HISTORY_DIRECTION_ARG]: NavigateHistory.BACK };
+    const intent = 'send an invite to qa@example.com';
+    for (const d of [drive(), drive({ intent }), drive({ scope: HelloScope.OBSERVE })]) {
+      expect(await d.refuseCommand(ReticleCommand.HISTORY, back, plain)).toContain(
+        refusalOf(ProductionRule.HISTORY_MOVE),
+      );
+    }
+    // The expiry still comes first, as it does for every command.
+    expect(
+      await drive({ expiresAt: NOW }).refuseCommand(ReticleCommand.HISTORY, back, plain),
+    ).toContain(refusalOf(ProductionRule.EXPIRED));
   });
 
   it('refuses every act under scope observe, and still reads', async () => {
@@ -273,6 +292,7 @@ describe('a production policy refusal', () => {
     for (const rule of [
       ProductionRule.OBSERVE_ONLY,
       ProductionRule.OFF_ORIGIN,
+      ProductionRule.HISTORY_MOVE,
       ProductionRule.EXPIRED,
     ]) {
       expect(productionRefusal(rule), rule).not.toMatch(/only when its declared intent names it/);

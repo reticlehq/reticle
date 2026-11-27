@@ -2271,14 +2271,6 @@
       "count": 7
     }
   },
-  "src/portal/production/production-drive.ts": {
-    "curly": {
-      "count": 23
-    },
-    "no-nested-ternary": {
-      "count": 1
-    }
-  },
   "src/portal/production/production-hello.ts": {
     "curly": {
       "count": 1
@@ -2301,11 +2293,6 @@
   },
   "src/portal/realm/web-realm.test.ts": {
     "curly": {
-      "count": 1
-    }
-  },
-  "src/portal/realm/web-realm.ts": {
-    "no-nested-ternary": {
       "count": 1
     }
   },

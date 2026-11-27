@@ -134,6 +134,11 @@ export {
   ScriptStatus,
 } from './wire/constants/hud-use.js';
 export { MatchArg } from './wire/constants/match-args.js';
+export {
+  HISTORY_DIRECTION_ARG,
+  NavigateHistory,
+  NavigateHistoryRefusal,
+} from './wire/constants/navigate-history.js';
 export { ResponseBodyReason } from './wire/constants/response-body-reason.js';
 export { RETICLE_OVERLAY_SELECTOR } from './wire/constants/reticle-chrome.js';
 export {

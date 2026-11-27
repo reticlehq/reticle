@@ -700,11 +700,6 @@
       "count": 1
     }
   },
-  "src/registry/declared-platform.ts": {
-    "curly": {
-      "count": 1
-    }
-  },
   "src/registry/domains.ts": {
     "curly": {
       "count": 3

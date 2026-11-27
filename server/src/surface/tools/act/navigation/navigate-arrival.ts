@@ -32,7 +32,8 @@ import type { NavigateArrival } from './navigate-result.js';
  * and the SDK to dial back; short enough to not hang. A caller who knows the app is slower says so.
  */
 export const ARRIVAL_TIMEOUT_MS = 5_000;
-const POLL_MS = 100;
+/** How often an arrival wait looks at the session registry. */
+export const ARRIVAL_POLL_MS = 100;
 
 /**
  * Compare only origin + pathname.
@@ -222,7 +223,7 @@ export interface ArrivalClock {
   sleep: (ms: number) => Promise<void>;
 }
 
-const REAL_CLOCK: ArrivalClock = {
+export const REAL_ARRIVAL_CLOCK: ArrivalClock = {
   now: () => Date.now(),
   sleep: (ms) => new Promise((resolve) => setTimeout(resolve, ms)),
 };
@@ -236,7 +237,7 @@ export async function awaitArrival(
   target: string,
   scope: ArrivalScope,
   timeoutMs: number = ARRIVAL_TIMEOUT_MS,
-  clock: ArrivalClock = REAL_CLOCK,
+  clock: ArrivalClock = REAL_ARRIVAL_CLOCK,
 ): Promise<NavigateArrival | null> {
   const deadline = clock.now() + timeoutMs;
 
@@ -255,7 +256,7 @@ export async function awaitArrival(
       break;
     }
 
-    await clock.sleep(POLL_MS);
+    await clock.sleep(ARRIVAL_POLL_MS);
   }
 
   // Only after the navigation wait has expired do we use successor detection.

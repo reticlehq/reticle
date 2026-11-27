@@ -116,6 +116,11 @@ const PAGE_CAPABILITIES: readonly Capability[] = [
   },
   { name: ReticleCommand.NAVIGATE, meaning: 'go to a different location', mutating: true },
   { name: ReticleCommand.REFRESH, meaning: 'reload the current location', mutating: true },
+  {
+    name: ReticleCommand.HISTORY,
+    meaning: 'move one entry back or forward in the location history',
+    mutating: true,
+  },
   { name: ReticleCommand.SCROLL, meaning: 'move the viewport', mutating: false },
   {
     name: ReticleCommand.SNAPSHOT,
@@ -800,15 +805,9 @@ export class WebRealm extends Realm {
       }
       const name = (element as { name?: unknown; text?: unknown }).name;
       const text = (element as { text?: unknown }).text;
-      found.push({
-        ref,
-        describes:
-          'string' === typeof name && name.length > 0
-            ? name
-            : 'string' === typeof text && text.length > 0
-              ? text
-              : ref,
-      });
+      // The name when it has one, else the text, else the ref itself.
+      const label = [name, text].find((v): v is string => 'string' === typeof v && v.length > 0);
+      found.push({ ref, describes: label ?? ref });
     }
     return found;
   }

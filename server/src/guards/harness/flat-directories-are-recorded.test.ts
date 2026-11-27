@@ -163,7 +163,10 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // `constants.ts` at the same cap.
   // 17 with `render-stats.ts`: the fields of the React adapter's render store that replay reads
   // (#1654). `constants.ts` is at the line cap, and this group has no sibling to join.
-  'core/src/wire/constants': 17,
+  // 18 with `navigate-history.ts`: the Back/Forward direction and the `history` command's refusals,
+  // kept out of `constants.ts` for the same cap. The SDK reads it on first load, so it has no zod
+  // (#1844).
+  'core/src/wire/constants': 18,
   // 16 since `snapshot-tree.ts`. The snapshot tree is a format the BROWSER writes and several
   // things on the Node side read back, and its parser was living beside the MCP tool handlers — so
   // every other reader imported from the tool surface to parse a string the tool surface does not

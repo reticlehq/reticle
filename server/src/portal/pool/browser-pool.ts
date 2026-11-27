@@ -10,7 +10,7 @@
  * the thin Playwright adapter that satisfies these interfaces lives separately.
  */
 
-import { LEASE_CLOSE_TIMEOUT_MS, unreachableUrlIn } from '@reticlehq/core';
+import { LEASE_CLOSE_TIMEOUT_MS, NavigateHistory, unreachableUrlIn } from '@reticlehq/core';
 import { log } from '@/log.js';
 import { closeLeaseTab, LEASE_CLOSE_TIMED_OUT, settledWithin } from './bounded-close.js';
 import { seedStorageInto, targetOriginOf } from './storage-seed.js';
@@ -28,6 +28,7 @@ import type {
   PooledContext,
   PooledCoverage,
   PooledMockRule,
+  PooledPage,
   ScreenshotOptions,
 } from './pool-contract.js';
 import type { RealInputArgs, RealInputResult } from '@/portal/input/real-input.js';
@@ -348,13 +349,56 @@ export class BrowserPool {
    * connected session". False when this is not a lease or the page would not go.
    */
   async gotoLease(sessionId: string, url: string, timeoutMs?: number): Promise<boolean> {
+    return this.#onLeasePage(sessionId, (page) =>
+      page.goto(url, timeoutMs === undefined ? {} : { timeoutMs }),
+    );
+  }
+
+  /**
+   * Move a leased page one entry back or forward through the browser, for a page with no SDK to
+   * take the `history` command (#1844). False when this is not a lease or the page would not move.
+   */
+  async historyLease(
+    sessionId: string,
+    direction: NavigateHistory,
+    timeoutMs?: number,
+  ): Promise<boolean> {
+    const opts = timeoutMs === undefined ? {} : { timeoutMs };
+    return this.#onLeasePage(sessionId, (page) =>
+      direction === NavigateHistory.BACK ? page.goBack?.(opts) : page.goForward?.(opts),
+    );
+  }
+
+  /** Where a leased page is, read from the browser, for a page with no SDK to say. */
+  leasePageUrl(sessionId: string): string | undefined {
+    return this.#active.get(this.#leaseIdOf(sessionId))?.page.url?.();
+  }
+
+  /** Whether a production drive guards this lease (see guardLease). Its moves must not skip it. */
+  leaseGuarded(sessionId: string): boolean {
+    return this.#active.get(this.#leaseIdOf(sessionId))?.guard !== undefined;
+  }
+
+  /**
+   * Run `act` on a live lease's page, and touch the lease as any tool call on it does. False when
+   * this is not a lease, when the page lacks the capability (`act` gives undefined), or when it
+   * fails: an absent or failed capability reads as "could not", never as done.
+   */
+  async #onLeasePage(
+    sessionId: string,
+    act: (page: PooledPage) => Promise<unknown> | undefined,
+  ): Promise<boolean> {
     const lease = this.#active.get(this.#leaseIdOf(sessionId));
     if (lease === undefined) {
       return false;
     }
-    this.touch(sessionId);
     try {
-      await lease.page.goto(url, timeoutMs === undefined ? {} : { timeoutMs });
+      const acting = act(lease.page);
+      if (acting === undefined) {
+        return false;
+      }
+      this.touch(sessionId);
+      await acting;
       return true;
     } catch {
       return false;
@@ -369,47 +413,17 @@ export class BrowserPool {
    * Touches the lease like any other tool call, so hovering keeps it alive.
    */
   async hoverLease(sessionId: string, x: number, y: number): Promise<boolean> {
-    const lease = this.#active.get(this.#leaseIdOf(sessionId));
-    if (lease === undefined || lease.page.hover === undefined) {
-      return false;
-    }
-    this.touch(sessionId);
-    try {
-      await lease.page.hover(x, y);
-      return true;
-    } catch {
-      return false;
-    }
+    return this.#onLeasePage(sessionId, (page) => page.hover?.(x, y));
   }
 
   /** Reload a lease with the browser cache ignored, or false when this is not a lease or its page cannot. */
   async hardReloadLease(sessionId: string): Promise<boolean> {
-    const lease = this.#active.get(this.#leaseIdOf(sessionId));
-    if (lease?.page.reloadIgnoringCache === undefined) {
-      return false;
-    }
-    this.touch(sessionId);
-    try {
-      await lease.page.reloadIgnoringCache();
-      return true;
-    } catch {
-      return false;
-    }
+    return this.#onLeasePage(sessionId, (page) => page.reloadIgnoringCache?.());
   }
 
   /** Set a live lease's media features, or false when this is not a lease or its page cannot. */
   async emulateLease(sessionId: string, media: LeaseMedia): Promise<boolean> {
-    const lease = this.#active.get(this.#leaseIdOf(sessionId));
-    if (lease?.page.emulateMedia === undefined) {
-      return false;
-    }
-    this.touch(sessionId);
-    try {
-      await lease.page.emulateMedia(media);
-      return true;
-    } catch {
-      return false;
-    }
+    return this.#onLeasePage(sessionId, (page) => page.emulateMedia?.(media));
   }
 
   /** Whether this lease's page is still loading. False for a non-lease, or a page that cannot say. */
@@ -463,17 +477,7 @@ export class BrowserPool {
     sessionId: string,
     size: { width: number; height: number },
   ): Promise<boolean> {
-    const lease = this.#active.get(this.#leaseIdOf(sessionId));
-    if (lease === undefined || lease.page.setViewport === undefined) {
-      return false;
-    }
-    this.touch(sessionId);
-    try {
-      await lease.page.setViewport(size);
-      return true;
-    } catch {
-      return false;
-    }
+    return this.#onLeasePage(sessionId, (page) => page.setViewport?.(size));
   }
 
   /** The size a leased page reports for itself, or undefined when it cannot be read. */
@@ -483,22 +487,16 @@ export class BrowserPool {
   }
 
   async setMocksLease(sessionId: string, rules: readonly PooledMockRule[]): Promise<boolean> {
-    const lease = this.#active.get(this.#leaseIdOf(sessionId));
-    if (lease === undefined || lease.page.installMocks === undefined) {
-      return false;
-    }
-    this.touch(sessionId);
-    try {
-      await lease.page.installMocks(rules);
-      // Mocks registered later are asked first, and one that lets a request through would skip
-      // the production guard. Re-asserting the guard puts it back in front.
-      if (lease.guard !== undefined) {
-        await lease.page.guardRequests?.(lease.guard);
-      }
-      return true;
-    } catch {
-      return false;
-    }
+    const guard = this.#active.get(this.#leaseIdOf(sessionId))?.guard;
+    return this.#onLeasePage(sessionId, (page) =>
+      page.installMocks?.(rules).then(async () => {
+        // Mocks registered later are asked first, and one that lets a request through would skip
+        // the production guard. Re-asserting the guard puts it back in front.
+        if (guard !== undefined) {
+          await page.guardRequests?.(guard);
+        }
+      }),
+    );
   }
 
   /** Step a deterministic lease's clock by `frames` frames; undefined when it is not one. */

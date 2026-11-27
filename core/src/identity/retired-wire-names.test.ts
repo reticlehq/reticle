@@ -36,6 +36,7 @@ const SHIPPED: readonly string[] = [
   'render',
   'navigate',
   'refresh',
+  'history',
   'flows',
   'flow.progress',
   'plan',
