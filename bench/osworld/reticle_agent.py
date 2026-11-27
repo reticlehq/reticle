@@ -75,8 +75,8 @@ TOOLS = [
             'properties': {
                 'app': APP,
                 'ref': {'type': 'string', 'description': 'The ref from reticle_look or reticle_find, e.g. "e27".'},
-                'action': {'type': 'string', 'enum': ['click', 'dblclick', 'rightclick', 'type', 'press', 'fill']},
-                'text': {'type': 'string', 'description': 'The text to type or fill, or the key to press, e.g. "Return" or "ctrl+s".'},
+                'action': {'type': 'string', 'enum': ['click', 'dblclick', 'type', 'press', 'fill', 'select', 'check', 'uncheck', 'hover']},
+                'text': {'type': 'string', 'description': 'The text to type or fill, the option to select, or the key to press, e.g. "Return" or "ctrl+s".'},
                 'until_text': {'type': 'string', 'description': 'Text that must show after the action.'},
             },
             'required': ['app', 'ref', 'action'],
@@ -165,7 +165,7 @@ class Reticle:
         action = given['action']
         args = {'foreground': True}
         if given.get('text') is not None:
-            args['value' if action == 'fill' else 'text'] = given['text']
+            args['value' if action in ('fill', 'select') else 'text'] = given['text']
         call = {'sessionId': self.session(given['app']), 'ref': given['ref'], 'action': action, 'args': args}
         if given.get('until_text'):
             call['until'] = {'text': given['until_text']}
