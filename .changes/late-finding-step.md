@@ -1,0 +1,3 @@
+### Fixed
+
+- **`@reticlehq/server` — the same finding was given to its step on one replay and to no step (`-1`) on the next.** A step's check ends when its window closes. A failed read that came back a moment later was outside that window, so only the whole-replay pass found it, and it was reported as cross-step. Which one you got depended on timing. The whole-replay pass now runs each step's window on to the start of the next step. A finding that exactly one of those windows finds goes to that step. A finding that no window or several windows find stays cross-step, and so does a request that never settled.
