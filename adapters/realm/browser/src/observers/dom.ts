@@ -1,5 +1,11 @@
 import { readTestId, testIdSelector } from '@/dom/addressing/testid-attr.js';
-import { EventType, LivePoliteness, REDACTED_VALUE, TruncationChannel } from '@reticlehq/core/page';
+import {
+  EventType,
+  INSIDE_FIELD,
+  LivePoliteness,
+  REDACTED_VALUE,
+  TruncationChannel,
+} from '@reticlehq/core/page';
 import { getAccessibleName, getRole, isSensitiveField } from '@/dom/a11y.js';
 import { isVisible } from '@/dom/visibility.js';
 import { refs } from '@/dom/addressing/refs.js';
@@ -191,7 +197,7 @@ const insideOf = (el: Element): { inside?: string[] } => {
     }
     a = a.parentElement;
   }
-  return found.length > 0 ? { inside: found } : {};
+  return found.length > 0 ? { [INSIDE_FIELD]: found } : {};
 };
 
 const ALERT_REGION = '[role="alert"]';

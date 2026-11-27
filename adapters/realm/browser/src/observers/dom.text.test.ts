@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { EventType, LivePoliteness } from '@reticlehq/core';
+import { EventType, INSIDE_FIELD, LivePoliteness } from '@reticlehq/core';
 import { installDom } from './dom.js';
 import { refs } from '@/dom/addressing/refs.js';
 
@@ -212,7 +212,7 @@ describe('a change names the minted ancestors it landed inside', () => {
     const events = await record(() => {
       b.textContent = 'Saved';
     });
-    expect(textEvents(events)[0]?.data['inside']).toEqual([buttonRef, mainRef]);
+    expect(textEvents(events)[0]?.data[INSIDE_FIELD]).toEqual([buttonRef, mainRef]);
   });
 
   it('an attribute change on a descendant carries `inside` too', async () => {
@@ -233,6 +233,6 @@ describe('a change names the minted ancestors it landed inside', () => {
     const events = await record(() => {
       p.textContent = 'changed';
     });
-    expect(textEvents(events)[0]?.data['inside']).toBeUndefined();
+    expect(textEvents(events)[0]?.data[INSIDE_FIELD]).toBeUndefined();
   });
 });

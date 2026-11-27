@@ -3,6 +3,7 @@ import { CanvasTrigger, EventType, MediaEvent, PerfMetric } from './constants/co
 import {
   FieldChangeField,
   FieldChangeKind,
+  INSIDE_FIELD,
   LivePoliteness,
   RouteChangeHow,
   ROUTE_CHANGE_HOW_FIELD,
@@ -16,6 +17,8 @@ import { BlindSpotKind } from '@/verdict/verified-constants.js';
 import { BrowserBrand } from '@/browser-brand.js';
 import { HudUseDataSchema, HumanControlDataSchema, HumanMarkDataSchema } from './messages.js';
 import { DepartedNetField, NEXT_ACTION_FIELD, REQUEST_SHAPE_FIELD } from './net.js';
+
+export { INSIDE_FIELD } from './constants/event-types.js';
 
 /**
  * Per-event-type payload schemas — the typed replacement for the envelope's open `data` record.
@@ -142,7 +145,7 @@ export const EVENT_PAYLOAD_SCHEMAS = {
        * of the acted control (a label in a child span, #2318) names the control's ref here; without
        * it the wire carries no way to tell "inside the control" from churn on an unrelated element.
        */
-      inside: z.array(z.string()).optional(),
+      [INSIDE_FIELD]: z.array(z.string()).optional(),
     })
     .passthrough(),
   [EventType.DOM_TEXT]: z.object({
@@ -166,7 +169,7 @@ export const EVENT_PAYLOAD_SCHEMAS = {
      * of the acted control (a label in a child span, #2318) names the control's ref here; without
      * it the wire carries no way to tell "inside the control" from churn on an unrelated element.
      */
-    inside: z.array(z.string()).optional(),
+    [INSIDE_FIELD]: z.array(z.string()).optional(),
   }),
   [EventType.NET_REQUEST]: netRequestSchema,
   [EventType.NET_PENDING]: z.object({
