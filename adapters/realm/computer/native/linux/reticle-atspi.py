@@ -93,16 +93,17 @@ def states(el):
     return safe(el.get_state_set)
 
 
-def has(el, state):
-    s = states(el)
+def has(el, state, held=None):
+    # `held` is a state set already read: each read is a call on the bus.
+    s = held if held is not None else states(el)
     return s is not None and s.contains(state)
 
 
-def role_of(el):
+def role_of(el, held=None):
     name = safe(el.get_role_name, '') or ''
     role = ROLE_OF.get(name, 'AXGroup')
     # GTK names a one-line field and a text area both "text".
-    if role == 'AXTextArea' and has(el, Atspi.StateType.SINGLE_LINE):
+    if role == 'AXTextArea' and has(el, Atspi.StateType.SINGLE_LINE, held):
         return 'AXTextField'
     return role
 
@@ -133,11 +134,12 @@ def children_of(el):
     return [c for c in (safe(lambda k=k: el.get_child_at_index(k)) for k in range(safe(el.get_child_count, 0))) if c is not None]
 
 
-def value_of(el, role):
-    if has(el, Atspi.StateType.CHECKABLE) or role in ('AXCheckBox', 'AXRadioButton'):
-        return '1' if has(el, Atspi.StateType.CHECKED) else '0'
+def value_of(el, role, held=None):
+    if has(el, Atspi.StateType.CHECKABLE, held) or role in ('AXCheckBox', 'AXRadioButton'):
+        return '1' if has(el, Atspi.StateType.CHECKED, held) else '0'
     text = safe(el.get_text_iface)
-    if text is not None and role in ('AXTextField', 'AXTextArea', 'AXComboBox'):
+    # A static text gives its words as its value, as on macOS: a paragraph of LibreOffice has no name.
+    if text is not None and role in ('AXTextField', 'AXTextArea', 'AXComboBox', 'AXStaticText'):
         count = safe(lambda: Atspi.Text.get_character_count(text), 0)
         return safe(lambda: Atspi.Text.get_text(text, 0, min(4000, count)), '')
     value = safe(el.get_value_iface)
@@ -152,7 +154,8 @@ class Reader:
         self.unread = 0
 
     def node(self, el, depth):
-        role = role_of(el)
+        held = states(el)
+        role = role_of(el, held)
         node = {'role': role}
         name = safe(el.get_name, '')
         if name:
@@ -163,23 +166,29 @@ class Reader:
         ident = safe(el.get_accessible_id, '')
         if ident:
             node['id'] = ident
-        node['enabled'] = has(el, Atspi.StateType.ENABLED) or has(el, Atspi.StateType.SENSITIVE)
-        node['focused'] = has(el, Atspi.StateType.FOCUSED)
+        node['enabled'] = has(el, Atspi.StateType.ENABLED, held) or has(el, Atspi.StateType.SENSITIVE, held)
+        node['focused'] = has(el, Atspi.StateType.FOCUSED, held)
         frame = frame_of(el)
         if frame is not None:
             node['frame'] = frame
-        value = value_of(el, role)
+        value = value_of(el, role, held)
         if value is not None:
             node['value'] = value
-        if has(el, Atspi.StateType.SELECTED):
+        if has(el, Atspi.StateType.SELECTED, held):
             node['selected'] = True
         kids = children_of(el) if depth < 80 else []
         places = None
         # A long list gives the items on the screen, with their places, and says how many it left out.
-        if len(kids) > SHORT_LIST and role in ('AXList', 'AXTable', 'AXOutline'):
+        # A menu gives only the items on the screen: a closed menu gives none, and says how many.
+        # LibreOffice has hundreds of items in closed menus, and to read them took seconds.
+        listed = len(kids) > SHORT_LIST and role in ('AXList', 'AXTable', 'AXOutline')
+        if listed or (role == 'AXMenu' and kids):
             places = [k for k, c in enumerate(kids) if has(c, Atspi.StateType.SHOWING)]
-            node['notShown'] = len(kids) - len(places)
-            kids = [kids[k] for k in places]
+            if listed or len(places) < len(kids):
+                node['notShown'] = len(kids) - len(places)
+                kids = [kids[k] for k in places]
+            else:
+                places = None
         if self.budget <= 0 and kids:
             node['notShown'] = node.get('notShown', 0) + len(kids)
             node['children'] = []

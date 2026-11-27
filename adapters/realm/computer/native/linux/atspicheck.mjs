@@ -63,6 +63,9 @@ try {
     shown = (await commands.answer(ReticleCommand.SNAPSHOT, {})).tree;
   }
   assert.match(shown, /- window /, `the fixture shows no window:\n${shown}`);
+  // A paragraph has no name: its words are its text, and the read shows them.
+  assert.match(shown, /Words without a name/, `the paragraph shows no words:\n${shown}`);
+  held += 1;
 
   const field = (await query({ role: 'textbox', name: 'Name' }))[0];
   assert.ok(field?.ref, `the field has no ref:\n${shown}`);
@@ -168,7 +171,34 @@ try {
     `the left half is not half: ${JSON.stringify(half.window)}`,
   );
   held += 1;
-  process.stdout.write(`computer atspicheck: ${String(held)} of 8 cases held\n`);
+  // Last: a menu that was open can keep the keyboard of the window.
+  // The helper does not read the items of a closed menu: each item is many calls on the bus.
+  // LibreOffice has hundreds, and two reads of it took longer than the bridge waits for an act.
+  const read = JSON.stringify(
+    JSON.parse(
+      execFileSync(launch.file, [...launch.prefix, 'tree', String(pid)], { encoding: 'utf8' }),
+    ).tree,
+  );
+  assert.doesNotMatch(read, /Export 7/, 'the helper read the items of a closed menu');
+  assert.match(read, /"notShown":40/, 'the closed menu does not say how many items it left out');
+  // An open menu shows its items.
+  const file = (await query({ role: 'menu', name: 'File' }))[0];
+  assert.ok(file?.ref, `the menu has no ref:\n${shown}`);
+  await commands.answer(ReticleCommand.ACT, {
+    ref: file.ref,
+    action: ActionType.CLICK,
+    args: { foreground: true, settleMs: 600 },
+  });
+  const open = (await commands.answer(ReticleCommand.SNAPSHOT, {})).tree;
+  await commands.answer(ReticleCommand.ACT, {
+    action: ActionType.PRESS,
+    args: { text: 'Escape', foreground: true, settleMs: 400 },
+  });
+  assert.match(open, /Export 7/, `the open menu does not show its items:\n${open}`);
+  const closed = (await commands.answer(ReticleCommand.SNAPSHOT, {})).tree;
+  assert.doesNotMatch(closed, /Export 7/, `Escape did not close the menu:\n${closed}`);
+  held += 1;
+  process.stdout.write(`computer atspicheck: ${String(held)} of 10 cases held\n`);
 } finally {
   fixture.kill();
 }
