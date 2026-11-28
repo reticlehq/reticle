@@ -56,6 +56,16 @@ const WORD_JOINERS = /[_-]+/g;
  */
 const VALUE_PICKER_ROLES: ReadonlySet<string> = new Set(['option', 'radio']);
 
+/**
+ * A checkbox label can carry a second clause that states a data right: "I agree to the Terms. You
+ * can export or delete it at any time". The word in that clause is not the act the checkbox does.
+ * Only the clause up to the first of these marks is judged, so a standalone "Delete this
+ * repository" still trips the guard. The guard stays asymmetric: a false block costs a round
+ * trip, a missed block cannot be undone.
+ */
+const CHECKBOX_CLAUSE_END = /[.;:,]/;
+const CHECKBOX_ROLE = 'checkbox';
+
 /** The hostnames that ARE loopback outright, with no parsing: the name, and IPv6 ::1 both ways. */
 const LOOPBACK_HOSTNAMES: readonly string[] = ['localhost', '::1', '0:0:0:0:0:0:0:1'];
 
@@ -262,10 +272,16 @@ export function destructiveActionWord(text: string, role?: string): string | und
 }
 
 function firstMatch(pattern: RegExp, text: string, role?: string): string | undefined {
-  if (role !== undefined && VALUE_PICKER_ROLES.has(role.trim().toLowerCase())) {
+  const normalizedRole = role?.trim().toLowerCase();
+  if (normalizedRole !== undefined && VALUE_PICKER_ROLES.has(normalizedRole)) {
     return undefined;
   }
-  return pattern.exec(text.replace(WORD_JOINERS, ' '))?.[1]?.toLowerCase();
+  let judged = text;
+  if (normalizedRole === CHECKBOX_ROLE) {
+    const end = text.search(CHECKBOX_CLAUSE_END);
+    judged = -1 === end ? text : text.slice(0, end);
+  }
+  return pattern.exec(judged.replace(WORD_JOINERS, ' '))?.[1]?.toLowerCase();
 }
 
 /**
