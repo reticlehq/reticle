@@ -1,0 +1,41 @@
+# Throwaway: runs the mac-programs job of publish.yml and the step that takes its output, without
+# publishing anything, so the 3.11.0 release is not the first run. Delete this branch after.
+name: mac-programs-dryrun
+on:
+  push:
+    branches: [ci/mac-programs-dryrun]
+permissions:
+  contents: read
+jobs:
+  mac-programs:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: node adapters/realm/computer/native/mac/build-release.mjs
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: computer-mac-programs
+          path: adapters/realm/computer/native/mac/build/
+          if-no-files-found: error
+          retention-days: 1
+  take-them:
+    needs: mac-programs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: computer-mac-programs
+          path: adapters/realm/computer/native/mac/build/
+      - name: Put the Mac programs into @reticlehq/computer
+        run: |
+          for program in reticle-ax reticle-hud; do
+            file=adapters/realm/computer/native/mac/build/$program
+            test -s "$file" || { echo "missing $file"; exit 1; }
+            chmod +x "$file"
+            file "$file"
+            file "$file" | grep -q arm64 || { echo "no arm64 in $program"; exit 1; }
+            file "$file" | grep -q x86_64 || { echo "no x86_64 in $program"; exit 1; }
+          done
