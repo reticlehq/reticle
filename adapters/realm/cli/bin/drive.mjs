@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Drive one command and WATCH it prove itself.
 //
-//   reticle-cli-drive --expect "<what should become true>" --path <file> -- <command> [args...]
+//   reticle-terminal --expect "<what should become true>" --path <file> -- <command> [args...]
 //
 // The point of this binary is that verification is something you can SEE happening rather than a
 // paragraph you read afterwards. It paints a live pane: the claim first, the channels being
@@ -39,7 +39,7 @@ const command = sep === -1 ? [] : argv.slice(sep + 1);
 
 if (expectation === undefined || expectPath === undefined || command.length === 0) {
   process.stderr.write(
-    'usage: reticle-cli-drive --expect "<claim>" --path <file> [--cwd <dir>] [--json] -- <command> [args...]\n\n' +
+    'usage: reticle-terminal --expect "<claim>" --path <file> [--cwd <dir>] [--json] -- <command> [args...]\n\n' +
       'The claim and the path are required and are declared BEFORE the command runs. That ordering\n' +
       'is the method: an expectation written after the result can be talked into agreeing with it.\n',
   );
@@ -135,7 +135,7 @@ const decided = adjudicate({
       observation: o,
       provenance: {
         class: 'observed',
-        source: '@reticlehq/cli-realm',
+        source: '@reticlehq/terminal',
         method: 'filesystem snapshot, before and after',
         subject: realm.identity(),
         at: Date.now(),

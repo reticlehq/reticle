@@ -49,7 +49,7 @@ function client() {
   return {
     hello: () =>
       Promise.resolve({
-        name: '@reticlehq/cli-realm',
+        name: '@reticlehq/terminal',
         version: '3.1.0',
         platform: 'native',
         // Declared from the realm itself rather than written down here, so the handshake cannot
@@ -124,7 +124,7 @@ function client() {
             observation: o,
             provenance: {
               class: 'observed',
-              source: '@reticlehq/cli-realm',
+              source: '@reticlehq/terminal',
               method: 'filesystem snapshot, before and after',
               subject: realm.identity(),
               at: Date.now(),
@@ -215,7 +215,7 @@ function dishonestIfSelfTesting(bound) {
 }
 
 const report = await driveAll(dishonestIfSelfTesting(client()), {
-  name: '@reticlehq/cli-realm',
+  name: '@reticlehq/terminal',
   version: '3.1.0',
   platform: 'native',
   channels: probeRealm()

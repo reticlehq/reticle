@@ -65,7 +65,7 @@ export const SIDE = Object.freeze({
   // step in somebody's build. It never touches the DOM, and unlike every other realm adapter it
   // has no browser half at all — there is no code inside the subject, which is the whole point of
   // it.
-  '@reticlehq/cli-realm': 'node',
+  '@reticlehq/terminal': 'node',
   // The computer realm. Node only: it speaks to a helper process that reads the operating
   // system's accessibility tree. It has no half inside the subject.
   '@reticlehq/computer': 'node',

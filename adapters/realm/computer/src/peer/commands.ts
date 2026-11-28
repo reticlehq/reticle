@@ -8,8 +8,8 @@
  */
 import { basename } from 'node:path';
 
-import { ChangeKind as FileKind, diffSnapshots } from '@reticlehq/cli-realm';
-import type { Snapshot, WorkspacePort } from '@reticlehq/cli-realm';
+import { ChangeKind as FileKind, diffSnapshots } from '@reticlehq/terminal';
+import type { Snapshot, WorkspacePort } from '@reticlehq/terminal';
 import {
   ActionType,
   DRAG_TO_REF_ARG,

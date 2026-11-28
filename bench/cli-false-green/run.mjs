@@ -162,7 +162,7 @@ for (const bug of BUGS) {
         observation: o,
         provenance: {
           class: 'observed',
-          source: '@reticlehq/cli-realm',
+          source: '@reticlehq/terminal',
           method: 'filesystem snapshot, before and after',
           subject: realm.identity(),
           at: Date.now(),

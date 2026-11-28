@@ -24,7 +24,7 @@
     "prepack": "node ../../../scripts/prepare-dist.mjs --clean dist && tsc -b --force && node ../../../scripts/alias-dist.mjs && node ../../../scripts/prepare-dist.mjs dist && node native/mac/build-release.mjs"
   },
   "dependencies": {
-    "@reticlehq/cli-realm": "workspace:*",
+    "@reticlehq/terminal": "workspace:*",
     "@reticlehq/core": "workspace:*",
     "open-verification": "workspace:*",
     "ws": "^8.22.1",

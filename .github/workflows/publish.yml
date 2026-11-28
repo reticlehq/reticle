@@ -41,7 +41,28 @@ on:
   workflow_dispatch:
 
 jobs:
+  # The Mac programs of @reticlehq/computer (the helper and the HUD) are built with swiftc, which
+  # only a Mac has. Its `prepack` builds nothing on Linux, so a publish from the job below alone
+  # shipped no Mac program, and each Mac user had to compile them on first use, with the Xcode
+  # command-line tools. This job builds them, for Apple silicon and Intel, and the publish job puts
+  # them into the package before npm sees it.
+  mac-programs:
+    runs-on: macos-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - run: node adapters/realm/computer/native/mac/build-release.mjs
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: computer-mac-programs
+          path: adapters/realm/computer/native/mac/build/
+          if-no-files-found: error
+          retention-days: 7
+
   publish:
+    needs: mac-programs
     runs-on: ubuntu-latest
     # This job re-runs the same build/lint/typecheck/test steps as CI's `verify`, so it inherits the
     # same failure mode: a test process that never exits parks the release behind it for the
@@ -116,6 +137,21 @@ jobs:
         # an unstamped server with npm's stamped one and refused 3.10.4's re-run.
         env:
           RETICLE_ISSUER_PUBLIC_KEY: ${{ secrets.RETICLE_ISSUER_PUBLIC_KEY }}
+      # The Mac programs from the mac-programs job. The package's `files` names them; an artifact
+      # loses the mode of a file, so they are made executable again, and the step fails when one
+      # is missing rather than publishing a package without it.
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: computer-mac-programs
+          path: adapters/realm/computer/native/mac/build/
+      - name: Put the Mac programs into @reticlehq/computer
+        run: |
+          for program in reticle-ax reticle-hud; do
+            file=adapters/realm/computer/native/mac/build/$program
+            test -s "$file" || { echo "missing $file"; exit 1; }
+            chmod +x "$file"
+          done
+          ls -l adapters/realm/computer/native/mac/build/
       - name: Publish public packages
         run: pnpm -r publish --access public --no-git-checks
         env:

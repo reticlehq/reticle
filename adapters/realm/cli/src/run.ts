@@ -30,7 +30,7 @@ import {
  */
 
 /** Who produced these runs. A named constant, because a wire string is never a free string. */
-const VERIFIER_NAME = '@reticlehq/cli-realm';
+const VERIFIER_NAME = '@reticlehq/terminal';
 
 /** One claim, driven and adjudicated. Everything a verdict needs to be re-checked. */
 export interface DriveOutcome {

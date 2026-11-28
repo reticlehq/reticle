@@ -13,7 +13,7 @@ import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
-import { nodeWorkspace } from '@reticlehq/cli-realm';
+import { nodeWorkspace } from '@reticlehq/terminal';
 import { ActionType, EventType, ReticleCommand } from '@reticlehq/core';
 
 import { MacDriver, PeerCommands } from '../../dist/index.js';

@@ -12,7 +12,7 @@
   "@reticlehq/react": ["e2e", "windows"],
   "@reticlehq/eslint-plugin": ["e2e", "windows"],
   "@reticlehq/browser": ["e2e", "windows"],
-  "@reticlehq/cli-realm": ["e2e", "windows"],
+  "@reticlehq/terminal": ["e2e", "windows"],
   "@reticlehq/computer": [],
   "@reticlehq/electron": ["e2e", "windows"],
   "@reticlehq/api": ["e2e"],

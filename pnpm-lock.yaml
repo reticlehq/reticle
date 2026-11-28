@@ -260,12 +260,12 @@ importers:
 
   adapters/realm/computer:
     dependencies:
-      '@reticlehq/cli-realm':
-        specifier: workspace:*
-        version: link:../cli
       '@reticlehq/core':
         specifier: workspace:*
         version: link:../../../core
+      '@reticlehq/terminal':
+        specifier: workspace:*
+        version: link:../cli
       open-verification:
         specifier: workspace:*
         version: link:../../../open-verification
