@@ -151,7 +151,6 @@ jobs:
             test -s "$file" || { echo "missing $file"; exit 1; }
             chmod +x "$file"
           done
-          ls -l adapters/realm/computer/native/mac/build/
       - name: Publish public packages
         run: pnpm -r publish --access public --no-git-checks
         env:
