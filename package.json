@@ -105,7 +105,8 @@
       "vite@>=7.0.0 <7.3.7": "7.3.7",
       "vite@>=8.0.0 <8.3.3": "8.3.3",
       "zod@<4.6.6": "4.6.6",
-      "minimatch@>=7.0.0 <11.0.1": "11.0.1"
+      "minimatch@>=7.0.0 <11.0.1": "11.0.1",
+      "@verdaccio/core>minimatch": "10.2.6"
     },
     "onlyBuiltDependencies": [
       "esbuild",

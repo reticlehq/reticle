@@ -47,6 +47,7 @@ overrides:
   vite@>=8.0.0 <8.3.3: 8.3.3
   zod@<4.6.6: 4.6.6
   minimatch@>=7.0.0 <11.0.1: 11.0.1
+  '@verdaccio/core>minimatch': 10.2.6
 
 importers:
 
@@ -5148,6 +5149,10 @@ packages:
     resolution: {integrity: sha512-e5ISH9xMYU0DzrT+jl8q2ze9D6eWBto+I8CNpe+VI+K2J/F/k3PdkdTdz4wvGVH4NTpo+NRYTVIuMQEMMcsLqg==}
     engines: {node: ^12.20.0 || ^14.13.1 || >=16.0.0}
 
+  minimatch@10.2.6:
+    resolution: {integrity: sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==}
+    engines: {node: 18 || 20 || >=22}
+
   minimatch@11.0.1:
     resolution: {integrity: sha512-t+Vn6DX4wPCxS23y03C0uhF7S1jpi1GfqPrnlEipCJaA2ykiNbMkVlDutZtmvLfRcUN6R8AYVlzTsQrT4RZoLQ==}
     engines: {node: 18 || 20 || >=22}
@@ -8920,7 +8925,7 @@ snapshots:
       http-errors: 2.0.1
       http-status-codes: 2.3.0
       lodash: 4.18.1
-      minimatch: 11.0.1
+      minimatch: 10.2.6
       process-warning: 1.0.0
       semver: 7.8.5
 
@@ -11380,6 +11385,10 @@ snapshots:
   mimic-response@3.1.0: {}
 
   mimic-response@4.0.0: {}
+
+  minimatch@10.2.6:
+    dependencies:
+      brace-expansion: 5.0.12
 
   minimatch@11.0.1:
     dependencies:
