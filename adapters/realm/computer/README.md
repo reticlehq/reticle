@@ -2,7 +2,7 @@
 
 The Reticle realm for a desktop application. An agent reads the application, acts on it, and gets back what the action changed. There is no SDK in the application and nothing to install in it.
 
-This package is private. It is not on npm. It runs on macOS only.
+It runs on macOS (AX), Windows (UI Automation) and Linux (AT-SPI, on X11). The sections below say where a platform differs.
 
 ## What it does
 

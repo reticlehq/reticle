@@ -13,7 +13,7 @@ It drives your real, running app and reads what happened. Then it returns a verd
 
 [![npm](https://img.shields.io/npm/v/@reticlehq/server?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@reticlehq/server) [![downloads](https://img.shields.io/npm/dm/@reticlehq/core?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@reticlehq/core) [![stars](https://img.shields.io/github/stars/reticlehq/reticle?color=ff9f87&labelColor=15131f&logo=github)](https://github.com/reticlehq/reticle/stargazers) [![license](https://img.shields.io/badge/license-Apache--2.0-46d6a0?labelColor=15131f)](LICENSE) [![OpenSSF](https://api.securityscorecards.dev/projects/github.com/reticlehq/reticle/badge)](https://securityscorecards.dev/viewer/?uri=github.com/reticlehq/reticle) [![Discord members](https://dcbadge.limes.pink/api/server/BwAbzv9ZRz?style=flat)](https://discord.gg/BwAbzv9ZRz)
 
-[**Install**](#install) · [What Reticle does](#what-reticle-does) · [Demo](#demo) · [Use it](#use-it) · [Commands](#commands) · [vs Playwright](#why-not-playwright) · [Safe to install](#safe-to-install-what-you-or-your-agent-can-check) · [Benchmarks](#benchmarks) · [Community](#community) · [Docs](https://docs.reticle.sh)
+[**Install**](#install) · [What Reticle does](#what-reticle-does) · [The computer](#the-computer-any-application-on-the-desktop) · [Demo](#demo) · [Use it](#use-it) · [Commands](#commands) · [vs Playwright](#why-not-playwright) · [Safe to install](#safe-to-install-what-you-or-your-agent-can-check) · [Benchmarks](#benchmarks) · [Community](#community) · [Docs](https://docs.reticle.sh)
 
 [⭐ Star the repo](https://github.com/reticlehq/reticle/stargazers) · [Good first issues](https://github.com/reticlehq/reticle/labels/good%20first%20issue) · [Contribute](CONTRIBUTING.md)
 
@@ -270,8 +270,36 @@ Reticle puts a small, **dev-only** SDK inside your app. Your coding agent gets t
 - **A gate in CI.** `reticle gate` fails a change that touches a saved flow's code without a new passing run.
 - **The Harness** (optional, on the platform): describe a person and a journey. Reticle drives it, verifies each step and saves what passed. [How it works](#the-open-source-tool-the-harness-and-the-dashboard).
 - **A HUD in your page** to watch the agent work: every action, every verdict, the flows it saved, and notes you pin for it.
+- **The whole computer, not only the page.** Your agent can join any desktop application, act in it, and prove what each action changed, with no SDK in it. [The computer](#the-computer-any-application-on-the-desktop).
 - **Works with your agent**: Claude Code, Cursor, Codex, Windsurf, VS Code, Gemini CLI and anything else that speaks MCP. Web (React, Next.js, Vue, Svelte, Angular and more) and desktop (Electron, Tauri).
 - **Safe to leave installed.** Production builds do not include the SDK, unless you opt in to [production mode](https://docs.reticle.sh/production-mode). The bridge listens only on `127.0.0.1`. Nothing from your app leaves your machine unless you link a project.
+
+---
+
+## The computer: any application on the desktop
+
+A page is not the whole job. A download opens a save dialog, a sign-in opens a popup, a desktop app has no page at all. `@reticlehq/computer` joins any application on the screen as a Reticle session:
+
+```bash
+npx -p @reticlehq/computer reticle-computer --app "Notes"
+```
+
+Your agent then uses the tools it has for a page: `reticle_look`, `reticle_act_and_wait`, `reticle_assert`.
+
+- **macOS, Windows and Linux.** It reads the application through the accessibility tree of the operating system: AX on macOS, UI Automation on Windows, AT-SPI on Linux (X11). The application needs no SDK and no change.
+- **Proof, not clicks.** Each action reports what it changed: the elements, the files it wrote, the settings, the clipboard and the pixels. A clock or a video that changes by itself is not counted as an effect.
+- **It acts only where a person can act.** Before a click, it asks the operating system what is at that point. A control that another window or shape covers, or that is in a closed menu, is refused with the reason.
+- **Safe on your own computer.** Actions go to the application in the background, so you keep your pointer and keyboard. An agent asks for the real pointer on one action only, and `~/.reticle/computer.json` can forbid it. On macOS, a HUD shows each action, with **Pause** and **Stop**.
+- **Applications with no elements.** On macOS, a screenshot gives the words in the picture with their boxes, so a canvas, a game or a remote desktop can be driven by those points.
+- **A desktop of its own.** `reticle-computer --sandbox linux --app <name> --open "<command>"` starts the application in a container with its own screen.
+
+**The browser and the computer work together.** Act in one, prove it in the other:
+
+- `reticle_attach_tab` joins a tab in your own Chromium browser as a session. It never joins a password vault or a sign-in page.
+- `reticle_session { action: "board", carry }` reads a value in one session (a desktop app), fills it into another (a page), and proves that it arrived.
+- When an action continues in a popup that the page cannot enter, the verdict says how to follow it on the computer.
+
+The computer realm is new. When something goes wrong, your agent can report it in one call, `reticle_feedback`, and it goes to the team. [The computer realm's README](adapters/realm/computer/README.md) has every flag and every limit.
 
 ---
 
@@ -553,7 +581,7 @@ Reticle is faster for a structural reason, not browser speed. It verifies a time
 |  |  |
 | --- | --- |
 | **Web** | CI drives React + Vite and Next.js to a verdict. CI boots Remix and Astro and checks that each connects. More frameworks are install-gated or wired. **[Frameworks](docs/frameworks.mdx) is the one list of what is proven, and how far** |
-| **Desktop** | Electron, Tauri, including the IPC boundary a browser-only tool cannot see |
+| **Desktop** | Electron, Tauri, including the IPC boundary a browser-only tool cannot see. Any other application on macOS, Windows and Linux (X11) through [the computer realm](#the-computer-any-application-on-the-desktop) |
 | **Agents** | anything that speaks MCP. Config written automatically for Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, Copilot CLI, OpenCode, Antigravity, Warp, Kiro, Amazon Q, Cline, Roo Code, Amp, Continue, Factory Droid. Codex CLI through `codex mcp add`, or a four-line paste when `codex` is not on PATH |
 | **Browsers** | the SDK runs in the tab you already have open; the tested and driven browser is Chromium, plus Electron and Tauri webviews |
 | **State** | zustand and Redux need no adapter. Shipped: TanStack Query, Jotai, XState, Valtio, MobX, Recoil, Svelte stores, Pinia |
