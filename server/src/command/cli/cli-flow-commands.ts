@@ -9,6 +9,7 @@
 import {
   GATE_OUTCOME,
   GateExit,
+  MSG_GATE_NO_COVERING_FLOW,
   MSG_GATE_NO_FLOWS,
   msgGateRegression,
   msgGateRefused,
@@ -30,6 +31,7 @@ import {
   type NamedFlow,
 } from '@/language/flows/change/flow-sources.js';
 import {
+  isFlowCoverableFile,
   isInteractiveSource,
   sourceMatchesChange,
   unflowedFiles,
@@ -273,7 +275,14 @@ export async function handleGate(
     // A gate over an empty suite has not passed — it had nothing to check. Same rule the suite
     // verdict already applies to `reticle verify`; see flowCoverageReport.
     const flowCoverage = flowCoverageReport(coverage.flows);
-    const pass = result.pass && flowCoverage.outcome === undefined;
+    // Files a flow can cover changed and flows exist, but no flow covers the change: nothing judged
+    // it. The gate exited 0 here while `reticle_verify change` answered `unknown` (#2324). A change
+    // to only docs, a lockfile, a stylesheet or a test is not counted, so it still passes.
+    const coverableChanged = changed.filter(isFlowCoverableFile);
+    const noCoveringFlow =
+      0 < coverableChanged.length && 0 < allFlows.length && 0 === affected.length;
+    const nothingChecked = flowCoverage.outcome !== undefined || noCoveringFlow;
+    const pass = result.pass && !nothingChecked;
     // What the platform knows decides too (a regression, a refused key), so the line is written
     // once the exit code is: it said "pass": true over an exit of 1 or 3.
     const known = await knownRegression(reticleRoot);
@@ -281,7 +290,7 @@ export async function handleGate(
     let local: GateExit = GateExit.FAIL;
     if (pass) {
       local = GateExit.PASS;
-    } else if (result.pass && flowCoverage.outcome !== undefined) {
+    } else if (result.pass && nothingChecked) {
       local = GateExit.NOTHING_TO_CHECK;
     }
     // Fails closed in CI, not in an agent's stop hook, where it would block over a key, not a change.
@@ -303,6 +312,7 @@ export async function handleGate(
       ...(result.unexecuted.length > 0 ? { unexecuted: result.unexecuted } : {}),
       ...(coverageStale.length > 0 ? { coverageStale } : {}),
       ...(coverageAccepted.length > 0 ? { coverageAccepted } : {}),
+      ...(noCoveringFlow ? { noCoveringFlow: coverableChanged } : {}),
       coverage: flowCoverage,
     });
     // Two non-zero codes, because two callers want opposite things from the same run. CI wants any
@@ -319,7 +329,7 @@ export async function handleGate(
       process.stderr.write(`${msgGateRefused(known.refused)}\n`);
     }
     if (GateExit.NOTHING_TO_CHECK === code && !hook) {
-      process.stderr.write(`${MSG_GATE_NO_FLOWS}\n`);
+      process.stderr.write(`${noCoveringFlow ? MSG_GATE_NO_COVERING_FLOW : MSG_GATE_NO_FLOWS}\n`);
     }
     if (GateExit.REGRESSION === code && !hook && regressed !== undefined) {
       process.stderr.write(`${msgGateRegression(regressed)}\n`);
