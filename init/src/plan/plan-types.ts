@@ -283,6 +283,10 @@ export interface PlanInput {
   craEntry?: { path: string; source: string } | null;
   /** Existing .env.development.local, so an unrelated variable in it survives. */
   craEnv?: string | null;
+  /** Expo: the root layout (expo-router) or `App` component the connect is imported from. */
+  expoEntry?: { path: string; source: string } | null;
+  /** Expo: current `.env.local`, where the `EXPO_PUBLIC_*` token goes. */
+  expoEnv?: string | null;
   /** The daemon's pairing token, inlined for CRA through the one channel it supports. */
   pairingToken?: string;
   /** Whether .reticle.json already exists in the project root (idempotency). */

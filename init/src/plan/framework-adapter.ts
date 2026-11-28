@@ -37,6 +37,7 @@ import {
 import { VITE_PLUGIN_DETAIL, viteSteps } from './plan-vite.js';
 import { electronForgeSteps, electronViteSteps } from './plan-electron-vite.js';
 import { angularSteps } from './plan-angular.js';
+import { expoSteps } from './plan-expo.js';
 import { REMIX_CLASSIC_MANUAL, remixEntryFile } from '@/patch/remix.js';
 import { StepStatus } from './plan-types.js';
 import type { PlanInput, Step } from './plan-types.js';
@@ -270,6 +271,14 @@ export const FRAMEWORK_ADAPTERS: Record<Framework, FrameworkAdapter> = {
     packages: () => [RETICLE_REACT_KIT],
     steps: craSteps,
     connectStepTitles: [StepTitle.CONNECT_MODULE, StepTitle.CONNECT_SNIPPET_CRA],
+    carriesOwnUnverifiedNote: false,
+  },
+  [Framework.EXPO]: {
+    // Metro takes no plugin of ours, so the kit alone, imported from the app entry and resolved
+    // for web only (see expo.ts). Expo web renders through react-dom, which the kit reads.
+    packages: () => [RETICLE_REACT_KIT],
+    steps: expoSteps,
+    connectStepTitles: [StepTitle.CONNECT_MODULE, StepTitle.CONNECT_SNIPPET_EXPO],
     carriesOwnUnverifiedNote: false,
   },
   [Framework.HTML]: {

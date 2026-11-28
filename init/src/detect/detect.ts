@@ -79,6 +79,13 @@ export const Framework = {
   ANGULAR: 'angular',
   /** Create React App. No config file exists, so `react-scripts` in the dependencies is the signal. */
   CRA: 'cra',
+  /**
+   * Expo, whose web build Metro serves (`expo start --web`, port 8081). Metro takes no plugin of
+   * ours and the app has no index.html to inject into, so it used to read as plain HTML and get a
+   * snippet that cannot run there (#1707). The connect has to come from the app's own entry, and
+   * only on web: the same entry is the iOS and Android bundle.
+   */
+  EXPO: 'expo',
   HTML: 'html',
 } as const;
 export type Framework = (typeof Framework)[keyof typeof Framework];
@@ -203,7 +210,12 @@ export interface Detection {
 }
 
 const NEXT_CONFIGS = ['next.config.js', 'next.config.mjs', 'next.config.ts', 'next.config.cjs'];
-const VITE_CONFIGS = ['vite.config.js', 'vite.config.ts', 'vite.config.mjs', 'vite.config.mts'];
+export const VITE_CONFIGS = [
+  'vite.config.js',
+  'vite.config.ts',
+  'vite.config.mjs',
+  'vite.config.mts',
+];
 const ELECTRON_VITE_CONFIGS = [
   'electron.vite.config.ts',
   'electron.vite.config.js',
@@ -270,6 +282,11 @@ interface FrameworkSignals {
    * conclusive there would install wiring that Vinext never evaluates.
    */
   readonly depsUnless?: readonly string[];
+  /**
+   * Root files whose presence disproves this framework's dependency signal. Expo is the only user:
+   * an app that depends on `expo` and has a Vite config is served by Vite.
+   */
+  readonly depsUnlessConfigs?: readonly string[];
   /** Root config-file basenames that name it when the dependency is absent. */
   readonly configs: readonly string[];
   /**
@@ -347,6 +364,8 @@ export const FRAMEWORK_SIGNALS: Record<Framework, FrameworkSignals> = {
   [Framework.VITE]: { deps: ['vite', 'vite-plus', 'vinext'], configs: VITE_CONFIGS },
   /** CRA has no config file at all, so the dependency is the only signal. */
   [Framework.CRA]: { deps: ['react-scripts'], configs: [] },
+  /** `app.json` is not Expo's alone, and `app.config.*` is optional, so the dependency decides. */
+  [Framework.EXPO]: { deps: ['expo'], depsUnlessConfigs: VITE_CONFIGS, configs: [] },
   /** Nothing identifies plain HTML; it is where the chain below ends. */
   [Framework.HTML]: { deps: [], configs: [] },
 };
@@ -373,6 +392,9 @@ export const DETECTION_ORDER: readonly Framework[] = [
   // successor's wiring; before Vite, because Remix on Vite depends on `vite` directly.
   Framework.REMIX,
   Framework.TANSTACK_START,
+  // Before Vite: an Expo app that lists `vite` for tooling, with no Vite config of its own, is still
+  // served by Metro, which the Vite plugin never reaches. A Vite config says Vite serves it.
+  Framework.EXPO,
   Framework.VITE,
   // After Vite: an Analog app is Angular on Vite, and the Vite plugin's index.html injection reaches
   // it. A CLI app never depends on `vite` itself — the CLI bundles its own.
@@ -471,12 +493,10 @@ function declaredDependencies(pkg: PackageJsonLike): Readonly<Record<string, str
 function detectFramework(input: DetectInput): Framework {
   for (const framework of DETECTION_ORDER) {
     const signals = FRAMEWORK_SIGNALS[framework];
-    const hasDisqualifyingDependency =
-      true === signals.depsUnless?.some((d) => depVersion(input.pkg, d) !== undefined);
-    if (
-      signals.deps.some((d) => depVersion(input.pkg, d) !== undefined) &&
-      !hasDisqualifyingDependency
-    ) {
+    const disqualified =
+      true === signals.depsUnless?.some((d) => depVersion(input.pkg, d) !== undefined) ||
+      hasAnyConfig(input.configFiles, signals.depsUnlessConfigs ?? []);
+    if (signals.deps.some((d) => depVersion(input.pkg, d) !== undefined) && !disqualified) {
       return framework;
     }
     if (

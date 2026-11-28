@@ -68,6 +68,7 @@ import {
   projectIdOf,
   RETICLE_CONFIG_FILE,
 } from '@/detect/existing-config.js';
+import { frameworkDevPort } from '@/detect/dev-server-ports.js';
 import { CLAUDE_SETTINGS_PATH, claudeSettingsSteps, promptHookSteps } from './stop-hook-step.js';
 import {
   PRETTIERIGNORE_PATH,
@@ -776,7 +777,7 @@ function reticleConfigStep(
   renamedFrom?: string,
 ): Step {
   if (true === input.reticleConfigExists) {
-    const problem = existingConfigProblem(onDisk);
+    const problem = existingConfigProblem(onDisk, frameworkDevPort(input.detection.framework));
     if (problem !== undefined) {
       // `ℹ`, not `·`: the step is done and something about the result still stops things working,
       // which is the one mark that says "there is something here to read".

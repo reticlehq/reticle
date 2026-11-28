@@ -254,13 +254,15 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // the patchers of its kind rather than folded into snippets.ts, which is near the cap already.
   // +1: python-snippets.ts, split from snippets.ts when the snippets started to read the token at
   // run time, because snippets.ts was near the cap.
-  'init/src/patch': 21,
+  // +1: expo.ts, for the same reason as the stacks above: Expo is one more stack `init` wires.
+  'init/src/patch': 22,
   // Crossed the line at 11 with `plan-angular.ts` and `plan-electron-vite.ts`, one per stack `init`
   // learned to wire, each beside the other per-framework builders. 12 with `plan-vite.ts`: the Vite
   // plugin and capabilities steps every Vite-based stack composes, split out of `plan-framework.ts`
   // when two merges took it to the edge of the 1000-line cap. Recorded rather than grouped, because
   // these files ARE the plan, and a `frameworks/` subdirectory would split one dispatch in two.
-  'init/src/plan': 12,
+  // 13 with `plan-expo.ts`, Expo's builder, kept out of `plan-framework.ts` for the same cap.
+  'init/src/plan': 13,
   // Crossed the line as the protocol grew the two things a subject must declare about ITSELF rather
   // than about what it can see: how it may be driven, and the state a suite starts from. Recorded
   // rather than grouped -- this directory IS the vocabulary, and splitting it would put nouns an

@@ -20,6 +20,7 @@ import { resolve, sep } from 'node:path';
 import { DEV_SERVER_PORTS } from '@/command/cli/ports/resolve/cli-port.js';
 import { callingClientDirectory } from '@/hooks/client-directory.js';
 import { detectDevCommandInProject, initCommandIn } from './dev-server/dev-command.js';
+import { expoPortIn } from './dev-server/project-ports.js';
 import { probeDevServerStates } from './dev-server/dev-server-probe.js';
 import { NextStepOffered } from '@reticlehq/core';
 import { readProjectId } from '@/command/cli/ports/resolve/cli-port.js';
@@ -87,6 +88,10 @@ async function projectAppUrlIn(
   const candidates = new Set<number>(DEV_SERVER_PORTS);
   if (pinned !== undefined) {
     candidates.add(pinned);
+  }
+  const expo = expoPortIn(dir);
+  if (expo !== undefined) {
+    candidates.add(expo);
   }
   const own = (await io.serving([...candidates]))
     .map((port) => `${LOCALHOST}:${String(port)}`)

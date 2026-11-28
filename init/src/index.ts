@@ -37,6 +37,7 @@ export {
   DEV_SERVER_PORTS,
   isLikelyDevServerPort,
   devServerPortWarning,
+  expoWebPort,
   frameworkDevPort,
 } from './detect/dev-server-ports.js';
 export { configWithInstallSource } from './project/install-source-config.js';

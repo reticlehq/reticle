@@ -14,10 +14,13 @@ describe('frameworkDevPort', () => {
     expect(frameworkDevPort(Framework.HTML)).toBeUndefined();
   });
 
-  it('only names ports the dev-server table already knows, so there is one list', () => {
+  // Expo's 8081 is Metro's port for every React Native app, so only an Expo project scans it.
+  it('only names ports the dev-server table already knows, Expo apart, so there is one list', () => {
     for (const framework of Object.values(Framework)) {
       const port = frameworkDevPort(framework);
-      if (port !== undefined) expect(DEV_SERVER_PORTS.has(port)).toBe(true);
+      if (port !== undefined && Framework.EXPO !== framework) {
+        expect(DEV_SERVER_PORTS.has(port)).toBe(true);
+      }
     }
   });
 });

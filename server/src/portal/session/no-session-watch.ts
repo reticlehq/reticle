@@ -25,7 +25,7 @@ import {
   detectDevCommandInProject,
   initCommandIn,
 } from './dev-server/dev-command.js';
-import { envFilePorts } from './dev-server/project-ports.js';
+import { envFilePorts, expoPortIn } from './dev-server/project-ports.js';
 import { nextActionFor, portOfUrl, renderNextAction } from './no-session-next-action.js';
 import type { NoSessionNextAction } from './no-session-next-action.js';
 import {
@@ -366,6 +366,10 @@ export function startNoSessionWatch(options: NoSessionWatchOptions): () => void 
     const pinned = detectDevCommandInProject(directory)?.port;
     if (pinned !== undefined) {
       ports.add(pinned);
+    }
+    const expo = expoPortIn(directory);
+    if (expo !== undefined) {
+      ports.add(expo);
     }
     // A script that reads its port from `.env` pins nothing in `package.json` (reticle#1543).
     for (const port of envFilePorts(directory)) {
