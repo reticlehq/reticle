@@ -7,6 +7,8 @@ arms write under the model's name.
     cd ~/OSWorld && python ~/reticle/bench/osworld/run_reticle.py gpt54 --provider_name docker \\
         --model gpt-5.4 --max_steps 50 --result_dir ./results-reticle \\
         --test_all_meta_path evaluation_examples/test_small.json
+
+bench/osworld/run-arms.sh runs every arm, one after another.
 """
 import os
 import runpy
