@@ -402,8 +402,13 @@ export async function resolveQuery(
 }
 
 /**
- * Several queries for one control, pooled: each attempt runs every query and joins the refs, so
- * the settle budget is spent once, not once for each query. A role anchor with `alsoRoles` uses it.
+ * Several queries for one control, pooled: each attempt runs every query, so the settle budget is
+ * spent once, not once for each query. A role anchor with `alsoRoles` uses it.
+ *
+ * The first query that matches decides, and the later queries are its fallbacks: a recorded role
+ * is tried before the roles a changed build could use (#2058). Refs are counted once. The SDK's
+ * `textbox` query also matches a search box, so one search input came back twice and read as
+ * ambiguous.
  */
 export async function resolveAnyQuery(
   session: FlowReplaySession,
@@ -418,7 +423,9 @@ export async function resolveAnyQuery(
       reads.push(read(await session.command(ReticleCommand.QUERY, queryArgs)));
     }
     const hint = reads.find((read) => read.hint !== undefined)?.hint;
-    return { refs: reads.flatMap((read) => read.refs), ...(hint === undefined ? {} : { hint }) };
+    const first = reads.find((read) => 0 < read.refs.length);
+    const refs = [...new Set(first?.refs ?? [])];
+    return { refs, ...(hint === undefined ? {} : { hint }) };
   };
   let last = await look();
   const deadline = now() + ANCHOR_SETTLE_BUDGET_MS;
