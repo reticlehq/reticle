@@ -129,6 +129,9 @@ export const ReticleTool = {
    * browser's debugging port, as a session: the reader is put in the tab, not in a tab of its own.
    */
   ATTACH_TAB: 'reticle_attach_tab',
+  // Open a realm as a session (a desktop application, a tab of the person's browser), and close what was opened.
+  OPEN_REALM: 'reticle_open_realm',
+  CLOSE_REALM: 'reticle_close_realm',
   /** Human review: list the mistakes the human pinned to elements, and resolve them once fixed. */
   REVIEW: 'reticle_review',
   /** First-run readiness: block briefly until the app's SDK connects (smooths the init→connect race). */

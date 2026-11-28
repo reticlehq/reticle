@@ -50,6 +50,26 @@ Three steps. The application needs no project and no set-up of its own.
 
 Give the `sessionId` of that line on each call; `next` shows the calls with it. You set no switch for an Electron application: the command sets it. When an action is refused, the refusal says what to do: for a double-click, a hover, a drag or the menu bar, it says to send the action again with `args: { foreground: true }`.
 
+### Open and close it from the agent
+
+An agent connected to Reticle can open the realm with a tool call, and close it after:
+
+```js
+reticle_run({ tool: 'reticle_open_realm', args: { realm: 'computer', app: 'Mail', launch: true } });
+// → { ok: true, sessionId: "cu-mail-…" }
+reticle_run({ tool: 'reticle_close_realm', args: { sessionId: 'cu-mail-…' } });
+```
+
+`realm: "browser"` with `match` joins a tab of the person's browser, as `reticle_attach_tab` does.
+
+A tool call does not show the approval prompt that an agent shows before a terminal command. So an agent can open only an application that the person listed in `~/.reticle/computer.json`:
+
+```json
+{ "open": ["Mail", "Notes"] }
+```
+
+An application that is not listed is refused, and nothing starts. `close` ends only a session that the same agent opened. When the agent leaves, every realm it opened is closed after 30 seconds, unless the agent comes back first. The other limits in the file, and **Stop**, still apply.
+
 ## Use it
 
 Give the terminal Accessibility permission: System Settings, Privacy & Security, Accessibility.

@@ -173,6 +173,7 @@ import {
   serverAcceptedAfterTimeout,
 } from './lease-seed.js';
 import { ATTACH_TAB_TOOL } from './attach-tab-tool.js';
+import { CLOSE_REALM_TOOL, OPEN_REALM_TOOL } from './realm-open.js';
 
 /** A fresh, collision-resistant lease id. Uses crypto at the I/O boundary (not pure logic). */
 function newLeaseId(): string {
@@ -947,4 +948,7 @@ export const LEASE_TOOLS: ToolDef[] = [
   LEASE_RELEASE_TOOL,
   LEASE_COVERAGE_TOOL,
   ATTACH_TAB_TOOL,
+  // Open a realm as a session (an app, a tab of the person's browser), and close what was opened.
+  OPEN_REALM_TOOL,
+  CLOSE_REALM_TOOL,
 ];
