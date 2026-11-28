@@ -528,13 +528,21 @@ export async function dragElement(
     if (dataTransfer !== null) {
       init.dataTransfer = dataTransfer;
     }
-    source.dispatchEvent(new DragEvent('dragstart', init));
+    // A browser starts an HTML5 drag from the draggable element under the pointer, so the event
+    // must land on that element, not on a non-draggable wrapper around it (#2401). With several
+    // draggable descendants the choice is ambiguous: leave the source alone rather than guess.
+    const draggables = source.querySelectorAll<HTMLElement>('[draggable="true"]');
+    const dragSource =
+      source.matches('[draggable="true"]') || draggables.length !== 1
+        ? source
+        : (draggables[0] ?? source);
+    dragSource.dispatchEvent(new DragEvent('dragstart', init));
     await nativeFrame();
     dest.dispatchEvent(new DragEvent('dragenter', init));
     dest.dispatchEvent(new DragEvent('dragover', init));
     await nativeFrame();
     dropPrevented = !dest.dispatchEvent(new DragEvent('drop', init));
-    source.dispatchEvent(new DragEvent('dragend', init));
+    dragSource.dispatchEvent(new DragEvent('dragend', init));
   }
   return dropPrevented;
 }
