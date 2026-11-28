@@ -19,7 +19,7 @@ Three arms, differing only in method:
 
 - **A — bash.** No instructions. "Run it and determine whether it worked."
 - **B — skill.** The `verify-cli-run` discipline inline: declare first, snapshot, diff, refuse the exit code, check the before-state.
-- **C — binary.** Must verify through `reticle-cli-drive`, reading the JSON verdict.
+- **C — binary.** Must verify through `reticle-terminal`, reading the JSON verdict.
 
 ## The result
 
@@ -31,7 +31,7 @@ Three arms, differing only in method:
 
 **The arm with the tool was the only arm that got anything wrong, and it got the CONTROL wrong.**
 
-`reticle-cli-drive` reported `no` on a build that worked perfectly, because `dist` sat in `EXCLUDED_BY_DEFAULT` — so the one path it had been asked to watch was structurally invisible, the before-and-after snapshots were identical, and the adjudicator correctly read "no artifact evidence" as the consequence failing. The adjudication was right. The observation it was given was not.
+`reticle-terminal` reported `no` on a build that worked perfectly, because `dist` sat in `EXCLUDED_BY_DEFAULT` — so the one path it had been asked to watch was structurally invisible, the before-and-after snapshots were identical, and the adjudicator correctly read "no artifact evidence" as the consequence failing. The adjudication was right. The observation it was given was not.
 
 Two failures stacked, and the second is worse:
 

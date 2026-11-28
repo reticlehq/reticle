@@ -11,7 +11,7 @@ import {
   PlatformProfile,
   RETICLE_PROTOCOL_VERSION,
 } from '@reticlehq/core';
-import type { WorkspacePort } from '@reticlehq/cli-realm';
+import type { WorkspacePort } from '@reticlehq/terminal';
 import { WebSocket } from 'ws';
 
 import type { UiDriver } from '../driver.js';

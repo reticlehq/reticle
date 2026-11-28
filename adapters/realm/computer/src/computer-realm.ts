@@ -9,8 +9,8 @@
  * application's own word. A claim gets a `yes` only from a channel the application does not
  * decide: here, the file system, when the caller names a folder to watch.
  */
-import { ChangeKind as FileChangeKind, diffSnapshots } from '@reticlehq/cli-realm';
-import type { Snapshot, WorkspacePort } from '@reticlehq/cli-realm';
+import { ChangeKind as FileChangeKind, diffSnapshots } from '@reticlehq/terminal';
+import type { Snapshot, WorkspacePort } from '@reticlehq/terminal';
 import {
   BlindSpotKind,
   CHANNEL_DEFAULTS,

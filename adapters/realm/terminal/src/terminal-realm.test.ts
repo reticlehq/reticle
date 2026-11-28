@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CloseCondition, Grade, Independence, RefusalReason } from 'open-verification';
-import { CliRealm } from './cli-realm.js';
-import { CliChannel } from './channels.js';
+import { TerminalRealm } from './terminal-realm.js';
+import { TerminalChannel } from './channels.js';
 import type { CommandManifest } from './manifest.js';
 import type { Invocation, Supervisor } from './process/supervisor.js';
 
@@ -41,8 +41,8 @@ const manifest: CommandManifest = {
   ],
 };
 
-const realm = (supervisor = fakeSupervisor()): CliRealm =>
-  new CliRealm({ supervisor, manifest, now: () => 100 });
+const realm = (supervisor = fakeSupervisor()): TerminalRealm =>
+  new TerminalRealm({ supervisor, manifest, now: () => 100 });
 
 describe('what a CLI realm says about itself', () => {
   /**
@@ -72,10 +72,10 @@ describe('what a CLI realm says about itself', () => {
    */
   it('declares log and the exit code below the specification default, because a CLI chose them', () => {
     const declared = realm().channels();
-    const log = declared.find((c) => c.id === CliChannel.LOG);
+    const log = declared.find((c) => c.id === TerminalChannel.LOG);
     expect(log?.independence).toBe(Independence.ACTUATION_DERIVED);
 
-    const exit = declared.find((c) => c.id === CliChannel.EXIT_STATUS);
+    const exit = declared.find((c) => c.id === TerminalChannel.EXIT_STATUS);
     expect(exit?.independence).toBe(Independence.ACTUATION_DERIVED);
     expect(exit?.grade).toBe(Grade.PRESENCE);
   });
@@ -90,7 +90,7 @@ describe('what a CLI realm says about itself', () => {
   it('separates the kill the OS imposed from the code the tool chose', () => {
     const proc = realm()
       .channels()
-      .find((c) => c.id === CliChannel.PROCESS);
+      .find((c) => c.id === TerminalChannel.PROCESS);
     expect(proc?.independence).toBe(Independence.INDEPENDENT);
   });
 

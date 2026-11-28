@@ -19,7 +19,7 @@ import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
-import { nodeWorkspace } from '../adapters/realm/cli/dist/index.js';
+import { nodeWorkspace } from '../adapters/realm/terminal/dist/index.js';
 import {
   ActKind,
   ComputerRealm,

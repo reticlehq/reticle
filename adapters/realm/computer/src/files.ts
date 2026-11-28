@@ -7,7 +7,7 @@
  */
 import { statSync } from 'node:fs';
 
-import type { Snapshot } from '@reticlehq/cli-realm';
+import type { Snapshot } from '@reticlehq/terminal';
 
 /** The kind of a write that left the same bytes. The snapshot has no word for it. */
 export const REWRITTEN = 'rewritten';

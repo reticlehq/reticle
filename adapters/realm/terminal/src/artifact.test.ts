@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { Grade, Independence, couldEverProve } from 'open-verification';
-import { CliRealm } from './cli-realm.js';
-import { CliChannel } from './channels.js';
-import { CliSummary } from './cli-realm.js';
+import { TerminalRealm } from './terminal-realm.js';
+import { TerminalChannel } from './channels.js';
+import { TerminalSummary } from './terminal-realm.js';
 import type { CommandManifest } from './manifest.js';
 import type { Invocation, Supervisor } from './process/supervisor.js';
 import type { Snapshot, WorkspacePort } from './workspace/port.js';
@@ -46,8 +46,8 @@ const withFile = (path: string, hash: string, size = 4): Snapshot => ({
   unreadable: [],
 });
 
-const realm = (workspace: WorkspacePort): CliRealm =>
-  new CliRealm({ supervisor, manifest, workspace, now: () => 100 });
+const realm = (workspace: WorkspacePort): TerminalRealm =>
+  new TerminalRealm({ supervisor, manifest, workspace, now: () => 100 });
 
 describe('the two artifact channels', () => {
   /**
@@ -64,11 +64,11 @@ describe('the two artifact channels', () => {
    */
   it('grades existence as independent consequence, and content as the subject own word', () => {
     const declared = realm(scriptedWorkspace([empty])).channels();
-    const artifact = declared.find((c) => c.id === CliChannel.ARTIFACT);
+    const artifact = declared.find((c) => c.id === TerminalChannel.ARTIFACT);
     expect(artifact?.independence).toBe(Independence.INDEPENDENT);
     expect(artifact?.grade).toBe(Grade.CONSEQUENCE);
 
-    const content = declared.find((c) => c.id === CliChannel.ARTIFACT_CONTENT);
+    const content = declared.find((c) => c.id === TerminalChannel.ARTIFACT_CONTENT);
     expect(content?.independence).toBe(Independence.ACTUATION_DERIVED);
     expect(content?.grade).toBe(Grade.PRESENCE);
   });
@@ -76,9 +76,9 @@ describe('the two artifact channels', () => {
   /** With the filesystem watched, this realm can finally reach a `yes`. Without it, it cannot. */
   it('can prove something once it watches the filesystem, and not before', () => {
     expect(couldEverProve(realm(scriptedWorkspace([empty])).channels())).toBe(true);
-    const blind = new CliRealm({ supervisor, manifest, now: () => 100 });
+    const blind = new TerminalRealm({ supervisor, manifest, now: () => 100 });
     expect(couldEverProve(blind.channels())).toBe(false);
-    expect(blind.channels().some((c) => c.id === CliChannel.ARTIFACT)).toBe(false);
+    expect(blind.channels().some((c) => c.id === TerminalChannel.ARTIFACT)).toBe(false);
   });
 
   it('reports a written path on the independent channel and its bytes on the other', async () => {
@@ -86,10 +86,10 @@ describe('the two artifact channels', () => {
     const window = r.openWindow(5_000);
     r.closeWindow(window);
     const observed = await r.observe(window);
-    const written = observed.find((o) => o.summary === CliSummary.FS_WRITTEN);
-    expect(written?.channel).toBe(CliChannel.ARTIFACT);
-    const content = observed.find((o) => o.summary === CliSummary.FS_CONTENT);
-    expect(content?.channel).toBe(CliChannel.ARTIFACT_CONTENT);
+    const written = observed.find((o) => o.summary === TerminalSummary.FS_WRITTEN);
+    expect(written?.channel).toBe(TerminalChannel.ARTIFACT);
+    const content = observed.find((o) => o.summary === TerminalSummary.FS_CONTENT);
+    expect(content?.channel).toBe(TerminalChannel.ARTIFACT_CONTENT);
   });
 
   /**
@@ -109,9 +109,9 @@ describe('the two artifact channels', () => {
     const window = r.openWindow(5_000);
     r.closeWindow(window);
     const observed = await r.observe(window);
-    expect(observed.some((o) => o.summary === CliSummary.FS_WRITTEN)).toBe(false);
-    const hollow = observed.find((o) => o.summary === CliSummary.FS_WRITTEN_EMPTY);
-    expect(hollow?.channel).toBe(CliChannel.ARTIFACT);
+    expect(observed.some((o) => o.summary === TerminalSummary.FS_WRITTEN)).toBe(false);
+    const hollow = observed.find((o) => o.summary === TerminalSummary.FS_WRITTEN_EMPTY);
+    expect(hollow?.channel).toBe(TerminalChannel.ARTIFACT);
     expect((hollow?.value as { size?: number } | undefined)?.size).toBe(0);
   });
 
@@ -126,9 +126,9 @@ describe('the two artifact channels', () => {
     const window = r.openWindow(5_000);
     r.closeWindow(window);
     const observed = await r.observe(window);
-    expect(observed.some((o) => o.summary === CliSummary.FS_WRITTEN)).toBe(false);
+    expect(observed.some((o) => o.summary === TerminalSummary.FS_WRITTEN)).toBe(false);
     // And the claim it made is still visible, on the channel that cannot prove it.
-    expect(observed.some((o) => o.channel === CliChannel.LOG)).toBe(true);
+    expect(observed.some((o) => o.channel === TerminalChannel.LOG)).toBe(true);
   });
 });
 
@@ -163,7 +163,7 @@ describe('whether the consequence was already true', () => {
    * already hold". Substituting `false` would score better and be a lie.
    */
   it('says nobody checked when there is no workspace to have looked at', () => {
-    const blind = new CliRealm({ supervisor, manifest, now: () => 100 });
+    const blind = new TerminalRealm({ supervisor, manifest, now: () => 100 });
     const window = blind.openWindow(5_000);
     expect(blind.existedBefore(window, '/tmp/ws/anything')).toBeUndefined();
   });

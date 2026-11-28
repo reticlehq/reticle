@@ -1,7 +1,7 @@
 /**
  * The only thing here that talks to the operating system.
  *
- * A PORT, not a class. `CliRealm` depends on this interface and never on `node:child_process`, and
+ * A PORT, not a class. `TerminalRealm` depends on this interface and never on `node:child_process`, and
  * the reason is not testability alone: a realm that could only be exercised by running real
  * programs would be exercised rarely, and the cases worth exercising -- a kill, a fork whose effect
  * lands after exit, a process that never ends -- are the ones hardest to produce on demand.

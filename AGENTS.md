@@ -20,7 +20,7 @@ init                          @reticlehq/init          — `reticle init`: write
 spec-runner                   @reticlehq/test          — spec runner and matchers for CI (peer vitest)
 adapters/realm/browser        @reticlehq/browser       — the SDK in the app (DOM only)
 adapters/realm/electron       @reticlehq/electron      — Electron main-process adapter
-adapters/realm/cli            @reticlehq/cli-realm     — realm for a command-line subject (Node only)
+adapters/realm/terminal       @reticlehq/terminal      — the terminal realm: a command-line program (Node only)
 adapters/realm/computer   @reticlehq/computer  — realm for a whole application, read through the OS accessibility tree (Node only)
 adapters/realm/tauri          reticle-tauri            — Tauri capture backend (Rust; no JS gate compiles it)
 adapters/framework/react      @reticlehq/react         — React adapter: DOM node to component to source file

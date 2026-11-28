@@ -1,6 +1,6 @@
 # CLI false-green scorecard — does a sealed verdict beat a disciplined agent?
 
-> A checkpoint on the CLI realm. It answered **against the adapter** (6 of 8, two false greens), the two misses were fixed, and it now ties the disciplined agent at 8 of 8 with both controls still clean. `@reticlehq/cli-realm` remains `private` and unpublished — the score was one of the reasons to hold it, never the only one, and a tie on eight defects is not a reason to claim a name permanently.
+> A checkpoint on the CLI realm. It answered **against the adapter** (6 of 8, two false greens), the two misses were fixed, and it now ties the disciplined agent at 8 of 8 with both controls still clean. `@reticlehq/terminal` remains `private` and unpublished — the score was one of the reasons to hold it, never the only one, and a tie on eight defects is not a reason to claim a name permanently.
 
 Deterministic, with no model in the loop — the same shape as the web scorecard next door, and for the same reason: a fix-loop benchmark moves the agent and the checker at once and cannot say which one did the work. Eight defects and two controls, each injected into a tool that is otherwise correct, each exiting 0 and printing something confident.
 

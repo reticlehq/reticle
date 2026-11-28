@@ -1,4 +1,4 @@
-# `cli-smoke` — integration proof for `@reticlehq/cli-realm`
+# `cli-smoke` — integration proof for `@reticlehq/terminal`
 
 A command-line tool that can be put into each behaviour the conformance suite asks for, so the CLI realm can be scored against the specification's own scenarios on a surface with **no screen and no network**.
 

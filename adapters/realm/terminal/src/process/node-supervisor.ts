@@ -12,7 +12,7 @@ import type {
  * The `Supervisor` port, over real processes.
  *
  * Everything in this adapter that knows an operating system exists is here, which is what lets
- * `CliRealm` be exercised against a fake and lets this be exercised against real programs. The two
+ * `TerminalRealm` be exercised against a fake and lets this be exercised against real programs. The two
  * halves are hard in opposite directions: the realm's difficulty is arranging a kill or a fork,
  * and this one's difficulty IS the arranging, so faking anything here would test the fake.
  *

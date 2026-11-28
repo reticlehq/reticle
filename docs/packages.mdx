@@ -257,7 +257,23 @@ npx @reticlehq/computer --app Notes
 
 macOS has the deepest support. Windows (UI Automation) and Linux (AT-SPI) have helpers too. The application needs no change.
 
-**Depends on:** `@reticlehq/core`.
+**Depends on:** `@reticlehq/core`, `@reticlehq/terminal` (for the files an action writes).
+
+---
+
+## @reticlehq/terminal
+
+**Reads a command-line program from the outside: what it prints, its exit code, and the files it changes.**
+
+**Why it exists:** an agent says a build, a script or a migration worked, and the screen is a terminal. This package runs the command, takes a snapshot of the folders it can write before and after, and gives an adjudicator the evidence: the output, the exit code, and each file that was added, changed or removed. The program needs no change.
+
+```bash
+npx -p @reticlehq/terminal reticle-terminal --expect "dist/index.js is written" --path dist/index.js -- npm run build
+```
+
+`@reticlehq/computer` uses its file snapshot to report the files a desktop action wrote.
+
+**Depends on:** `open-verification`.
 
 ---
 

@@ -1,11 +1,11 @@
 import { AnomalyKind, AnomalyTier, type Anomaly, type Observation } from 'open-verification';
-import { CliChannel } from './channels.js';
-import { CliSummary } from './cli-realm.js';
+import { TerminalChannel } from './channels.js';
+import { TerminalSummary } from './terminal-realm.js';
 
 /**
  * Two things in one window that cannot both be true.
  *
- * Kept out of `CliRealm` because every rule here is a pure function of a window's observations:
+ * Kept out of `TerminalRealm` because every rule here is a pure function of a window's observations:
  * no clock, no filesystem, no process. That makes each one testable on its own, and it makes the
  * set extensible without touching the realm, which is the open/closed shape the engine's own
  * contradiction folds already use.
@@ -52,7 +52,7 @@ const SUCCESS_WORDS: readonly string[] = [
  */
 function claimsSuccess(observations: readonly Observation[]): string | undefined {
   for (const observation of observations) {
-    if (observation.channel !== CliChannel.LOG) continue;
+    if (observation.channel !== TerminalChannel.LOG) continue;
     const text = 'string' === typeof observation.value ? observation.value : '';
     const lower = text.toLowerCase();
     if (SUCCESS_WORDS.some((word) => lower.includes(word))) return text;
@@ -73,8 +73,8 @@ const on = (observations: readonly Observation[], channel: string): readonly Obs
  * crash would be unreportable as a fault.
  */
 function claimedOverKill(observations: readonly Observation[]): Anomaly | undefined {
-  const killed = on(observations, CliChannel.PROCESS).find(
-    (o) => o.summary === CliSummary.TERMINATED_SIGNAL,
+  const killed = on(observations, TerminalChannel.PROCESS).find(
+    (o) => o.summary === TerminalSummary.TERMINATED_SIGNAL,
   );
   if (killed === undefined) return undefined;
   const claim = claimsSuccess(observations);
@@ -84,7 +84,7 @@ function claimedOverKill(observations: readonly Observation[]): Anomaly | undefi
     tier: AnomalyTier.OBSERVED,
     claim: `the tool reported: ${claim}`,
     counter: `the operating system ended it with ${String(killed.value)}, which the tool did not choose`,
-    between: [CliChannel.LOG, CliChannel.PROCESS],
+    between: [TerminalChannel.LOG, TerminalChannel.PROCESS],
     evidence: [killed.id],
   };
 }
@@ -99,7 +99,7 @@ function claimedOverKill(observations: readonly Observation[]): Anomaly | undefi
 function claimedWriteNeverLanded(observations: readonly Observation[]): Anomaly | undefined {
   const claim = claimsSuccess(observations);
   if (claim === undefined) return undefined;
-  if (on(observations, CliChannel.ARTIFACT).length > 0) return undefined;
+  if (on(observations, TerminalChannel.ARTIFACT).length > 0) return undefined;
   return {
     kind: AnomalyKind.ADVANCED_OVER_FAILURE,
     tier: AnomalyTier.ABSENCE_DERIVED,
@@ -107,7 +107,7 @@ function claimedWriteNeverLanded(observations: readonly Observation[]): Anomaly 
     counter:
       'nothing was recorded on the filesystem inside this window; the effect may be outside the ' +
       'declared roots, in a child process, or still to land',
-    between: [CliChannel.LOG, CliChannel.ARTIFACT],
+    between: [TerminalChannel.LOG, TerminalChannel.ARTIFACT],
     evidence: [],
   };
 }
@@ -126,7 +126,7 @@ function noTraceAtAll(observations: readonly Observation[]): Anomaly | undefined
     tier: AnomalyTier.ABSENCE_DERIVED,
     claim: 'the command was dispatched',
     counter: 'no channel recorded anything at all before the window closed',
-    between: [CliChannel.LOG, CliChannel.ARTIFACT],
+    between: [TerminalChannel.LOG, TerminalChannel.ARTIFACT],
     evidence: [],
   };
 }
@@ -148,7 +148,7 @@ function neverDialled(
 ): Anomaly | undefined {
   if (0 === expected.length) return undefined;
   const dialled = new Set(
-    on(observations, CliChannel.NET).map((o) =>
+    on(observations, TerminalChannel.NET).map((o) =>
       'object' === typeof o.value && null !== o.value
         ? String((o.value as { host?: unknown }).host)
         : '',
@@ -161,7 +161,7 @@ function neverDialled(
     tier: AnomalyTier.ABSENCE_DERIVED,
     claim: `the command was declared to reach ${missed.join(', ')}`,
     counter: 'no connection to it was seen before the window closed',
-    between: [CliChannel.NET, CliChannel.LOG],
+    between: [TerminalChannel.NET, TerminalChannel.LOG],
     evidence: [],
   };
 }

@@ -27,8 +27,8 @@ import { fileURLToPath } from 'node:url';
 import { BUGS, EXPECTED_PATH } from './bugs.mjs';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-const { CliRealm, NodeSupervisor, nodeWorkspace } = await import(
-  `file://${join(REPO, 'adapters/realm/cli/dist/index.js')}`
+const { TerminalRealm, NodeSupervisor, nodeWorkspace } = await import(
+  `file://${join(REPO, 'adapters/realm/terminal/dist/index.js')}`
 );
 const { adjudicate, Declaration, assertionsHeldUnder, Verdict } = await import(
   `file://${join(REPO, 'open-verification/dist/index.js')}`
@@ -72,7 +72,7 @@ const CLAIM = 'running the tool produces out.txt with real content';
  * the loose needle was the measurement under-stating the claim rather than the adapter meeting it.
  *
  * "With real content" is carried by the summary, not by this: `cli.fs.written` is no longer said
- * about a zero-byte file (see CliSummary.FS_WRITTEN_EMPTY).
+ * about a zero-byte file (see TerminalSummary.FS_WRITTEN_EMPTY).
  */
 const EXPECTED_NEEDLE = `/${EXPECTED_PATH}"`;
 
@@ -115,7 +115,7 @@ for (const bug of BUGS) {
     now: () => Date.now(),
     ...(bug.settleMs === undefined ? {} : { settleMs: bug.settleMs }),
   });
-  const realm = new CliRealm({
+  const realm = new TerminalRealm({
     supervisor,
     manifest: {
       workspaceRoot: root,
@@ -162,7 +162,7 @@ for (const bug of BUGS) {
         observation: o,
         provenance: {
           class: 'observed',
-          source: '@reticlehq/cli-realm',
+          source: '@reticlehq/terminal',
           method: 'filesystem snapshot, before and after',
           subject: realm.identity(),
           at: Date.now(),

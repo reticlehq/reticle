@@ -2,12 +2,12 @@
  * The front door.
  *
  * A realm for a subject that runs and exits, and the port it needs from the operating system.
- * Nothing here spawns anything: `CliRealm` is given a `Supervisor` and knows the world only
+ * Nothing here spawns anything: `TerminalRealm` is given a `Supervisor` and knows the world only
  * through it.
  */
-export { CliRealm, CliSummary, closedBy } from './cli-realm.js';
-export type { CliRealmDeps } from './cli-realm.js';
-export { CliChannel } from './channels.js';
+export { TerminalRealm, TerminalSummary, closedBy } from './terminal-realm.js';
+export type { TerminalRealmDeps } from './terminal-realm.js';
+export { TerminalChannel } from './channels.js';
 export { NodeSupervisor, exitStatus } from './process/node-supervisor.js';
 export { nodeWorkspace } from './workspace/port.js';
 export { detectAnomalies } from './detect.js';

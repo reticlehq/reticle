@@ -19,7 +19,7 @@ import {
   type SubjectRef,
   type Window,
 } from 'open-verification';
-import { CliChannel } from './channels.js';
+import { TerminalChannel } from './channels.js';
 import { detectAnomalies } from './detect.js';
 import { contractSatisfies } from './state-contract.js';
 import type { ConnectProxy } from './net/proxy.js';
@@ -54,7 +54,7 @@ import {
 const CLI_SURFACE = 'x-cli';
 
 /** Observation summaries. Stable machine labels, because `valueContains` matches on them exactly. */
-export const CliSummary = {
+export const TerminalSummary = {
   STDOUT_LINE: 'cli.stdout.line',
   STDERR_LINE: 'cli.stderr.line',
   EXIT_CODE: 'cli.exit.code',
@@ -95,25 +95,25 @@ export const CliSummary = {
  */
 const CLI_CHANNELS: readonly ChannelDescriptor[] = [
   {
-    id: CliChannel.LOG,
+    id: TerminalChannel.LOG,
     independence: Independence.ACTUATION_DERIVED,
     grade: Grade.CONTEXT,
     note: 'stdout and stderr, which a command-line tool writes on purpose',
   },
   {
-    id: CliChannel.EXIT_STATUS,
+    id: TerminalChannel.EXIT_STATUS,
     independence: Independence.ACTUATION_DERIVED,
     grade: Grade.PRESENCE,
     note: 'the exit code the tool chose for itself',
   },
   {
-    id: CliChannel.PROCESS,
+    id: TerminalChannel.PROCESS,
     independence: Independence.INDEPENDENT,
     grade: Grade.PRESENCE,
     note: 'termination imposed by the operating system, which the tool did not choose',
   },
   {
-    id: CliChannel.TIME,
+    id: TerminalChannel.TIME,
     ...CHANNEL_DEFAULTS[ChannelId.TIME],
     note: 'duration, and whether it ended',
   },
@@ -132,7 +132,7 @@ const CLI_CHANNELS: readonly ChannelDescriptor[] = [
  * never contacted the host its claim names has been caught by the only party that could see it.
  */
 const NET_CHANNEL: ChannelDescriptor = {
-  id: CliChannel.NET,
+  id: TerminalChannel.NET,
   independence: Independence.INDEPENDENT,
   grade: Grade.PRESENCE,
   note: 'hosts dialled, seen by a proxy that reads none of the traffic',
@@ -166,20 +166,20 @@ const NET_CHANNEL: ChannelDescriptor = {
  */
 const ARTIFACT_CHANNELS: readonly ChannelDescriptor[] = [
   {
-    id: CliChannel.ARTIFACT,
+    id: TerminalChannel.ARTIFACT,
     independence: Independence.INDEPENDENT,
     grade: Grade.CONSEQUENCE,
     note: 'that a path exists, its size and its mode, which the filesystem decided',
   },
   {
-    id: CliChannel.ARTIFACT_CONTENT,
+    id: TerminalChannel.ARTIFACT_CONTENT,
     independence: Independence.ACTUATION_DERIVED,
     grade: Grade.PRESENCE,
     note: 'the bytes inside a path, which the subject authored entirely',
   },
 ];
 
-export interface CliRealmDeps {
+export interface TerminalRealmDeps {
   readonly supervisor: Supervisor;
   readonly manifest: CommandManifest;
   /**
@@ -202,8 +202,8 @@ export interface CliRealmDeps {
   readonly now: () => number;
 }
 
-export class CliRealm extends Realm {
-  readonly #deps: CliRealmDeps;
+export class TerminalRealm extends Realm {
+  readonly #deps: TerminalRealmDeps;
   #windowSeq = 0;
   /**
    * What was on disk when each window opened.
@@ -228,7 +228,7 @@ export class CliRealm extends Realm {
   /** The budget of the most recently opened window, which is what a dispatch runs under. */
   #openBudgetMs: number | undefined;
 
-  constructor(deps: CliRealmDeps) {
+  constructor(deps: TerminalRealmDeps) {
     super();
     this.#deps = deps;
   }
@@ -475,7 +475,7 @@ export class CliRealm extends Realm {
           ? [
               {
                 kind: BlindSpotKind.CHANNEL_UNOBSERVED,
-                channel: CliChannel.ARTIFACT,
+                channel: TerminalChannel.ARTIFACT,
                 detail: 'no workspace was declared, so nothing here can see what the tool wrote',
                 impeaching: false,
                 remedy: 'declare workspace roots so writes can be observed',
@@ -508,7 +508,7 @@ export class CliRealm extends Realm {
           ? [
               {
                 kind: BlindSpotKind.CHANNEL_UNOBSERVED,
-                channel: CliChannel.NET,
+                channel: TerminalChannel.NET,
                 detail: 'nothing here observes whether the tool called out',
                 impeaching: false,
                 remedy: 'attach a proxy, or ask the far side afterwards with a witness',
@@ -520,7 +520,7 @@ export class CliRealm extends Realm {
                 // than a reader will assume. It sees that a host was dialled; it reads none of
                 // the traffic, so it cannot say what was sent or what came back.
                 kind: BlindSpotKind.CHANNEL_UNOBSERVED,
-                channel: CliChannel.NET,
+                channel: TerminalChannel.NET,
                 detail:
                   'the proxy records which hosts were dialled and reads none of the traffic, so ' +
                   'nothing here knows what was sent or what the far side answered',
@@ -588,14 +588,14 @@ function linesOf(window: Window, invocation: Invocation): Observation[] {
     lines.map((line) => ({
       id: `${window.id}-${invocation.id}-${summary}-${String(line.seq)}`,
       window: window.id,
-      channel: CliChannel.LOG,
+      channel: TerminalChannel.LOG,
       at: invocation.startedAt,
       value: line.text,
       summary,
     }));
   return [
-    ...of(invocation.stdout, CliSummary.STDOUT_LINE),
-    ...of(invocation.stderr, CliSummary.STDERR_LINE),
+    ...of(invocation.stdout, TerminalSummary.STDOUT_LINE),
+    ...of(invocation.stderr, TerminalSummary.STDERR_LINE),
   ];
 }
 
@@ -618,30 +618,30 @@ function endingOf(window: Window, invocation: Invocation): Observation[] {
     observations.push({
       id: `${window.id}-${invocation.id}-exit`,
       window: window.id,
-      channel: CliChannel.EXIT_STATUS,
+      channel: TerminalChannel.EXIT_STATUS,
       at,
       value: exit.code,
-      summary: CliSummary.EXIT_CODE,
+      summary: TerminalSummary.EXIT_CODE,
     });
   }
   if (exit.signal !== undefined) {
     observations.push({
       id: `${window.id}-${invocation.id}-signal`,
       window: window.id,
-      channel: CliChannel.PROCESS,
+      channel: TerminalChannel.PROCESS,
       at,
       value: exit.signal,
-      summary: CliSummary.TERMINATED_SIGNAL,
+      summary: TerminalSummary.TERMINATED_SIGNAL,
     });
   }
   if (invocation.endedAt !== undefined) {
     observations.push({
       id: `${window.id}-${invocation.id}-duration`,
       window: window.id,
-      channel: CliChannel.TIME,
+      channel: TerminalChannel.TIME,
       at,
       value: invocation.endedAt - invocation.startedAt,
-      summary: CliSummary.DURATION_MS,
+      summary: TerminalSummary.DURATION_MS,
     });
   }
   return observations;
@@ -665,24 +665,24 @@ function artifactsOf(window: Window, changes: readonly Change[]): Observation[] 
     observations.push({
       id: `${window.id}-fs-${change.path}`,
       window: window.id,
-      channel: CliChannel.ARTIFACT,
+      channel: TerminalChannel.ARTIFACT,
       at: window.openedAt,
       value: { path: change.path, kind: change.kind, size: change.after?.size },
       summary: deleted
-        ? CliSummary.FS_DELETED
+        ? TerminalSummary.FS_DELETED
         : 0 === change.after?.size
-          ? CliSummary.FS_WRITTEN_EMPTY
-          : CliSummary.FS_WRITTEN,
+          ? TerminalSummary.FS_WRITTEN_EMPTY
+          : TerminalSummary.FS_WRITTEN,
     });
     const hash = change.after?.hash;
     if (hash !== undefined) {
       observations.push({
         id: `${window.id}-content-${change.path}`,
         window: window.id,
-        channel: CliChannel.ARTIFACT_CONTENT,
+        channel: TerminalChannel.ARTIFACT_CONTENT,
         at: window.openedAt,
         value: { path: change.path, hash, was: change.before?.hash },
-        summary: CliSummary.FS_CONTENT,
+        summary: TerminalSummary.FS_CONTENT,
       });
     }
   }
@@ -701,7 +701,7 @@ function unreadableSpots(after: Snapshot | undefined, workspace: WorkspacePort):
   const roots = after?.unreadable ?? workspace.roots;
   return roots.map((root) => ({
     kind: BlindSpotKind.BOUNDARY_UNCROSSABLE,
-    channel: CliChannel.ARTIFACT,
+    channel: TerminalChannel.ARTIFACT,
     detail: `the declared root ${root} could not be read, so nothing under it was observed`,
     impeaching: true,
     remedy: 'check the path exists and is readable by the verifier',
@@ -722,9 +722,9 @@ function dialsOf(
   return dials.map((dial, index) => ({
     id: `${window.id}-net-${String(index)}`,
     window: window.id,
-    channel: CliChannel.NET,
+    channel: TerminalChannel.NET,
     at: dial.at,
     value: { host: dial.host, port: dial.port },
-    summary: CliSummary.NET_CONNECT,
+    summary: TerminalSummary.NET_CONNECT,
   }));
 }

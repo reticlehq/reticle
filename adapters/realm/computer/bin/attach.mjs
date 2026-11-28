@@ -18,7 +18,7 @@ import { connect } from 'node:net';
 import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 
-import { nodeWorkspace } from '@reticlehq/cli-realm';
+import { nodeWorkspace } from '@reticlehq/terminal';
 
 import {
   MacDriver,

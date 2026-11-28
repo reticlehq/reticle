@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { CliRealm } from './cli-realm.js';
+import { TerminalRealm } from './terminal-realm.js';
 import type { CommandManifest } from './manifest.js';
 import type { Invocation, Supervisor } from './process/supervisor.js';
 
@@ -20,7 +20,7 @@ const supervisor: Supervisor = {
   toolIdentity: () => ({ id: 't', version: '1', workspace: 'ws' }),
 };
 const manifest: CommandManifest = { workspaceRoot: '/ws', commands: [] };
-const realm = new CliRealm({ supervisor, manifest, now: () => 0 });
+const realm = new TerminalRealm({ supervisor, manifest, now: () => 0 });
 
 describe('whether one step leaves the next one what it needs', () => {
   /**
@@ -85,7 +85,7 @@ describe('whether one step leaves the next one what it needs', () => {
    * about the wrong moment and would pass or fail depending on what a previous run left behind.
    */
   it('answers without a workspace on disk, because it is a check at rest', () => {
-    const noDisk = new CliRealm({
+    const noDisk = new TerminalRealm({
       supervisor,
       manifest: { workspaceRoot: '/definitely/not/here', commands: [] },
       now: () => 0,

@@ -1,5 +1,5 @@
 {
-  "src/cli-realm.ts": {
+  "src/terminal-realm.ts": {
     "curly": {
       "count": 6
     },

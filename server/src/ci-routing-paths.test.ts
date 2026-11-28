@@ -338,7 +338,7 @@ describe('CI routing decisions', () => {
   });
 
   it('ORs the tier-map for a known workspace package', () => {
-    expect(route(['adapters/realm/cli/src/index.ts'])).toMatchObject({
+    expect(route(['adapters/realm/terminal/src/index.ts'])).toMatchObject({
       e2e: 'true',
       windows: 'true',
     });

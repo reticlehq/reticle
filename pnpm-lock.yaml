@@ -252,20 +252,14 @@ importers:
         specifier: ^5.33.3
         version: 5.33.3
 
-  adapters/realm/cli:
-    dependencies:
-      open-verification:
-        specifier: workspace:*
-        version: link:../../../open-verification
-
   adapters/realm/computer:
     dependencies:
-      '@reticlehq/cli-realm':
-        specifier: workspace:*
-        version: link:../cli
       '@reticlehq/core':
         specifier: workspace:*
         version: link:../../../core
+      '@reticlehq/terminal':
+        specifier: workspace:*
+        version: link:../terminal
       open-verification:
         specifier: workspace:*
         version: link:../../../open-verification
@@ -288,6 +282,12 @@ importers:
       electron:
         specifier: 43.8.1
         version: 43.8.1
+
+  adapters/realm/terminal:
+    dependencies:
+      open-verification:
+        specifier: workspace:*
+        version: link:../../../open-verification
 
   apps/api:
     dependencies:
