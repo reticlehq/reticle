@@ -9,7 +9,7 @@
 
 **Your AI agent says "done." Reticle finds out if that is true.**
 
-It drives your real, running app and reads what happened. Then it returns a verdict, **pass · fail · cannot tell**, with the `file:line` to fix.
+It drives the real app, in your browser or on your desktop, and reads what happened. Then it returns a verdict, **pass · fail · cannot tell**, with the evidence. For your own code, that includes the `file:line` to fix.
 
 [![npm](https://img.shields.io/npm/v/@reticlehq/server?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@reticlehq/server) [![downloads](https://img.shields.io/npm/dm/@reticlehq/core?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@reticlehq/core) [![stars](https://img.shields.io/github/stars/reticlehq/reticle?color=ff9f87&labelColor=15131f&logo=github)](https://github.com/reticlehq/reticle/stargazers) [![license](https://img.shields.io/badge/license-Apache--2.0-46d6a0?labelColor=15131f)](LICENSE) [![OpenSSF](https://api.securityscorecards.dev/projects/github.com/reticlehq/reticle/badge)](https://securityscorecards.dev/viewer/?uri=github.com/reticlehq/reticle) [![Discord members](https://dcbadge.limes.pink/api/server/BwAbzv9ZRz?style=flat)](https://discord.gg/BwAbzv9ZRz)
 
@@ -275,6 +275,12 @@ A small, **dev-only** SDK in your app gives your coding agent tools to **look, a
 - **Works with your agent:** Claude Code, Cursor, Codex, Windsurf, VS Code, Gemini CLI and anything that speaks MCP. Web (React, Next.js, Vue, Svelte, Angular and more) and desktop (Electron, Tauri).
 
 You say what should be true, in plain English: _"I changed checkout. Verify it with Reticle before you tell me it is done."_ People also use it for access-control checks, accessibility, performance and SEO: [use cases](https://docs.reticle.sh/use-cases).
+
+**Beyond your code.** The same proof works for any task your agent does on the computer:
+
+- _Prove that a form in a desktop app saved the record._
+- _Carry an invoice number from your mail to a web form, and prove that it arrived._
+- _Prove that a save dialog wrote the file to the right folder._
 
 <p align="center">
   <img src="assets/readme/hero.gif" width="760"
