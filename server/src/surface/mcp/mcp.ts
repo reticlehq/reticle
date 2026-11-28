@@ -103,6 +103,7 @@ function withExample(description: string, example?: Record<string, unknown>): st
 // Re-exported because callers (and `mcp.test.ts`) have imported it from here since it lived here.
 export { firstSentence } from '@/surface/tools/first-sentence.js';
 import { firstSentence } from '@/surface/tools/first-sentence.js';
+import { closeOpenedAfterGrace, keepOpenedOf } from '@/surface/tools/realm-open.js';
 
 /**
  * Parameters carrying the recursive predicate grammar. Advertised compactly in lean profiles.
@@ -740,6 +741,8 @@ export function createMcpServer(
   // A proxy that reconnects brings its own id as `attachId`, so this is the same owner coming back:
   // take its leases out of their grace. A new random id owns no leases, so this does nothing.
   deps.pool?.reattachOwner(deps.attachId);
+  // The same owner coming back keeps the realms it opened, as it keeps its leases.
+  keepOpenedOf(deps.attachId);
   if (deps.agentSession !== undefined) {
     noteAgentSession(deps.attachId, deps.agentSession);
   }
@@ -789,6 +792,9 @@ export function createMcpServer(
     noteAgentDetached(deps.attachId);
     // Start the leases' short grace. A reconnect from the same proxy takes them back (see above).
     deps.pool?.detachOwner(deps.attachId);
+    // Close the realms this agent opened, after the same grace: a desktop session that nobody
+    // drives would stay joined, and its process would rejoin after every socket close.
+    closeOpenedAfterGrace(deps.attachId);
   };
   // Which agent is on the other end, for a feedback report. Registered as a lazy hook rather than
   // read here: the handshake has not happened yet at construction time, and a report filed twenty

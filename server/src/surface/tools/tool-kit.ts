@@ -487,6 +487,7 @@ export const SESSION_EXEMPT_TOOLS: ReadonlySet<string> = new Set([
   ReticleTool.CONTEXT, // folds the journal + intent ledger; must still answer when nothing is connected
   ReticleTool.MAP, // folds the journals on disk into the App Graph; answers with no tab connected
   ReticleTool.ATTACH_TAB, // joins a tab as a NEW session: there is no session before it runs
+  ReticleTool.CLOSE_REALM, // ends a realm the agent opened: a process or a parked session, not a live-DOM read
   ReticleTool.PROJECT, // reads .reticle/project.json
   // Reads the team's shared memory over HTTP; sessionId only resolves WHICH project's link file to
   // use. It must answer with no tab connected — "what does this project know?" is a question an

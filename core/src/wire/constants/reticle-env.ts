@@ -137,4 +137,7 @@ export const ReticleEnv = {
   BACKGROUND_SYNC: 'RETICLE_BACKGROUND_SYNC',
   /** Set by the parent that starts the daemon: how it started it. A `DaemonSpawnMethod`. */
   SPAWN_METHOD: 'RETICLE_SPAWN_METHOD',
+  /** The `reticle-computer` command that `reticle_open_realm { realm: "computer" }` runs, in place of
+   * `npx -p @reticlehq/computer@<this version> reticle-computer`. For a local build or an offline machine. */
+  COMPUTER_BIN: 'RETICLE_COMPUTER_BIN',
 } as const;

@@ -217,8 +217,15 @@ describe('tool allowlists are complete', () => {
      * its own and not the CDP route of a driven page (CDP), it mints no ref (the session it makes
      * does, on its first look), and it gives no verdict (VERDICT). On no surface list: an agent
      * reaches it with reticle_run, and SKILL.md is not grown for it.
+     *
+     * reticle_open_realm and reticle_close_realm (72) open a realm as a session and close what the
+     * agent opened (#2557). open makes a NEW session, as attach_tab does, and takes no sessionId;
+     * close takes the sessionId that open answered with and is SESSION_EXEMPT: it ends a process or
+     * parks a session, it reads no live DOM. Neither drives an element, uses a page's CDP route,
+     * mints a ref or gives a verdict. On no surface list, as attach_tab: the default surface is at
+     * its yearly byte budget, so an agent reaches them with reticle_run.
      */
-    const PINNED_RAW_TOOL_COUNT = 70;
+    const PINNED_RAW_TOOL_COUNT = 72;
 
     expect(
       RAW_TOOLS.length,

@@ -332,7 +332,8 @@ const OVER_THE_LINE: Readonly<Record<string, number>> = {
   // 61: `outside-project-sessions.ts`, the outside-project section of the session list.
   // tools.ts is at the line cap, so the section lives beside it (#2492).
   // 62 with `attach-tab-tool.ts`: the tool of the attach, beside the lease tools.
-  'server/src/surface/tools': 62,
+  // 63 with `realm-open.ts` (#2557): open and close a realm, beside attach-tab-tool.ts, which it reuses.
+  'server/src/surface/tools': 63,
   // Crossed the line when a planned step gained its own `expect`: the grading rule and its test
   // joined the act cluster (preflight, target, retry, capsule). Recorded rather than grouped,
   // because this directory IS the grouping -- these files were split out of act-tools.ts when it
