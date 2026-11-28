@@ -13,69 +13,64 @@ It drives your real, running app and reads what happened. Then it returns a verd
 
 [![npm](https://img.shields.io/npm/v/@reticlehq/server?color=8b7bff&labelColor=15131f&logo=npm)](https://www.npmjs.com/package/@reticlehq/server) [![downloads](https://img.shields.io/npm/dm/@reticlehq/core?color=5fd9f5&labelColor=15131f)](https://www.npmjs.com/package/@reticlehq/core) [![stars](https://img.shields.io/github/stars/reticlehq/reticle?color=ff9f87&labelColor=15131f&logo=github)](https://github.com/reticlehq/reticle/stargazers) [![license](https://img.shields.io/badge/license-Apache--2.0-46d6a0?labelColor=15131f)](LICENSE) [![OpenSSF](https://api.securityscorecards.dev/projects/github.com/reticlehq/reticle/badge)](https://securityscorecards.dev/viewer/?uri=github.com/reticlehq/reticle) [![Discord members](https://dcbadge.limes.pink/api/server/BwAbzv9ZRz?style=flat)](https://discord.gg/BwAbzv9ZRz)
 
-[**Install**](#install) · [What Reticle does](#what-reticle-does) · [The computer](#the-computer-any-application-on-the-desktop) · [Demo](#demo) · [Use it](#use-it) · [Commands](#commands) · [vs Playwright](#why-not-playwright) · [Safe to install](#safe-to-install-what-you-or-your-agent-can-check) · [Benchmarks](#benchmarks) · [Community](#community) · [Docs](https://docs.reticle.sh)
+[**Quick start**](#quick-start) · [Why Reticle](#why-reticle) · [What it does](#what-it-does) · [The computer](#the-computer-any-application-on-the-desktop) · [Benchmarks](#benchmarks) · [Commands](#commands) · [Safe to install](#safe-to-install) · [Docs](https://docs.reticle.sh)
 
 [⭐ Star the repo](https://github.com/reticlehq/reticle/stargazers) · [Good first issues](https://github.com/reticlehq/reticle/labels/good%20first%20issue) · [Contribute](CONTRIBUTING.md)
+
+<!-- An animated image, because GitHub strips iframes and no embedded player can autoplay here. Mux
+     serves at most 10 seconds as a GIF; the link opens the full video. -->
+<a href="https://player.mux.com/ap7hnnu4j36BRV6wEcop1NZVpJTjVSedxpW1AaXdD3I?metadata-video-title=reticle%27s+demo+&video-title=reticle%27s+demo+">
+  <img src="https://image.mux.com/ap7hnnu4j36BRV6wEcop1NZVpJTjVSedxpW1AaXdD3I/animated.gif?start=2&end=12&width=640&fps=15" width="640"
+       alt="An agent says the invoice fix works; Reticle drives the Pay button, sees the card charged twice, and names PayButton.tsx:31" />
+</a>
+
+<sub>▶ An agent says its fix works. Reticle catches the double charge it missed. Click for the full demo.</sub>
 
 </div>
 
 ---
 
-## Install
+## Quick start
 
-**Start with one command in your app's folder.** It needs no account and no coding agent, and it changes no file in your project. It ends in a verdict on your running app.
+You need Node 20.11+ and a web app that runs locally. The full guide is [docs.reticle.sh/quickstart](https://docs.reticle.sh/quickstart).
 
-**You need:** Node 20.11+ (no Node? `brew install node` or [nodejs.org](https://nodejs.org)) and a web app you run locally with a dev server. For step 2, a coding agent that speaks MCP. The [frameworks page](docs/frameworks.mdx) lists what is proven, and how far.
-
-> **Full guide:** [docs.reticle.sh/quickstart](https://docs.reticle.sh/quickstart) walks through the same steps and shows real output at each one. [Agent install](https://docs.reticle.sh/install-agentic) and [manual install](https://docs.reticle.sh/install-manual) cover every flag and every framework.
-
-### Step 1: Check your app, with nothing installed
+**1. Check your app, with nothing installed.** In your app's folder:
 
 ```bash
-cd path/to/your-app
 npx @reticlehq/server
 ```
 
-It finds your app's dev server. If the app does not run, it starts the dev script, and it stops that server at the end. It opens the app in a Reticle browser and installs nothing in your app. It checks that the page loads, that there is no console error and no failed request, and that each same-origin link opens (8 at most). Then it prints a verdict and the next step. This run found a broken page behind a link:
+It finds your dev server (or starts it), opens the app, and checks that pages load with no console error and no failed request. It changes no file. It ends in a verdict:
 
 ```text
-Starting your dev server: npm run dev
-Reticle is checking http://localhost:58473/. It installs nothing in your app.
   ✗ Console error on /broken: Uncaught Error: status page broke
   ✗ Failed request on /broken: GET http://localhost:58473/api/missing: HTTP 404
-  - 1 of 2 link(s) opened with no fault.
 verified: no — 2 fault(s) on http://localhost:58473/
-
-Next: connect your coding agent, so it can verify each change it makes:
-  npx @reticlehq/server init
 ```
 
-**✅ It worked when** the output ends in `verified: yes` or `verified: no`, then the next step. A `no` is a finished check: each `✗` line names one fault. The command exits 0 only on `yes`. When the app sends the page to a sign-in page, Reticle verifies up to there and says so.
-
-> **Not in the app's folder?** It checks the one dev server that runs on this computer. When several run, it names them and does not choose. In a folder that `init` already wired, the same command starts the Reticle server (`reticle serve`) instead.
-
-### Step 2: Connect your coding agent (once per project)
-
-In the same folder, run the command that step 1 printed:
+**2. Connect your coding agent** (once per project):
 
 ```bash
-npx @reticlehq/server init
+npx @reticlehq/server init            # add --dry-run to see the plan first
 ```
 
-It adds the dev-only SDK to your app and registers Reticle with every coding agent it finds on this machine. To see the changes first, or to pick one app in a monorepo:
+It adds the dev-only SDK to your app and registers Reticle with every coding agent on this machine. A dev server that was already running must restart once.
 
-```bash
-npx @reticlehq/server init --dry-run          # show the plan, write nothing
-npx @reticlehq/server init --app apps/web     # monorepo: wire this app
+**3. Restart your agent, and ask for one real journey:**
+
+> _"Verify the sign-up flow with Reticle."_
+
+The agent clicks and types through Reticle, and gets a verdict with its evidence and the line to fix:
+
+```jsonc
+{
+  "verified": "no",
+  "failureReason": "POST /api/signup returned 500",
+  "source": "src/SignUp.tsx:42",
+}
 ```
 
-**✅ It worked when** `init` lists every file it changed and says that your app connected. To check again at any time:
-
-```bash
-npx @reticlehq/server status
-```
-
-> **Was your dev server already running?** Restart it and reload the tab. The server read your build config before `init` changed it. Until it restarts, it serves your app without Reticle.
+A verdict, `yes`, `no` or `unknown` (cannot tell), means the install is finished. Stuck? Run `npx @reticlehq/server doctor`, or see [Troubleshooting](https://docs.reticle.sh/troubleshooting).
 
 <details>
 <summary>What <code>reticle init</code> changes, file by file</summary>
@@ -138,40 +133,10 @@ npx @reticlehq/server init --no-mcp           # skip agent registration and rule
 
 </details>
 
-### Step 3: Restart your agent and run your first check
+<details>
+<summary>Other ways to install: the installer, the skill, the Claude Code plugin, any MCP client</summary>
 
-Restart your coding agent once, so it loads Reticle's tools. Then open it in your app's folder and ask for one real journey:
-
-> _"Verify the sign-up flow with Reticle."_
-
-The agent finds your app with `reticle_session`, clicks and types with `reticle_act_and_wait`, and gets back a verdict with its evidence:
-
-```jsonc
-{
-  "verified": "yes",
-  "effect": {
-    "action": "click",
-    "name": "Sign up",
-    "source": { "file": "src/SignUp.tsx", "line": 42 },
-  },
-  "verdict": {
-    "pass": true,
-    "evidence": { "method": "POST", "url": "http://localhost:5173/api/signup", "status": 201 },
-  },
-}
-```
-
-Without an agent, you can verify one fact about the current page from a terminal. It does not click through a flow; that is the agent's job. It exits 0 only on `yes`:
-
-```bash
-npx @reticlehq/server verify http://localhost:5173 --expect '{"kind":"element","query":{"role":"heading","name":"Welcome"},"state":"visible"}'
-```
-
-PowerShell changes those quotes. On Windows, put the JSON in a file and pass `--expect-file check.json` instead.
-
-**✅ It worked when** you get `verified: "yes"`, `"no"` or `"unknown"` with evidence. **That verdict means the install is finished.** A connected app only shows that the SDK reached the page. `unknown` means **cannot tell**, not pass. When the session ends, Reticle saves each drive with a check in it as a flow. The flow runs again later with no model.
-
-### Other ways to connect your agent
+<br/>
 
 **The installer** puts `reticle` on your PATH once per machine and registers Reticle with every coding agent it finds. It does not touch your project. Run it before you open your coding agent: an open agent must restart once to see the new tools.
 
@@ -195,11 +160,6 @@ npx skills add reticlehq/reticle --skill reticle
 
 **On Claude Code, the plugin** registers the tools and the skill: `/plugin marketplace add reticlehq/reticle`, then `/plugin install reticle@reticlehq`. Type `/reload-plugins` and the Reticle tools load in the open session, with no restart. In an app that is not wired, Claude offers a check of the running app with nothing installed, and `init` to keep Reticle wired. Claude runs `init` only when you agree, because `init` changes your files.
 
-<details>
-<summary>What the installer does, and other ways to install</summary>
-
-<br/>
-
 It does three things in order, then prints your next steps. It asks you no questions:
 
 1. Checks for Node 20.11 or newer. If Node is missing or too old, it stops and shows the fix.
@@ -212,7 +172,7 @@ It does three things in order, then prints your next steps. It asks you no quest
    args = ["@reticlehq/server", "mcp"]
    ```
 
-At the end, it says that Reticle is **not in your app yet**, and prints a prompt for your coding agent. With no coding agent, run `reticle init` in your app's folder, then press **Run Harness** in the Reticle panel. To see a verdict before you wire anything, run `reticle` with no arguments in your app's folder ([step 1](#step-1-check-your-app-with-nothing-installed)).
+At the end, it says that Reticle is **not in your app yet**, and prints a prompt for your coding agent. With no coding agent, run `reticle init` in your app's folder, then press **Run Harness** in the Reticle panel. To see a verdict before you wire anything, run `reticle` with no arguments in your app's folder ([step 1](#quick-start)).
 
 **Any MCP client, by hand:**
 
@@ -222,7 +182,10 @@ At the end, it says that Reticle is **not in your app yet**, and prints a prompt
 
 </details>
 
-### Connect the dashboard (optional)
+<details>
+<summary>Connect the dashboard (optional)</summary>
+
+<br/>
 
 ```bash
 reticle connect --project "My App"
@@ -241,7 +204,12 @@ reticle sync --watch    # keep syncing while you work
 
 > `reticle: command not found`? Every command also works as `npx @reticlehq/server <command>`, for example `npx @reticlehq/server init`.
 
-### For agents: the rules during install
+</details>
+
+<details>
+<summary>For agents: the rules during install</summary>
+
+<br/>
 
 The full agent guide is [SKILL.md](SKILL.md). These are the rules that matter most during install:
 
@@ -253,187 +221,30 @@ The full agent guide is [SKILL.md](SKILL.md). These are the rules that matter mo
 - `unknown` is not a pass. Report it as "cannot tell", with the reason Reticle gives.
 - Stuck? Run `reticle doctor` and report what it says. To report a problem with Reticle, run `reticle feedback --agent --kind bug "…"`.
 
-### Something stopped?
+</details>
 
-Run `npx @reticlehq/server doctor`. It checks the browser, the background service, the port and the connected pages, and names the problem. [Troubleshooting](https://docs.reticle.sh/troubleshooting) lists every known failure and its fix. To set Reticle up with no installer and no `init`, follow the [manual install](https://docs.reticle.sh/install-manual).
+<details>
+<summary>Check one fact without an agent</summary>
 
----
+<br/>
 
-## What Reticle does
-
-Reticle puts a small, **dev-only** SDK inside your app. Your coding agent gets tools to **look, act, observe and assert** through it. Reticle reads the app from the inside. So it sees what the screen hides: the request a click sent, its response, the app state, the console and each element's source line. Every check ends in a verdict with the evidence attached.
-
-- **A verdict, not a screenshot.** `verified: "yes"`, `"no"` or `"unknown"` (cannot tell). The verdict includes the request, state change and console line that decided it, and the `file:line` to open.
-- **Sees what the screen hides.** Network responses, each tied to the click that caused it. Your store's real state (zustand, Redux, TanStack Query, Pinia and more). Console errors, request counts and React renders.
-- **Says when it cannot tell.** Only `yes` is a pass. A check that cannot decide returns `unknown` with the reason. It never gives a quiet green.
-- **Flows that replay with no AI model.** Say _"save that as a flow"_. After that, one call re-verifies that journey deterministically. Today's fix cannot quietly break last week's feature.
-- **A gate in CI.** `reticle gate` fails a change that touches a saved flow's code without a new passing run.
-- **The Harness** (optional, on the platform): describe a person and a journey. Reticle drives it, verifies each step and saves what passed. [How it works](#the-open-source-tool-the-harness-and-the-dashboard).
-- **A HUD in your page** to watch the agent work: every action, every verdict, the flows it saved, and notes you pin for it.
-- **The whole computer, not only the page.** Your agent can join any desktop application, act in it, and prove what each action changed, with no SDK in it. [The computer](#the-computer-any-application-on-the-desktop).
-- **Works with your agent**: Claude Code, Cursor, Codex, Windsurf, VS Code, Gemini CLI and anything else that speaks MCP. Web (React, Next.js, Vue, Svelte, Angular and more) and desktop (Electron, Tauri).
-- **Safe to leave installed.** Production builds do not include the SDK, unless you opt in to [production mode](https://docs.reticle.sh/production-mode). The bridge listens only on `127.0.0.1`. Nothing from your app leaves your machine unless you link a project.
-
----
-
-## The computer: any application on the desktop
-
-A page is not the whole job. A download opens a save dialog, a sign-in opens a popup, a desktop app has no page at all. `@reticlehq/computer` joins any application on the screen as a Reticle session:
+Without an agent, you can verify one fact about the current page from a terminal. It does not click through a flow; that is the agent's job. It exits 0 only on `yes`:
 
 ```bash
-npx -p @reticlehq/computer reticle-computer --app "Notes"
+npx @reticlehq/server verify http://localhost:5173 --expect '{"kind":"element","query":{"role":"heading","name":"Welcome"},"state":"visible"}'
 ```
 
-Your agent then uses the tools it has for a page: `reticle_look`, `reticle_act_and_wait`, `reticle_assert`.
+PowerShell changes those quotes. On Windows, put the JSON in a file and pass `--expect-file check.json` instead.
 
-- **macOS, Windows and Linux.** It reads the application through the accessibility tree of the operating system: AX on macOS, UI Automation on Windows, AT-SPI on Linux (X11). The application needs no SDK and no change.
-- **Proof, not clicks.** Each action reports what it changed: the elements, the files it wrote, the settings, the clipboard and the pixels. A clock or a video that changes by itself is not counted as an effect.
-- **It acts only where a person can act.** Before a click, it asks the operating system what is at that point. A control that another window or shape covers, or that is in a closed menu, is refused with the reason.
-- **Safe on your own computer.** Actions go to the application in the background, so you keep your pointer and keyboard. An agent asks for the real pointer on one action only, and `~/.reticle/computer.json` can forbid it. On macOS, a HUD shows each action, with **Pause** and **Stop**.
-- **Applications with no elements.** On macOS, a screenshot gives the words in the picture with their boxes, so a canvas, a game or a remote desktop can be driven by those points.
-- **A desktop of its own.** `reticle-computer --sandbox linux --app <name> --open "<command>"` starts the application in a container with its own screen.
-
-**The browser and the computer work together.** Act in one, prove it in the other:
-
-- `reticle_attach_tab` joins a tab in your own Chromium browser as a session. It never joins a password vault or a sign-in page.
-- `reticle_session { action: "board", carry }` reads a value in one session (a desktop app), fills it into another (a page), and proves that it arrived.
-- When an action continues in a popup that the page cannot enter, the verdict says how to follow it on the computer.
-
-The computer realm is new. When something goes wrong, your agent can report it in one call, `reticle_feedback`, and it goes to the team. [The computer realm's README](adapters/realm/computer/README.md) has every flag and every limit.
+</details>
 
 ---
 
-## Demo
+## Why Reticle
 
-<div align="center">
+Your agent writes code, **assumes** it worked, and moves on. It never opens the app. So the silent `500`, the badge that shows the wrong count and the "Deploy succeeded" over a failed deploy all ship, and **you become your agent's QA**.
 
-<!-- An animated image, because GitHub strips iframes and no embedded player can autoplay here. Mux
-     serves at most 10 seconds as a GIF; the link opens the full video. -->
-<a href="https://player.mux.com/ap7hnnu4j36BRV6wEcop1NZVpJTjVSedxpW1AaXdD3I?metadata-video-title=reticle%27s+demo+&video-title=reticle%27s+demo+">
-  <img src="https://image.mux.com/ap7hnnu4j36BRV6wEcop1NZVpJTjVSedxpW1AaXdD3I/animated.gif?start=2&end=12&width=640&fps=15" width="640"
-       alt="An agent says the invoice fix works; Reticle drives the Pay button, sees the card charged twice, and names PayButton.tsx:31" />
-</a>
-
-<sub>▶ An agent says its fix works. Reticle catches the double charge it missed. Click for the full demo.</sub>
-
-</div>
-
----
-
-## The problem
-
-Your agent writes code, **assumes** it worked, and moves on. It never opens the app.
-
-So the broken modal, the silent `500` and the "Deploy succeeded" over a failed deploy all ship. You find them later, by clicking around. **You are now your agent's QA.**
-
-The truth was in the running app all the time. It did not reach the screen.
-
-<p align="center">
-  <img src="assets/readme/silent-failures.png" width="540"
-       alt="A page that looks shipped, hiding mock data, a dead click and a silent 500." />
-</p>
-
-Your agent did not forget a step. A coding agent is built to **produce a change**, so it is optimistic by design. Verification does the opposite: it goes to find out, and is ready to come back with **no**.
-
----
-
-## Use it
-
-You never write test syntax. You say what should be true, in plain English.
-
-<p align="center">
-  <img src="assets/readme/hero.gif" width="760"
-       alt="An agent driving a real app through Reticle: it clicks, reads what actually happened, and returns a verdict." />
-</p>
-
-**Verify what you just built**
-
-> "I changed checkout. Verify it with Reticle before you tell me it is done."
-
-**Find what the screen is hiding**
-
-> "The page looks fine but something is wrong. Use Reticle to check what happens underneath."
-
-**Verify a bug is fixed**
-
-> "Reproduce the bug with Reticle, fix it, then verify the fix with the same steps."
-
-**Lock a flow so it cannot break**
-
-> "Record the login flow with Reticle, then re-verify it after every change."
-
-**Sweep before you ship**
-
-> "Walk the main routes with Reticle. Tell me anything broken."
-
-Reticle answers with evidence: the request that fired, the state that changed, the console line, and the file to open.
-
-### What people use Reticle for
-
-An agent can verify anything the running app does. Beyond agent-built changes, people use Reticle for:
-
-- **Security checks.** Access control holds for each role (the protected call returns `403`). Forbidden calls fire zero times, a secret never renders in the page, and CSP violations surface as console errors. Reticle verifies your app's security behaviour. Use it with a vulnerability scanner, which finds the holes.
-- **Accessibility and UX.** Controls are reachable by role and accessible name. Focus moves into a dialog when it opens, and `Enter` or `Escape` fires the action from the keyboard. Use it with a full WCAG audit such as axe.
-- **Performance and monitoring.** One request per action instead of five. Largest-contentful-paint, layout shift and long tasks read from the page. React render counts, and saved flows replayed against staging in CI.
-- **SEO checks.** Page title, headings and every link with its `href`. Redirects landing on the right route, and a crawl that finds dead controls and failed requests.
-- **Personas and simulation.** `explore` drives a journey described in plain words (`--persona "a new user who signs up"`). Each role gets its own isolated browser context, and several agents drive the same app in parallel.
-
-[docs.reticle.sh/use-cases](https://docs.reticle.sh/use-cases) shows each one, with what it verifies and a call you can run.
-
-**Make it unavoidable in CI**
-
-```bash
-npx @reticlehq/server gate --since HEAD~1
-```
-
-`gate` finds the saved flows that your edits affect. It exits non-zero unless a **passing** artifact covers each one. An agent that edits a covered file must verify again before it calls itself finished. No one can pass this check by reasoning about their own diff. See [`docs/cli/gate.mdx`](docs/cli/gate.mdx).
-
----
-
-### Every day
-
-You do not start Reticle yourself. Your agent starts it with its first Reticle tool call. It runs in the background until it is idle for some time.
-
-1. Start your dev server as usual (`npm run dev` or whatever your app uses).
-2. `reticle open` shows the app. It uses a tab that is already connected, or opens a new one.
-3. Ask your agent to verify something. Saved flows run again with no AI model: `reticle verify http://localhost:5173`.
-
----
-
-## Commands
-
-Use `reticle <command>` after install, or `npx @reticlehq/server <command>` anywhere. `reticle help all` lists every command. `reticle <command> --help` lists its flags.
-
-| When | Command | What it does |
-| --- | --- | --- |
-| **Setting up** | `reticle setup mcp` | Registers Reticle with your coding agents. The installer already runs this; rerun it after you install a new agent |
-|  | `reticle init` | Wires the app in this folder. `--dry-run` shows the changes without writing them, `--app <dir>` picks one app in a monorepo, `--env KEY=VALUE` passes what the app needs to boot, `--json` prints one object for agents |
-|  | `reticle try <url>` | Signed in: Reticle drives a URL once, in a window you watch, and says which journeys work |
-| **Running** | `reticle open [url]` | Shows your app in a browser connected to Reticle |
-|  | `reticle status` | Whether Reticle is running and which apps are connected |
-|  | `reticle doctor` | Diagnoses setup in one go: the browser, the background service, the port |
-|  | `reticle serve --restart` / `reticle stop` | Restarts or stops Reticle's background service |
-| **Verifying** | `reticle verify <url>` | Runs your saved flows again. It exits 0 only when every one passes. `--explore --persona "a new user who signs up"` makes Reticle drive the app itself and save what it finds. `--expect '<check>'` gives one verdict |
-|  | `reticle gate --since HEAD~1` | For CI: fails unless every saved flow your changes touch has a passing run |
-|  | `reticle gate --list` | Lists which saved flows your changes touch |
-|  | `reticle report` | What the last session claimed, and what actually held |
-| **Dashboard** _(optional)_ | `reticle connect --project "My App"` | Signs in, links this folder to a project on app.reticle.sh and sends your local history. Wires the app first if needed |
-|  | `reticle sync` | Syncs now. `--watch` keeps syncing |
-|  | `reticle status` | Whether Reticle is running, who you are signed in as, and which project this folder is linked to |
-|  | `reticle config --runs off` | Chooses what syncs: `--runs`, `--memory` and `--flows`, each `on` or `off` |
-|  | `reticle runs` / `reticle runs regression` | Reads your runs back from the dashboard. `runs regression` exits 3 if any flow broke |
-|  | `reticle logout` | Signs out |
-| **Keeping it current** | `reticle update` / `reticle update --rollback` | Installs the latest version, or goes back to the previous one |
-|  | `reticle telemetry disable` | Turns off anonymous usage counts |
-|  | `reticle feedback "message"` | Tells us what worked and what did not. It prints exactly what it sends |
-
-**In CI:** run `npx @reticlehq/server verify <url>`, then `npx @reticlehq/server gate --since HEAD~1`. Set `RETICLE_API_KEY` only if you want those runs on the dashboard.
-
----
-
-## Why not Playwright?
-
-Playwright, DevTools and browser agents all look in from **outside** the browser. That is correct for a site that you do not own. For your own app, the important bugs never reach the pixels.
+Playwright, DevTools and browser agents look in from **outside** the browser. For your own app, the important bugs never reach the pixels:
 
 | Bug | Looks fine on screen? | Reticle reads |
 | --- | :-: | --- |
@@ -446,32 +257,33 @@ Playwright, DevTools and browser agents all look in from **outside** the browser
 
 **Use both.** Playwright for sites you do not own, many browsers, real pixels. Reticle for the app you build, inside your agent's loop.
 
+<p align="center">
+  <img src="assets/readme/silent-failures.png" width="540"
+       alt="A page that looks shipped, hiding mock data, a dead click and a silent 500." />
+</p>
+
 ---
 
-## How it works
+## What it does
 
-> **You:** "Verify login works."
->
-> **Agent, via Reticle:** clicks **Sign in** → `POST /api/login → 200 (14 ms)` → dashboard rendered → store holds `auth: { email: "admin@…" }` → **`verified: "yes"`**, evidence attached.
+A small, **dev-only** SDK in your app gives your coding agent tools to **look, act, observe and assert** from the inside.
+
+- **A verdict, not a screenshot.** `yes`, `no` or `unknown`, with the request, the state change and the console line that decided it, and the `file:line` to open. Only `yes` is a pass.
+- **Flows that replay with no AI model.** Say _"save that as a flow"_. One call then re-verifies that journey, so today's fix cannot quietly break last week's feature.
+- **A gate in CI.** `npx @reticlehq/server gate --since HEAD~1` fails a change that touches a saved flow without a new passing run ([gate](docs/cli/gate.mdx)).
+- **A HUD in your page** shows each action, each verdict and the flows the agent saved.
+- **Works with your agent:** Claude Code, Cursor, Codex, Windsurf, VS Code, Gemini CLI and anything that speaks MCP. Web (React, Next.js, Vue, Svelte, Angular and more) and desktop (Electron, Tauri).
+
+You say what should be true, in plain English: _"I changed checkout. Verify it with Reticle before you tell me it is done."_ People also use it for access-control checks, accessibility, performance and SEO: [use cases](https://docs.reticle.sh/use-cases).
+
+<p align="center">
+  <img src="assets/readme/hero.gif" width="760"
+       alt="An agent driving a real app through Reticle: it clicks, reads what actually happened, and returns a verdict." />
+</p>
 
 <p align="center">
   <img src="assets/readme/verdict-not-view.png" width="760"
        alt="Reticle watches the app from the inside: a broken Pay button traced to onPay.tsx line 46, handed to the coding agent as a repair packet." />
-</p>
-
-Your agent calls Reticle's tools to **look, act, observe and assert**. Reticle reads the running app from the inside (DOM, network, console, store, React fibers). It reads structured events, not pixels. It answers with a verdict, its evidence and the `file:line` behind it.
-
-<p align="center">
-  <img src="assets/readme/file-line-fix.png" width="700"
-       alt="A failed verdict naming the exact source file and line to fix, rather than a screenshot to squint at." />
-</p>
-
-<sub align="center">A verdict points at the line that caused it. That pointer is the difference between "something broke" and a fix.</sub>
-
-One call verifies many things at once. Say _"save that as a flow"_, and the flow replays after every later edit with no model. Today's fix cannot quietly break last week's feature.
-
-<p align="center">
-  <img src="assets/readme/regression-replay.png" alt="Re-driving a suite with an LLM burns tokens on every step, every run. Reticle records the flow once and replays it deterministically: no model, no flake, just a verdict." width="560" />
 </p>
 
 <details>
@@ -500,41 +312,26 @@ reticle_assert({
 
 ---
 
-## Safe to install: what you, or your agent, can check
+## The computer: any application on the desktop
 
-Whether you are a person or an agent, check a new dependency before you run it. Each fact below has a way to check it yourself.
+A page is not the whole job. A download opens a save dialog, a sign-in opens a popup, and a desktop app has no page at all. `@reticlehq/computer` joins any application on the screen as a Reticle session, and your agent uses the same tools:
 
-**Where it comes from**
+```bash
+npx -p @reticlehq/computer reticle-computer --app "Notes"
+```
 
-- **Open source, public history.** Every line that runs is in this repository. Every package is [Apache-2.0](LICENSE).
-- **Signed builds from CI.** GitHub Actions publishes every `@reticlehq/*` package with npm's SLSA provenance. Check: `npm view @reticlehq/server dist.attestations`, or `npm audit signatures` after install.
-- **No install scripts.** No package runs a `preinstall`, `install` or `postinstall` hook, so `npm install` runs none of our code. Check: `npm view @reticlehq/server scripts`.
-- **Scored by OpenSSF.** [OpenSSF Scorecard](https://securityscorecards.dev/viewer/?uri=github.com/reticlehq/reticle) rates the repo's security practices (signed releases, fuzzing, least-privilege CI tokens, a [security policy](SECURITY.md)). The badge at the top is live.
+- **macOS, Windows and Linux.** It reads the accessibility tree of the operating system (AX, UI Automation, AT-SPI on X11). The application needs no SDK.
+- **Proof, not clicks.** Each action reports what it changed: the elements, the files, the settings, the clipboard and the pixels.
+- **It acts only where a person can act.** A control that something covers, or that is in a closed menu, is refused with the reason. Actions go in the background, so you keep your pointer and keyboard.
+- **The browser and the computer work together.** `reticle_attach_tab` joins a tab of your own Chromium browser, and `reticle_session { action: "board", carry }` carries a value from a desktop app into a page and proves it arrived.
 
-**What it touches, and why each one is needed**
-
-A verification tool must sit inside the app it verifies, as React DevTools or a dev-mode error reporter does. That is why it touches more than one place:
-
-| It touches | Why | Scope |
-| --- | --- | --- |
-| Your app's dev dependencies, build config and one `reticle-dev` file | The SDK has to run inside the page to read network, state and console | Development builds only. Production builds remove it, and a runtime guard refuses to connect in production |
-| Your coding agents' MCP config | So your agent gets the `reticle_*` tools | One `reticle` entry that runs the installed copy (`node <path>/bin/reticle.js mcp`) or `npx @reticlehq/server@<version> mcp`; nothing else in the file changes |
-| `CLAUDE.md`, `AGENTS.md`, `RETICLE.md`, `.claude/commands/reticle.md` | So any agent in the repo knows to verify its work | Appended, never overwritten; `--no-mcp` skips them |
-| A prompt hook in each agent's project config (`.claude/settings.json`, `.cursor/hooks.json`, `.codex/hooks.json`, `.gemini/settings.json`, `.windsurf/hooks.json`, `.github/hooks/reticle-prompt-capture.json`, `.factory/hooks.json`) | So each prompt is kept as the request a verdict is checked against | Only for agents it finds; one entry, merged into what is there; `--no-prompt-capture` skips it, `reticle hook uninstall` removes it |
-| A local service on `127.0.0.1:4400` | The bridge between the page and your agent | Loopback only, paired with a token stored owner-only in `~/.reticle/` |
-| A Chromium browser | To drive the app | Your own machine |
-
-**What leaves the machine:** nothing from your app (DOM, network bodies, console, state, source) unless you link a project with `reticle connect` (or set `RETICLE_API_KEY` in CI). Verdicts are made locally, with no account. After you link, `reticle config --runs/--memory/--flows on|off` sets what syncs. Each prompt you send to your agent is kept in `.reticle/`, redacted, and a linked project sends it with its runs by default; `"shareRequests": false` in `.reticle.json` keeps prompts on the machine ([Prompt capture](docs/prompt-capture.md)). [What each part contains is written down](docs/what-is-recorded.md). When the Harness drives, the platform sees its steps, but secret field values never leave your machine. Reticle also sends anonymous usage counts by default (which commands and tools ran, with a random id, nothing from your app, and no IP address or location). `reticle telemetry disable`, `RETICLE_TELEMETRY=0` or `DO_NOT_TRACK=1` turns them off, and every other optional outbound call too. [The complete list](docs/telemetry.md).
-
-**What it never does:** run arbitrary JavaScript in the page (there is no "evaluate" tool). It also never ships in a production build unless you add the production-mode loader, and it never bypasses your client's permission prompts. Reticle replaces passwords, tokens and card numbers in captured data with `[REDACTED]` before you see them.
-
-**See the plan before anything is written:** `npx @reticlehq/server init --dry-run` writes nothing. `--no-mcp` skips agent registration. `--files-only` writes the files and stops. If you find a security issue, follow [SECURITY.md](SECURITY.md).
+The computer realm is new: your agent can report a problem in one call, `reticle_feedback`. [Its README](adapters/realm/computer/README.md) has every flag and limit.
 
 ---
 
 ## Benchmarks
 
-The benchmark injects an 88-bug registry into a controlled app: 86 real regressions and 2 false-positive traps. It compares Reticle against a Playwright script. Every number comes from a committed harness. Reproduce it with `node bench/pw-vs-reticle/run.mjs`.
+An 88-bug registry (86 real regressions, 2 false-positive traps) injected into a controlled app, against a Playwright script. Reproduce it with `node bench/pw-vs-reticle/run.mjs`.
 
 <p align="center">
   <img src="assets/readme/benchmark-chart.svg" width="880"
@@ -558,68 +355,80 @@ Re-verification has no model in the loop, so a recorded suite costs a fixed, sma
        alt="Wall-clock time to a verdict: a 2.6 second time-gated transition verified in 176 ms versus a 2,978 ms real wait, and a 16-flow batch in 5.2 seconds versus 35.4 seconds one at a time." />
 </p>
 
-Reticle is faster for a structural reason, not browser speed. It verifies a time-gated transition from the event stream instead of waiting it out. A batch of flows runs as a batch.
-
 ---
 
-## Capabilities and limits
+## Commands
 
-|  |  |
+Use `reticle <command>` after install, or `npx @reticlehq/server <command>` anywhere. `reticle help all` lists every command.
+
+| Command | What it does |
 | --- | --- |
-| **Strong** | silent failed requests, state that disagrees with the screen, stale caches, double-submits, a write that failed while the UI moved on |
-| **Partial** | races around a single action. It catches a request that never finished and a request sent twice; it is not a full race analyser |
-| **Cannot see yet** | IndexedDB, Web Workers, closed shadow roots, cross-origin iframes |
-
-**When Reticle cannot see something, it says so.** A verdict is `yes`, `no`, `unknown` (the evidence could not decide) or `no-fault` (nothing was declared to verify). Only `yes` is a pass, and never a quiet one.
-
-**Pairs well with:** a visual testing tool for pixel-level diffs, axe for full WCAG audits, and a security scanner for vulnerability discovery. Use Playwright for sites you do not own and a cross-browser matrix. Reticle verifies what your own app does; those tools cover the rest.
+| `reticle init` | Wires the app in this folder. `--dry-run` writes nothing, `--app <dir>` picks one app in a monorepo |
+| `reticle open [url]` | Shows your app in a browser connected to Reticle |
+| `reticle verify <url>` | Runs your saved flows again. Exits 0 only when every one passes |
+| `reticle gate --since HEAD~1` | For CI: fails unless every saved flow your changes touch has a passing run |
+| `reticle status` / `reticle doctor` | Whether Reticle runs and which apps are connected / what is wrong, and the fix |
+| `reticle connect --project "My App"` | Optional: links this folder to the dashboard on app.reticle.sh |
+| `reticle update` | Installs the latest version. `--rollback` goes back |
+| `reticle feedback "message"` | Tells us what worked and what did not. It prints exactly what it sends |
 
 ---
 
-## Supported
+## Safe to install
+
+- **Dev-only.** Production builds do not include the SDK, and a runtime guard refuses to connect in production.
+- **Local.** The bridge listens only on `127.0.0.1`. Nothing from your app leaves your machine unless you link a project. Anonymous usage counts can be turned off with `reticle telemetry disable` ([the complete list](docs/telemetry.md)).
+- **Open and signed.** Apache-2.0, published from CI with npm provenance (`npm view @reticlehq/server dist.attestations`), and no install scripts.
+- **No `evaluate`.** Reticle never runs arbitrary JavaScript in the page, and it redacts passwords, tokens and card numbers.
+- **See the plan first:** `npx @reticlehq/server init --dry-run` writes nothing. Security issue? Follow [SECURITY.md](SECURITY.md).
+
+<details>
+<summary>What it touches, and what leaves the machine</summary>
+
+<br/>
+
+| It touches | Why | Scope |
+| --- | --- | --- |
+| Your app's dev dependencies, build config and one `reticle-dev` file | The SDK has to run inside the page to read network, state and console | Development builds only. Production builds remove it, and a runtime guard refuses to connect in production |
+| Your coding agents' MCP config | So your agent gets the `reticle_*` tools | One `reticle` entry that runs the installed copy (`node <path>/bin/reticle.js mcp`) or `npx @reticlehq/server@<version> mcp`; nothing else in the file changes |
+| `CLAUDE.md`, `AGENTS.md`, `RETICLE.md`, `.claude/commands/reticle.md` | So any agent in the repo knows to verify its work | Appended, never overwritten; `--no-mcp` skips them |
+| A prompt hook in each agent's project config (`.claude/settings.json`, `.cursor/hooks.json`, `.codex/hooks.json`, `.gemini/settings.json`, `.windsurf/hooks.json`, `.github/hooks/reticle-prompt-capture.json`, `.factory/hooks.json`) | So each prompt is kept as the request a verdict is checked against | Only for agents it finds; one entry, merged into what is there; `--no-prompt-capture` skips it, `reticle hook uninstall` removes it |
+| A local service on `127.0.0.1:4400` | The bridge between the page and your agent | Loopback only, paired with a token stored owner-only in `~/.reticle/` |
+| A Chromium browser | To drive the app | Your own machine |
+
+**What leaves the machine:** nothing from your app (DOM, network bodies, console, state, source) unless you link a project with `reticle connect` (or set `RETICLE_API_KEY` in CI). Verdicts are made locally, with no account. After you link, `reticle config --runs/--memory/--flows on|off` sets what syncs. Each prompt you send to your agent is kept in `.reticle/`, redacted, and a linked project sends it with its runs by default; `"shareRequests": false` in `.reticle.json` keeps prompts on the machine ([Prompt capture](docs/prompt-capture.md)). [What each part contains is written down](docs/what-is-recorded.md). When the Harness drives, the platform sees its steps, but secret field values never leave your machine. Reticle also sends anonymous usage counts by default (which commands and tools ran, with a random id, nothing from your app, and no IP address or location). `reticle telemetry disable`, `RETICLE_TELEMETRY=0` or `DO_NOT_TRACK=1` turns them off, and every other optional outbound call too. [The complete list](docs/telemetry.md).
+
+</details>
+
+---
+
+## Supported, and limits
 
 |  |  |
 | --- | --- |
 | **Web** | CI drives React + Vite and Next.js to a verdict. CI boots Remix and Astro and checks that each connects. More frameworks are install-gated or wired. **[Frameworks](docs/frameworks.mdx) is the one list of what is proven, and how far** |
-| **Desktop** | Electron, Tauri, including the IPC boundary a browser-only tool cannot see. Any other application on macOS, Windows and Linux (X11) through [the computer realm](#the-computer-any-application-on-the-desktop) |
+| **Desktop** | Electron and Tauri, with the IPC boundary. Any other application through [the computer realm](#the-computer-any-application-on-the-desktop) |
 | **Agents** | anything that speaks MCP. Config written automatically for Claude Code, Cursor, Windsurf, VS Code, Zed, Gemini CLI, Copilot CLI, OpenCode, Antigravity, Warp, Kiro, Amazon Q, Cline, Roo Code, Amp, Continue, Factory Droid. Codex CLI through `codex mcp add`, or a four-line paste when `codex` is not on PATH |
 | **Browsers** | the SDK runs in the tab you already have open; the tested and driven browser is Chromium, plus Electron and Tauri webviews |
 | **State** | zustand and Redux need no adapter. Shipped: TanStack Query, Jotai, XState, Valtio, MobX, Recoil, Svelte stores, Pinia |
 | **OS** | macOS, Linux, Windows |
+| **Cannot see yet** | IndexedDB, Web Workers, closed shadow roots, cross-origin iframes |
+
+When Reticle cannot see something, it says so: the verdict is `unknown`, with the reason.
 
 ---
 
 ## The open-source tool, the Harness, and the dashboard
 
-**The open-source tool is the full verify loop, on your machine.** It is the SDK in your app, the local daemon, the MCP tools your agent calls and the HUD in the corner of your page. The HUD shows the agent's actions, every verdict, the saved flows and the notes you pin on the page. It needs no account, and nothing from your app leaves your machine.
+- **The open-source tool** is the full verify loop on your machine: the SDK, the local daemon, the MCP tools and the HUD. It needs no account.
+- **The Harness** (optional, on the platform) drives a journey you describe in plain words, verifies each step and saves flows that replay with no model. Start it from **Run Harness** in the HUD ([how it works](docs/autodrive.md)).
+- **[app.reticle.sh](https://app.reticle.sh)** shows a team every run, the bugs Reticle caught, saved flows and coverage. Link a folder with `reticle connect`.
 
-**The Harness drives the app for you.** Describe a person and a journey (_"a returning customer reorders and pays"_). The Harness drives it in your browser and verifies each step. It saves what it drove as flows that replay with no model. Your agent spends one call instead of a context full of snapshots. The Harness decides on the Reticle platform. A new account gets free credits, and a card starts a 14-day trial with 500 credits. Start it from **Run Harness** in the HUD on your running app, or tell your coding agent to call `reticle_verify { action: "explore", persona: "…" }`. You watch it live in the HUD ("Reticle Harness is driving"). You can stop it mid-run from the same panel; see [docs/autodrive.md](docs/autodrive.md).
-
-**[app.reticle.sh](https://app.reticle.sh) is the dashboard.** Run `reticle connect` in your app and sign in. Everything your machine verified then syncs automatically, whichever agent drove:
-
-- every run, with what was checked, what held, and who drove it (your agent or the Harness)
-- the bugs Reticle caught, to triage, assign, and push to GitHub
-- saved flows, Reticle Coverage (routes reached, controls proved), and the notes people pinned in the HUD
-- a team view of all of it, and a shareable proof link for any run
-
-The open-source tool never needs the dashboard. The dashboard shows a team what its agents and the Harness verified. To test an app on your machine, start from Run Harness in the HUD or from your coding agent.
+---
 
 ## Community
 
-<div align="center">
-
-<a href="https://discord.gg/BwAbzv9ZRz"><img src="https://dcbadge.limes.pink/api/server/BwAbzv9ZRz?style=for-the-badge" alt="Join the Reticle community on Discord" height="36" /></a>
-
-</div>
-
-We build Reticle in the open, and its users decide what we build next. Come say hello and tell us what you verify.
-
-- **[💬 Discord](https://discord.gg/BwAbzv9ZRz)** is the center. Find what we build, which tasks are open, design decisions before they land, and help when you are stuck.
-- **Contribute.** Start with a [good first issue](https://github.com/reticlehq/reticle/labels/good%20first%20issue) or [help wanted](https://github.com/reticlehq/reticle/labels/help%20wanted), and read [CONTRIBUTING.md](CONTRIBUTING.md). In CI, every PR runs the gates that its diff needs.
-- **Ideas and questions:** [GitHub Discussions](https://github.com/reticlehq/reticle/discussions). **Bugs:** [issues](https://github.com/reticlehq/reticle/issues), or `reticle feedback "what happened"` from your terminal.
-- **Talk to us:** stuck on setup, or want to discuss your use case? [Book a call with the founders](https://calendar.app.google/h9NRDbBBQetyTzWM6).
-- **CI and pipelines:** Using Reticle in CI or in a pipeline? Talk to a founder: [book a call](https://calendar.app.google/h9NRDbBBQetyTzWM6) or write to [hey@reticle.sh](mailto:hey@reticle.sh).
-- **Security issue?** Follow [SECURITY.md](SECURITY.md). Do not open a public issue.
+[💬 Discord](https://discord.gg/BwAbzv9ZRz) · [Good first issues](https://github.com/reticlehq/reticle/labels/good%20first%20issue) · [Contributing](CONTRIBUTING.md) · [Discussions](https://github.com/reticlehq/reticle/discussions) · [Issues](https://github.com/reticlehq/reticle/issues) · [Book a call with the founders](https://calendar.app.google/h9NRDbBBQetyTzWM6)
 
 Everyone here follows the [Code of Conduct](CODE_OF_CONDUCT.md).
 
@@ -627,24 +436,12 @@ Everyone here follows the [Code of Conduct](CODE_OF_CONDUCT.md).
   <a href="https://github.com/reticlehq/reticle/graphs/contributors"><img src="https://contrib.rocks/image?repo=reticlehq/reticle" alt="Contributors" /></a>
 </p>
 
-<p align="center">
-  <a href="https://star-history.com/#reticlehq/reticle&Date"><img src="https://api.star-history.com/svg?repos=reticlehq/reticle&type=Date" alt="Star history" width="600" /></a>
-</p>
-
 **If Reticle catches a bug for you, [⭐ star the repo](https://github.com/reticlehq/reticle/stargazers).** Stars are the main way other developers find it.
 
----
+## Docs and license
 
-## Docs
-
-**[docs.reticle.sh](https://docs.reticle.sh)** — a page per tool, a page per command, every example captured from a real run.
-
-[Quickstart](https://docs.reticle.sh/quickstart) · [Frameworks](https://docs.reticle.sh/frameworks) · [Troubleshooting](https://docs.reticle.sh/troubleshooting) · [Architecture](docs/architecture.md) · [Contributing](CONTRIBUTING.md)
-
-## License
+**[docs.reticle.sh](https://docs.reticle.sh)**: a page for each tool and each command. [Quickstart](https://docs.reticle.sh/quickstart) · [Frameworks](https://docs.reticle.sh/frameworks) · [Troubleshooting](https://docs.reticle.sh/troubleshooting) · [Architecture](docs/architecture.md)
 
 Every npm package is Apache-2.0: the SDK, the adapters, core, engine, the server and CLI, `init` and the spec runner (`@reticlehq/test`). Use them anywhere, including inside the apps that you ship. The `reticle-tauri` crate is MIT.
 
 [LICENSE](LICENSE) has the details.
-
-`dev-only` · `localhost-only` · `your app data stays local`
