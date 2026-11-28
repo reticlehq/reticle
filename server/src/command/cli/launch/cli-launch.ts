@@ -195,9 +195,16 @@ export async function openInBrowser(
   platform: NodeJS.Platform = process.platform,
   run: (cmd: string, args: string[]) => Promise<string | null> = defaultRun,
 ): Promise<string | null> {
+  // Each launcher runs a program or opens a file when it is given one (`start "" calc.exe`), so
+  // only a web address reaches it.
+  if (!WEB_ADDRESS.test(url)) {
+    return `${url} is not a web address: only http:// and https:// addresses are opened`;
+  }
   const { cmd, args } = openCommand(url, platform);
   return run(cmd, args);
 }
+
+const WEB_ADDRESS = /^https?:\/\//i;
 
 /**
  * What a finished launcher means, or null when nothing is wrong.

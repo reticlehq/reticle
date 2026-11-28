@@ -80,7 +80,7 @@ function idsIn(url: string, body: unknown): string[] {
   for (const segment of url.split('?')[0]?.split('/') ?? []) {
     if (segment.length > 0 && /^\d+$/.test(segment)) found.add(segment);
   }
-  if ('object' === typeof body && body !== null) {
+  if (null !== body && 'object' === typeof body) {
     for (const value of Object.values(body as Record<string, unknown>)) {
       if ('string' === typeof value) for (const id of value.match(ID_PATTERN) ?? []) found.add(id);
     }
