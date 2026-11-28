@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # A small GTK application for atspicheck.mjs: a menu bar, a field, a button that writes what it
-# saved, a check box, a paragraph without a name, a notebook with a second page, and a canvas ("Ink") where a drag draws a line
+# saved, a check box, a paragraph without a name, a notebook with a second page and a covered button, and a canvas ("Ink") where a drag draws a line
 # that no element shows. A red bar beside the canvas moves by itself all the time, as a video
 # does: its pixels must not count as an effect.
 #
@@ -43,7 +43,19 @@ for widget in (field, save, remember, status, words):
 # A notebook: the button on its second page is in the tree, and not on the screen, as the hidden
 # menu bar of Thunderbird is.
 pages = Gtk.Notebook()
-pages.append_page(Gtk.Label(label='First page'), Gtk.Label(label='One'))
+# A button over the left part of another, as a shape on a slide of Impress covers part of another.
+# A click on "Under" goes to its open part, and says so in the status.
+cover = Gtk.Overlay()
+under = Gtk.Button(label='Under')
+under.set_size_request(110, -1)
+under.connect('clicked', lambda _b: status.set_text('Under clicked'))
+cover.add(under)
+over = Gtk.Button(label='Over')
+over.set_size_request(80, -1)
+over.set_halign(Gtk.Align.START)
+over.connect('clicked', lambda _b: status.set_text('Over clicked'))
+cover.add_overlay(over)
+pages.append_page(cover, Gtk.Label(label='One'))
 pages.append_page(Gtk.Button(label='Behind'), Gtk.Label(label='Two'))
 
 row = Gtk.Box(spacing=6)

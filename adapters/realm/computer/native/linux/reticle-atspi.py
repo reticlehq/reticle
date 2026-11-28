@@ -38,6 +38,8 @@ LONG_TABLE = 5000
 QUIET_MS = 150
 PICTURE_WIDTH = 240
 STEP = 24
+# The two menu bars of LibreOffice put the same menu at most 4 pixels apart.
+TWIN_PX = 8
 
 # AT-SPI role names, named as macOS names them. A role that is not here is read as AXGroup.
 ROLE_OF = {
@@ -100,6 +102,32 @@ def has(el, state, held=None):
     # `held` is a state set already read: each read is a call on the bus.
     s = held if held is not None else states(el)
     return s is not None and s.contains(state)
+
+
+def enabled_of(el, held=None):
+    if has(el, Atspi.StateType.ENABLED, held) or has(el, Atspi.StateType.SENSITIVE, held):
+        return True
+    # An item that the application draws itself (a file in the icon view of Files) gives no
+    # enabled state: it takes the state of what holds it.
+    if safe(el.get_role_name) == 'canvas' and has(el, Atspi.StateType.FOCUSABLE, held):
+        up = safe(el.get_parent)
+        return up is not None and (has(up, Atspi.StateType.ENABLED) or has(up, Atspi.StateType.SENSITIVE))
+    return False
+
+
+def open_gtk2_menu(menu, held=None):
+    # GTK2 (GIMP) never says that the items of an open menu are showing, only visible. The open
+    # menu is the one with the focus.
+    return safe(menu.get_role_name) == 'menu' and has(menu, Atspi.StateType.FOCUSED, held)
+
+
+def on_screen(el, depth=0):
+    if has(el, Atspi.StateType.SHOWING):
+        return True
+    if depth > 20 or not has(el, Atspi.StateType.VISIBLE):
+        return False
+    up = safe(el.get_parent)
+    return up is not None and open_gtk2_menu(up) and on_screen(up, depth + 1)
 
 
 def role_of(el, held=None):
@@ -209,7 +237,7 @@ class Reader:
         ident = safe(el.get_accessible_id, '')
         if ident:
             node['id'] = ident
-        node['enabled'] = has(el, Atspi.StateType.ENABLED, held) or has(el, Atspi.StateType.SENSITIVE, held)
+        node['enabled'] = enabled_of(el, held)
         node['focused'] = has(el, Atspi.StateType.FOCUSED, held)
         frame = frame_of(el)
         if frame is not None:
@@ -236,7 +264,9 @@ class Reader:
         # LibreOffice has hundreds of items in closed menus, and to read them took seconds.
         listed = len(kids) > SHORT_LIST and role in ('AXList', 'AXTable', 'AXOutline')
         if listed or (role == 'AXMenu' and kids):
-            places = [k for k, c in enumerate(kids) if has(c, Atspi.StateType.SHOWING)]
+            gtk2 = open_gtk2_menu(el, held)
+            places = [k for k, c in enumerate(kids) if has(c, Atspi.StateType.SHOWING) or
+                      (gtk2 and has(c, Atspi.StateType.VISIBLE))]
             if listed or len(places) < len(kids):
                 node['notShown'] = len(kids) - len(places)
                 kids = [kids[k] for k in places]
@@ -323,35 +353,120 @@ def holds(outer, el):
     return False
 
 
-def reach(el, pid):
-    if not has(el, Atspi.StateType.SHOWING):
-        return {'reach': 'unknown', 'detail': 'the element is not showing: it is on a hidden page, in a closed menu or in a hidden bar'}
-    frame = frame_of(el)
-    if frame is None:
-        return {'reach': 'unknown', 'detail': 'the element has no place on the screen'}
-    x, y = frame[0] + frame[2] // 2, frame[1] + frame[3] // 2
-    app = app_of(pid)
-    shown, _ = windows_of(app) if app is not None else ([], 0)
+def inside(point, box):
+    return box is not None and box[0] <= point[0] < box[0] + box[2] and box[1] <= point[1] < box[1] + box[3]
+
+
+def window_of(el):
+    at = el
+    for _ in range(80):
+        up = safe(at.get_parent)
+        if up is None or safe(up.get_role_name) == 'application':
+            return at
+        at = up
+    return None
+
+
+def twin(at, el, point):
+    # The same control, given twice: LibreOffice gives its menu bar in two trees, with boxes some
+    # pixels apart. A twin has the same role and name, a box within TWIN_PX on each edge, and the
+    # same window: an "OK" of a dialog over another dialog is in a different window.
+    a, b = frame_of(at), frame_of(el)
+    if a is None or b is None or not inside(point, a):
+        return False
+    if any(abs(p - q) > TWIN_PX for p, q in zip(a, b)):
+        return False
+    if role_of(at) != role_of(el) or (safe(at.get_name, '') or '') != (safe(el.get_name, '') or ''):
+        return False
+    wa, wb = window_of(at), window_of(el)
+    return wa is not None and wb is not None and same(wa, wb)
+
+
+def covered_by(el, point):
+    # A child after the element is drawn over it: a button in a GTK overlay, a shape on a slide.
+    up = safe(el.get_parent)
+    k = safe(el.get_index_in_parent, -1)
+    if up is None or k < 0:
+        return None
+    for j in range(k + 1, min(safe(up.get_child_count, 0), k + 1 + SHORT_LIST)):
+        other = child_at(up, j)
+        if other is not None and has(other, Atspi.StateType.SHOWING) and inside(point, frame_of(other)):
+            return other
+    return None
+
+
+def hit_at(el, frame, shown, x, y):
+    """True if a click at (x, y) goes to `el`, else the element that the hit test found there."""
+    # The toolkit can stop at a container: then only the order of the children tells what is on top.
+    over = covered_by(el, (x, y))
+    found = None
     for w in shown:
         at = point_child(w, x, y)
         for _ in range(40):
             if at is None:
                 break
-            if same(at, el):
-                return {'reach': 'yes'}
+            if same(at, el) or twin(at, el, (x, y)):
+                return True
             deeper = point_child(at, x, y)
             if deeper is None or same(deeper, at):
                 break
             at = deeper
         # The element holds the point it was hit at: what was hit is inside it.
         hit = frame_of(at) if at is not None else None
-        if hit is not None and frame[0] <= hit[0] and frame[1] <= hit[1] and \
+        if over is None and hit is not None and frame[0] <= hit[0] and frame[1] <= hit[1] and \
                 hit[0] + hit[2] <= frame[0] + frame[2] and hit[1] + hit[3] <= frame[1] + frame[3]:
-            return {'reach': 'yes'}
+            return True
         # The toolkit stopped answering at a container that holds the element (a dialog of
         # LibreOffice, the sidebar of Files): no other element of the application is at the point.
-        if at is not None and holds(at, el):
-            return {'reach': 'yes'}
+        if over is None and at is not None and holds(at, el):
+            return True
+        found = found or over or at
+    return found
+
+
+def popups_of(el):
+    found, at = [], el
+    for _ in range(80):
+        at = safe(at.get_parent)
+        if at is None or safe(at.get_role_name) == 'application':
+            return found
+        # Qt calls an open menu "popup menu", and Gecko calls it "menu".
+        if safe(at.get_role_name) in ('popup menu', 'menu') and on_screen(at):
+            found.append(at)
+    return found
+
+
+def spots(frame):
+    # The middle first, then eight points around it, inside the edges: a shape on a slide can
+    # cover the middle of another and leave the rest of it open to the pointer.
+    x, y, w, h = frame
+    yield x + w // 2, y + h // 2
+    for fy in (0.25, 0.5, 0.75):
+        for fx in (0.25, 0.5, 0.75):
+            if (fx, fy) != (0.5, 0.5):
+                yield int(x + w * fx), int(y + h * fy)
+
+
+def reach(el, pid):
+    if not on_screen(el):
+        return {'reach': 'unknown', 'detail': 'the element is not showing: it is on a hidden page, in a closed menu or in a hidden bar'}
+    frame = frame_of(el)
+    if frame is None:
+        return {'reach': 'unknown', 'detail': 'the element has no place on the screen'}
+    app = app_of(pid)
+    shown, _ = windows_of(app) if app is not None else ([], 0)
+    # An open menu of Qt or Gecko is not a window of the application: it is under its menu item in
+    # the tree. It is over its window, so the hit test starts in it.
+    shown = popups_of(el) + shown
+    first = None
+    for x, y in spots(frame):
+        got = hit_at(el, frame, shown, x, y)
+        if got is True:
+            return {'reach': 'yes', 'at': [x, y]}
+        first = first or got
+    if first is not None:
+        name = safe(first.get_name, '') or ''
+        return {'reach': 'unknown', 'detail': f'the hit test found {safe(first.get_role_name, "")} "{name}" over the element, at its middle and at eight other points'}
     return {'reach': 'unknown', 'detail': 'the hit test did not find the element'}
 
 
@@ -615,8 +730,7 @@ def act(words):
     if el is not None:
         if role_of(el) != role or (safe(el.get_name, '') or '') != name:
             return {'refused': 'stale', 'detail': 'a different element is at the path'}
-        enabled = has(el, Atspi.StateType.ENABLED) or has(el, Atspi.StateType.SENSITIVE)
-        if not enabled and kind != 'raise':
+        if not enabled_of(el) and kind != 'raise':
             return {'refused': 'disabled'}
     pointer = kind in POINTER
     if pointer and not foreground:
@@ -684,7 +798,11 @@ def act(words):
                 press_key(value)
         elif kind in ('click', 'dblclick', 'rightclick', 'hover'):
             xy = [v for v in str(value).split(',') if v != '']
-            x, y = (float(xy[0]), float(xy[1])) if len(xy) >= 2 else middle_of(el)
+            # No point given: the point that the reach check found open, else the middle.
+            if len(xy) >= 2:
+                x, y = float(xy[0]), float(xy[1])
+            else:
+                x, y = rch.get('at') or middle_of(el)
             if kind == 'hover':
                 move(x, y)
             else:

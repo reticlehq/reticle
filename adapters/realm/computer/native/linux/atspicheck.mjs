@@ -11,7 +11,8 @@
 //   - the window takes a frame and a half of the screen, and the answer is its new frame;
 //   - a table of 600,000 cells (bigtable.py) is read in the time an act has: the cells on the
 //     screen, with how many it left out, and a click on one of them reaches it;
-//   - a button on a page that is not shown has no place, and a click on it is refused.
+//   - a button on a page that is not shown has no place, and a click on it is refused;
+//   - a click on a button that another button partly covers goes to its open part.
 //
 //   node native/linux/atspicheck.mjs
 //
@@ -149,6 +150,20 @@ try {
   );
   held += 1;
 
+  // "Over" covers the middle of "Under". GTK stops its hit test at the notebook, so only the order
+  // of the children shows what is on top. A click on "Under" goes to its open part: the realm
+  // clicked the middle, and the shape on top took the click.
+  const under = (await query({ role: 'button', name: 'Under' }))[0];
+  assert.ok(under?.ref, `the covered button has no ref:\n${shown}`);
+  await commands.answer(ReticleCommand.ACT, {
+    ref: under.ref,
+    action: ActionType.CLICK,
+    args: { foreground: true, settleMs: 600 },
+  });
+  const after = (await commands.answer(ReticleCommand.SNAPSHOT, {})).tree;
+  assert.match(after, /Under clicked/, `the click did not reach the open part of Under:\n${after}`);
+  held += 1;
+
   // The window moves and takes a size, as a person arranges it, and the answer is its new frame.
   const win = (await query({ role: 'window' }))[0];
   const placed = await commands.answer(ReticleCommand.ACT, {
@@ -220,7 +235,7 @@ try {
     /not showing/,
   );
   held += 1;
-  process.stdout.write(`computer atspicheck: ${String(held)} of 12 cases held\n`);
+  process.stdout.write(`computer atspicheck: ${String(held)} of 13 cases held\n`);
 } finally {
   fixture.kill();
 }
