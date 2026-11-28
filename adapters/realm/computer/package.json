@@ -1,6 +1,6 @@
 {
   "name": "@reticlehq/computer",
-  "version": "3.10.10",
+  "version": "3.11.0",
   "description": "Reticle realm adapter for computer use: reads an application through the operating system's accessibility tree, acts on it, and reports what each action changed. Needs no code inside the subject.",
   "type": "module",
   "main": "./dist/index.js",
