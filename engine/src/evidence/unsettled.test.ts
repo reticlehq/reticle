@@ -177,6 +177,66 @@ describe("namedNetIsInFlight matches the assertion's own request", () => {
       ),
     ).toBe(true);
   });
+
+  /** A `urlPath` check names its request as much as a `urlContains` one does (#2286). */
+  describe('for a check that names the request by urlPath', () => {
+    it('is true when that path is still open', () => {
+      expect(
+        namedNetIsInFlight({ kind: PredicateKind.NET, urlPath: '/api/items' }, [
+          'GET http://x/api/items',
+        ]),
+      ).toBe(true);
+    });
+
+    it('ignores the query on the open request, as the check does', () => {
+      expect(
+        namedNetIsInFlight({ kind: PredicateKind.NET, urlPath: '/api/items' }, [
+          'GET http://x/api/items?page=2',
+        ]),
+      ).toBe(true);
+    });
+
+    it('is false when only a longer path is open, since the match is exact', () => {
+      expect(
+        namedNetIsInFlight({ kind: PredicateKind.NET, urlPath: '/api/items' }, [
+          'GET http://x/api/items/count',
+        ]),
+      ).toBe(false);
+    });
+
+    it('still honours the method', () => {
+      expect(
+        namedNetIsInFlight({ kind: PredicateKind.NET, method: 'POST', urlPath: '/api/items' }, [
+          'GET http://x/api/items',
+        ]),
+      ).toBe(false);
+    });
+
+    it('reads the net out of an allOf', () => {
+      expect(
+        namedNetIsInFlight(
+          {
+            kind: PredicateKind.ALL_OF,
+            predicates: [
+              { kind: PredicateKind.NET, urlPath: '/api/items' },
+              { kind: PredicateKind.TEXT, contains: 'Saved' },
+            ],
+          },
+          ['POST /api/items'],
+        ),
+      ).toBe(true);
+    });
+
+    it('needs both fields to match when a check names both', () => {
+      const net = {
+        kind: PredicateKind.NET,
+        urlContains: 'items',
+        urlPath: '/api/items',
+      } as const;
+      expect(namedNetIsInFlight(net, ['GET http://x/api/items'])).toBe(true);
+      expect(namedNetIsInFlight(net, ['GET http://x/v2/items'])).toBe(false);
+    });
+  });
 });
 
 describe('unsettledBecause says what the window held instead', () => {

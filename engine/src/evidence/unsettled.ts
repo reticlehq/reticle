@@ -18,6 +18,7 @@
 
 import { PredicateKind, compareSourceClauses, describePropertyAssertion } from '@reticlehq/core';
 import type { Predicate } from '@/question/predicate/predicate.js';
+import { urlPathOf } from '@/question/predicate/predicate-eval-kit.js';
 
 /** Enough to recognise the one that is stuck; not so many that a chatty window eats the verdict. */
 const MAX_LISTED_REQUESTS = 3;
@@ -134,7 +135,7 @@ export function namedNetIsInFlight(
   stillInFlight: readonly string[],
 ): boolean {
   if (0 === stillInFlight.length) return false;
-  const nets: { method?: string; urlContains: string }[] = [];
+  const nets: NamedNet[] = [];
   const walk = (p: Predicate): void => {
     switch (p.kind) {
       case PredicateKind.ALL_OF:
@@ -145,10 +146,16 @@ export function namedNetIsInFlight(
         for (const child of compareSourceClauses(p)) walk(child);
         return;
       case PredicateKind.NET: {
-        if (undefined === p.urlContains || 0 === p.urlContains.length) return;
+        const urlContains =
+          undefined === p.urlContains || 0 === p.urlContains.length ? undefined : p.urlContains;
+        // A check that names a request by its path (#2286) names it as much as one that names a substring.
+        if (undefined === urlContains && undefined === p.urlPath) {
+          return;
+        }
         nets.push({
           ...(undefined === p.method ? {} : { method: p.method }),
-          urlContains: p.urlContains,
+          ...(undefined === urlContains ? {} : { urlContains }),
+          ...(undefined === p.urlPath ? {} : { urlPath: p.urlPath }),
         });
         return;
       }
@@ -160,16 +167,27 @@ export function namedNetIsInFlight(
   return nets.some((net) => stillInFlight.some((label) => inFlightLabelMatchesNet(label, net)));
 }
 
-function inFlightLabelMatchesNet(
-  label: string,
-  net: { method?: string; urlContains: string },
-): boolean {
+/** The parts of a `net` check that name a request, once the empty ones are dropped. */
+interface NamedNet {
+  method?: string;
+  urlContains?: string;
+  urlPath?: string;
+}
+
+function inFlightLabelMatchesNet(label: string, net: NamedNet): boolean {
   const space = label.indexOf(' ');
   if (space <= 0) return false;
   const method = label.slice(0, space);
   const url = label.slice(space + 1);
   if (undefined !== net.method && method.toUpperCase() !== net.method.toUpperCase()) return false;
-  return url.includes(net.urlContains);
+  if (undefined !== net.urlContains && !url.includes(net.urlContains)) {
+    return false;
+  }
+  // Both sides go through `urlPathOf`, as the check itself does, so the two agree on what a path is.
+  if (undefined !== net.urlPath && urlPathOf(url) !== urlPathOf(net.urlPath)) {
+    return false;
+  }
+  return true;
 }
 
 /**

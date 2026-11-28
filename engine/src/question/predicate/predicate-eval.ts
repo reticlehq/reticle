@@ -35,6 +35,7 @@ import {
   num,
   redactedOnPath,
   str,
+  urlPathOf,
   type EvalResult,
 } from './predicate-eval-kit.js';
 import { keyFragmentOnly } from './body-key-fragment.js';
@@ -323,6 +324,7 @@ export function evalNet(
   /** A response key whose captured value is `[REDACTED]`, so a `bodyMatches` clause is unjudgeable. */
   let redactedResponseField: string | undefined;
   const requestState = newRequestBodyState();
+  const wantedPath = p.urlPath === undefined ? undefined : urlPathOf(p.urlPath);
   const matches = events.filter((e) => {
     if (e.type !== EventType.NET_REQUEST || e.t < since) {
       return false;
@@ -337,6 +339,9 @@ export function evalNet(
       return false;
     }
     if (p.method !== undefined && method?.toUpperCase() !== p.method.toUpperCase()) {
+      return false;
+    }
+    if (p.urlPath !== undefined && urlPathOf(urlForMatch(d)) !== wantedPath) {
       return false;
     }
     if (p.status !== undefined) {

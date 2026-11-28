@@ -43,10 +43,13 @@ function elementNoun(query: ElementQuery): string {
 /** What a claim is about, as a noun: "a PATCH request to /assignee", 'the text "Saved"'. */
 function noun(predicate: Predicate): string {
   switch (predicate.kind) {
-    case PredicateKind.NET:
+    case PredicateKind.NET: {
+      // The exact path names the call better than a substring of its URL, so it goes first.
+      const target = predicate.urlPath ?? predicate.urlContains;
       return `a ${predicate.method === undefined ? '' : `${predicate.method} `}request${
-        predicate.urlContains === undefined ? '' : ` to ${predicate.urlContains}`
+        target === undefined ? '' : ` to ${target}`
       }`;
+    }
     case PredicateKind.TEXT:
       if (predicate.contains !== undefined) {
         return `the text "${predicate.contains}"`;
