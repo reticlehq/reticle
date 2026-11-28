@@ -57,7 +57,7 @@ One `reticle_gate` line. Real capture from this repository, with the flow lists 
 | --- | --- |
 | `0` | Every affected, non-flaky flow has a passing artifact, nothing was weakened or deleted, and coverage held |
 | `1` | Something is uncovered, downgraded, deleted, unflowed, unexecuted, or coverage fell. Also `1` on any internal fault, and, outside `--hook`, when the linked platform refused the project's credential: the gate fails closed |
-| `2` | Nothing was checked: there are no saved flows, or components changed and no saved flow covers them. Docs, lockfiles, stylesheets and tests do not count. This is not a failure of the change. The gate says which case it is and how to record a flow. The JSON line names the uncovered files in `noCoveringFlow` |
+| `2` | Nothing was checked: there are no saved flows, or components changed and no saved flow covers them. Only component files that are not tests count: `.jsx`, `.tsx`, `.vue`, `.svelte` and `.astro`. This is not a failure of the change. The gate says which case it is and how to record a flow. The JSON line names the uncovered files in `noCoveringFlow` |
 | `3` | The linked project's dashboard knows a flow that passed before and is broken now, the same code `reticle runs regression` exits with. Checked only when the repo is linked; offline, it changes nothing |
 
 Measured on this repository, `npx @reticlehq/server gate --since HEAD~1` exited `1` with the output above: 0 of 47 flows covered, 39 uncovered and 8 quarantined.
