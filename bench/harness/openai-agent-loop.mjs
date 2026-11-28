@@ -19,6 +19,12 @@ const MODEL = process.env.BENCH_OPENAI_MODEL ?? 'gpt-4o';
 const BASE = (process.env.BENCH_OPENAI_BASE_URL ?? 'https://api.openai.com/v1').replace(/\/$/, '');
 const URL = process.env.BENCH_URL ?? 'http://localhost:4312/';
 const MAX_TURNS = Number(process.env.BENCH_MAX_TURNS ?? 14);
+// Newer OpenAI models refuse `max_tokens` and require `max_completion_tokens`. Other endpoints
+// accept only `max_tokens`. A reasoning model also spends this budget on its reasoning.
+const TOKEN_PARAM = process.env.BENCH_OPENAI_TOKEN_PARAM ?? 'max_tokens';
+const MAX_OUTPUT_TOKENS = Number(process.env.BENCH_MAX_OUTPUT_TOKENS ?? 1024);
+// Extra request fields as JSON, for example '{"reasoning_effort":"none"}'.
+const EXTRA_BODY = JSON.parse(process.env.BENCH_OPENAI_EXTRA ?? '{}');
 
 if (!KEY) {
   console.log(
@@ -104,7 +110,14 @@ async function callOpenAI(messages, tools) {
   const r = await fetch(`${BASE}/chat/completions`, {
     method: 'POST',
     headers: { 'content-type': 'application/json', authorization: `Bearer ${KEY}` },
-    body: JSON.stringify({ model: MODEL, messages, tools, tool_choice: 'auto', max_tokens: 1024 }),
+    body: JSON.stringify({
+      model: MODEL,
+      messages,
+      tools,
+      tool_choice: 'auto',
+      [TOKEN_PARAM]: MAX_OUTPUT_TOKENS,
+      ...EXTRA_BODY,
+    }),
   });
   if (!r.ok) throw new Error(`${MODEL} ${r.status}: ${(await r.text()).slice(0, 300)}`);
   return r.json();
@@ -157,7 +170,13 @@ async function runCell(scenarioId, toolKey) {
           content = `error: ${String(e).slice(0, 200)}`;
         }
         if (process.env.BENCH_TRACE)
-          trace.push({ turn: turns, call: tc.function.name, resultChars: content.length });
+          trace.push({
+            turn: turns,
+            call: tc.function.name,
+            args: tc.function.arguments,
+            resultChars: content.length,
+            resultHead: content.slice(0, 300),
+          });
         messages.push({ role: 'tool', tool_call_id: tc.id, content });
       }
     }
