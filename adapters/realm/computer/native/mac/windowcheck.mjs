@@ -73,7 +73,46 @@ try {
 
   await assert.rejects(arrange({ arrange: 'sideways' }), /one of: minimize/);
 
-  process.stdout.write('computer windowcheck: 5 of 5 cases held\n');
+  // An ordinary application has a tile in the Dock: its window goes there and comes back. The
+  // window that went has no ref, so it comes back from the application element, as a person
+  // brings it back from the Dock. This part takes the screen for a few seconds.
+  const regular = spawn(`${build}/fixture`, [tmpdir()], {
+    stdio: 'ignore',
+    env: { ...process.env, RETICLE_FIXTURE_RESIZABLE: '1', RETICLE_FIXTURE_REGULAR: '1' },
+  });
+  try {
+    const onRegular = new PeerCommands({
+      driver: new MacDriver({ helper: `${build}/reticle-ax`, app: 'fixture', pid: regular.pid }),
+      emit: () => undefined,
+    });
+    await sleep(1500);
+    const application = (await onRegular.answer(ReticleCommand.QUERY, { role: 'application' }))
+      .elements[0]?.ref;
+    await onRegular.answer(ReticleCommand.ACT, {
+      ref: application,
+      action: ActionType.FOCUS,
+      args: { foreground: true, settleMs: 600 },
+    });
+    const windowRefOf = async () =>
+      (await onRegular.answer(ReticleCommand.QUERY, { role: 'window' })).elements[0]?.ref;
+    const gone = await onRegular.answer(ReticleCommand.ACT, {
+      ref: await windowRefOf(),
+      action: ActionType.WINDOW,
+      args: { arrange: WindowArrangement.MINIMIZE, settleMs: 800 },
+    });
+    assert.equal(gone.window?.minimized, true, 'the window did not go to the Dock');
+    const back = await onRegular.answer(ReticleCommand.ACT, {
+      ref: application,
+      action: ActionType.WINDOW,
+      args: { arrange: WindowArrangement.RESTORE, settleMs: 800 },
+    });
+    assert.equal(back.window?.minimized, false, 'the window did not come back from the Dock');
+    assert.ok(await windowRefOf(), 'the window that came back has no ref');
+  } finally {
+    regular.kill();
+  }
+
+  process.stdout.write('computer windowcheck: 8 of 8 cases held\n');
 } finally {
   fixture.kill();
 }
