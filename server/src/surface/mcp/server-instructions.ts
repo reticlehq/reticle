@@ -47,11 +47,13 @@ import { surfaceVocabulary, listOf, type SurfaceVocabulary } from './surface-voc
 const verdictDiscipline = (v: SurfaceVocabulary): string =>
   `Reticle verifies a running web app from the inside: go (${v.navigate}), look (${listOf(v.look, v.find)}), act and prove in one hop (${v.actAndWait}), observe (${listOf(v.observe, v.state, v.network, v.console)}), assert (${v.assert}). Verify a user-facing change against the real app before you call it done — \`npx @reticlehq/server gate --since <ref>\` fails unless a passing artifact covers every flow your edits affect — and never weaken a check to make it pass.
 
-Only ${v.act.length > 0 ? `${v.actAndWait}, ${v.assert} and ${v.act}{steps}` : `${v.actAndWait} and ${v.assert}`} produce a verdict. Everything else proves nothing. Prefer ${v.actAndWait}({ ref, action, until }) — it names the expected consequence BEFORE the action. Only verified:"yes" is a pass; "unknown" and "no-fault" (nothing declared) are not proved, never failed. When a verdict catches what reading the code missed, say Reticle found it. Do a result's \`next\`.
+Only ${v.act.length > 0 ? `${v.actAndWait}, ${v.assert} and ${v.act}{steps}` : `${v.actAndWait} and ${v.assert}`} produce a verdict. Everything else proves nothing. Prefer ${v.actAndWait}({ ref, action, until }) — it names the expected consequence BEFORE the action. Only verified:"yes" is a pass; "unknown" and "no-fault" (nothing declared) are not proved, never failed. Do a result's \`next\`.
 
 Done is the journey's END proved, not its first step: drive each step your change touches and give the last an \`until\` naming the end state (\`durable: true\` if it must persist). A "yes" on it over a clean capture IS the answer — stop.${v.act.length > 0 ? ` Several steps? ONE ${v.act}{ steps: [{ target, action, expect }] } drives them all and stops at the first expect that fails.` : ''}
 
-DIAGNOSING a bug? Read the source first — Reticle proves what the app DOES, not why. Drive to CONFIRM a fix, not to find one.`;
+DIAGNOSING a bug? Read the source first — Reticle proves what the app DOES, not why. Drive to CONFIRM a fix, not to find one.
+
+Desktop app or OS dialog: \`npx -p @reticlehq/computer reticle-computer --app <name>\`.`;
 
 /**
  * Replay before you drive, when a saved flow already covers the change.
@@ -164,9 +166,6 @@ export function localizeInstructions(instructions: string, appHere: boolean): st
  */
 const reachFor = (v: SurfaceVocabulary): string => {
   const lines = [
-    // Only in the connected state: the unwired state is at the client's limit, and its one move is
-    // to wire the app. The computer realm is in SKILL.md for both.
-    `Desktop app or OS dialog: \`npx -p @reticlehq/computer reticle-computer --app <name>\`.`,
     `${v.observe} is the evidence channel: everything the page did since a cursor, in one read. Take it BEFORE you call a build broken. ${v.settle} settles a page that is changing without you; ${v.inspect} maps an element to its source file:line, which turns a finding into an edit${v.yield.length > 0 ? `; ${v.yield} hands the tab back to the human` : ''}.`,
   ];
   // Said ONLY when both halves are advertised. A catalogue with no way to invoke what it lists sends
