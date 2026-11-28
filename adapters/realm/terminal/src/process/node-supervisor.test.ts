@@ -8,7 +8,7 @@ import { removeTempDirSync } from '../test-support/temp-dir.test-helpers.js';
 /**
  * The half that talks to the operating system, tested against real processes.
  *
- * `CliRealm` is tested with a fake because the interesting cases are hard to arrange on demand.
+ * `TerminalRealm` is tested with a fake because the interesting cases are hard to arrange on demand.
  * This one is the opposite: its whole job is the arranging, so faking anything here would test the
  * fake. Every case below runs a real process.
  */

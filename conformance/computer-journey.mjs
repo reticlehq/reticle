@@ -20,7 +20,7 @@ import { join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
 import { fileURLToPath } from 'node:url';
 
-import { nodeWorkspace } from '../adapters/realm/cli/dist/index.js';
+import { nodeWorkspace } from '../adapters/realm/terminal/dist/index.js';
 import { MacDriver, connectPeer } from '../adapters/realm/computer/dist/index.js';
 import { FINISH_TOOL } from '../server/dist/features/harness/harness.js';
 import { Bridge } from '../server/dist/portal/bridge/bridge.js';

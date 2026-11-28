@@ -132,14 +132,14 @@ describe('every shipped integration is covered by an app AND a gate', () => {
       'open-verification',
       'engine',
       'browser',
-      // The realm for a command-line subject. A realm adapter like `browser`, and non-integration
+      // The terminal realm, for a command-line program. A realm adapter like `browser`, and non-integration
       // for a sharper reason than the others: a user installs an integration to WIRE Reticle into
       // their app, and there is nothing here to wire. It spawns the subject and watches from
       // outside, so it teaches Reticle nothing about anybody's framework or build tool. It does
       // need an app and a gate of its own -- `apps/cli-smoke` and the conformance subject -- and
       // that obligation is `apps/README.md` rule 1's, not this guard's.
-      'cli',
-      // The realm for a whole application, read through the operating system. Like `cli`, it
+      'terminal',
+      // The realm for a whole application, read through the operating system. Like `terminal`, it
       // watches from outside, so there is nothing for a user to wire into an app.
       'computer',
       'server',

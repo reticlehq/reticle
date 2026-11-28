@@ -6,7 +6,7 @@
     { "path": "engine" },
     { "path": "init" },
     { "path": "adapters/realm/browser" },
-    { "path": "adapters/realm/cli" },
+    { "path": "adapters/realm/terminal" },
     { "path": "adapters/realm/computer" },
     { "path": "server" },
     { "path": "spec-runner" },

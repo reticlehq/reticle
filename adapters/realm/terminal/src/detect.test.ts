@@ -7,7 +7,7 @@ import {
   adjudicate,
   Declaration,
 } from 'open-verification';
-import { CliRealm } from './cli-realm.js';
+import { TerminalRealm } from './terminal-realm.js';
 import type { CommandManifest } from './manifest.js';
 import type { Invocation, Supervisor } from './process/supervisor.js';
 import type { Snapshot, WorkspacePort } from './workspace/port.js';
@@ -52,8 +52,8 @@ function scripted(looks: readonly Snapshot[]): WorkspacePort {
   };
 }
 
-const realm = (supervisor: Supervisor, workspace?: WorkspacePort): CliRealm =>
-  new CliRealm({ supervisor, manifest, ...(workspace ? { workspace } : {}), now: () => 100 });
+const realm = (supervisor: Supervisor, workspace?: WorkspacePort): TerminalRealm =>
+  new TerminalRealm({ supervisor, manifest, ...(workspace ? { workspace } : {}), now: () => 100 });
 
 describe('what the realm reports as a disagreement', () => {
   /**

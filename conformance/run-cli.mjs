@@ -23,8 +23,8 @@ process.env.RETICLE_HEADLESS ??= '1';
 
 const REPO = join(dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
-const { CliRealm, NodeSupervisor, nodeWorkspace } = await import(
-  `file://${join(REPO, 'adapters/realm/cli/dist/index.js')}`
+const { TerminalRealm, NodeSupervisor, nodeWorkspace } = await import(
+  `file://${join(REPO, 'adapters/realm/terminal/dist/index.js')}`
 );
 const { adjudicate, Declaration, assertionsHeldUnder } = await import(
   `file://${join(REPO, 'open-verification/dist/index.js')}`
@@ -163,7 +163,7 @@ function build(workspace, out, entry) {
     tool: { id: 'cli-smoke', version: '1', workspace },
     now: () => Date.now(),
   });
-  return new CliRealm({
+  return new TerminalRealm({
     supervisor,
     manifest: {
       workspaceRoot: workspace,

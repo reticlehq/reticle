@@ -12,7 +12,7 @@ import { ChannelId } from 'open-verification';
  * needs two INDEPENDENT implementations agreeing on the meaning, and both of the ones that exist
  * today share an author.
  */
-export const CliChannel = {
+export const TerminalChannel = {
   /** stdout and stderr. A CLI's output is deliberate, so see `CLI_CHANNELS` for the downgrade. */
   LOG: ChannelId.LOG,
   /** The exit code the tool CHOSE. The subject announcing something about itself. */
@@ -50,4 +50,4 @@ export const CliChannel = {
    */
   ARTIFACT_CONTENT: 'x-artifact-content',
 } as const;
-export type CliChannel = (typeof CliChannel)[keyof typeof CliChannel];
+export type TerminalChannel = (typeof TerminalChannel)[keyof typeof TerminalChannel];

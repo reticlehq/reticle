@@ -63,7 +63,7 @@ const PACKAGES: Readonly<Record<string, Recorded>> = {
     mutual: 0,
     note: 'measured when the package was first published: mac/ and win/ are the drivers of each operating system, peer/ answers the bridge, hud/ draws the overlay. Nothing mutual: the drivers do not know the peer.',
   },
-  'adapters/realm/cli': {
+  'adapters/realm/terminal': {
     directories: 4,
     mutual: 0,
     note: 'measured when the package was first published, as @reticlehq/terminal: hud/ paints the live pane, net/ is the connect proxy, process/ runs the command, workspace/ takes the file snapshots. Nothing mutual.',

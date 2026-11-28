@@ -17,7 +17,7 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const {
-  CliRealm,
+  TerminalRealm,
   NodeSupervisor,
   nodeWorkspace,
   createLiveHud,
@@ -70,7 +70,7 @@ const supervisor = new NodeSupervisor({
 const declaredRoot = expectPath.split('/')[0];
 const exclude = EXCLUDED_BY_DEFAULT.filter((dir) => dir !== declaredRoot);
 
-const realm = new CliRealm({
+const realm = new TerminalRealm({
   supervisor,
   manifest: {
     workspaceRoot: root,

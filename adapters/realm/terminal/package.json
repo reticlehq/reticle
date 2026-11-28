@@ -28,7 +28,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/reticlehq/reticle.git",
-    "directory": "adapters/realm/cli"
+    "directory": "adapters/realm/terminal"
   },
   "homepage": "https://github.com/reticlehq/reticle#readme",
   "bugs": "https://github.com/reticlehq/reticle/issues",
