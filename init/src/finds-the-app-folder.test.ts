@@ -45,8 +45,10 @@ describe('init finds the app below where it was run', () => {
       'services/api/main.go': 'package main',
       'clients/web/shop/package.json': VITE_APP,
       'clients/web/shop/vite.config.ts': 'export default {}',
+      'clients/web/shop/index.html': '<main>Shop</main>',
       'clients/web/admin/package.json': VITE_APP,
       'clients/web/admin/vite.config.ts': 'export default {}',
+      'clients/web/admin/index.html': '<main>Admin</main>',
     });
     const outcomes: unknown[] = [];
     const result = runInit(OPTS, {
@@ -82,6 +84,7 @@ describe('init finds the app below where it was run', () => {
     const home = memoryIo({
       'code/shop/package.json': VITE_APP,
       'code/shop/vite.config.ts': 'export default {}',
+      'code/shop/index.html': '<main>Shop</main>',
     });
     const io = { ...home, cwd: () => '/home/u', homeDir: () => '/home/u' };
     const result = runInit({ ...OPTS, cwd: '/home/u' }, io);
@@ -130,5 +133,62 @@ describe('init finds the app below where it was run', () => {
     const out = io.lines.join('\n');
     expect(out).toContain('home folder');
     expect(out).not.toContain('cd "/home"');
+  });
+  it('refuses a build-only Vite package at the repository root before any writes', () => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({
+        name: 'node-http-service',
+        scripts: { dev: 'node server.js', build: 'vite build' },
+        devDependencies: { vite: '^8' },
+      }),
+      'vite.config.ts': 'export default { build: { lib: {} } }',
+      'server.js': 'export {};',
+    });
+    const result = runInit(OPTS, io);
+    expect(result.ok).toBe(false);
+    expect(result.applied).toBe(0);
+    expect(io.lines.join('\n')).toContain('reticle init --app .');
+    expect(Object.keys(io.written)).toEqual([]);
+  });
+
+  it('does not redirect a Python project into a JS build tool directory', () => {
+    const io = memoryIo({
+      'requirements.txt': 'fastapi',
+      'tools/builder/package.json': JSON.stringify({
+        name: 'builder',
+        scripts: { dev: 'vite build --watch' },
+        devDependencies: { vite: '^8' },
+      }),
+      'tools/builder/vite.config.ts': 'export default { build: { lib: {} } }',
+    });
+    const result = runInit(OPTS, io);
+    expect(result.ok).toBe(false);
+    expect(Object.keys(io.written)).toEqual([]);
+  });
+
+  it('refuses ambiguous web app discovery instead of modifying either candidate', () => {
+    const io = memoryIo({
+      'package.json': JSON.stringify({
+        name: 'mono',
+        private: true,
+        workspaces: ['apps/*'],
+        devDependencies: { vite: '^8' },
+      }),
+      'apps/a/package.json': JSON.stringify({
+        scripts: { dev: 'vite' },
+        devDependencies: { vite: '^8' },
+      }),
+      'apps/a/index.html': '<h1>A</h1>',
+      'apps/b/package.json': JSON.stringify({
+        scripts: { dev: 'vite' },
+        devDependencies: { vite: '^8' },
+      }),
+      'apps/b/index.html': '<h1>B</h1>',
+    });
+    const result = runInit(OPTS, io);
+    expect(result.ok).toBe(false);
+    expect(io.lines.join('\n')).toContain('reticle init --app apps/a');
+    expect(io.lines.join('\n')).toContain('reticle init --app apps/b');
+    expect(Object.keys(io.written)).toEqual([]);
   });
 });

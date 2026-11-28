@@ -167,6 +167,38 @@ export function parsedManifest(pkgRaw: string): Record<string, unknown> {
 }
 
 /**
+ * An explicit Vite library build must not be selected as a web app.
+ * Unlike a generic Vite dependency or config, build.lib and a Vite watch-build
+ * are positive evidence that this package produces library assets, not a page.
+ * An actual index.html takes precedence because a package may build both.
+ */
+export function isBuildOnlyVitePackage(
+  dir: string,
+  pkgRaw: string,
+  io: Pick<InitIo, 'exists' | 'readFile'>,
+): boolean {
+  const at = (file: string): string => ('.' === dir ? file : `${dir}/${file}`);
+  if (OWN_PAGES.some((page) => io.exists(at(page)))) {
+    return false;
+  }
+  const pkg = parsedManifest(pkgRaw);
+  const rawScripts = pkg['scripts'];
+  const scripts =
+    'object' === typeof rawScripts && rawScripts !== null
+      ? (rawScripts as Record<string, unknown>)
+      : {};
+  const watchesLibraryBuild = DEV_SCRIPT_NAMES.some((name) => {
+    const command = scripts[name];
+    return 'string' === typeof command && /\b(?:vite|vp)\s+build\b/.test(command);
+  });
+  const libraryConfig = VITE_CONFIG_CANDIDATES.some((name) => {
+    const source = io.readFile(at(name));
+    return source !== null && /\bbuild\s*:\s*\{[\s\S]*?\blib\s*:/.test(source);
+  });
+  return watchesLibraryBuild || libraryConfig;
+}
+
+/**
  * Whether a package with a dev script has a page. Asked of the same detector the plan uses, so
  * "is this the app" and "which framework is it" cannot disagree about what a UI dependency is.
  */
@@ -185,6 +217,11 @@ function hasPage(dir: string, pkgRaw: string, io: Pick<InitIo, 'exists'>): boole
 function appSignal(dir: string, io: Pick<InitIo, 'exists' | 'readFile'>): AppSignal {
   const pkgRaw = io.readFile(`${dir}/${PACKAGE_JSON}`);
   if (null === pkgRaw) {
+    return AppSignal.NONE;
+  }
+  // A Vite library/watch-build is not a page. Preserve other app heuristics,
+  // including non-HTML server-rendered apps, to avoid disrupting existing setups.
+  if (isBuildOnlyVitePackage(dir, pkgRaw, io)) {
     return AppSignal.NONE;
   }
   const configs = [

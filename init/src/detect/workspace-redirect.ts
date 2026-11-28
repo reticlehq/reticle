@@ -15,6 +15,7 @@ import { detectNonJsEcosystem, noPackageJsonMessage } from './non-js-project.js'
 import {
   findAppsBelow,
   findWorkspaceApps,
+  isBuildOnlyVitePackage,
   PACKAGE_JSON,
   workspacePackageDirs,
 } from './workspace-apps.js';
@@ -162,7 +163,26 @@ export function redirectToWorkspaceApp(
     );
     return { ok: false, applied: 0, manual: 1 };
   }
-  if (here.framework !== Framework.HTML) return null; // this directory IS the app
+  // A repo root may have Vite only for its library build or workspace tooling.
+  // Check for apps below before allowing init to mutate that root. A regular
+  // Vite app, or a framework that owns its document, retains its normal path.
+  const rootPkgRaw = io.readFile(PACKAGE_JSON);
+  const libraryRoot = rootPkgRaw !== null && isBuildOnlyVitePackage('.', rootPkgRaw, io);
+  const rootHasPage = io.exists(STATIC_PAGE) || io.exists('public/index.html');
+  const rootWorkspaces =
+    ('object' === typeof pkg &&
+      pkg !== null &&
+      (pkg as { workspaces?: unknown }).workspaces !== undefined) ||
+    io.exists('pnpm-workspace.yaml');
+  const toolWorkspace =
+    here.framework === Framework.VITE &&
+    rootWorkspaces &&
+    !rootHasPage &&
+    devScriptBody(pkg) === undefined;
+  const inspectRoot = libraryRoot || toolWorkspace;
+  if (here.framework !== Framework.HTML && !inspectRoot) {
+    return null;
+  }
 
   // A root that an earlier `--app` run (or a run inside the app) already pointed at one app has
   // answered the question discovery would ask. Ignoring it made every re-run at the root refuse
@@ -208,10 +228,30 @@ export function redirectToWorkspaceApp(
     if (1 === below.length && below[0] !== undefined)
       return enterApp(options, io, below[0], 'No app in this directory — wiring', runInit);
     if (1 < below.length) return listApps(io, BELOW_HEADER, below);
+
+    // A non-JS repository with a JS build tool must not fall into the
+    // no-package setup, which writes a project config and pairing token.
+    const packages = workspacePackageDirs(io).filter((dir) => io.exists(`${dir}/${PACKAGE_JSON}`));
+    if (0 < packages.length) {
+      io.print('No web app verified below this directory. JavaScript package(s) found:');
+      printAppCommands(io, packages);
+      io.print('Nothing was changed. Choose an actual web app with --app.');
+      return { ok: false, applied: 0, manual: packages.length, listedAppsBelow: true };
+    }
   }
   const target = chosen.app ?? (1 === apps.length ? apps[0] : undefined);
   if (target === undefined) {
-    if (0 === apps.length) return null; // not a workspace — fall through to the normal HTML plan
+    if (0 === apps.length) {
+      if (inspectRoot) {
+        io.print(
+          'No web app could be verified here. Nothing was changed. ' +
+            'Use `reticle init --app <dir>` for the app, or `reticle init --app .` ' +
+            'if this directory serves an HTML page.',
+        );
+        return { ok: false, applied: 0, manual: 1 };
+      }
+      return null; // not a workspace — fall through to the normal HTML plan
+    }
     // Apps already wired answer a re-run here: nothing to do at the root, which is pinned to none.
     const wired = apps.filter((a) => io.exists(`${a}/${RETICLE_CONFIG_FILE}`));
     io.print(0 === wired.length ? AMBIGUOUS_HEADER : `${ALREADY_WIRED} ${wired.join(', ')}.`);

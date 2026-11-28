@@ -23,6 +23,7 @@ function ambiguousWorkspaceIo(lines: string[]): InitIo {
     'apps/web/package.json': JSON.stringify({
       dependencies: { vite: '^7' },
     }),
+    'apps/web/index.html': '<main>Web</main>',
     'apps/admin/package.json': JSON.stringify({
       dependencies: { next: '^16' },
     }),

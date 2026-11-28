@@ -96,6 +96,8 @@ With `--no-mcp`, the whole MCP and rules group collapses into one skipped line:
       --no-mcp ... also skips the agent rule files (CLAUDE.md / AGENTS.md / .cursor) and the /reticle command
 ```
 
+A Vite dependency or config can represent a library build rather than an application. If `init` finds an explicit Vite library build (`build.lib` or a watch-build command) without its own HTML page, it excludes that package from automatic app selection. A Vite tooling-only workspace root or Python repository with only JS build tools is refused before changing files. This does not change the existing fallback for server-rendered apps whose dev or start script serves the page. For a custom app that detection cannot recognise, select it explicitly with `reticle init --app .` from its directory, or `--app path/to/app` from its parent.
+
 Run from a workspace root with several apps, it refuses to guess, prints a command for each one, and exits `1`:
 
 ```
