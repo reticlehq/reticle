@@ -286,6 +286,15 @@ You say what should be true, in plain English: _"I changed checkout. Verify it w
        alt="Reticle watches the app from the inside: a broken Pay button traced to onPay.tsx line 46, handed to the coding agent as a repair packet." />
 </p>
 
+<p align="center">
+  <img src="assets/readme/file-line-fix.png" width="700"
+       alt="A failed verdict naming the exact source file and line to fix, rather than a screenshot to squint at." />
+</p>
+
+<p align="center">
+  <img src="assets/readme/regression-replay.png" alt="Re-driving a suite with an LLM burns tokens on every step, every run. Reticle records the flow once and replays it deterministically: no model, no flake, just a verdict." width="560" />
+</p>
+
 <details>
 <summary><b>What one call looks like underneath</b></summary>
 
