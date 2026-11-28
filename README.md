@@ -646,9 +646,10 @@ Use `reticle <command>` after install, or `npx @reticlehq/server <command>` anyw
 
 Direction, not dates. [ROADMAP.md](ROADMAP.md) has the detail and a tracking issue for each item.
 
-- **The computer realm, for every task.** Choose accessibility, the pointer or a screenshot for each step, and close the gaps that OSWorld finds.
-- **A zero-install tier.** Drive a React app with no SDK installed, with the SDK for signals, named stores and `file:line`.
-- **More state adapters**, and a sharper failure capsule: the first divergence and the exact `file:line`.
+- **General purpose: one proof, every realm.** Reticle proves any task an agent does, wherever it acts. Today it reads the browser, Electron and Tauri apps, and any desktop application. A backend realm (requests, logs, queries, jobs) and a CLI session come next.
+- **Realms that talk to each other.** One verdict over several realms (_"the click in the page wrote this row, and the desktop app shows it"_), and saved flows whose steps cross realms.
+- **The computer realm, for every task.** Choose the accessibility tree, the pointer or a screenshot for each step, close the gaps that OSWorld finds, and bring the HUD to Windows and Linux.
+- **A zero-install tier, more state adapters**, and a sharper failure capsule: the first divergence and the exact `file:line`.
 - **Verifier honesty**, always: a green never rests on evidence it does not have.
 - **Mobile and native** (React Native, Flutter, iOS, Android) are being explored, and deliberately not promised.
 
