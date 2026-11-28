@@ -880,10 +880,7 @@ export function reticle(options: ReticleVitePluginOptions = {}): ReticleVitePlug
       // those is something the user can change under us.
       const announce = (): void => {
         const address = server.httpServer?.address();
-        const port =
-          'object' === typeof address && null !== address && undefined !== address
-            ? address.port
-            : undefined;
+        const port = 'object' === typeof address && null !== address ? address.port : undefined;
         if (undefined === port) return;
         const opts = resolveLazy();
         const withdraw = announceDevServer({

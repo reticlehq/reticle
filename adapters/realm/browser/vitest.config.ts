@@ -1,7 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import { sharedTestOptions } from '../../../vitest.shared.js';
 import tsconfigPaths from 'vite-tsconfig-paths';
-import { fileURLToPath } from 'node:url';
 
 /*
  * `@/x` -> the src of whichever PACKAGE the importing file belongs to.

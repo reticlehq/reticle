@@ -1,0 +1,22 @@
+Reticle
+Copyright (c) 2026 Reticle Labs
+
+Every npm package in this repository is licensed under the Apache License,
+Version 2.0 (see LICENSE). Each package contains its own LICENSE and NOTICE
+files, which are authoritative.
+
+Apache License, Version 2.0
+   Packages: open-verification, @reticlehq/core, @reticlehq/engine,
+   @reticlehq/server, @reticlehq/init, @reticlehq/test,
+   @reticlehq/browser, @reticlehq/react, @reticlehq/electron,
+   @reticlehq/computer, @reticlehq/terminal, @reticlehq/babel-plugin,
+   @reticlehq/next, @reticlehq/vite-plugin, @reticlehq/eslint-plugin
+   open-verification is the Open Verification Protocol: the vocabulary and
+   rules that a verdict comes from. Anyone can implement it, including
+   implementations that compete with ours. Use every package anywhere,
+   including in apps that you ship to your own customers.
+   (@reticlehq/protocol is a deprecated, unpublished Apache-2.0 alias of core.)
+
+The reticle-tauri crate (adapters/realm/tauri) is MIT. See its Cargo.toml.
+
+For OEM, embedding or commercial questions: hey@reticle.sh

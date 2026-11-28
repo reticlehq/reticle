@@ -176,6 +176,29 @@ describe('openCommand — per-platform OS open', () => {
   });
 });
 
+describe('openInBrowser opens only a web address', () => {
+  // `start ""` on Windows, `open` on macOS and `xdg-open` on Linux all run a program or open a
+  // file when they are given one. Only http and https reach the launcher.
+  for (const notWeb of [
+    'calc.exe',
+    'file:///etc/passwd',
+    'C:\\Windows\\System32\\calc.exe',
+    '-h',
+  ]) {
+    it(`refuses ${notWeb} on every platform, and runs nothing`, async () => {
+      for (const platform of ['win32', 'darwin', 'linux'] as const) {
+        const calls: string[] = [];
+        const failure = await openInBrowser(notWeb, platform, (cmd) => {
+          calls.push(cmd);
+          return Promise.resolve(null);
+        });
+        expect(failure).toMatch(/not a web address/);
+        expect(calls).toEqual([]);
+      }
+    });
+  }
+});
+
 describe('openInBrowser', () => {
   it('runs the platform command with the url (spawn injected, hermetic)', async () => {
     const calls: { cmd: string; args: string[] }[] = [];
